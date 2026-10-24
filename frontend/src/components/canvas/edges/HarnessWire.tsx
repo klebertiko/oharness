@@ -134,6 +134,7 @@ export function HarnessWire({
 
       {d.label && (
         <EdgeLabelRenderer>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: hover only highlights the wire; the wire is selectable and focusable through React Flow */}
           <div
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}

@@ -175,6 +175,7 @@ export function HarnessCanvas({ onNodeClick }: Props) {
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop target for palette drags only; nodes are also added by click and from the command palette, so no keyboard path is lost
     <div
       className={panMode ? `${styles.stage} ${styles.panMode}` : styles.stage}
       onDragOver={onDragOver}
