@@ -32,7 +32,7 @@ describe("providerStore.attachSecret", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ secretRef: "openharness/ollama-cloud" }),
+        json: async () => ({ secretRef: "oharness/ollama-cloud" }),
       })
     );
 
@@ -42,13 +42,13 @@ describe("providerStore.attachSecret", () => {
 
     const c = useProviderStore.getState().connections.find((x) => x.id === "ollama-cloud");
     expect(c?.secret).toBeTruthy();
-    expect(c?.secret?.service).toBe("openharness/ollama-cloud");
+    expect(c?.secret?.service).toBe("oharness/ollama-cloud");
     expect(c?.secret?.vault).toBe("backend");
     expect(c?.secret?.tail).toBe("99zz");
 
     const snap = JSON.stringify(useProviderStore.getState().connections);
     expect(snap).not.toContain("PASTEDPLAINTEXT");
     expect(snap).not.toContain(raw);
-    expect(snap).toContain("openharness/ollama-cloud");
+    expect(snap).toContain("oharness/ollama-cloud");
   });
 });

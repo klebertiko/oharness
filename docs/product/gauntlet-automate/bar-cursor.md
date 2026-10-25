@@ -52,12 +52,12 @@ from memory.
 - Three Cursor-managed automations ship built in: Bugbot (PR review), Security
   Agents (vuln scan), PR Routing & Approval.
 
-## What this means for OpenHarness's Automate (do not copy verbatim — adapt)
-- Cursor's "Instructions + Tools" per automation is *our* harness (OpenHarness
+## What this means for OHarness's Automate (do not copy verbatim — adapt)
+- Cursor's "Instructions + Tools" per automation is *our* harness (OHarness
   puts reusable instructions/tools in the harness graph, not in each job) —
   keep "What runs" as a harness picker, not a duplicate textarea.
 - Cursor's "Tools → Send to Slack, requires connection, greyed with a Connect
-  CTA" is exactly the pattern for how OpenHarness should show a not-yet-
+  CTA" is exactly the pattern for how OHarness should show a not-yet-
   connected MCP notification target — greyed, honest, one click to Providers/
   connect, never silently skipped.
 - Cursor's background-agent list (elapsed time + status per running/finished

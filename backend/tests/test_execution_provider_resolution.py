@@ -39,7 +39,7 @@ class _StubAdapter(AgentAdapter):
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch):
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
     connections = {
         "anthropic": {
             "id": "anthropic",
@@ -48,7 +48,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         }
     }
     monkeypatch.setattr("providers.resolution.get_adapter", lambda name: _StubAdapter())

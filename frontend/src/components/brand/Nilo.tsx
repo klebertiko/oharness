@@ -9,7 +9,7 @@ type Props = {
   cell?: 4 | 6;
 };
 
-/** Nilo: the OpenHarness owl, animated and interactive (see NiloSprite). */
-export function Nilo({ className = "", label = "Nilo, the OpenHarness owl guide", state = "idle", cell = 6 }: Props) {
+/** Nilo: the OHarness owl, animated and interactive (see NiloSprite). */
+export function Nilo({ className = "", label = "Nilo, the OHarness owl guide", state = "idle", cell = 6 }: Props) {
   return <NiloSprite state={state} cell={cell} interactive label={label} className={`oh-nilo ${className}`} />;
 }

@@ -16,7 +16,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
  * `Authorization: Bearer <token>` on every route but /health
  * (backend/security/sidecar_token.py). This is the dev-only half of getting
  * that token to the browser: read the same file the backend persists it to
- * (`%LOCALAPPDATA%/OpenHarness/sidecar.token`) once, at `next dev`/`next
+ * (`%LOCALAPPDATA%/OHarness/sidecar.token`) once, at `next dev`/`next
  * build` start, and bake it into the client bundle as
  * `NEXT_PUBLIC_OH_SIDECAR_TOKEN` — read by `src/lib/apiAuth.ts`. This works
  * today because dev always talks to a sidecar already running on this same
@@ -30,7 +30,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 function readSidecarTokenForDev(): string {
   try {
     const base = process.env.LOCALAPPDATA || os.homedir();
-    const tokenPath = path.join(base, "OpenHarness", "sidecar.token");
+    const tokenPath = path.join(base, "OHarness", "sidecar.token");
     return fs.readFileSync(tokenPath, "utf-8").trim();
   } catch {
     // Backend hasn't run yet on this machine — no token to bake in. API

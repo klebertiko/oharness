@@ -61,7 +61,7 @@ def main() -> None:
     questions = {
         "component": {
             "type": "choice",
-            "instructions": "Which OpenHarness component most likely owns this issue?",
+            "instructions": "Which OHarness component most likely owns this issue?",
             "criteria": {
                 "backend": "Python API, execution engine, adapters, storage or scheduler",
                 "frontend": "Next.js interface, state, components or accessibility",
@@ -91,7 +91,7 @@ def main() -> None:
     started = perf_counter()
     result = Router(max_loaded=1).predict(state, questions)
     evidence = {
-        "schema_version": "openharness-issue-triage-v1",
+        "schema_version": "oharness-issue-triage-v1",
         "authority": "advisory-shadow",
         "issue_number": issue["number"],
         "model_result": result,

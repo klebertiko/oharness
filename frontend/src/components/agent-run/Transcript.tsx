@@ -25,7 +25,7 @@ function Marker({ segment }: { segment: Segment }) {
   if (s === "gate") {
     return (
       <span
-        className="relative z-10 block h-[9px] w-[9px] rotate-45 rounded-[1px] border"
+        className="relative z-10 block h-[9px] w-[9px] rotate-45 rounded-none border"
         style={{ borderColor: "var(--warn)", background: "var(--sub-100)" }}
         aria-hidden
       />
@@ -34,7 +34,7 @@ function Marker({ segment }: { segment: Segment }) {
   if (s === "error") {
     return (
       <span
-        className="relative z-10 block h-[9px] w-[9px] rounded-[1px]"
+        className="relative z-10 block h-[9px] w-[9px] rounded-none"
         style={{ background: "var(--fault)" }}
         aria-hidden
       />
@@ -43,7 +43,7 @@ function Marker({ segment }: { segment: Segment }) {
   if (s === "running") {
     return (
       <span
-        className="relative z-10 block h-[9px] w-[9px] rounded-[1px] border-2"
+        className="relative z-10 block h-[9px] w-[9px] rounded-none border-2"
         style={{ borderColor: role, background: "var(--sub-100)" }}
         aria-hidden
       />
@@ -52,7 +52,7 @@ function Marker({ segment }: { segment: Segment }) {
   if (s === "done") {
     return (
       <span
-        className="relative z-10 block h-[9px] w-[9px] rounded-[1px]"
+        className="relative z-10 block h-[9px] w-[9px] rounded-none"
         style={{ background: role }}
         aria-hidden
       />
@@ -64,7 +64,7 @@ function Marker({ segment }: { segment: Segment }) {
     // waiting", not "this path wasn't selected").
     return (
       <span
-        className="relative z-10 flex h-[9px] w-[9px] items-center justify-center rounded-[1px] border border-dashed"
+        className="relative z-10 flex h-[9px] w-[9px] items-center justify-center rounded-none border border-dashed"
         style={{ borderColor: "var(--ink-faint)" }}
         aria-hidden
       />
@@ -72,7 +72,7 @@ function Marker({ segment }: { segment: Segment }) {
   }
   return (
     <span
-      className="relative z-10 block h-[7px] w-[7px] rounded-[1px] border"
+      className="relative z-10 block h-[7px] w-[7px] rounded-none border"
       style={{ borderColor: "var(--ink-faint)", background: "var(--sub-100)" }}
       aria-hidden
     />
@@ -116,7 +116,7 @@ function ToolRow({ call, transcriptRunId }: { call: ToolCall; transcriptRunId: s
       style={failed ? { borderColor: "var(--fault)" } : undefined}
     >
       <span
-        className="h-[10px] w-[2px] flex-none rounded-[1px]"
+        className="h-[10px] w-[2px] flex-none rounded-none"
         style={{
           background: pending ? "var(--signal)" : failed ? "var(--fault)" : "var(--ink-faint)",
         }}
@@ -127,7 +127,7 @@ function ToolRow({ call, transcriptRunId }: { call: ToolCall; transcriptRunId: s
         type="button"
         disabled={!long}
         onClick={() => setOpen((v) => !v)}
-        className={`t-meta min-w-0 flex-1 text-left text-ink-faint ${open ? "" : css.argEllipsis} ${
+        className={`t-meta min-w-0 flex-1 text-left text-ink-mute ${open ? "" : css.argEllipsis} ${
           long ? "hover:text-ink-mute" : "cursor-default"
         }`}
         title={long ? "Expand" : undefined}
@@ -136,19 +136,19 @@ function ToolRow({ call, transcriptRunId }: { call: ToolCall; transcriptRunId: s
       </button>
 
       {pending ? (
-        <span className="t-meta flex-none" style={{ color: "var(--signal)" }}>
+        <span className="t-meta flex-none" style={{ color: "var(--signal-text)" }}>
           running
         </span>
       ) : (
         <>
           <span
             className={`t-meta flex-none ${open ? "" : "max-w-[46%] truncate"}`}
-            style={{ color: failed ? "var(--fault)" : "var(--ink-mute)" }}
+            style={{ color: failed ? "var(--fault-text)" : "var(--ink-mute)" }}
           >
             {call.result}
           </span>
           {call.durationMs !== undefined && (
-            <span className="t-meta flex-none text-ink-faint">{fmtLatency(call.durationMs)}</span>
+            <span className="t-meta flex-none text-ink-mute">{fmtLatency(call.durationMs)}</span>
           )}
         </>
       )}
@@ -169,7 +169,7 @@ function Reasoning({ text, done }: { text: string; done: boolean }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={!done}
-        className="t-meta flex items-center gap-1.5 text-ink-faint disabled:cursor-default hover:text-ink-mute"
+        className="t-meta flex items-center gap-1.5 text-ink-mute disabled:cursor-default hover:text-ink-mute"
       >
         <span aria-hidden>{done ? (open ? "▾" : "▸") : "▾"}</span>
         {done ? "thought" : "thinking"}
@@ -218,14 +218,14 @@ function ToolRun({ calls, runId }: { calls: ToolCall[]; runId: string | null }) 
           className={`t-meta flex w-full min-w-0 items-center gap-1.5 text-left hover:text-ink ${
             summary.failed > 0 ? "" : "text-ink-mute"
           } ${forced ? "cursor-default" : ""}`}
-          style={summary.failed > 0 ? { color: "var(--fault)" } : undefined}
+          style={summary.failed > 0 ? { color: "var(--fault-text)" } : undefined}
         >
           <span aria-hidden className="flex-none">
             {open ? "▾" : "▸"}
           </span>
           <span className="min-w-0 truncate">{summary.label}</span>
           {summary.current && (
-            <span className="min-w-0 flex-1 truncate" style={{ color: "var(--signal)" }}>
+            <span className="min-w-0 flex-1 truncate" style={{ color: "var(--signal-text)" }}>
               · {summary.current}
             </span>
           )}
@@ -298,7 +298,7 @@ function SegmentView({
         <div className="flex h-[22px] min-w-0 items-center gap-2">
           <Icon size={12} strokeWidth={1.75} style={{ color: role }} className="flex-none" />
           <span className="t-title min-w-0 flex-none truncate text-ink">{segment.label}</span>
-          <span className="t-meta min-w-0 flex-1 truncate text-ink-faint">
+          <span className="t-meta min-w-0 flex-1 truncate text-ink-mute">
             {segment.intrinsic
               ? segment.type
               : `${segment.type} · ${segment.model || segment.adapter}`}
@@ -308,19 +308,19 @@ function SegmentView({
               role="note"
               aria-label={`${segment.label} activity`}
               className="t-meta max-w-[55%] flex-none truncate"
-              style={{ color: stepActivity.failed > 0 ? "var(--fault)" : "var(--ink-mute)" }}
+              style={{ color: stepActivity.failed > 0 ? "var(--fault-text)" : "var(--ink-mute)" }}
             >
               {stepActivity.label}
             </span>
           )}
           {segment.state === "done" && (
-            <span className="t-meta flex-none text-ink-faint">
+            <span className="t-meta flex-none text-ink-mute">
               {segment.latencyMs ? fmtLatency(segment.latencyMs) : null}
               {segment.tokens ? ` · ${segment.tokensEstimated ? "~" : ""}${fmtTokens(segment.tokens)} tok` : null}
             </span>
           )}
           {running && segment.phase && (
-            <span className="t-meta flex-none" style={{ color: "var(--signal)" }}>
+            <span className="t-meta flex-none" style={{ color: "var(--signal-text)" }}>
               {segment.phase}
               {segment.phaseDetail ? ` · ${segment.phaseDetail}` : ""}
             </span>
@@ -354,7 +354,7 @@ function SegmentView({
             className="mt-1.5 rounded-control border px-2 py-1.5"
             style={{ borderColor: "var(--fault)" }}
           >
-            <span className="t-label" style={{ color: "var(--fault)" }}>
+            <span className="t-label" style={{ color: "var(--fault-text)" }}>
               fault
             </span>
             <p className={`t-body mt-0.5 text-ink-dim ${css.prose}`}>{segment.error}</p>
@@ -376,7 +376,7 @@ function Metric({ value, unit }: { value: string; unit: string }) {
   return (
     <span className="t-meta flex items-baseline gap-1 px-2.5 first:pl-0">
       <span className="text-ink-dim">{value}</span>
-      <span className="text-ink-faint">{unit}</span>
+      <span className="text-ink-mute">{unit}</span>
     </span>
   );
 }
@@ -392,7 +392,7 @@ function PinnedBadge({ label }: { label: string }) {
       style={{ borderColor: "var(--warn)" }}
       title={`Ran on a pinned connection different from today's chat default: ${label}`}
     >
-      <span className="h-[5px] w-[5px] flex-none rounded-[1px]" style={{ background: "var(--warn)" }} aria-hidden />
+      <span className="h-[5px] w-[5px] flex-none rounded-none" style={{ background: "var(--warn)" }} aria-hidden />
       pinned: {label}
     </span>
   );
@@ -464,7 +464,7 @@ function RunRollup({ run, elapsed }: { run: RunState; elapsed?: number }) {
           title="The run finished, but its duration was not captured."
         >
           <span className="text-ink-dim">not recorded</span>
-          <span className="text-ink-faint">duration</span>
+          <span className="text-ink-mute">duration</span>
         </span>
       ) : (
         <Metric value={clock(totals.elapsedMs ?? 0)} unit="elapsed" />
@@ -477,7 +477,7 @@ function RunRollup({ run, elapsed }: { run: RunState; elapsed?: number }) {
       {/* Provenance of the token count, always on screen. "estimated" is
           reserved for counts that really were estimated; a duration that was
           never captured is reported in its own cell, not smeared onto this. */}
-      <span className="t-meta ml-auto flex items-center gap-1.5 pl-2.5 text-ink-faint" title={copy.title}>
+      <span className="t-meta ml-auto flex items-center gap-1.5 pl-2.5 text-ink-mute" title={copy.title}>
         <span
           className={`h-[5px] w-[5px] flex-none rounded-full ${
             totals.tokenSource === "measured"
@@ -507,12 +507,13 @@ function RouteDecisionProvenance({ decision }: { decision: NonNullable<RunState[
   return (
     <div
       className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-line-soft px-2 py-1.5 text-ink-dim"
+      role="group"
       aria-label="Routing decision provenance"
     >
       <span className="t-meta">{`decided by ${source}`}</span>
-      <span className="t-meta text-ink-faint">{`selected ${outcome}`}</span>
-      {confidence && <span className="t-meta text-ink-faint">{confidence}</span>}
-      {reason && decision.reason !== "confident" && <span className="t-meta text-ink-faint">{reason}</span>}
+      <span className="t-meta text-ink-mute">{`selected ${outcome}`}</span>
+      {confidence && <span className="t-meta text-ink-mute">{confidence}</span>}
+      {reason && decision.reason !== "confident" && <span className="t-meta text-ink-mute">{reason}</span>}
     </div>
   );
 }
@@ -537,14 +538,14 @@ function NodeBreakdown({
     <table className="mb-2 w-full border-collapse">
       <caption className="sr-only">Per-node latency and token attribution for this run</caption>
       <thead>
-        <tr className="t-label text-ink-faint">
-          <th scope="col" className="px-1.5 pb-1 text-left font-[600]">
+        <tr className="t-label text-ink-mute">
+          <th scope="col" className="px-1.5 pb-1 text-left font-semibold">
             node
           </th>
-          <th scope="col" className="px-1.5 pb-1 text-right font-[600]">
+          <th scope="col" className="px-1.5 pb-1 text-right font-semibold">
             latency
           </th>
-          <th scope="col" className="px-1.5 pb-1 text-right font-[600]">
+          <th scope="col" className="px-1.5 pb-1 text-right font-semibold">
             tokens
           </th>
         </tr>
@@ -651,7 +652,7 @@ export function Transcript({
           className="mb-2 rounded-control border px-2 py-1.5"
           style={{ borderColor: "var(--warn)" }}
         >
-          <span className="t-body" style={{ color: "var(--warn)" }}>
+          <span className="t-body" style={{ color: "var(--warn-text)" }}>
             {n}
           </span>
         </div>
@@ -675,7 +676,7 @@ export function Transcript({
       {run.status === "complete" && (
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />
-          <div className="t-meta flex items-baseline gap-2 text-ink-faint">
+          <div className="t-meta flex items-baseline gap-2 text-ink-mute">
             <span className="h-px flex-1 bg-line-soft" aria-hidden />
             <span>run complete</span>
           </div>

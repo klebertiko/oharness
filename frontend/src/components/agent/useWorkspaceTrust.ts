@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { chatToolsApi } from "@/lib/chatToolsApi";
 
-const SAVE_FAILED = "Não foi possível salvar a confiança do workspace; ele continua sem confiança.";
+const SAVE_FAILED = "Couldn't save workspace trust; the workspace stays untrusted.";
 
 /**
  * Whether the person trusted the selected workspace. The sidecar stores and

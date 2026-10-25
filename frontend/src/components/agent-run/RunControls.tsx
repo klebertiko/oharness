@@ -1,16 +1,17 @@
 "use client";
+import { Button } from "@/components/ui/Button";
 import { clock, tokens as fmtTokens } from "./format";
 import type { RunState, RunStatus } from "./types";
 
 const STATE: Record<RunStatus, { word: string; color: string }> = {
-  idle: { word: "idle", color: "var(--ink-faint)" },
-  starting: { word: "opening", color: "var(--signal)" },
-  running: { word: "running", color: "var(--signal)" },
-  gate: { word: "waiting on you", color: "var(--warn)" },
-  paused: { word: "parked", color: "var(--warn)" },
+  idle: { word: "idle", color: "var(--ink-mute)" },
+  starting: { word: "opening", color: "var(--signal-text)" },
+  running: { word: "running", color: "var(--signal-text)" },
+  gate: { word: "waiting on you", color: "var(--warn-text)" },
+  paused: { word: "parked", color: "var(--warn-text)" },
   stopped: { word: "stopped", color: "var(--ink-mute)" },
   complete: { word: "complete", color: "var(--ink-dim)" },
-  error: { word: "faulted", color: "var(--fault)" },
+  error: { word: "faulted", color: "var(--fault-text)" },
 };
 
 function Btn({
@@ -28,29 +29,24 @@ function Btn({
   chord?: string;
   title?: string;
 }) {
-  const base =
-    "inline-flex h-[22px] items-center gap-1.5 rounded-control px-2 text-[12px] font-[550] leading-none transition disabled:cursor-not-allowed disabled:opacity-40";
-  const tones = {
-    primary: "bg-signal text-signal-ink hover:bg-signal-deep hover:text-ink",
-    quiet: "border border-line bg-sub-200 text-ink-dim hover:bg-sub-300 hover:text-ink",
-    danger: "border border-line bg-sub-200 text-ink-dim hover:border-fault hover:text-fault",
-  }[tone];
   return (
-    <button type="button" title={title} onClick={onClick} disabled={disabled} className={`${base} ${tones}`}>
+    <Button
+      size="sm"
+      variant={tone === "primary" ? "primary" : tone === "danger" ? "danger" : "secondary"}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
       {chord && (
         <kbd
-          className="oh-kbd"
-          style={
-            tone === "primary"
-              ? { borderColor: "var(--signal-ink)", background: "transparent", color: "var(--signal-ink)" }
-              : undefined
-          }
+          className="t-meta rounded-control border px-1"
+          style={tone === "primary" ? { borderColor: "var(--signal-ink)", color: "var(--signal-ink)" } : { borderColor: "var(--line)" }}
         >
           {chord}
         </kbd>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -58,7 +54,7 @@ function Metric({ value, unit }: { value: string; unit: string }) {
   return (
     <span className="t-meta flex items-baseline gap-1 px-2.5">
       <span className="text-ink-dim">{value}</span>
-      <span className="text-ink-faint">{unit}</span>
+      <span className="text-ink-mute">{unit}</span>
     </span>
   );
 }
@@ -93,7 +89,7 @@ export function RunControls({
   return (
     <div className="flex h-[34px] flex-none items-center gap-2 border-b border-line bg-sub-100 px-2.5">
       <span
-        className="h-[7px] w-[7px] flex-none rounded-[1px]"
+        className="h-[7px] w-[7px] flex-none rounded-none"
         style={{ background: s.color }}
         aria-hidden
       />

@@ -1,6 +1,6 @@
 # OHM-ROUNDTRIP-ASTRA — Studio authoring roundtrip
 
-Source of authority: D:/Development/handoffs/2026-09-12-openharness-ohm-roundtrip-astra.md and the user's request to complete it with TDD, E2E, mutation and regression tests.
+Source of authority: D:/Development/handoffs/2026-09-12-oharness-ohm-roundtrip-astra.md and the user's request to complete it with TDD, E2E, mutation and regression tests.
 
 ## Scope and ownership
 

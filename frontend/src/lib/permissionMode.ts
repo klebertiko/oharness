@@ -33,7 +33,7 @@ export const PERMISSION_HINT: Record<PermissionMode, string> = {
 
 /** The always-visible one-liner beside the selector. */
 export const PERMISSION_SUMMARY: Record<PermissionMode, string> = {
-  ask: "pede aprovação",
-  auto_workspace: "comandos de leitura rodam sozinhos",
-  plan: "somente leitura",
+  ask: "asks before every command",
+  auto_workspace: "read-only commands run on their own",
+  plan: "read-only",
 };

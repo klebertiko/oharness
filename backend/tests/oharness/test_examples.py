@@ -25,9 +25,9 @@ REPO_ROOT = BACKEND_DIR.parent
 TAURI_DIR = REPO_ROOT / "src-tauri"
 
 EXPECTED = {
-    "openharness.default.agile": None,
-    "openharness.example.deepseek-harness": "https://github.com/deepseek-ai/deepseek-harness",
-    "openharness.example.mattpocock-skills": "https://github.com/mattpocock/skills",
+    "oharness.default.agile": None,
+    "oharness.example.deepseek-harness": "https://github.com/deepseek-ai/deepseek-harness",
+    "oharness.example.mattpocock-skills": "https://github.com/mattpocock/skills",
 }
 NEW_IDS = [i for i, url in EXPECTED.items() if url]
 
@@ -79,7 +79,7 @@ def test_new_example_cites_source_and_ships_no_secrets(example_id):
         assert node_data.get("providerIds", []) == []
     assert data["content"]["agents"], "agent profiles must be authored"
     assert data["content"]["skills"], "skills must be authored"
-    # The OpenHarness assistant is Nilo; examples never call it "Copilot".
+    # The OHarness assistant is Nilo; examples never call it "Copilot".
     assert "copilot" not in _entry(example_id).path.read_text(encoding="utf-8").lower()
 
 

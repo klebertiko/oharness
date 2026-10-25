@@ -47,7 +47,7 @@ import { apiUrl } from "@/lib/apiBase";
 export type SecretVault = "os-keychain" | "backend" | "memory";
 
 export interface SecretRef {
-  /** Keychain service key, e.g. `openharness/openrouter`. Not a secret. */
+  /** Keychain service key, e.g. `oharness/openrouter`. Not a secret. */
   service: string;
   /** Vendor prefix as pasted, e.g. `sk-ant-`. Public by design. */
   prefix: string;
@@ -70,7 +70,7 @@ export const VAULT_LABEL: Record<SecretVault, string> = {
 };
 
 function connectionIdFromService(service: string): string {
-  return service.startsWith("openharness/") ? service.slice("openharness/".length) : service;
+  return service.startsWith("oharness/") ? service.slice("oharness/".length) : service;
 }
 
 /** Does a pasted value plausibly belong to this vendor? Empty/short input
@@ -158,7 +158,7 @@ export async function saveSecret(service: string, plaintext: string): Promise<Se
   try {
     secretRef = await saveViaBackend(service, value);
   } catch {
-    throw new Error("Couldn't reach the OpenHarness sidecar, so the key was not stored.");
+    throw new Error("Couldn't reach the OHarness sidecar, so the key was not stored.");
   }
   if (!secretRef) throw new Error("The sidecar refused the key, so it was not stored.");
   return toRef(secretRef, value, "backend");

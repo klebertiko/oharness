@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BACKEND =
+  process.env.OHARNESS_BACKEND_URL ??
   process.env.OPENHARNESS_BACKEND_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   "http://127.0.0.1:8000";

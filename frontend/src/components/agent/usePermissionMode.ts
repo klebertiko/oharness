@@ -4,7 +4,7 @@ import { chatToolsApi } from "@/lib/chatToolsApi";
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, nextPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import { usePermissionStore } from "@/store/permissionStore";
 
-const SAVE_FAILED = "Não foi possível salvar o modo de permissão; o modo anterior continua valendo.";
+const SAVE_FAILED = "Couldn't save the permission mode; the previous mode still applies.";
 
 /**
  * The conversation's permission mode. The sidecar holds and enforces the

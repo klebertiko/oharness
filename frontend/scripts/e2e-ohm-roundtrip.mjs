@@ -13,7 +13,7 @@ mkdirSync(output, { recursive: true });
 const startedAt = new Date().toISOString();
 const resultPath = resolve(output, "result.json");
 writeFileSync(resultPath, JSON.stringify({ result: "running", startedAt }, null, 2));
-const browser = await chromium.launch({ channel: process.env.OHM_BROWSER_CHANNEL || "msedge", headless: true });
+const browser = await chromium.launch(process.env.OHM_BROWSER_EXECUTABLE ? { executablePath: process.env.OHM_BROWSER_EXECUTABLE, headless: true } : { channel: process.env.OHM_BROWSER_CHANNEL || "msedge", headless: true });
 const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1440, height: 1000 } });
 const page = await context.newPage();
 const validations = [];
@@ -49,8 +49,8 @@ await context.route("http://127.0.0.1:8000/**", async route => {
 });
 
 async function upload(bundle, name) {
-  // Studio has two import inputs (actions bar, then Validate dock); this flow asserts the dock's "Imported · id" status.
-  await page.locator('input[type="file"][accept=".ohm,.oharness,application/json"]').nth(1).setInputFiles({
+  // The Validate dock owns the one .ohm import input; this flow asserts its "Imported · id" status.
+  await page.locator('input[type="file"][accept=".ohm,.oharness,application/json"]').first().setInputFiles({
     name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(bundle)),
   });
   await page.getByText(`Imported · ${bundle.manifest.id}`, { exact: true }).waitFor();

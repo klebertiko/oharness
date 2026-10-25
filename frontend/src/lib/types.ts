@@ -41,7 +41,7 @@ export interface NodeData {
   adapter?: AdapterType;
   model?: string;
   endpoint?: string;
-  /** Opaque vault reference (e.g. `openharness/openai`). Never a raw key. */
+  /** Opaque vault reference (e.g. `oharness/openai`). Never a raw key. */
   secretRef?: string;
   /** @deprecated POC field — do not persist; use `secretRef` instead. */
   apiKey?: string;

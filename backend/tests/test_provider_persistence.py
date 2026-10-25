@@ -70,7 +70,7 @@ def test_a_stored_secret_and_enabled_flag_survive_a_simulated_restart(client: Te
 
     reloaded = anyio.run(_reload_from_db)
     assert reloaded["openrouter"]["enabled"] is True
-    assert reloaded["openrouter"]["secretRef"] == "openharness/openrouter"
+    assert reloaded["openrouter"]["secretRef"] == "oharness/openrouter"
 
 
 def test_an_update_survives_a_simulated_restart(client: TestClient) -> None:

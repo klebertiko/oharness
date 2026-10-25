@@ -11,7 +11,7 @@ const base = process.env.OHM_E2E_URL || 'http://127.0.0.1:3000';
 const sidecar = 'http://127.0.0.1:18099';
 const checks = [], unexpected = [], errors = [], requests = [], responsive = [];
 let step = 'startup', rejectRun = false, rejectUsage = false, rejectBudget = true;
-const browser = await chromium.launch({ channel: process.env.OHM_BROWSER_CHANNEL || 'msedge', headless: true });
+const browser = await chromium.launch(process.env.OHM_BROWSER_EXECUTABLE ? { executablePath: process.env.OHM_BROWSER_EXECUTABLE, headless: true } : { channel: process.env.OHM_BROWSER_CHANNEL || 'msedge', headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
 await context.addInitScript(() => {
   window.__OH_API__ = 'http://127.0.0.1:18099';
@@ -55,7 +55,7 @@ const page = await context.newPage();
 page.setDefaultTimeout(15000);
 page.on('pageerror', error => errors.push(error.message));
 const button = name => page.getByRole('button', { name, exact: true });
-const composer = () => page.getByRole('textbox', { name: 'Message OpenHarness' });
+const composer = () => page.getByRole('textbox', { name: 'Message OHarness' });
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
   step = 'explicit model and completion';

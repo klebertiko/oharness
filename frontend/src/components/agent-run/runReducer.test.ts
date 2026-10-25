@@ -343,7 +343,7 @@ describe("runReducer · chat tools", () => {
     const started = runReducer(capable, { type: "sse", event: "run_start", data: {
       run_id: "r1", mode: "live", step: false, order: [], unreachable: [],
     } });
-    expect(started.notices).toEqual(["este provedor não pede ferramentas; /exec e /read continuam disponíveis"]);
+    expect(started.notices).toEqual(["this provider doesn't request tools; /exec and /read stay available"]);
     expect(started.capabilities?.reason).toBe("cli-adapter");
   });
 
@@ -385,9 +385,9 @@ describe("runReducer · chat tools", () => {
 
   it("emits each capability notice once and none for ok", () => {
     const reasons = [
-      ["cli-adapter", "este provedor não pede ferramentas; /exec e /read continuam disponíveis"],
-      ["provider-no-tools", "este modelo não suporta ferramentas; a resposta segue só em texto"],
-      ["no-workspace", "sem pasta selecionada: sem ferramentas nesta conversa"],
+      ["cli-adapter", "this provider doesn't request tools; /exec and /read stay available"],
+      ["provider-no-tools", "this model doesn't support tools; the reply continues as text only"],
+      ["no-workspace", "no folder selected: no tools in this conversation"],
     ] as const;
     for (const [reason, notice] of reasons) {
       const once = runReducer(seeded, { type: "sse", event: "capabilities", data: { reason } });

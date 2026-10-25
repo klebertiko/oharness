@@ -1,15 +1,15 @@
 
-> openharness@0.0.1-alpha build
+> oharness@0.0.1-alpha build
 > next build
 
  ⚠ `devIndicators.appIsrStatus` is deprecated and no longer configurable. Please remove it from next.config.ts.
  ⚠ `devIndicators.buildActivity` is deprecated and no longer configurable. Please remove it from next.config.ts.
  ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
- We detected multiple lockfiles and selected the directory of C:\Users\klebe\.codex\worktrees\ca7d\OpenHarness\package-lock.json as the root directory.
+ We detected multiple lockfiles and selected the directory of C:\Users\klebe\.codex\worktrees\ca7d\OHarness\package-lock.json as the root directory.
  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
    See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
  Detected additional lockfiles:
-   * C:\Users\klebe\.codex\worktrees\ca7d\OpenHarness\frontend\package-lock.json
+   * C:\Users\klebe\.codex\worktrees\ca7d\OHarness\frontend\package-lock.json
 
    ▲ Next.js 15.5.27
 

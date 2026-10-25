@@ -23,11 +23,11 @@ There is deliberately no "bypass" mode, and an unknown mode is ``"ask"``. The mo
 is stored per conversation by the sidecar; a run request can only tighten it
 (`effective_mode`), never loosen it.
 """
-import functools
 import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path, PureWindowsPath
 from typing import Literal, NamedTuple
 
@@ -57,8 +57,8 @@ _GIT_FLAGS = frozenset({
     '--cached', '--staged', '--no-color', '--graph', '--decorate', '--abbrev-commit', '-p', '--patch', '--show-toplevel', '--abbrev-ref',
     '--is-inside-work-tree', '--git-dir', '--tags', '--always',
 })
-_GIT_COUNT_FLAG = re.compile(r'^(-\d{1,4}|-n\d{1,4}|--max-count=\d{1,4})$')
-_GIT_OPERAND = re.compile(r'^[A-Za-z0-9_@{}^~:./+\\-]+$')
+_GIT_COUNT_FLAG = re.compile(r'^(-\d{1,4}|-n\d{1,4}|--max-count=\d{1,4})\Z')
+_GIT_OPERAND = re.compile(r'^[A-Za-z0-9_@{}^~:./+\\-]+\Z')
 _DIFFY_SUBCOMMANDS = frozenset({'diff', 'log', 'show'})
 _SUBMODULE_SCANNERS = frozenset({'status', 'diff'})
 
@@ -131,11 +131,12 @@ _GIT_REDIRECTS = ('commondir', 'config.worktree', 'gitdir')
 # An attribute that binds a path to a driver (clean/smudge/textconv/merge/diff program defined in some config).
 _GIT_DRIVER_ATTR = re.compile(r'(?:^|\s)(?:filter|diff|merge)\s*=', re.IGNORECASE)
 
-_SCRIPT_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9:_.-]{0,63}$')
+_SCRIPT_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9:_.-]{0,63}\Z')
 _PYTEST_FLAGS = frozenset({'-q', '-qq', '-v', '-vv', '-x', '-s', '--lf', '--ff', '--co', '--collect-only', '--no-header', '-rA'})
-_PYTEST_TB = re.compile(r'^--tb=(short|long|line|no|auto|native)$')
-_PYTEST_NODE = re.compile(r'^[\w./\\:\[\]-]+$')
-_LS_FLAGS = re.compile(r'^-[A-Za-z]{1,6}$')
+_PYTEST_TB = re.compile(r'^--tb=(short|long|line|no|auto|native)\Z')
+_PYTEST_NODE = re.compile(r'^[\w./\\:\[\]-]+\Z')
+_LS_FLAGS = re.compile(r'^-[A-Za-z]{1,6}\Z')
+_LS_OPERAND = re.compile(r'^[\w./\\ +@-]+\Z')
 
 
 def _normalize_program(name: str) -> str:
@@ -250,17 +251,22 @@ def _git_attributes_are_inert(git_dir: str) -> bool:
     try:
         if not os.path.lexists(path):
             return True
-        if os.path.islink(path) or not os.path.isfile(path) or os.stat(path).st_size > 65536:
+        if _is_link(path) or not os.path.isfile(path) or os.stat(path).st_size > 65536:
             return False
         with open(path, encoding='utf-8', errors='replace') as handle:
-            return not any(_GIT_DRIVER_ATTR.search(line) for line in handle if not line.lstrip().startswith('#'))
+            return not any(_GIT_DRIVER_ATTR.search(line) for line in handle if not line.lstrip(' 	').startswith('#'))
     except OSError:
         return False
 
 
 def _is_link(path: str) -> bool:
+    """A symlink or a Windows junction. `islink` is False for a junction and `isjunction` needs Python 3.12, so a path
+    that does not resolve to itself under its own (resolved) parent is a redirect too."""
     isjunction = getattr(os.path, 'isjunction', None)
-    return os.path.islink(path) or bool(isjunction and isjunction(path))
+    if os.path.islink(path) or bool(isjunction and isjunction(path)):
+        return True
+    parent, name = os.path.split(os.path.abspath(path))
+    return os.path.normcase(os.path.realpath(path)) != os.path.normcase(os.path.join(os.path.realpath(parent), name))
 
 
 def _git_objects_are_local(git_dir: str) -> bool:
@@ -289,6 +295,8 @@ def _git_run(args: list[str], cwd: str) -> bytes | None:
     return done.stdout if done.returncode == 0 else None
 
 
+_GIT_MIN_VERSION = (2, 32)
+_GIT_LINKABLE = ('info', 'refs', 'HEAD')
 _GIT_VERSION = re.compile(r'git version ([0-9]+)\.([0-9]+)(?:\.([0-9]+))?', re.ASCII)
 
 
@@ -298,11 +306,35 @@ def _parse_git_version(text: str) -> tuple[int, ...]:
     return tuple(int(part) for part in found.groups(default='0')) if found else ()
 
 
-@functools.lru_cache(maxsize=1)
+_GIT_VERSION_RETRY_S = 30.0  # a failed probe is retried at most this often; only a success is remembered
+
+
+class _GitProbe:
+    """What the process has learned about the installed git: the version once read, and when a read last failed."""
+    version: tuple[int, ...] = ()
+    failed_at: float | None = None
+
+
+_GIT_PROBE = _GitProbe()
+
+
 def _git_version() -> tuple[int, ...]:
-    """The installed git's version as a tuple of ints, cached for the process; () when it cannot be read."""
+    """The installed git's version as a tuple of ints; () when it cannot be read.
+    A version that was read is remembered for the process. A failure (a timeout while an antivirus scans git on
+    its first call, say) is not: it is retried, but not more often than every `_GIT_VERSION_RETRY_S` seconds,
+    so a git that never answers does not cost a probe per command."""
+    if _GIT_PROBE.version:
+        return _GIT_PROBE.version
+    now = time.monotonic()
+    if _GIT_PROBE.failed_at is not None and now - _GIT_PROBE.failed_at < _GIT_VERSION_RETRY_S:
+        return ()
     out = _git_run(['--version'], os.path.dirname(_GIT_EXE) if _GIT_EXE else '.')
-    return _parse_git_version(out.decode('utf-8', 'replace')) if out is not None else ()
+    version = _parse_git_version(out.decode('utf-8', 'replace')) if out is not None else ()
+    if version:
+        _GIT_PROBE.version, _GIT_PROBE.failed_at = version, None
+    else:
+        _GIT_PROBE.failed_at = now
+    return version
 
 
 def _git_config_keys(config: str, git_dir: str) -> list[str] | None:
@@ -365,8 +397,13 @@ def _git_config_is_inert(root: str) -> bool:
     config = _join_inside(root, os.path.join('.git', 'config'))
     if git_dir is None or config is None:
         return False
+    # GIT_CONFIG_GLOBAL (what keeps ~/.gitconfig out of every run) exists since git 2.32; an older or unknown git reads it again.
+    if _git_version() < _GIT_MIN_VERSION:
+        return False
     try:
-        if os.path.islink(git_dir) or not os.path.isdir(git_dir) or os.path.islink(config) or not os.path.isfile(config) or os.stat(config).st_size > 65536:
+        if _is_link(git_dir) or not os.path.isdir(git_dir) or _is_link(config) or not os.path.isfile(config) or os.stat(config).st_size > 65536:
+            return False
+        if any(_is_link(os.path.join(git_dir, name)) for name in _GIT_LINKABLE if os.path.lexists(os.path.join(git_dir, name))):
             return False
         if any(os.path.lexists(os.path.join(git_dir, name)) for name in _GIT_REDIRECTS):
             return False
@@ -416,7 +453,7 @@ def _pytest_ok(args: list[str], trusted: bool, cwd: str) -> bool:
 
 
 def _ls_ok(args: list[str], cwd: str) -> bool:
-    return all(_LS_FLAGS.match(arg) or _operand_ok(cwd, arg, re.compile(r'^[\w./\\ +@-]+$')) for arg in args)
+    return all(_LS_FLAGS.match(arg) or _operand_ok(cwd, arg, _LS_OPERAND) for arg in args)
 
 
 def _allowed_exec(call, workspace, trusted: bool) -> bool:

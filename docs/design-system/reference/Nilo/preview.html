@@ -1,0 +1,11 @@
+<!-- @dsCard group="Brand" height=340 -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../bundle.css"><script src="../theme.js"></script><style>body{margin:0;padding:var(--space-4);background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.g{display:flex;flex-wrap:wrap;gap:var(--space-4)}.c{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);width:128px}.n{font:400 10.5px/1.4 var(--font-mono);color:var(--ink-mute)}.cap{font:400 10.5px/1.4 var(--font-mono);color:var(--ink-mute);margin:var(--space-4) 0 var(--space-2)}</style></head><body><div id="r"></div><script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script><script src="../bundle.js"></script><script>
+var h=React.createElement,O=window.OH;
+var S=["idle","thinking","working","waiting","success","error","sleeping"];
+function App(){return h(React.Fragment,null,
+ h("div",{className:"cap",style:{marginTop:0}},"states · animated, 110ms per frame"),
+ h("div",{className:"g"},S.map(function(s){return h("div",{className:"c",key:s},h(O.Nilo,{state:s,cell:5,label:"Nilo "+s}),h("span",{className:"n"},s))})),
+ h("div",{className:"cap"},"interactive · click her, move the pointer · face crop · reduced-motion still"),
+ h("div",{className:"g",style:{alignItems:"flex-end"}},h(O.Nilo,{interactive:true,cell:6,label:"Nilo, the OHarness owl guide"}),h(O.Nilo,{crop:"face",cell:4,label:"Nilo face"}),h(O.Nilo,{state:"thinking",still:true,cell:4,label:"Nilo thinking, still"})))}
+ReactDOM.createRoot(document.getElementById('r')).render(h(App));
+</script></body></html>

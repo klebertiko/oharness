@@ -28,12 +28,12 @@ export function ProviderLine({ onUseOffline, canUseOffline }: { onUseOffline: ()
   if (!provider) {
     return (
       <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-1.5">
-        <span className="t-meta text-ink-faint">No provider ready</span>
+        <span className="t-meta text-ink-mute">No provider ready</span>
         <button
           type="button"
           disabled={!canUseOffline}
           onClick={onUseOffline}
-          className="h-6 rounded-control border border-line px-2 text-[12px] text-ink hover:bg-sub-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-6 rounded-control border border-line px-2 text-body text-ink hover:bg-sub-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-40"
         >
           Use offline draft
         </button>

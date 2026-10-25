@@ -1,4 +1,4 @@
-"""Compile skills-framework harness markdown into an OpenHarness bundle dict.
+"""Compile skills-framework harness markdown into an OHarness bundle dict.
 
 Graph mapping (coarse gate flow from FLOW.md / GATES.md exit chain):
 
@@ -114,7 +114,7 @@ def compile_skills_harness(src_dir: Path) -> dict:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "manifest": {
-            "id": "openharness.default.agile",
+            "id": "oharness.default.agile",
             "name": "Agile Harness",
             "version": "0.1.0",
             "description": (

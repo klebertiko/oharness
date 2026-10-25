@@ -8,8 +8,8 @@
 
 /** Image basenames we are willing to terminate when freeing a watched port. */
 export const ALLOWED_IMAGES = Object.freeze([
-  "openharness-sidecar.exe",
-  "openharness-sidecar",
+  "oharness-sidecar.exe",
+  "oharness-sidecar",
   "python.exe",
   "python",
   "pythonw.exe",

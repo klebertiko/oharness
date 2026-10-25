@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { isChatCapable, providerReadiness } from "@/components/agent/chatProvider";
 import { ListGroup, ListRow, StatusDot, type Tone } from "@/components/shell/ListRow";
 import { type ConnectionUsage } from "@/lib/usageApi";
+import { Button, Notice } from "@/components/ui";
 import { RESIDENCE_SR, ResidenceMark, ToneDot } from "./atoms";
 import { nextStep } from "./nextStep";
 import { useProviderStore, type Connection } from "./providerStore";
@@ -46,7 +47,7 @@ const groupOf = (c: Connection): "ready" | "needsSetup" | "agentsOnly" =>
     when it has never actually been used, a genuinely different state from
     "used, but free" or "used, but unpriced" (both of which formatCost
     already tells apart honestly). */
-function rowCostLabel(c: Connection, usage: ConnectionUsage | undefined): string | undefined {
+function rowCostLabel(_c: Connection, usage: ConnectionUsage | undefined): string | undefined {
   if (!usage || usage.tokensTotal <= 0) return undefined;
   return usageCostLabel(usage);
 }
@@ -71,7 +72,7 @@ function ProviderRow({
       subtitle={
         <>
           <span>{readiness.label}</span>
-          {step && <span className="text-ink-faint"> · {step.hint}</span>}
+          {step && <span className="text-ink-mute"> · {step.hint}</span>}
         </>
       }
       hint={step ? `${readiness.label} — ${step.label}` : readiness.label}
@@ -82,7 +83,7 @@ function ProviderRow({
         <span className="flex items-center gap-2">
           <ResidenceMark residence={c.residence} />
           <span className="sr-only">{RESIDENCE_SR[c.residence]}</span>
-          {costLabel && <span className="t-meta text-ink-faint">{costLabel}</span>}
+          {costLabel && <span className="t-meta text-ink-mute">{costLabel}</span>}
         </span>
       }
     />
@@ -90,10 +91,10 @@ function ProviderRow({
 }
 
 const BUDGET_TONE_CLASS: Record<Tone, string> = {
-  ok: "text-signal",
-  warn: "text-warn",
-  fault: "text-fault",
-  idle: "text-ink-faint",
+  ok: "text-signal-text",
+  warn: "text-warn-text",
+  fault: "text-fault-text",
+  idle: "text-ink-mute",
 };
 
 /** Global spend + budget — one line always visible, an inline editor one
@@ -116,6 +117,7 @@ function BudgetStrip() {
 
   const startEdit = () => {
     setDraft(budget?.limitUsd != null ? String(budget.limitUsd) : "");
+    setInvalid(false);
     setEditing(true);
   };
 
@@ -123,32 +125,43 @@ function BudgetStrip() {
     if (saving) return;
     const trimmed = draft.trim();
     const n = trimmed === "" ? null : Number(trimmed);
-    if (n !== null && (!Number.isFinite(n) || n < 0)) { setInvalid(true); return; }
+    if (n !== null && (!Number.isFinite(n) || n < 0)) {
+      setInvalid(true);
+      return;
+    }
     setInvalid(false);
     setSaving(true);
     try {
       if (await setBudget(n)) setEditing(false);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="mx-1.5 mt-2 rounded-[8px] border border-line-soft bg-sub-100 px-2.5 py-2">
+    <section aria-label="Spend and budget" className="mx-1.5 mt-2 rounded-float border border-line-soft bg-sub-100 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="t-body text-ink-mute">Spend</span>
-        <button type="button" disabled={loading} onClick={() => void refreshUsage()} className="t-meta rounded-control px-1 text-ink-mute hover:text-ink focus-visible:ring-1 focus-visible:ring-signal disabled:opacity-50">Refresh usage</button>
+        <Button size="sm" variant="ghost" disabled={loading} onClick={() => void refreshUsage()} className="-my-1">
+          Refresh usage
+        </Button>
         <span className={`t-meta flex items-center gap-1.5 ${BUDGET_TONE_CLASS[tone]}`}>
           <StatusDot tone={tone} />
           {summary ? usageCostLabel(summary) : "—"}
         </span>
       </div>
-      {loading && <p role="status" className="t-body text-ink-dim">Loading usage...</p>}
-      {error && <p role="alert" className="t-body mt-1 text-warn [overflow-wrap:anywhere]">Usage may be stale: {error}</p>}
+      {loading && !summary && <p role="status" className="t-body text-ink-mute">Loading usage…</p>}
+      {error && (
+        <Notice tone="warn" role="alert" className="mt-2">
+          Usage may be out of date. <span className="t-meta [overflow-wrap:anywhere]">{error}</span>
+        </Notice>
+      )}
       {editing ? (
         <div className="mt-1.5 flex items-center gap-1.5">
           <input
             autoFocus
             disabled={saving}
-            aria-invalid={invalid}
+            aria-invalid={invalid || undefined}
             aria-label="Global budget in USD"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -157,33 +170,20 @@ function BudgetStrip() {
               if (e.key === "Escape") setEditing(false);
             }}
             placeholder="no limit"
-            className="t-meta h-7 w-full min-w-0 rounded-control border border-line-soft bg-sub-200 px-1.5 text-ink outline-none focus:border-signal-deep"
+            className="t-meta h-control-md w-full min-w-0 rounded-control border border-line-strong bg-sub-200 px-1.5 text-ink focus-visible:border-signal aria-[invalid=true]:border-fault max-sm:h-control-lg"
           />
-          <button type="button" disabled={saving} onClick={() => void save()} className="t-body flex-none rounded-control px-1 text-ink-dim hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setEditing(false)}
-            className="t-body flex-none rounded-control px-1 text-ink-faint hover:text-ink-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
-          >
-            Cancel
-          </button>
+          <Button size="sm" variant="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</Button>
+          <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={startEdit}
-          className="t-body mt-0.5 block rounded-control text-left text-ink-faint hover:text-ink-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
-        >
+        <Button size="sm" variant="ghost" onClick={startEdit} className="-ml-2 mt-0.5 text-ink-mute">
           {budget?.limitUsd != null
             ? `of $${budget.limitUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} budget`
             : "No budget — set one"}
-        </button>
+        </Button>
       )}
-      {editing && invalid && <p role="alert" className="mt-1 text-[11px] text-warn">Enter zero or a positive USD amount.</p>}
-    </div>
+      {editing && invalid && <p role="alert" className="mt-1 text-meta text-warn-text">Enter zero or a positive USD amount.</p>}
+    </section>
   );
 }
 

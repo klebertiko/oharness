@@ -88,7 +88,7 @@ def default_cli_cwd() -> Path:
     one to a specific harness/project directory. Never the sidecar process's
     own cwd, which callers do not control."""
     base = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("HOME") or str(Path.home()))
-    d = base / "OpenHarness" / "cli-runs"
+    d = base / "OHarness" / "cli-runs"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

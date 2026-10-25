@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.1.0",
   "manifest": {
-    "id": "openharness.studio.sample.minimal-gate",
+    "id": "oharness.studio.sample.minimal-gate",
     "name": "Agent + review",
     "version": "0.1.0",
     "description": "Smallest OHM loop — one Agent, one Gate, human merge.",

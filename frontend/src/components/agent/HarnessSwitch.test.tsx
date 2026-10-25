@@ -7,8 +7,8 @@ import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 
 import { HarnessSwitch } from "./HarnessSwitch";
 
-const agileBundle = { manifest: { id: "openharness.default.agile", name: "OpenHarness Agile (skills-framework)" } };
-const customBundle = { manifest: { id: "openharness.custom.demo", name: "Custom Demo" } };
+const agileBundle = { manifest: { id: "oharness.default.agile", name: "OHarness Agile (skills-framework)" } };
+const customBundle = { manifest: { id: "oharness.custom.demo", name: "Custom Demo" } };
 
 const entries = [
   { id: agileBundle.manifest.id, name: agileBundle.manifest.name, isDefault: true, bundle: agileBundle },
@@ -33,7 +33,7 @@ describe("HarnessSwitch (harness picker)", () => {
 
   it("shows the active harness by its short name", () => {
     render(<HarnessSwitch />);
-    const trigger = screen.getByRole("button", { name: "Harness: OpenHarness Agile" });
+    const trigger = screen.getByRole("button", { name: "Harness: OHarness Agile" });
     expect(trigger.getAttribute("aria-haspopup")).toBe("listbox");
     expect(screen.queryByText(/skills-framework/)).toBeNull();
   });
@@ -46,10 +46,10 @@ describe("HarnessSwitch (harness picker)", () => {
     const options = screen.getAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual([
       expect.stringMatching(/^No harness/),
-      expect.stringMatching(/^OpenHarness Agile/),
+      expect.stringMatching(/^OHarness Agile/),
       expect.stringMatching(/^Custom Demo/),
     ]);
-    expect(screen.getByRole("option", { name: /^OpenHarness Agile/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("option", { name: /^OHarness Agile/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("choosing a harness activates it and closes the menu", async () => {
@@ -58,7 +58,7 @@ describe("HarnessSwitch (harness picker)", () => {
     await user.click(screen.getByRole("button", { name: /^Harness:/ }));
     await user.click(screen.getByRole("option", { name: /^Custom Demo/ }));
 
-    expect(activate).toHaveBeenCalledWith("openharness.custom.demo");
+    expect(activate).toHaveBeenCalledWith("oharness.custom.demo");
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
@@ -85,7 +85,7 @@ describe("HarnessSwitch (harness picker)", () => {
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");
-    expect(activate).toHaveBeenCalledWith("openharness.custom.demo");
+    expect(activate).toHaveBeenCalledWith("oharness.custom.demo");
   });
 
   it("offers Edit in Studio from the menu", async () => {
@@ -115,7 +115,7 @@ describe("HarnessSwitch (harness picker)", () => {
     const focused = document.activeElement as HTMLElement;
     const active = focused.getAttribute("aria-activedescendant");
     expect(active).toBeTruthy();
-    expect(document.getElementById(active!)?.textContent).toContain("OpenHarness Agile");
+    expect(document.getElementById(active!)?.textContent).toContain("OHarness Agile");
     await user.keyboard("{ArrowUp}");
     expect(document.getElementById(focused.getAttribute("aria-activedescendant")!)?.textContent).toContain("No harness");
   });

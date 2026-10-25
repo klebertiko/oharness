@@ -79,7 +79,7 @@ justificativa no código; o denominador final contém todos os mutantes comporta
 trava os argumentos exatos de `OpenProcess`, attach, terminate e close. `schemas.py` ganhou uma
 asserção integral do contrato publicado. Testes direcionados após as mudanças: **52 passed in
 2.61s**. Caches finais:
-`D:\Development\.worktrees\openharness-mutation-final-20260922\{process,schemas}\.mutmut-cache`.
+`D:\Development\.worktrees\oharness-mutation-final-20260922\{process,schemas}\.mutmut-cache`.
 
 Regressão backend final após os testes de mutation: **607 passed, 34 skipped in 44.18s**. Os 34
 skips continuam sendo 28 E2E reservados à cópia isolada e 6 symlinks sem privilégio; os 28 E2E

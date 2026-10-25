@@ -50,7 +50,7 @@ from pathlib import Path
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _REAL_DATA_DIR = (_BACKEND_DIR / "data").resolve()
 
-_ISOLATION_ROOT = Path(tempfile.mkdtemp(prefix="openharness-test-")).resolve()
+_ISOLATION_ROOT = Path(tempfile.mkdtemp(prefix="oharness-test-")).resolve()
 _DB_PATH = _ISOLATION_ROOT / "harness.db"
 _SECRETS_DIR = _ISOLATION_ROOT / "secrets"
 _SECRETS_DIR.mkdir(parents=True, exist_ok=True)

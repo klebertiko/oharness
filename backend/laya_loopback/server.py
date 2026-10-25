@@ -55,8 +55,8 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 
 DEFAULT_PORT = 8761
-_DEFAULT_LOCK_PATH = Path(tempfile.gettempdir()) / "openharness-laya-loopback.lock"
-_SCHEMA_VERSION = "openharness-decision-node-v1"
+_DEFAULT_LOCK_PATH = Path(tempfile.gettempdir()) / "oharness-laya-loopback.lock"
+_SCHEMA_VERSION = "oharness-decision-node-v1"
 
 
 class _Handler(BaseHTTPRequestHandler):

@@ -23,7 +23,8 @@
 .roleMarker[data-role="tool"] { --role-c: var(--role-tool); }
 
 .paletteRow { min-height: 44px; }
-.fieldControl { min-height: 32px; }
+.fieldControl { min-height: var(--control-md); }
+@media (max-width: 640px) { .fieldControl { min-height: var(--control-lg); } }
 .paletteRow:focus-visible,
 .fieldControl:focus-visible,
 .dock button:focus-visible,

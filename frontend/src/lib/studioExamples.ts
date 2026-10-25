@@ -63,7 +63,7 @@ export async function fetchStudioExamples(): Promise<StudioExample[]> {
 
 export type StudioOrigin = "saved" | "example" | "draft";
 
-const EXAMPLE_ID = /^openharness\.(example|default|studio\.sample)\b/;
+const EXAMPLE_ID = /^oharness\.(example|default|studio\.sample)\b/;
 
 /** Where the open harness came from: a saved file, a bundled example, or a new draft. */
 export function studioOrigin(recordId: string | null, bundleId: string | null | undefined): StudioOrigin {

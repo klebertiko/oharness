@@ -1,8 +1,8 @@
-# Toward an Open Harness Model
+# Toward an OHarness Model
 
 An agent receives a task, consults tools, and produces a response. Between intent and result, there are choices: who can act, with what context, when work should stop, and who decides to continue. We want those choices to be readable, open to discussion, and reviewable by the people responsible for the work.
 
-We advocate an Open Harness Model that is open to inspection and evolution. A harness brings together agents, capabilities, checkpoints, and human decisions to organize work. Its description should make the responsibilities behind that organization visible. People using it need to understand what they are delegating.
+We advocate an OHarness Model that is open to inspection and evolution. A harness brings together agents, capabilities, checkpoints, and human decisions to organize work. Its description should make the responsibilities behind that organization visible. People using it need to understand what they are delegating.
 
 **Readability is part of control.** Context, instructions, and criteria need a recognizable place. We want people to follow the reasoning behind a composition, review a change, and understand its consequences. Clarity also means stating what is missing, what depends on the environment, and what remains uncertain.
 

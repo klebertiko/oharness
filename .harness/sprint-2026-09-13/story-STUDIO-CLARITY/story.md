@@ -20,7 +20,7 @@ Authority: user screenshot C:/Users/klebe/Pictures/Screenshots/Captura de tela 2
 - Full frontend regression and typecheck pass. Existing OHM fidelity work retained.
 - Browser checks on existing port3000 with isolated context, actual UI interactions and explicit API contracts; provider selected vs status, configure, overview/open/back/resume, and per-agent selection. Disclose any API stubs. Check relevant widths and keyboard behavior; report existing desktop layout limits honestly.
 - Fresh QA and SEC gates, architecture review; no invented scores or coverage percentages.
-- External handoff D:/Development/handoffs/2026-09-13-openharness-studio-clarity-sonnet.md includes exact provenance, changes, tests, reference URLs and any remaining runtime limitations.
+- External handoff D:/Development/handoffs/2026-09-13-oharness-studio-clarity-sonnet.md includes exact provenance, changes, tests, reference URLs and any remaining runtime limitations.
 - No commit/merge, no backend edits, no server restart/kill, no overwriting Sonnet's concurrent changes.
 
 ## Ownership

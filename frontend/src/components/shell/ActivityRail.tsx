@@ -14,6 +14,8 @@ import type { LucideIcon } from "lucide-react";
 
 import { useShellStore, LEFT_MIN, RAIL_COLLAPSED, type RailSection } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
+import { cn } from "@/lib/utils";
+import { appliedTheme, applyTheme, type Theme } from "@/lib/theme";
 
 /* Hallmark · design-system: design.md · designed-as-app */
 /**
@@ -54,15 +56,12 @@ function RailButton({
       title={hint ? `${label} · ${hint}` : label}
       aria-label={label}
       aria-current={active ? "page" : undefined}
-      className={[
-        "flex h-9 w-full items-center gap-3 rounded-[8px] px-3 text-left text-[13px] font-[500] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-signal",
-        // Two colours, two meanings: where you already are is teal
-        // (--signal); where the pointer is, not chosen yet, is amber
-        // (Nilo's beak) — hover never reads as "this is now active".
-        active
-          ? "bg-[color-mix(in_oklab,var(--signal)_14%,transparent)] text-ink"
-          : "text-ink-mute hover:bg-[color-mix(in_oklab,var(--nilo-beak)_14%,transparent)] hover:text-ink",
-      ].join(" ")}
+      className={cn(
+        "oh-focus-inner t-title flex h-control-lg w-full items-center gap-3 rounded-float px-3 text-left transition-colors",
+        // Where you are: ink-primary and a signal bar. Where the pointer is:
+        // one step of substrate. Hover never reads as "chosen".
+        active ? "bg-sub-200 text-ink shadow-[inset_2px_0_0_var(--signal)]" : "text-ink-mute hover:bg-sub-200 hover:text-ink",
+      )}
     >
       <Icon size={16} strokeWidth={1.8} absoluteStrokeWidth className="flex-none" />
       <span className="oh-rail-label min-w-0 flex-1 truncate">{label}</span>
@@ -70,7 +69,16 @@ function RailButton({
   );
 }
 
-export function ActivityRail({ children, collapsed = false }: { children?: React.ReactNode; collapsed?: boolean }) {
+export function ActivityRail({
+  children,
+  collapsed = false,
+  edge,
+}: {
+  children?: React.ReactNode;
+  collapsed?: boolean;
+  /** The resize handle, rendered inside the landmark so it is not stray content. */
+  edge?: React.ReactNode;
+}) {
   const mac = useIsMac();
   const section = useShellStore((s) => s.section);
   const setSection = useShellStore((s) => s.setSection);
@@ -80,18 +88,14 @@ export function ActivityRail({ children, collapsed = false }: { children?: React
   const hydrated = useShellStore((s) => s.hydrated);
   const toggleLeft = useShellStore((s) => s.toggleLeft);
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-  useEffect(() => {
-    const saved = window.localStorage.getItem("openharness-theme");
-    const initial = saved === "light" ? "light" : "dark";
-    setTheme(initial);
-    document.documentElement.dataset.theme = initial;
-  }, []);
+  // theme-init.js has already applied the saved theme before first paint; this
+  // only mirrors it so the toggle shows the right icon and label.
+  const [theme, setTheme] = useState<Theme>("dark");
+  useEffect(() => setTheme(appliedTheme()), []);
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    document.documentElement.dataset.theme = next;
-    window.localStorage.setItem("openharness-theme", next);
+    applyTheme(next);
   };
 
   return (
@@ -102,7 +106,7 @@ export function ActivityRail({ children, collapsed = false }: { children?: React
           ? { width: RAIL_COLLAPSED, minWidth: RAIL_COLLAPSED }
           : { width: hydrated ? leftWidth : undefined, minWidth: LEFT_MIN }
       }
-      className="oh-navigation flex w-rail flex-none flex-col items-stretch gap-px border-r border-line bg-sub-100 px-2 pb-2 pt-2.5"
+      className="oh-navigation relative flex w-rail flex-none flex-col items-stretch gap-px border-r border-line bg-sub-100 px-2 pb-2 pt-2.5"
     >
       {NAV.map((item) => (
         <div key={item.id} className="contents">
@@ -135,6 +139,7 @@ export function ActivityRail({ children, collapsed = false }: { children?: React
         hint={chordCaps("Mod+B", mac).join(" ")}
         onClick={toggleLeft}
       />
+      {edge}
     </nav>
   );
 }

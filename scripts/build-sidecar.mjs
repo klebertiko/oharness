@@ -41,7 +41,7 @@ const separator = platform() === "win32" ? ";" : ":";
 run([
   "-m", "PyInstaller",
   "--noconfirm", "--clean", "--onefile",
-  "--name", `openharness-sidecar-${triple}`,
+  "--name", `oharness-sidecar-${triple}`,
   "--paths", join(root, "backend"),
   "--hidden-import", "aiosqlite",
   "--distpath", join(root, "src-tauri", "binaries"),

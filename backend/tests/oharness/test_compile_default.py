@@ -36,7 +36,7 @@ def test_compiled_default_validates(tmp_path: Path):
     source = _make_synthetic_harness_source(tmp_path / "harness")
     data = compile_skills_harness(source)
 
-    assert data["manifest"]["id"] == "openharness.default.agile"
+    assert data["manifest"]["id"] == "oharness.default.agile"
     assert "PO" in data["content"]["agents"]
     assert data["content"]["agents"]["PO"] == "# PO Agent Profile\n\nSynthetic.\n"
     assert data["content"]["skills"]["harness"].startswith("# Harness Skill")

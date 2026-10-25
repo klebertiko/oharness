@@ -1,4 +1,4 @@
-"""Packaged OpenHarness sidecar entry point.
+"""Packaged OHarness sidecar entry point.
 
 The desktop shell supplies a loopback port and per-process bearer token. User
 data lives under LOCALAPPDATA instead of the read-only installation directory.
@@ -12,7 +12,7 @@ from pathlib import Path
 
 def _data_dir() -> Path:
     configured = os.environ.get("OH_DATA_DIR")
-    path = Path(configured) if configured else Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "OpenHarness"
+    path = Path(configured) if configured else Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "OHarness"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

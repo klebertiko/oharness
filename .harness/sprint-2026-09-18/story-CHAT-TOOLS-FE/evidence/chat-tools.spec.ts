@@ -18,7 +18,7 @@ test.describe("Chat tools broker — real E2E", () => {
     await page.goto("/");
     await page.getByRole("button", { name: /Working folder/ }).click();
     await page.getByRole("listbox", { name: "Chat working folder" }).getByRole("option", { name: "No folder" }).click();
-    const composer = page.getByPlaceholder(/Ask OpenHarness/);
+    const composer = page.getByPlaceholder(/Ask OHarness/);
     await composer.click();
     await composer.fill("/");
     await expect(page.getByText("Selecione uma pasta para usar ferramentas")).toBeVisible();
@@ -32,7 +32,7 @@ test.describe("Chat tools broker — real E2E", () => {
     await page.getByRole("button", { name: /Chat provider/ }).click();
     await page.getByRole("listbox", { name: "Chat provider" }).getByRole("option", { name: "Ollama local" }).click();
 
-    const composer = page.getByPlaceholder(/Ask OpenHarness/);
+    const composer = page.getByPlaceholder(/Ask OHarness/);
     await composer.click();
     await composer.fill("/exec npm run test");
     await composer.press("Control+Enter");
@@ -59,7 +59,7 @@ test.describe("Chat tools broker — real E2E", () => {
     await page.getByRole("button", { name: /Chat provider/ }).click();
     await page.getByRole("listbox", { name: "Chat provider" }).getByRole("option", { name: "Ollama local" }).click();
 
-    const composer = page.getByPlaceholder(/Ask OpenHarness/);
+    const composer = page.getByPlaceholder(/Ask OHarness/);
     await composer.click();
     await composer.fill("Say hi in one word.");
     await composer.press("Control+Enter");

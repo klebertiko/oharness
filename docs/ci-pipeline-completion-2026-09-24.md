@@ -2,7 +2,7 @@
 
 Closes the ChatGPT share work
 (https://chatgpt.com/s/cx_6ab4bebdfa3481919b8e7d417aa7c99f): bar-3 OpenSSF /
-GitButler-aligned delivery gates for OpenHarness, plus OpenGrep, Aikido Safe
+GitButler-aligned delivery gates for OHarness, plus OpenGrep, Aikido Safe
 Chain, CycloneDX, OWASP Dependency-Check, and optional Laya shadow.
 
 ## Delivered on disk

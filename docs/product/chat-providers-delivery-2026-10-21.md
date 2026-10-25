@@ -36,7 +36,7 @@ DoD: all above criteria verified; no personal profile/DB, credentials or paid ca
 
 Reuse `design.md`: Quiet Desk reading column; Curated Library provider dossier; Sora/IBM Plex Mono and named paper/graphite/ink/mineral tokens. Stream text is the primary new reading surface, with compact actions below messages. Controls wrap on narrow screens. No new brand palette or competitor assets.
 
-Input research: `D:/Development/src/OpenHarness/docs/product/harness-innovations-research-2026-10-21.md`, read directly because it is untracked in the source checkout. Reuse its behavior-level opportunities (explicit inference settings, inspectable tools, honest coverage). No new comparative claims. Source inspection is not runtime evidence; local tests use synthetic sidecar frames, not competitor runtime observations.
+Input research: `D:/Development/src/OHarness/docs/product/harness-innovations-research-2026-10-21.md`, read directly because it is untracked in the source checkout. Reuse its behavior-level opportunities (explicit inference settings, inspectable tools, honest coverage). No new comparative claims. Source inspection is not runtime evidence; local tests use synthetic sidecar frames, not competitor runtime observations.
 
 Integration seam: optional `model` on frontend `useRunStream.start`, forwarded only to the already-supported direct request field. No changes to backend storage, Activity/Runs, event or artifact contracts.
 

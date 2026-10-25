@@ -48,7 +48,7 @@ def _connections(model="claude-sonnet-5"):
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
             "defaultModel": model,
         }
     }
@@ -56,7 +56,7 @@ def _connections(model="claude-sonnet-5"):
 
 def _request(connections=None):
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
     state = SimpleNamespace(provider_connections=connections if connections is not None else _connections(), secrets_store=store)
     return SimpleNamespace(app=SimpleNamespace(state=state))
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "manifest": {
-    "id": "openharness.default.agile",
+    "id": "oharness.default.agile",
     "name": "Agile Harness",
     "version": "0.1.0",
     "description": "Default Agile/Scrum/Kanban agent harness, modelled on the engineering/harness project in skills-framework.",

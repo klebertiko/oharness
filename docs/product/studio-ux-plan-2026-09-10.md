@@ -13,7 +13,7 @@ A sibling audit, `docs/product/competitive-gaps-2026-09-10.md`, covers the whole
 ### 1.1 Add a node
 - Only path: drag a row from `NodePalette` (`frontend/src/components/sidebar/NodePalette.tsx:36-73`) onto the canvas; drop position is computed correctly via `screenToFlowPosition` in `HarnessCanvas.tsx:115-133`. This part works well and is a real fix from a documented past bug (comment at `HarnessCanvas.tsx:112-114`).
 - Second path: `Mod+K` command palette → "Add {Type}" commands, built in `page.tsx:207-226`. These insert at a **fixed cascading offset** (`x: 160 + nodes.length * 28`, `page.tsx:220`), not at cursor or viewport centre — acceptable but not spatially intentional.
-- **No third path.** There is no "+" affordance anywhere on the canvas itself: not on an empty canvas click, not on a node edge, not on a handle. Every mainstream node editor (see §3) offers "drag a wire and drop it on nothing → search a node → it connects itself." OpenHarness has no `onConnectStart`/`onConnectEnd` handlers at all (confirmed absent — `Grep` for `onConnectStart|onConnectEnd` across `frontend/src` returns nothing), so dragging a wire off a handle onto empty canvas just … cancels. That is the single most requested n8n-style affordance and it does not exist.
+- **No third path.** There is no "+" affordance anywhere on the canvas itself: not on an empty canvas click, not on a node edge, not on a handle. Every mainstream node editor (see §3) offers "drag a wire and drop it on nothing → search a node → it connects itself." OHarness has no `onConnectStart`/`onConnectEnd` handlers at all (confirmed absent — `Grep` for `onConnectStart|onConnectEnd` across `frontend/src` returns nothing), so dragging a wire off a handle onto empty canvas just … cancels. That is the single most requested n8n-style affordance and it does not exist.
 - `NodePalette` has no search/filter box (`NodePalette.tsx:75-88` — a static title, a one-line instruction, then the six rows). Fine at 6 node types; will not scale, and a search box is also the fastest way to make the palette feel "keyboard-first" per the brief's own ask (Tab/Space).
 
 ### 1.2 Connect nodes
@@ -124,4 +124,4 @@ Already established in `frontend/src/app/globals.css` and `frontend/src/componen
 
 ---
 
-**Output path**: `D:\Development\src\OpenHarness\docs\product\studio-ux-plan-2026-09-10.md` (this file).
+**Output path**: `D:\Development\src\OHarness\docs\product\studio-ux-plan-2026-09-10.md` (this file).

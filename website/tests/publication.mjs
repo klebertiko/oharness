@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const temporary = await mkdtemp(join(tmpdir(), 'openharness-publication-test-'));
+const temporary = await mkdtemp(join(tmpdir(), 'oharness-publication-test-'));
 const build = path => spawnSync(process.execPath, ['scripts/build-pages.mjs', path], {cwd:root,encoding:'utf8'});
 const stale = join(temporary, 'stale');
 await mkdir(stale);

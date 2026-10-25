@@ -8,7 +8,7 @@ import { WorkspacePicker } from "./WorkspacePicker";
 /* providers-recovery F9: the folder chip shares the one Combobox — the
    focused element announces the active option and Escape returns focus. */
 
-const projects = [{ id: "p1", name: "OpenHarness", rootPath: "D:/src/OpenHarness" }];
+const projects = [{ id: "p1", name: "OHarness", rootPath: "D:/src/OHarness" }];
 
 describe("WorkspacePicker", () => {
   let setChosen: ReturnType<typeof vi.fn>;
@@ -33,7 +33,7 @@ describe("WorkspacePicker", () => {
     const list = screen.getByRole("listbox", { name: "Chat working folder" });
     expect(document.activeElement).toBe(list);
     await user.keyboard("{ArrowDown}");
-    expect(document.getElementById(list.getAttribute("aria-activedescendant")!)?.textContent).toContain("OpenHarness");
+    expect(document.getElementById(list.getAttribute("aria-activedescendant")!)?.textContent).toContain("OHarness");
     await user.keyboard("{Enter}");
     expect(setChosen).toHaveBeenCalledWith("p1");
     expect(document.activeElement).toBe(trigger);

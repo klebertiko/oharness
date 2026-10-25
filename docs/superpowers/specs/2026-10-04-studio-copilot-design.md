@@ -395,7 +395,7 @@ assistant. `tokens` is 0.
 The **plan system prompt** is assembled at request time from `catalog.json`.
 It never hand-copies the catalogue:
 
-1. *Role.* You edit OpenHarness harness graphs. Reply with **one JSON object
+1. *Role.* You edit OHarness harness graphs. Reply with **one JSON object
    only**, no prose outside it.
 2. *Vocabulary* (from CONTEXT.md). Agent, Gate (pass/fail), HITL
    (approve/reject, a human authority, usually terminal), Skill (attaches
@@ -434,7 +434,7 @@ The **plan user message** contains:
 - `<request>`.
 
 The **assist system prompt** sets the role ("you write configuration text
-for one block of an OpenHarness graph") and then gives per-field guidance:
+for one block of an OHarness graph") and then gives per-field guidance:
 
 - Agent `systemPrompt`: role, goal, method, constraints, output format,
   hand-off signal.

@@ -69,7 +69,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         }
     }
 
@@ -88,7 +88,7 @@ def _run(graph: dict, tokens: int, monkeypatch: pytest.MonkeyPatch) -> list[tupl
     stub = _FixedTokenAdapter(tokens)
     monkeypatch.setattr("providers.resolution.get_adapter", lambda name: stub)
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
 
     async def collect() -> list[str]:
         control = RunControl("t")

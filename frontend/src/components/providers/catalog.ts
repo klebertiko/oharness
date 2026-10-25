@@ -9,7 +9,7 @@
  * WHY THREE AXES AND NOT A LOGO GRID
  *
  * A single-vendor tool shows you a list of integrations because every row means
- * the same thing. OpenHarness holds a *wallet*: five vendors, six connections,
+ * the same thing. OHarness holds a *wallet*: five vendors, six connections,
  * and three properties that differ per row and change what a harness is allowed
  * to do with it.
  *

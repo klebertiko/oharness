@@ -1,116 +1,114 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Panel } from "@/components/shell/Panel";
+import { Button, EmptyState, Input } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useThreadStore, type Thread } from "@/store/threadStore";
 
 /**
  * The chat list beside the conversation. New chat on top, chats grouped by
  * recency, and a per-row menu for rename / archive / delete. Archived chats
  * live in a collapsed section at the bottom until restored or removed.
+ *
+ * It is a navigation list, not a listbox: each row is a button, the open chat
+ * carries `aria-current`, and the arrow keys move between rows (and open the
+ * chat they land on).
  */
 export function ThreadsSidebar() {
   const threads = useThreadStore((s) => s.threads);
   const activeThreadId = useThreadStore((s) => s.activeThreadId);
   const startNewChat = useThreadStore((s) => s.startNewChat);
   const selectThread = useThreadStore((s) => s.selectThread);
+
   const [query, setQuery] = useState("");
-  const matches = (thread: Thread) => thread.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-
-  const open = threads.filter((t) => !t.archived && matches(t));
-  const archived = threads.filter((t) => t.archived && matches(t));
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = useCallback((thread: Thread) => thread.title.toLocaleLowerCase().includes(needle), [needle]);
+  const open = useMemo(() => threads.filter((t) => !t.archived && matches(t)), [threads, matches]);
+  const archived = useMemo(() => threads.filter((t) => t.archived && matches(t)), [threads, matches]);
   const groups = useMemo(() => groupByRecency(open), [open]);
-
-  const [listFocused, setListFocused] = useState(false);
+  const listRef = useRef<HTMLElement>(null);
 
   const onNew = useCallback(() => startNewChat(), [startNewChat]);
 
+  /* Arrow keys on a row open and focus the neighbouring chat. Rows are found in
+     the DOM so grouping and the archived section need no index bookkeeping. */
   const onKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input, [role="menu"]')) return;
-      if (open.length === 0 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const target = e.target as HTMLElement;
+      if (!target.matches("[data-thread-row]")) return;
+      const rows = [...(listRef.current?.querySelectorAll<HTMLElement>("[data-thread-row]") ?? [])];
+      const next = rows[rows.indexOf(target) + (e.key === "ArrowDown" ? 1 : -1)];
+      if (!next) return;
       e.preventDefault();
-      const ids = open.map((t) => t.id);
-      const current = activeThreadId && ids.includes(activeThreadId) ? activeThreadId : ids[0];
-      const idx = ids.indexOf(current);
-      selectThread(e.key === "ArrowDown" ? ids[Math.min(idx + 1, ids.length - 1)] : ids[Math.max(idx - 1, 0)]);
+      next.focus();
+      selectThread(next.dataset.threadRow!);
     },
-    [open, activeThreadId, selectThread],
+    [selectThread],
   );
 
   return (
     <Panel title="Chats" className="h-full">
       <div className="px-2 pb-1 pt-2">
-        <button
-          type="button"
+        <Button
+          icon={<Plus size={14} strokeWidth={2} aria-hidden />}
           onClick={onNew}
           aria-current={activeThreadId === null ? "true" : undefined}
-          className={[
-            "flex h-8 w-full items-center gap-2 rounded-[8px] px-2.5 text-[13px] font-[550] transition-colors",
-            activeThreadId === null
-              ? "bg-sub-300 text-ink"
-              : "bg-sub-200 text-ink hover:bg-sub-300",
-          ].join(" ")}
+          className={cn("w-full justify-start", activeThreadId === null && "bg-sub-300")}
         >
-          <Plus size={14} strokeWidth={2} className="text-ink-mute" />
           New chat
-        </button>
+        </Button>
       </div>
 
-      <div className="px-2 py-2">
-        <input type="search" aria-label="Search chats" placeholder="Search chats" value={query} onChange={(event) => setQuery(event.target.value)}
-          className="h-8 w-full min-w-0 rounded-control border border-line-soft bg-sub-100 px-2 text-[12px] text-ink outline-none focus-visible:ring-1 focus-visible:ring-signal" />
+      <div className="px-2 py-1">
+        <Input
+          type="search"
+          aria-label="Search chats"
+          placeholder="Search chats"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          compact
+        />
       </div>
 
       {open.length === 0 && archived.length === 0 ? (
-        <p role="status" className="px-3 py-3 text-[12px] text-ink-mute">{query.trim() ? "No matching chats." : "No chats yet. Start one and it shows up here."}</p>
+        <div className="px-2 py-2">
+          {needle ? (
+            <p role="status" className="text-body text-ink-mute">No matching chats.</p>
+          ) : (
+            <EmptyState title="No chats yet">Start one and it shows up here.</EmptyState>
+          )}
+        </div>
       ) : (
-        <div
-          role="listbox"
-          aria-label="Chats"
-          tabIndex={0}
-          onKeyDown={onKeyDown}
-          onFocus={(e) => e.target === e.currentTarget && setListFocused(true)}
-          onBlur={(e) => e.target === e.currentTarget && setListFocused(false)}
-          className={`flex flex-col pb-2 outline-none ${listFocused ? "ring-1 ring-inset ring-signal/25" : ""}`}
-        >
+        <nav ref={listRef} aria-label="Chats" onKeyDown={onKeyDown} className="flex flex-col pb-2">
           {groups.map(({ label, items }) => (
-            <section key={label} className="px-1.5 pt-2">
-              <h3 className="px-2 pb-1 text-[11px] font-[550] text-ink-faint">{label}</h3>
+            <section key={label} aria-label={label} className="px-1.5 pt-2">
+              <h3 className="px-2 pb-1 text-meta font-medium text-ink-mute">{label}</h3>
               <ul className="flex flex-col gap-px">
                 {items.map((thread) => (
-                  <ThreadRow
-                    key={thread.id}
-                    thread={thread}
-                    active={thread.id === activeThreadId}
-                    onSelect={() => selectThread(thread.id)}
-                  />
+                  <ThreadRow key={thread.id} thread={thread} active={thread.id === activeThreadId} onSelect={() => selectThread(thread.id)} />
                 ))}
               </ul>
             </section>
           ))}
 
           {archived.length > 0 && (
-            <details key={query.trim() ? "search" : "all"} open={query.trim() ? true : undefined} className="mt-2 px-1.5">
-              <summary className="cursor-pointer list-none px-2 py-1.5 text-[11px] font-[550] text-ink-faint marker:content-none hover:text-ink-mute">
+            <details key={needle ? "search" : "all"} open={needle ? true : undefined} className="mt-2 px-1.5">
+              <summary className="oh-focus-inner min-h-control-md cursor-pointer list-none rounded-control px-2 py-1.5 text-meta font-medium text-ink-mute marker:content-none hover:text-ink">
                 Archived · {archived.length}
               </summary>
               <ul className="flex flex-col gap-px pt-1">
                 {archived.map((thread) => (
-                  <ThreadRow
-                    key={thread.id}
-                    thread={thread}
-                    active={thread.id === activeThreadId}
-                    onSelect={() => selectThread(thread.id)}
-                  />
+                  <ThreadRow key={thread.id} thread={thread} active={thread.id === activeThreadId} onSelect={() => selectThread(thread.id)} />
                 ))}
               </ul>
             </details>
           )}
-        </div>
+        </nav>
       )}
     </Panel>
   );
@@ -126,18 +124,27 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [draft, setDraft] = useState(thread.title);
+  const titleId = useId();
   const rowRef = useRef<HTMLLIElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const closeMenu = useCallback((refocus = true) => {
+    setMenuOpen(false);
+    setConfirmingDelete(false);
+    if (refocus) moreRef.current?.focus();
+  }, []);
+
+  // Outside press and Escape close the menu; focus goes back to its button.
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: PointerEvent) => {
-      if (!rowRef.current?.contains(e.target as Node)) {
-        setMenuOpen(false);
-        setConfirmingDelete(false);
-      }
+      if (!rowRef.current?.contains(e.target as Node)) closeMenu(false);
     };
-    const onEsc = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const onEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") closeMenu();
+    };
     // Defer binding so the click that opened the menu can't immediately close it.
     const id = window.setTimeout(() => {
       document.addEventListener("pointerdown", onDown);
@@ -148,7 +155,15 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [menuOpen]);
+  }, [menuOpen, closeMenu]);
+
+  // Opening the menu moves focus to its first item; the delete confirmation
+  // focuses Cancel, the safe default.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const target = confirmingDelete ? menuRef.current?.querySelector<HTMLElement>("[data-cancel]") : menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+    target?.focus();
+  }, [menuOpen, confirmingDelete]);
 
   useEffect(() => {
     if (editing) {
@@ -164,8 +179,18 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
     setEditing(false);
   };
 
+  const onMenuKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+    if (!items.length) return;
+    e.preventDefault();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const to = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : (at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[to].focus();
+  };
+
   return (
-    <li ref={rowRef} role="option" aria-selected={active} className="group/row relative">
+    <li ref={rowRef} className="group/row relative">
       {editing ? (
         <input
           ref={inputRef}
@@ -177,72 +202,72 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
             if (e.key === "Escape") setEditing(false);
           }}
           aria-label="Chat name"
-          className="w-full rounded-[7px] border border-signal/50 bg-sub-200 px-2.5 py-1.5 text-[13px] text-ink outline-none"
+          className="h-control-lg w-full rounded-control border border-line-strong bg-sub-200 px-2.5 text-title text-ink focus-visible:border-signal"
         />
       ) : (
         <button
           type="button"
+          data-thread-row={thread.id}
           onClick={onSelect}
-          className={[
-            "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-left outline-none transition-colors focus-visible:ring-1 focus-visible:ring-signal",
-            active ? "bg-sub-300/70" : "hover:bg-sub-200/70",
-          ].join(" ")}
+          aria-current={active ? "true" : undefined}
+          className={cn(
+            "oh-focus-inner flex min-h-control-lg w-full items-center gap-2 rounded-control px-2.5 py-1.5 pr-9 text-left transition-colors",
+            active ? "bg-sub-200 shadow-[inset_2px_0_0_var(--signal)]" : "hover:bg-sub-200",
+          )}
         >
-          <span className={`min-w-0 flex-1 truncate text-[13px] leading-5 ${active ? "text-ink" : "text-ink-dim"}`}>
-            {thread.title}
-          </span>
-          <span className="shrink-0 text-[11px] text-ink-faint group-hover/row:hidden">{relativeTime(thread.updatedAt)}</span>
+          <span id={titleId} className={cn("min-w-0 flex-1 truncate text-title", active ? "text-ink" : "text-ink-dim")}>{thread.title}</span>
+          <span className="t-meta shrink-0 text-ink-mute group-focus-within/row:hidden group-hover/row:hidden">{relativeTime(thread.updatedAt)}</span>
         </button>
       )}
 
       {!editing && (
-        <button
-          type="button"
+        <Button
+          ref={moreRef}
+          iconOnly
+          size="sm"
+          variant="ghost"
           aria-label="Chat actions"
-          onClick={() => setMenuOpen((v) => !v)}
-          className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-[6px] text-ink-mute opacity-0 transition-opacity hover:bg-sub-300 hover:text-ink hover:opacity-100 focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 aria-expanded:opacity-100"
+          aria-describedby={titleId}
+          aria-haspopup="menu"
           aria-expanded={menuOpen}
-        >
-          <MoreHorizontal size={15} strokeWidth={1.8} />
-        </button>
+          onClick={() => setMenuOpen((v) => !v)}
+          icon={<MoreHorizontal size={15} strokeWidth={1.8} aria-hidden />}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within/row:opacity-100 group-hover/row:opacity-100 aria-expanded:opacity-100 max-sm:opacity-100"
+        />
       )}
 
       {menuOpen && (
-        <div className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-[168px] p-1" role="menu">
+        <div ref={menuRef} onKeyDown={onMenuKeyDown} className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-[184px] p-1" role="menu" aria-label={`Actions for ${thread.title}`}>
           {confirmingDelete ? (
-            <div className="px-2 py-1.5">
-              <p className="pb-1.5 text-[12px] text-ink-mute">Delete this chat?</p>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
+            <div className="px-2 py-1.5" role="group" aria-label="Confirm delete">
+              <p className="pb-2 text-body text-ink-dim">Delete this chat and its messages?</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => {
                     deleteThread(thread.id);
-                    setMenuOpen(false);
+                    closeMenu(false);
                   }}
-                  className="h-7 flex-1 rounded-[6px] bg-fault px-2 text-[12px] font-[550] text-[color:var(--sub-000)]"
                 >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="h-7 flex-1 rounded-[6px] border border-line px-2 text-[12px] text-ink-mute hover:text-ink"
-                >
+                  Delete chat
+                </Button>
+                <Button size="sm" data-cancel onClick={() => closeMenu()}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
             <>
-              <MenuItem icon={Pencil} onClick={() => { setEditing(true); setMenuOpen(false); }}>
+              <MenuItem icon={Pencil} onClick={() => { setEditing(true); closeMenu(false); }}>
                 Rename
               </MenuItem>
               {thread.archived ? (
-                <MenuItem icon={ArchiveRestore} onClick={() => { restoreThread(thread.id); setMenuOpen(false); }}>
+                <MenuItem icon={ArchiveRestore} onClick={() => { restoreThread(thread.id); closeMenu(false); }}>
                   Restore
                 </MenuItem>
               ) : (
-                <MenuItem icon={Archive} onClick={() => { archiveThread(thread.id); setMenuOpen(false); }}>
+                <MenuItem icon={Archive} onClick={() => { archiveThread(thread.id); closeMenu(false); }}>
                   Archive
                 </MenuItem>
               )}
@@ -257,28 +282,18 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
   );
 }
 
-function MenuItem({
-  icon: Icon,
-  children,
-  onClick,
-  danger = false,
-}: {
-  icon: typeof Pencil;
-  children: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
+function MenuItem({ icon: Icon, children, onClick, danger = false }: { icon: typeof Pencil; children: React.ReactNode; onClick: () => void; danger?: boolean }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className={[
-        "flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-[12px] font-[500] transition-colors",
-        danger ? "text-fault hover:bg-fault/12" : "text-ink-mute hover:bg-sub-300/70 hover:text-ink",
-      ].join(" ")}
+      className={cn(
+        "oh-focus-inner flex min-h-control-md w-full items-center gap-2 rounded-control px-2 py-1 text-left text-body font-medium transition-colors max-sm:min-h-control-lg",
+        danger ? "text-fault-text hover:bg-sub-200" : "text-ink-dim hover:bg-sub-200 hover:text-ink",
+      )}
     >
-      <Icon size={13} strokeWidth={1.8} />
+      <Icon size={13} strokeWidth={1.8} aria-hidden />
       {children}
     </button>
   );

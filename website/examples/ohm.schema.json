@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openharness.dev/schema/oharness/v1.0.0.json",
-  "title": "OpenHarness Bundle",
+  "$id": "https://oharness.dev/schema/oharness/v1.0.0.json",
+  "title": "OHarness Bundle",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "description": "Semver of the OpenHarness bundle schema."
+      "description": "Semver of the OHarness bundle schema."
     },
     "manifest": {
       "type": "object",

@@ -1,6 +1,6 @@
 // Apply the preference before styles paint; the rest waits for the document.
 (() => {
-  const storageKey = 'openharness-website-theme';
+  const storageKey = 'oharness-website-theme';
   const system = matchMedia('(prefers-color-scheme: dark)');
   const root = document.documentElement;
   const english = root.lang === 'en-US';

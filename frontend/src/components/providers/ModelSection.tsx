@@ -61,15 +61,15 @@ export function ModelSection({ c }: { c: Connection }) {
           </p>
         )}
         {save.state === "failed" && (
-          <p role="alert" className="t-meta text-fault">
+          <p role="alert" className="t-meta text-fault-text">
             Couldn&apos;t save the default model. Check the app is running and try again.
           </p>
         )}
       </div>
 
-      <p className="t-meta mb-1.5 mt-2 text-ink-faint">{modelSourceNote(c)}</p>
+      <p className="t-meta mb-1.5 mt-2 text-ink-mute">{modelSourceNote(c)}</p>
       {c.models.length === 0 ? (
-        <p className="t-body text-ink-faint">Nothing listed yet. Test the connection to load what it serves.</p>
+        <p className="t-body text-ink-mute">Nothing listed yet. Test the connection to load what it serves.</p>
       ) : (
         <ul className="max-h-[260px] overflow-y-auto rounded-control border border-line-soft" aria-label={`${c.label} models`}>
           {c.models.map((m, i) => (
@@ -80,7 +80,7 @@ export function ModelSection({ c }: { c: Connection }) {
               }`}
             >
               <span className="t-meta truncate text-ink">{m.id}</span>
-              <span className="t-meta truncate text-right text-ink-faint">
+              <span className="t-meta truncate text-right text-ink-mute">
                 {m.id === c.defaultModel ? "default" : modelDetail(m) || "—"}
               </span>
             </li>
@@ -98,7 +98,7 @@ export function CursorHandoff({ c }: { c: Connection }) {
   return (
     <Block
       title="Handoff"
-      lede="Cursor runs the agent; OpenHarness hands it the task and reads the result back. Chat cannot use it — it answers agent tasks only."
+      lede="Cursor runs the agent; OHarness hands it the task and reads the result back. Chat cannot use it — it answers agent tasks only."
     >
       <div className="grid gap-2 sm:grid-cols-2">
         <Card
@@ -132,7 +132,7 @@ export function Block({
   return (
     <section className="border-t border-line-soft py-4">
       <header className="mb-2.5 flex flex-wrap items-center gap-2">
-        <h3 className="t-title text-ink">{title}</h3>
+        <h2 className="t-title text-ink">{title}</h2>
         {chip}
       </header>
       {lede && <p className="t-body mb-2.5 max-w-[70ch] text-ink-mute">{lede}</p>}
@@ -145,7 +145,7 @@ function Card({ k, v, body }: { k: string; v: string; body: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-control border border-line-soft bg-sub-200 p-2.5">
       <div className="t-title text-ink">{k}</div>
-      <div className="t-meta break-all text-ink-faint">{v}</div>
+      <div className="t-meta break-all text-ink-mute">{v}</div>
       <p className="t-body flex-1 text-ink-mute">{body}</p>
     </div>
   );

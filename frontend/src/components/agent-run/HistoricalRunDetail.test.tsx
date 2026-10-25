@@ -18,7 +18,7 @@ describe("HistoricalRunDetail", () => {
         json: async () => ({
           id: "r1",
           harness_id: "h1",
-          harness_name: "OpenHarness Agile",
+          harness_name: "OHarness Agile",
           status: "complete",
           started_at: null,
           finished_at: null,
@@ -70,7 +70,7 @@ describe("HistoricalRunDetail", () => {
         json: async () => ({
           id: "r1",
           harness_id: "h1",
-          harness_name: "OpenHarness Agile",
+          harness_name: "OHarness Agile",
           status: "complete",
           started_at: null,
           finished_at: null,

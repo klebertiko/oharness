@@ -23,14 +23,14 @@ vi.mock("@/lib/studio", async (original) => ({
 vi.mock("@/lib/studioExamples", async (original) => ({
   ...(await original<typeof import("@/lib/studioExamples")>()),
   fetchStudioExamples: vi.fn().mockResolvedValue([
-    { id: "openharness.default.agile", name: "Agile Harness", description: "", bundle: { manifest: { id: "openharness.default.agile" } } },
+    { id: "oharness.default.agile", name: "Agile Harness", description: "", bundle: { manifest: { id: "oharness.default.agile" } } },
     { id: "sample:minimal-gate", name: "Agent + review", description: "", bundle: null, presetId: "minimal-gate" },
-    { id: "openharness.example.deepseek-harness", name: "DeepSeek Harness", description: "", bundle: { manifest: { id: "openharness.example.deepseek-harness" } } },
+    { id: "oharness.example.deepseek-harness", name: "DeepSeek Harness", description: "", bundle: { manifest: { id: "oharness.example.deepseek-harness" } } },
   ]),
 }));
 
 const node = { id: "a", type: "agent" as const, position: { x: 0, y: 0 }, data: { label: "a" } };
-const setDraft = (id: string | null, bundleId = "openharness.studio.export") => {
+const setDraft = (id: string | null, bundleId = "oharness.studio.export") => {
   useCanvasStore.setState({ isRunning: false, nodes: [node], edges: [], harnessMeta: { id, name: "My harness", description: "" } });
   useHarnessSessionStore.setState({ activeBundle: { manifest: { id: bundleId } } });
 };
@@ -43,7 +43,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it("names the harness and says where it came from and whether it is saved", () => {
-  setDraft(null, "openharness.example.deepseek-harness");
+  setDraft(null, "oharness.example.deepseek-harness");
   render(<StudioActionsBar />);
   expect(screen.getByText("My harness")).toBeTruthy();
   expect(screen.getByText("Bundled harness")).toBeTruthy();
@@ -59,7 +59,7 @@ it("names the harness and says where it came from and whether it is saved", () =
 it("shows every file action as a labelled button", () => {
   setDraft(null);
   render(<StudioActionsBar />);
-  for (const name of ["New", "Open bundled harness", "Import", "Export", "Save", "Save as…", "Discard", "Delete draft"]) {
+  for (const name of ["New", "Open bundled harness", "Save", "Save as…", "Discard", "Delete draft"]) {
     expect(screen.getByRole("button", { name })).toBeTruthy();
   }
 });
@@ -89,7 +89,7 @@ it("Discard and Delete ask for confirmation first, and Cancel does nothing", asy
   expect(docs.removeSavedHarness).not.toHaveBeenCalled();
 
   await userEvent.click(screen.getByRole("button", { name: "Delete" }));
-  await userEvent.click(within(screen.getByRole("group", { name: "Confirm delete" })).getByRole("button", { name: "Delete" }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Confirm delete" })).getByRole("button", { name: "Delete harness" }));
   await waitFor(() => expect(docs.removeSavedHarness).toHaveBeenCalledWith("h1"));
 });
 
@@ -97,10 +97,10 @@ it("deleting a draft discards it, and a bundled harness offers no Delete", async
   setDraft(null);
   render(<StudioActionsBar />);
   await userEvent.click(screen.getByRole("button", { name: "Delete draft" }));
-  await userEvent.click(within(screen.getByRole("group", { name: "Confirm delete" })).getByRole("button", { name: "Delete" }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Confirm delete" })).getByRole("button", { name: "Delete harness" }));
   await waitFor(() => expect(docs.discardStudioChanges).toHaveBeenCalled());
   cleanup();
-  setDraft(null, "openharness.example.deepseek-harness");
+  setDraft(null, "oharness.example.deepseek-harness");
   render(<StudioActionsBar />);
   expect(screen.queryByRole("button", { name: /^Delete/ })).toBeNull();
 });
@@ -110,10 +110,10 @@ it("lists every example the catalog returns and opens the chosen one as a copy",
   render(<StudioActionsBar />);
   await userEvent.click(screen.getByRole("button", { name: "Open bundled harness" }));
   for (const n of ["Agile Harness", "Agent + review", "DeepSeek Harness"]) {
-    expect(await screen.findByRole("menuitem", { name: n })).toBeTruthy();
+    expect(await screen.findByRole("option", { name: new RegExp("^" + n.replace("+", "\\+")) })).toBeTruthy();
   }
-  await userEvent.click(screen.getByRole("menuitem", { name: /DeepSeek Harness/ }));
-  expect(studio.openStudioExample).toHaveBeenCalledWith(expect.objectContaining({ id: "openharness.example.deepseek-harness" }));
+  await userEvent.click(screen.getByRole("option", { name: /DeepSeek Harness/ }));
+  expect(studio.openStudioExample).toHaveBeenCalledWith(expect.objectContaining({ id: "oharness.example.deepseek-harness" }));
 });
 
 it("Save runs the explicit save", async () => {

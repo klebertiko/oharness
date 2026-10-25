@@ -24,4 +24,4 @@ createServer(async (req, res) => {
     catch {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Página não encontrada.');
     }
-}).listen(port, '127.0.0.1', () => process.stdout.write(`OpenHarness website: http://127.0.0.1:${port}\n`));
+}).listen(port, '127.0.0.1', () => process.stdout.write(`OHarness website: http://127.0.0.1:${port}\n`));

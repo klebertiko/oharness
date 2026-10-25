@@ -58,14 +58,14 @@ jobs:
   quality:
     name: Quality
     if: github.event_name == 'push'
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
     permissions:
       contents: read
 
   security:
     name: Security scan
     if: github.event_name == 'push'
-    uses: ./.github/workflows/security.yml
+    uses: $/.github/workflows/security.yml
     permissions:
       contents: read
       security-events: write
@@ -129,14 +129,14 @@ jobs:
         with:
           persist-credentials: false
       # No dependency caches in a release workflow (cache poisoning).
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - uses: ./.github/actions/setup-safe-chain
+      - uses: $/.github/actions/setup-safe-chain # nosemgrep: third-party-action-not-pinned-to-commit-sha (in-repo action, self-repository syntax)
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts --prefix frontend
 
@@ -172,7 +172,7 @@ jobs:
       - name: Build sidecar
         run: node scripts/build-sidecar.mjs
       - name: Smoke packaged sidecar
-        run: node scripts/smoke-sidecar.mjs src-tauri/binaries/openharness-sidecar-x86_64-pc-windows-msvc.exe
+        run: node scripts/smoke-sidecar.mjs src-tauri/binaries/oharness-sidecar-x86_64-pc-windows-msvc.exe
 
       # Sign inside-out: sidecar, app exe, then the installers that embed them.
       # Each signing step logs in again because OIDC assertions are short-lived.
@@ -190,7 +190,7 @@ jobs:
           endpoint: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\src-tauri\binaries\openharness-sidecar-x86_64-pc-windows-msvc.exe
+          files: ${{ github.workspace }}\src-tauri\binaries\oharness-sidecar-x86_64-pc-windows-msvc.exe
           file-digest: SHA256
           timestamp-digest: SHA256
           cache-dependencies: false
@@ -213,8 +213,8 @@ jobs:
           signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
           files: |
-            ${{ github.workspace }}\src-tauri\target\release\openharness.exe
-            ${{ github.workspace }}\src-tauri\target\release\openharness-sidecar.exe
+            ${{ github.workspace }}\src-tauri\target\release\oharness.exe
+            ${{ github.workspace }}\src-tauri\target\release\oharness-sidecar.exe
           file-digest: SHA256
           timestamp-digest: SHA256
           cache-dependencies: false
@@ -285,9 +285,9 @@ jobs:
           NSIS: ${{ steps.bundles.outputs.nsis }}
         run: |
           $files = @(
-            'src-tauri\binaries\openharness-sidecar-x86_64-pc-windows-msvc.exe',
-            'src-tauri\target\release\openharness-sidecar.exe',
-            'src-tauri\target\release\openharness.exe',
+            'src-tauri\binaries\oharness-sidecar-x86_64-pc-windows-msvc.exe',
+            'src-tauri\target\release\oharness-sidecar.exe',
+            'src-tauri\target\release\oharness.exe',
             $env:NSIS
           )
           foreach ($f in $files) {
@@ -302,23 +302,23 @@ jobs:
           SIGNED: ${{ steps.signing.outputs.enabled }}
         run: |
           New-Item -ItemType Directory -Force dist-release, dist-status | Out-Null
-          Copy-Item -LiteralPath $env:NSIS dist-release\OpenHarness-windows-x64-setup.exe
+          Copy-Item -LiteralPath $env:NSIS dist-release\OHarness-windows-x64-setup.exe
           if ($env:SIGNED -eq 'true') {
-            $line = '- **Windows x64** (`OpenHarness-windows-x64-setup.exe`): **signed** with Authenticode (Azure Trusted Signing): app, sidecar and installer.'
+            $line = '- **Windows x64** (`OHarness-windows-x64-setup.exe`): **signed** with Authenticode (Azure Trusted Signing): app, sidecar and installer.'
           } else {
-            Write-Host "::warning title=Unsigned Windows build::Azure Trusted Signing is not configured; OpenHarness-windows-x64-setup.exe is UNSIGNED (SmartScreen will warn)."
-            $line = '- **Windows x64** (`OpenHarness-windows-x64-setup.exe`): **UNSIGNED**. Microsoft Defender SmartScreen shows "Windows protected your PC" / "Unknown publisher"; choose *More info* then *Run anyway*. Verify the file with `SHA256SUMS` and `gh attestation verify` first.'
+            Write-Host "::warning title=Unsigned Windows build::Azure Trusted Signing is not configured; OHarness-windows-x64-setup.exe is UNSIGNED (SmartScreen will warn)."
+            $line = '- **Windows x64** (`OHarness-windows-x64-setup.exe`): **UNSIGNED**. Microsoft Defender SmartScreen shows "Windows protected your PC" / "Unknown publisher"; choose *More info* then *Run anyway*. Verify the file with `SHA256SUMS` and `gh attestation verify` first.'
           }
           Set-Content -Path dist-status\windows-x64.md -Value $line -Encoding utf8
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Signing status`n`n$line"
           Get-ChildItem dist-release | Format-Table Name, Length
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installer-windows-x64
           path: dist-release/*
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'push' && 30 || 7 }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signing-status-windows-x64
           path: dist-status/*
@@ -372,14 +372,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
             libssl-dev libayatana-appindicator3-dev librsvg2-dev libfuse2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - uses: ./.github/actions/setup-safe-chain
+      - uses: $/.github/actions/setup-safe-chain # nosemgrep: third-party-action-not-pinned-to-commit-sha (in-repo action, self-repository syntax)
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts --prefix frontend
 
@@ -456,13 +456,13 @@ jobs:
           TRIPLE: ${{ matrix.triple }}
         run: |
           set -euo pipefail
-          bin="src-tauri/binaries/openharness-sidecar-${TRIPLE}"
+          bin="src-tauri/binaries/oharness-sidecar-${TRIPLE}"
           test -x "$bin"
           file "$bin"
       - name: Smoke packaged sidecar
         env:
           TRIPLE: ${{ matrix.triple }}
-        run: node scripts/smoke-sidecar.mjs "src-tauri/binaries/openharness-sidecar-${TRIPLE}"
+        run: node scripts/smoke-sidecar.mjs "src-tauri/binaries/oharness-sidecar-${TRIPLE}"
 
       - name: Build and bundle
         env:
@@ -532,38 +532,38 @@ jobs:
           mkdir -p dist-release dist-status
           case "$ID" in
             linux-x64)
-              cp "$(one "$bundle/appimage" "*.AppImage")" dist-release/OpenHarness-linux-x86_64.AppImage
-              cp "$(one "$bundle/deb" "*.deb")" dist-release/OpenHarness-linux-amd64.deb
-              dpkg-deb --info dist-release/OpenHarness-linux-amd64.deb | sed -n '1,20p'
+              cp "$(one "$bundle/appimage" "*.AppImage")" dist-release/OHarness-linux-x86_64.AppImage
+              cp "$(one "$bundle/deb" "*.deb")" dist-release/OHarness-linux-amd64.deb
+              dpkg-deb --info dist-release/OHarness-linux-amd64.deb | sed -n '1,20p'
               # Capture first: grep -q closing the pipe early would SIGPIPE dpkg-deb.
-              deb_contents=$(dpkg-deb --contents dist-release/OpenHarness-linux-amd64.deb)
-              grep -q 'openharness-sidecar' <<<"$deb_contents" \
+              deb_contents=$(dpkg-deb --contents dist-release/OHarness-linux-amd64.deb)
+              grep -q 'oharness-sidecar' <<<"$deb_contents" \
                 || { echo "::error::.deb does not contain the sidecar"; exit 1; }
               if [ "$SIGNED" = true ]; then
-                sig=$(APPIMAGE_EXTRACT_AND_RUN=1 dist-release/OpenHarness-linux-x86_64.AppImage --appimage-signature || true)
+                sig=$(APPIMAGE_EXTRACT_AND_RUN=1 dist-release/OHarness-linux-x86_64.AppImage --appimage-signature || true)
                 printf '%s' "$sig" | grep -q 'BEGIN PGP SIGNATURE' \
                   || { echo "::error::AppImage has no embedded GPG signature"; exit 1; }
-                line="- **Linux x86_64** (\`OpenHarness-linux-x86_64.AppImage\`, \`OpenHarness-linux-amd64.deb\`): AppImage **signed** with an embedded GPG signature; the .deb is verified through \`SHA256SUMS\` and the attestation."
+                line="- **Linux x86_64** (\`OHarness-linux-x86_64.AppImage\`, \`OHarness-linux-amd64.deb\`): AppImage **signed** with an embedded GPG signature; the .deb is verified through \`SHA256SUMS\` and the attestation."
               else
-                echo "::warning title=Unsigned Linux build::AppImage GPG signing is not configured; OpenHarness-linux-x86_64.AppImage is UNSIGNED."
-                line="- **Linux x86_64** (\`OpenHarness-linux-x86_64.AppImage\`, \`OpenHarness-linux-amd64.deb\`): **UNSIGNED** (no embedded AppImage GPG signature). Linux shows no warning; verify the file with \`SHA256SUMS\` and \`gh attestation verify\`."
+                echo "::warning title=Unsigned Linux build::AppImage GPG signing is not configured; OHarness-linux-x86_64.AppImage is UNSIGNED."
+                line="- **Linux x86_64** (\`OHarness-linux-x86_64.AppImage\`, \`OHarness-linux-amd64.deb\`): **UNSIGNED** (no embedded AppImage GPG signature). Linux shows no warning; verify the file with \`SHA256SUMS\` and \`gh attestation verify\`."
               fi
               ;;
             macos-arm64|macos-x64)
               arch=${ID#macos-}
               app=$(one "$bundle/macos" "*.app")
-              grep -q . <(find "$app/Contents/MacOS" -name 'openharness-sidecar*') \
+              grep -q . <(find "$app/Contents/MacOS" -name 'oharness-sidecar*') \
                 || { echo "::error::.app does not contain the sidecar"; exit 1; }
               codesign --verify --deep --strict --verbose=2 "$app"
-              cp "$(one "$bundle/dmg" "*.dmg")" "dist-release/OpenHarness-macos-${arch}.dmg"
+              cp "$(one "$bundle/dmg" "*.dmg")" "dist-release/OHarness-macos-${arch}.dmg"
               label=$([ "$arch" = arm64 ] && echo "Apple silicon" || echo "Intel")
               if [ "$SIGNED" = true ]; then
                 spctl --assess --type execute --verbose=4 "$app"
                 xcrun stapler validate "$app"
-                line="- **macOS ${label}** (\`OpenHarness-macos-${arch}.dmg\`): **signed** with Developer ID and **notarized** by Apple."
+                line="- **macOS ${label}** (\`OHarness-macos-${arch}.dmg\`): **signed** with Developer ID and **notarized** by Apple."
               else
-                echo "::warning title=Unsigned macOS build::Developer ID signing and notarization are not configured; OpenHarness-macos-${arch}.dmg is ad-hoc signed only (Gatekeeper blocks the first launch)."
-                line="- **macOS ${label}** (\`OpenHarness-macos-${arch}.dmg\`): **UNSIGNED** (ad-hoc signature only, not notarized). Gatekeeper blocks the first launch (\"Apple could not verify OpenHarness is free of malware\"); open *System Settings > Privacy & Security* and choose *Open Anyway*, or run \`xattr -dr com.apple.quarantine /Applications/OpenHarness.app\` after verifying the file."
+                echo "::warning title=Unsigned macOS build::Developer ID signing and notarization are not configured; OHarness-macos-${arch}.dmg is ad-hoc signed only (Gatekeeper blocks the first launch)."
+                line="- **macOS ${label}** (\`OHarness-macos-${arch}.dmg\`): **UNSIGNED** (ad-hoc signature only, not notarized). Gatekeeper blocks the first launch (\"Apple could not verify OHarness is free of malware\"); open *System Settings > Privacy & Security* and choose *Open Anyway*, or run \`xattr -dr com.apple.quarantine /Applications/OHarness.app\` after verifying the file."
               fi
               ;;
             *) echo "::error::unknown matrix id $ID"; exit 1 ;;
@@ -571,13 +571,13 @@ jobs:
           printf '%s\n' "$line" > "dist-status/${ID}.md"
           printf '### Signing status\n\n%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"
           ls -la dist-release
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installer-${{ matrix.id }}
           path: dist-release/*
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'push' && 30 || 7 }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signing-status-${{ matrix.id }}
           path: dist-status/*
@@ -599,12 +599,12 @@ jobs:
         with:
           persist-credentials: false
           path: source
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: installer-*
           merge-multiple: true
           path: release-assets
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: signing-status-*
           merge-multiple: true
@@ -613,40 +613,40 @@ jobs:
         run: |
           set -euo pipefail
           expected=(
-            OpenHarness-windows-x64-setup.exe
-            OpenHarness-linux-x86_64.AppImage
-            OpenHarness-linux-amd64.deb
-            OpenHarness-macos-arm64.dmg
-            OpenHarness-macos-x64.dmg
+            OHarness-windows-x64-setup.exe
+            OHarness-linux-x86_64.AppImage
+            OHarness-linux-amd64.deb
+            OHarness-macos-arm64.dmg
+            OHarness-macos-x64.dmg
           )
           for f in "${expected[@]}"; do test -s "release-assets/$f" || { echo "::error::missing $f"; exit 1; }; done
           test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq "${#expected[@]}"
       # SBOM of what the installers are built from: npm, Cargo and Python lockfiles.
-      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: source
           format: cyclonedx-json
-          output-file: release-assets/OpenHarness-sbom.cdx.json
+          output-file: release-assets/OHarness-sbom.cdx.json
           upload-artifact: false
           upload-release-assets: false
       - name: Create SHA256SUMS
         working-directory: release-assets
         run: |
           set -euo pipefail
-          sha256sum OpenHarness-* > SHA256SUMS
+          sha256sum OHarness-* > SHA256SUMS
           cat SHA256SUMS
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
-            release-assets/OpenHarness-*
+            release-assets/OHarness-*
             release-assets/SHA256SUMS
       - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-path: |
-            release-assets/OpenHarness-windows-*
-            release-assets/OpenHarness-linux-*
-            release-assets/OpenHarness-macos-*
-          sbom-path: release-assets/OpenHarness-sbom.cdx.json
+            release-assets/OHarness-windows-*
+            release-assets/OHarness-linux-*
+            release-assets/OHarness-macos-*
+          sbom-path: release-assets/OHarness-sbom.cdx.json
       - name: Write release notes
         env:
           REPO: ${{ github.repository }}
@@ -657,10 +657,10 @@ jobs:
             echo
             echo "| Platform | File |"
             echo "| --- | --- |"
-            echo "| Windows 10/11 x64 | \`OpenHarness-windows-x64-setup.exe\` (per-user installer) |"
-            echo "| macOS Apple silicon | \`OpenHarness-macos-arm64.dmg\` |"
-            echo "| macOS Intel | \`OpenHarness-macos-x64.dmg\` |"
-            echo "| Linux x86_64 | \`OpenHarness-linux-x86_64.AppImage\` or \`OpenHarness-linux-amd64.deb\` (Ubuntu 22.04+ / Debian 12+) |"
+            echo "| Windows 10/11 x64 | \`OHarness-windows-x64-setup.exe\` (per-user installer) |"
+            echo "| macOS Apple silicon | \`OHarness-macos-arm64.dmg\` |"
+            echo "| macOS Intel | \`OHarness-macos-x64.dmg\` |"
+            echo "| Linux x86_64 | \`OHarness-linux-x86_64.AppImage\` or \`OHarness-linux-amd64.deb\` (Ubuntu 22.04+ / Debian 12+) |"
             echo
             echo "## Code signing"
             echo
@@ -670,10 +670,10 @@ jobs:
             echo
             echo '```bash'
             echo "sha256sum --check --ignore-missing SHA256SUMS"
-            echo "gh attestation verify OpenHarness-linux-x86_64.AppImage --repo ${REPO}"
+            echo "gh attestation verify OHarness-linux-x86_64.AppImage --repo ${REPO}"
             echo '```'
             echo
-            echo "\`OpenHarness-sbom.cdx.json\` is the CycloneDX SBOM; every installer carries a build-provenance and an SBOM attestation."
+            echo "\`OHarness-sbom.cdx.json\` is the CycloneDX SBOM; every installer carries a build-provenance and an SBOM attestation."
             echo
           } > release-notes.md
           cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
@@ -688,5 +688,5 @@ jobs:
           case "${GITHUB_REF_NAME}" in *-*) prerelease=(--prerelease) ;; esac
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --draft --verify-tag --generate-notes --notes-file release-notes.md \
-            --title "OpenHarness ${GITHUB_REF_NAME}" ${prerelease[@]+"${prerelease[@]}"}
+            --title "OHarness ${GITHUB_REF_NAME}" ${prerelease[@]+"${prerelease[@]}"}
           echo "Draft release created for ${GITHUB_REF_NAME}. A maintainer must review and publish it." >> "$GITHUB_STEP_SUMMARY"

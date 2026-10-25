@@ -20,8 +20,8 @@ const DEFAULT_NAMES = new Set(["untitled harness"]);
 const RUNTIME_NODE_KEYS = ["status", "output", "tokens", "latencyMs", "error"] as const;
 const RUNTIME_EDGE_KEYS = ["live"] as const;
 // React Flow view state: selecting or measuring a node is not an edit.
-const VIEW_NODE_KEYS = ["selected", "dragging", "measured", "width", "height", "resizing"] as const;
-const VIEW_EDGE_KEYS = ["selected"] as const;
+export const VIEW_NODE_KEYS = ["selected", "dragging", "measured", "width", "height", "resizing"] as const;
+export const VIEW_EDGE_KEYS = ["selected"] as const;
 const RETRY_MS = 5000;
 const AUTOSAVE_MS = 500;
 

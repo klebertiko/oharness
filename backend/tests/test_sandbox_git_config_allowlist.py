@@ -409,7 +409,7 @@ def test_promisor_keys_need_a_git_that_has_the_lazy_fetch_switch(config, version
     assert verdict(root, 'git', 'status') == expected
 
 
-@pytest.mark.parametrize('version', [(2, 44, 0), ()])
+@pytest.mark.parametrize('version', [(2, 44, 0), (2, 32, 0)])
 def test_the_git_version_does_not_matter_for_a_repo_without_promisor_keys(version, tmp_path, monkeypatch):
     root = with_config(make_repo(tmp_path), '[core]\n\tfscache = true\n[gc]\n\tauto = 0\n')
     monkeypatch.setattr(permission, '_git_version', lambda: version)

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 import { runsApi, type RunLogDetail } from "@/lib/runsApi";
 
@@ -25,21 +26,21 @@ export function RunEvidence({ detail }: { detail: RunLogDetail }) {
   };
   const artifacts = detail.artifacts ?? [];
   return (
-    <div className="mt-3 space-y-2 text-[12px] text-ink-mute">
+    <div className="mt-3 space-y-2 text-body text-ink-mute">
       <p>{COVERAGE[detail.coverage ?? "legacy_unknown"]}{detail.lastSequence != null ? ` · ${detail.lastSequence} events saved` : ""}</p>
       {detail.status === "interrupted" && <p>Interrupted — execution did not resume.</p>}
       {artifacts.length > 0 && <p className="font-medium text-ink">Saved outputs</p>}
       {artifacts.map((artifact) => (
         <div key={artifact.id}>
-          <button type="button" className="underline" onClick={() => void load(artifact.id)}>
+          <Button size="sm" variant="ghost" className="-ml-2" onClick={() => void load(artifact.id)}>
             {artifact.name} · v{artifact.version}
-          </button>
+          </Button>
           {contents[artifact.id] !== undefined && (
-            <pre className="mt-1 whitespace-pre-wrap rounded bg-sub-200 p-2 font-mono text-[11px]">{contents[artifact.id]}</pre>
+            <pre className="mt-1 whitespace-pre-wrap rounded-control bg-sub-200 p-2 font-mono text-code">{contents[artifact.id]}</pre>
           )}
         </div>
       ))}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert" className="text-fault-text">{error}</p>}
     </div>
   );
 }

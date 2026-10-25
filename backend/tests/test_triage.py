@@ -327,10 +327,10 @@ def test_cwd_is_forwarded_to_resolve_node_provider(monkeypatch: pytest.MonkeyPat
             ["anthropic"],
             connections=_connections(),
             secrets_store=MemorySecrets(),
-            cwd="D:\\Development\\src\\OpenHarness",
+            cwd="D:\\Development\\src\\OHarness",
         )
     )
-    assert captured["cwd"] == "D:\\Development\\src\\OpenHarness"
+    assert captured["cwd"] == "D:\\Development\\src\\OHarness"
 
 
 def test_cwd_defaults_to_none_when_the_caller_omits_it(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,7 +379,7 @@ def test_workspace_folder_is_named_in_the_system_prompt_when_chosen(monkeypatch:
             # Matches the reported screenshot's composer chip exactly
             # ("📁 Development") -- deliberately a name absent from SOUL.md's
             # own text, so this assertion can't pass by coincidence the way
-            # "OpenHarness" (used elsewhere in Nilo's voice) would.
+            # "OHarness" (used elsewhere in Nilo's voice) would.
             cwd="D:\\Development",
         )
     )

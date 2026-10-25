@@ -13,7 +13,7 @@ beforeEach(() => useReadDisclosureStore.getState().reset());
 
 describe("readDisclosure", () => {
   it("names the remote provider a finished read is sent to", () => {
-    expect(readDisclosure({ provider: "openrouter", residence: "cloud" }, read)).toBe("arquivos lidos são enviados a openrouter");
+    expect(readDisclosure({ provider: "openrouter", residence: "cloud" }, read)).toBe("files it reads are sent to openrouter");
   });
 
   it("says nothing for a local provider — the content never leaves the machine", () => {

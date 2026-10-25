@@ -1,7 +1,7 @@
 {
   "finishedAt": "2026-09-13T13:10:06.595Z",
   "scope": "10 targeted semantic mutants; not an exhaustive mutation score",
-  "sandbox": "C:\\Users\\klebe\\AppData\\Local\\Temp\\openharness-studio-mutation-yZCyDM",
+  "sandbox": "C:\\Users\\klebe\\AppData\\Local\\Temp\\oharness-studio-mutation-yZCyDM",
   "baseline": "passed",
   "originalTargetsUnchanged": true,
   "results": [

@@ -35,7 +35,7 @@ sem `harness_done` fica `estimated` — honesto: o backend nunca confirmou.
 - Stryker isolado em `rollup.ts`: **16/16 mutants killed, 100%**.
 - O fallback de `Transcript.tsx` foi medido junto da story CHAT-TOOLS-FE; o gate desta story usa o
   módulo puro `rollup.ts`, que contém toda a regra de proveniência. Relatório bruto preservado em
-  `D:\Development\.worktrees\openharness-fe-integration-20260918\frontend\reports\mutation.json`.
+  `D:\Development\.worktrees\oharness-fe-integration-20260918\frontend\reports\mutation.json`.
 - AC#4 permanece reservado ao crítico fresh-context do gate QA/ARCH.
 
 ## 2026-09-23 — AC#4 fechado: crítico fresh-context rodou
@@ -55,7 +55,7 @@ EVIDENCE) registrado no ledger original da story-mãe:
 
 QA fresh-context de 2026-09-23 bounceou esta story por dois motivos: AC#4 crítico nunca tinha
 rodado (fechado acima, WON) e evidência de mutation do `rollup.ts` inacessível — o worktree citado
-no ledger anterior (`openharness-fe-integration-20260918`) foi apagado nesta sessão antes do QA
+no ledger anterior (`oharness-fe-integration-20260918`) foi apagado nesta sessão antes do QA
 conseguir abrir o relatório. Refeito junto com o Stryker da CHAT-TOOLS-FE (mesmo worktree novo,
 mesma config, `rollup.ts` no escopo): **`rollup.ts` → 16/16 mutants killed, 100,00%**, exact match
 ao número anterior. Relatório bruto preservado desta vez em `evidence/mutation-2026-09-23.json`

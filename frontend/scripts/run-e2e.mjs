@@ -5,6 +5,9 @@
  * The server binds an OS-assigned port on loopback, so it never collides with
  * a dev server already on 3000. Each script stubs all sidecar HTTP itself, so
  * no backend, provider or secret is needed. Exits non-zero if any script fails.
+ *
+ * Browser: Microsoft Edge by default (OHM_BROWSER_CHANNEL picks another channel);
+ * OHM_BROWSER_EXECUTABLE=<path> runs a Chromium binary you already have.
  */
 
 import { spawn } from "node:child_process";

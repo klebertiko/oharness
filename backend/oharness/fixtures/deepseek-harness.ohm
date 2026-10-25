@@ -1,6 +1,6 @@
 schemaVersion: 1.0.0
 manifest:
-  id: openharness.example.deepseek-harness
+  id: oharness.example.deepseek-harness
   name: DeepSeek Harness (dsh)
   version: 0.1.0
   description: 'Bundled harness modelled on DeepSeek Harness desktop release dsh-v0.2.1-alpha.2: plan mode, AgentLoop turn/step loop, guarded tools, subagents and goal continuation. Source: https://github.com/deepseek-ai/deepseek-harness (https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2).'
@@ -290,7 +290,7 @@ content:
          otherwise `agent/turn-stopping` closes the turn. With `goal-round-driver` enabled an active
          `/goal` keeps the session going in sequential Rounds.
 
-      In OpenHarness the step loop is folded into the AgentLoop node (the canvas graph stays acyclic).
+      In OHarness the step loop is folded into the AgentLoop node (the canvas graph stays acyclic).
       Providers are left unset: pick a connection (for example DeepSeek V4 Flash) in the app.
   agents:
     agent-loop: |

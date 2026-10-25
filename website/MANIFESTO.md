@@ -1,8 +1,8 @@
-# Por um Open Harness Model
+# Por um OHarness Model
 
 Um agente recebe uma tarefa, consulta ferramentas e produz uma resposta. Entre a intenção e o resultado, há escolhas: quem pode agir, com qual contexto, quando o trabalho deve parar e quem decide continuar. Queremos que essas escolhas possam ser lidas, discutidas e revistas por quem responde pelo trabalho.
 
-Defendemos um Open Harness Model aberto à inspeção e à evolução. Um harness reúne agentes, capacidades, pontos de verificação e decisões humanas para organizar o trabalho. Sua descrição deve tornar visíveis as responsabilidades que sustentam essa organização. Quem a utiliza precisa conseguir compreender o que está delegando.
+Defendemos um OHarness Model aberto à inspeção e à evolução. Um harness reúne agentes, capacidades, pontos de verificação e decisões humanas para organizar o trabalho. Sua descrição deve tornar visíveis as responsabilidades que sustentam essa organização. Quem a utiliza precisa conseguir compreender o que está delegando.
 
 **Legibilidade é parte do controle.** Contexto, instruções e critérios precisam ter um lugar reconhecível. Queremos que uma pessoa consiga acompanhar o raciocínio da composição, revisar uma mudança e entender suas consequências. Clareza também exige declarar o que falta, o que depende do ambiente e o que permanece incerto.
 

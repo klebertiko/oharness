@@ -32,7 +32,7 @@ vi.mock("@/components/agent/ChatProviderPicker", () => ({ ChatProviderPicker: ()
 vi.mock("@/components/agent/WorkspacePicker", () => ({ WorkspacePicker: () => <div /> }));
 
 const api = vi.mocked(chatToolsApi);
-const input = () => screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+const input = () => screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
 const checked = () => screen.getAllByRole("radio").find((r) => r.getAttribute("aria-checked") === "true")?.textContent;
 
 describe("AgentStage permission mode", () => {
@@ -108,14 +108,14 @@ describe("AgentStage permission mode", () => {
 
   it("trust controls appear only under Auto, and trusting the workspace goes through the sidecar after a warning", async () => {
     render(<AgentStage />);
-    expect(screen.queryByRole("button", { name: "Confiar neste workspace…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Trust this workspace…" })).toBeNull();
     expect(api.getTrust).not.toHaveBeenCalled();
     fireEvent.keyDown(input(), { key: "Tab", shiftKey: true });
     await waitFor(() => expect(api.getTrust).toHaveBeenCalledWith("D:\w"));
-    fireEvent.click(await screen.findByRole("button", { name: "Confiar neste workspace…" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Trust this workspace…" }));
     expect(api.setTrust).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Confiar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trust" }));
     await waitFor(() => expect(api.setTrust).toHaveBeenCalledWith("D:\w", true));
-    expect(await screen.findByRole("button", { name: "Revogar confiança" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Revoke trust" })).toBeTruthy();
   });
 });

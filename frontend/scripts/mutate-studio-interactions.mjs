@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sandbox = mkdtempSync(join(tmpdir(), "openharness-interactions-mutation-"));
+const sandbox = mkdtempSync(join(tmpdir(), "oharness-interactions-mutation-"));
 cpSync(join(frontend, "src"), join(sandbox, "src"), { recursive: true });
 for (const file of ["package.json", "tsconfig.json", "vitest.config.ts"]) cpSync(join(frontend, file), join(sandbox, file));
 symlinkSync(join(frontend, "node_modules"), join(sandbox, "node_modules"), process.platform === "win32" ? "junction" : "dir");

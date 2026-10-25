@@ -1,6 +1,6 @@
 # Ledger — STUDIO-REDESIGN
 
-Authority: user request via handoff `D:\Development\handoffs\2026-09-17-openharness-next-work-studio-automate-workspace.md`
+Authority: user request via handoff `D:\Development\handoffs\2026-09-17-oharness-next-work-studio-automate-workspace.md`
 section 4 (verbatim complaints + named skills), gated on `story-STUDIO-MOCK-CYCLE` (execution bug
 fix) being done — confirmed done below. Full redesign of the Studio screen. Skills named by user:
 `gauntlet-loop`, `hallmark`, `frontend-design`, `tdd`, and an `implement` skill not found in this

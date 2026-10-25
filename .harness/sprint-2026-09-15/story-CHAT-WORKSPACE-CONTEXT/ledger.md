@@ -7,12 +7,12 @@ diagnosed, backend-only, no overlap with any concurrent agent's active files —
 Real user bug report, reproduced in a screenshot
 (`C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-17 042225.png`): the composer's
 toolbar clearly shows "📁 Development" as the selected workspace folder. The user asks "em que
-folder estamos agora?" (what folder are we in now?) and OpenHarness replies "Não tenho
+folder estamos agora?" (what folder are we in now?) and OHarness replies "Não tenho
 visibilidade do diretório de trabalho daqui. Se quiser, roda `pwd` no terminal e me diz..." (I
 have no visibility into the working directory — run `pwd` yourself and tell me). The user then
 asks why the agent can't call tools/terminal commands at all — that follow-up went unanswered in
 the screenshot. Already logged as item #1 in
-`handoffs/2026-09-17-openharness-next-work-studio-automate-workspace.md` (a prior Sonnet session's
+`handoffs/2026-09-17-oharness-next-work-studio-automate-workspace.md` (a prior Sonnet session's
 triage of 4 screenshots), which flagged it as "provavelmente o menor dos itens, bom candidato pra
 começar sozinho e rápido" without having traced root cause yet.
 
@@ -101,7 +101,7 @@ exact reported exchange.
 `backend/tests/test_triage.py`:
 - `test_workspace_folder_is_named_in_the_system_prompt_when_chosen` — cwd set to `D:\Development`
   (matching the screenshot's own chip exactly; chosen so the folder name can't coincidentally
-  already appear in SOUL.md's prose the way "OpenHarness" does). Captures the real
+  already appear in SOUL.md's prose the way "OHarness" does). Captures the real
   `AdapterConfig.system_prompt` an adapter would receive via a capturing stub adapter (same pattern
   `test_nilos_voice_is_layered_onto_the_intake_call` already used).
   - RED (before the fix): `assert "Development" in system_prompt` failed — system prompt was

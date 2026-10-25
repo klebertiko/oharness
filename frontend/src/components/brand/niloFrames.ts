@@ -162,13 +162,15 @@ export function niloFrame(p: Pose = {}): string[][] {
     const count = clamp(Math.floor(p.z) + 1, 1, Z_TRAIL.length);
     for (let i = 0; i < count; i++) {
       const g = Z_TRAIL[i];
-      g.rows.forEach((row, y) =>
-        Array.from(row).forEach((c, x) => c !== "." && put(OX + g.dx + x, oy + g.dy + y, "Z")),
-      );
+      g.rows.forEach((row, y) => {
+        Array.from(row).forEach((c, x) => {
+          if (c !== ".") put(OX + g.dx + x, oy + g.dy + y, "Z");
+        });
+      });
     }
   }
 
-  if (p.flip) g.forEach((r) => r.reverse());
+  if (p.flip) g.forEach((r) => { r.reverse(); });
   return g;
 }
 

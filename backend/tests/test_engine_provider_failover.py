@@ -229,7 +229,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://openrouter.ai/api/v1",
             "enabled": True,
-            "secretRef": "openharness/openrouter",
+            "secretRef": "oharness/openrouter",
             "defaultModel": "anthropic/claude-opus-5",
         },
     }
@@ -268,7 +268,7 @@ def _run(graph: dict, connections: dict, secrets_store, adapters_by_name: dict, 
 
 def _store() -> MemorySecrets:
     store = MemorySecrets()
-    store.put("openharness/openrouter", "sk-or-REAL")
+    store.put("oharness/openrouter", "sk-or-REAL")
     return store
 
 

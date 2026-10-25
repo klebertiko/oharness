@@ -60,7 +60,7 @@ def test_tags_use_no_forbidden_term(label, manifest):
 
 def test_default_agile_product_name():
     for label, manifest in MANIFESTS:
-        if manifest["id"] == "openharness.default.agile":
+        if manifest["id"] == "oharness.default.agile":
             assert manifest["name"] == "Agile Harness", label
 
 

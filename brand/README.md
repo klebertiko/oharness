@@ -1,8 +1,8 @@
-# Brand — OpenHarness
+# Brand — OHarness
 
-Nilo, the owl, is the OpenHarness identity. Edit the grid, then stamp it into the app and the installer.
+Nilo, the owl, is the OHarness identity. Edit the grid, then stamp it into the app and the installer.
 
-<img src="nilo.svg" alt="Nilo, the OpenHarness owl" height="88"> &nbsp; <img src="icon.png" alt="OpenHarness app icon" height="88">
+<img src="nilo.svg" alt="Nilo, the OHarness owl" height="88"> &nbsp; <img src="icon.png" alt="OHarness app icon" height="88">
 
 ## Source of truth
 

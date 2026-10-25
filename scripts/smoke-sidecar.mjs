@@ -1,6 +1,6 @@
 // Release smoke: start a packaged PyInstaller sidecar the way the desktop
 // shell does (loopback port + token + data dir) and require GET /health == ok.
-// Usage: node scripts/smoke-sidecar.mjs <path-to-openharness-sidecar-binary>
+// Usage: node scripts/smoke-sidecar.mjs <path-to-oharness-sidecar-binary>
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";

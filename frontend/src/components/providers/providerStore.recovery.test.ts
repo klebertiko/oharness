@@ -97,7 +97,7 @@ describe("secrets (F10)", () => {
     vi.stubGlobal("fetch", fetchMock);
     useProviderStore.setState((s) => ({
       connections: s.connections.map((c) => (c.id === "openrouter"
-        ? { ...c, enabled: true, secret: { service: "openharness/openrouter", prefix: "", tail: "····", length: 0, vault: "backend", savedAt: "" } }
+        ? { ...c, enabled: true, secret: { service: "oharness/openrouter", prefix: "", tail: "····", length: 0, vault: "backend", savedAt: "" } }
         : c)),
     }));
     await expect(useProviderStore.getState().revokeSecret("openrouter")).resolves.toBe(true);
@@ -108,7 +108,7 @@ describe("secrets (F10)", () => {
 
   it("Remove key that the sidecar could not delete keeps the key shown and reports failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(fail()));
-    const secret = { service: "openharness/openrouter", prefix: "", tail: "····", length: 0, vault: "backend" as const, savedAt: "" };
+    const secret = { service: "oharness/openrouter", prefix: "", tail: "····", length: 0, vault: "backend" as const, savedAt: "" };
     useProviderStore.setState((s) => ({
       connections: s.connections.map((c) => (c.id === "openrouter" ? { ...c, enabled: true, secret } : c)),
     }));
@@ -118,7 +118,7 @@ describe("secrets (F10)", () => {
 
   it("never keeps a pasted key in renderer memory when the sidecar is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
-    await expect(saveSecret("openharness/openrouter", "sk-or-test-value-1234")).rejects.toThrow(/couldn't reach/i);
+    await expect(saveSecret("oharness/openrouter", "sk-or-test-value-1234")).rejects.toThrow(/couldn't reach/i);
   });
 });
 

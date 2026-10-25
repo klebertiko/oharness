@@ -45,25 +45,25 @@ export function RunLadder({ run }: { run: RunState }) {
 
       <div className="mt-1.5 flex items-baseline gap-2">
         <span
-          className="h-[9px] w-[2px] flex-none translate-y-[1px] rounded-[1px]"
+          className="h-[9px] w-[2px] flex-none translate-y-[1px] rounded-none"
           style={{ background: active ? ROLE_VAR[active.type] : "var(--ink-faint)" }}
           aria-hidden
         />
         <span className="t-body min-w-0 flex-1 truncate text-ink-dim">
           {nextUp ? (
             <>
-              <span className="text-ink-faint">next up </span>
+              <span className="text-ink-mute">next up </span>
               {nextUp.label}
             </>
           ) : active ? (
             active.label
           ) : (
-            <span className="text-ink-faint">
+            <span className="text-ink-mute">
               {run.plan.length ? "Plan loaded" : "No run yet — the plan appears here"}
             </span>
           )}
         </span>
-        <span className="t-meta flex-none text-ink-faint">
+        <span className="t-meta flex-none text-ink-mute">
           {run.plan.length ? `${Math.max(run.cursor + 1, 0)}/${run.plan.length}` : "—"}
         </span>
       </div>

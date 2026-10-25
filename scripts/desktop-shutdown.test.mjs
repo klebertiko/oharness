@@ -50,7 +50,7 @@ describe("parseListeningPorts", () => {
 
 describe("shouldKillProcess — allowlisted images only", () => {
   it("allows known sidecar / tooling images", () => {
-    for (const name of ["openharness-sidecar.exe", "python.exe", "uvicorn.exe"]) {
+    for (const name of ["oharness-sidecar.exe", "python.exe", "uvicorn.exe"]) {
       assert.equal(shouldKillProcess(name, ALLOWED_IMAGES), true);
     }
   });

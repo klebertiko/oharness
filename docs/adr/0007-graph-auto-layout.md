@@ -4,7 +4,7 @@ Status: Aceito (2026-10-10)
 
 ## Contexto
 
-O exemplo "OpenHarness Agile" abria bagunçado no Studio. A causa não é o
+O exemplo "OHarness Agile" abria bagunçado no Studio. A causa não é o
 Studio sobrescrever posições: `backend/oharness/fixtures/default-agile.ohm`
 (e o `default-agile.legacy.json` que o teste de codec exige idêntico) **não
 guarda posição alguma** em nenhum dos 9 nós. Sem `position`, `bundleGraphToCanvas`

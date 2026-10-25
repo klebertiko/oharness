@@ -34,7 +34,7 @@ import { connectionLabel } from "@/components/agent-run/pinnedConnection";
 const ADAPTERS: AdapterType[] = ["mock", "claude", "ollama", "openai", "lmstudio", "codex"];
 
 const inputCls =
-  `${styles.fieldControl} w-full rounded-control border border-line-soft bg-sub-200 px-2 py-1 text-title text-ink transition-colors hover:border-line`;
+  `${styles.fieldControl} w-full rounded-control border border-line-strong bg-sub-200 px-2 py-1 text-title text-ink transition-colors hover:bg-sub-300`;
 const textareaCls = `${inputCls} h-[76px] resize-none text-body leading-relaxed`;
 
 /** Picker trigger styled like the inspector's other fields. */
@@ -49,7 +49,7 @@ function SectionHead({ label, note }: { label: string; note?: string }) {
   return (
     <div className="flex min-h-panelhead items-center gap-2 border-y border-line-soft bg-sub-000 px-2.5">
       <span className="t-label flex-none text-ink-dim">{label}</span>
-      {note && <span className="t-body min-w-0 flex-1 truncate text-ink-faint">{note}</span>}
+      {note && <span className="t-body min-w-0 flex-1 truncate text-ink-mute">{note}</span>}
     </div>
   );
 }
@@ -123,22 +123,22 @@ function PortTable({ nodeId, type }: { nodeId: string; type: NodeType }) {
       {rows.map((r) => {
         const tone =
           r.port.tone === "accept"
-            ? "var(--signal-deep)"
+            ? "var(--signal-text)"
             : r.port.tone === "reject"
-              ? "var(--fault)"
+              ? "var(--fault-text)"
               : "var(--ink-mute)";
         const wired = r.wires.length > 0;
         return (
           <div key={r.key} className="flex items-center gap-2 py-[3px]">
             <span
               aria-hidden
-              className="h-[10px] w-[3px] flex-none rounded-[1px]"
+              className="h-[10px] w-[3px] flex-none rounded-none"
               style={{
                 background: wired ? tone : "transparent",
                 boxShadow: wired ? "none" : `inset 0 0 0 1px var(--line)`,
               }}
             />
-            <span className="t-meta w-[24px] flex-none text-ink-faint">{r.dir}</span>
+            <span className="t-meta w-[24px] flex-none text-ink-mute">{r.dir}</span>
             <span className="t-meta w-[56px] flex-none truncate" style={{ color: tone }}>
               {r.port.label}
             </span>
@@ -195,7 +195,7 @@ function FallbackConnections({
     <Field label="Fallback connections">
       <div className="space-y-1">
         {fallbacks.length === 0 && (
-          <p className="t-meta leading-4 text-ink-faint">
+          <p className="t-meta leading-4 text-ink-mute">
             None configured — a resolution or first-output failure on the pin above stops the run today.
           </p>
         )}
@@ -203,11 +203,11 @@ function FallbackConnections({
           const label = connectionLabel(connections, id);
           return (
             <div key={id} className="flex items-center gap-1.5">
-              <span className="t-meta w-4 flex-none text-right text-ink-faint">{i + 2}</span>
+              <span className="t-meta w-4 flex-none text-right text-ink-mute">{i + 2}</span>
               <span className="t-body min-w-0 flex-1 truncate text-ink">{label}</span>
               <button
                 type="button"
-                className="rounded-control p-0.5 text-ink-faint hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
+                className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
                 disabled={i === 0}
                 aria-label={`Move ${label} up`}
                 onClick={() => moveFallback(i, -1)}
@@ -216,7 +216,7 @@ function FallbackConnections({
               </button>
               <button
                 type="button"
-                className="rounded-control p-0.5 text-ink-faint hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
+                className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
                 disabled={i === fallbacks.length - 1}
                 aria-label={`Move ${label} down`}
                 onClick={() => moveFallback(i, 1)}
@@ -225,7 +225,7 @@ function FallbackConnections({
               </button>
               <button
                 type="button"
-                className="rounded-control p-0.5 text-ink-faint hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400"
+                className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400"
                 aria-label={`Remove ${label} fallback`}
                 onClick={() => removeFallback(i)}
               >
@@ -267,11 +267,11 @@ export function PropertiesPanel() {
     return (
       <Panel title="Inspector" className="h-full">
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6">
-          <p className="text-center text-[13px] font-[600] text-ink-dim">Select a block</p>
-          <p className="max-w-[190px] text-center text-[12px] leading-5 text-ink-faint">
+          <p className="text-center text-title font-semibold text-ink-dim">Select a block</p>
+          <p className="max-w-[190px] text-center text-body leading-5 text-ink-mute">
             Inspect its connections and edit its settings here. Add a block from the Blocks panel to get started.
           </p>
-          <p className="t-meta flex items-center gap-1.5 text-ink-faint">
+          <p className="t-meta flex items-center gap-1.5 text-ink-mute">
             select a block, or
             {chordCaps("Mod+K", mac).map((c) => (
               <kbd key={c} className="oh-kbd">
@@ -313,7 +313,7 @@ export function PropertiesPanel() {
       className="h-full"
       actions={
         <span
-          className="ml-1 h-[12px] w-[2px] rounded-[1px]"
+          className="ml-1 h-[12px] w-[2px] rounded-none"
           style={{ background: role }}
           aria-hidden
         />
@@ -323,7 +323,7 @@ export function PropertiesPanel() {
       <div className="flex items-center gap-2.5 px-2.5 py-2.5">
         <span
           aria-hidden
-          className="grid h-[22px] w-[22px] flex-none place-items-center rounded-[2px]"
+          className="grid h-[22px] w-[22px] flex-none place-items-center rounded-none"
           style={{
             background: "color-mix(in oklab, var(--role-c) 18%, var(--sub-200))",
             ["--role-c" as string]: role,
@@ -334,7 +334,7 @@ export function PropertiesPanel() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="t-title truncate text-ink">{String(d.label ?? node.id)}</div>
-          <div className="t-meta truncate text-ink-faint">{node.id}</div>
+          <div className="t-meta truncate text-ink-mute">{node.id}</div>
         </div>
       </div>
 
@@ -481,7 +481,7 @@ export function PropertiesPanel() {
                       <span className="min-w-0 truncate">
                         {pinned ? pinned.label : pin ? pin : "Use chat default (in chat)"}
                       </span>
-                      <span className="t-meta flex-none text-ink-faint">{pinned ? readinessWord(pinned) : pin ? "Removed" : ""}</span>
+                      <span className="t-meta flex-none text-ink-mute">{pinned ? readinessWord(pinned) : pin ? "Removed" : ""}</span>
                     </>
                   }
                 />
@@ -513,7 +513,7 @@ export function PropertiesPanel() {
             </Field>
 
             <details className="rounded-control border border-line-soft p-2">
-              <summary className="t-meta cursor-pointer text-ink-faint">Legacy bundle settings</summary>
+              <summary className="t-meta cursor-pointer text-ink-mute">Legacy bundle settings</summary>
               <p className="t-meta my-2 leading-4 text-ink-mute">Preserved for compatibility. Connected runs use the connection pin; simulation calls no provider.</p>
               <div className="space-y-3.5">
             <Field label="Adapter">
@@ -560,7 +560,7 @@ export function PropertiesPanel() {
                   ))}
                 </select>
                 {sealed.length === 0 && (
-                  <p className="t-meta mt-1 text-ink-faint">
+                  <p className="t-meta mt-1 text-ink-mute">
                     Seal a key under Providers (Alt+4). The inspector only stores the reference.
                   </p>
                 )}
@@ -596,7 +596,7 @@ export function PropertiesPanel() {
                 className={inputCls}
                 type="number"
                 value={d.maxTokens ?? 4096}
-                onChange={(e) => update({ maxTokens: parseInt(e.target.value) })}
+                onChange={(e) => update({ maxTokens: parseInt(e.target.value, 10) })}
               />
             </Field>
 
@@ -609,11 +609,11 @@ export function PropertiesPanel() {
                 value={d.tokenLimit ?? ""}
                 onChange={(e) => {
                   const raw = e.target.value;
-                  update({ tokenLimit: raw === "" ? undefined : Math.max(0, parseInt(raw) || 0) });
+                  update({ tokenLimit: raw === "" ? undefined : Math.max(0, parseInt(raw, 10) || 0) });
                 }}
               />
             </Field>
-            <p className="t-meta -mt-2 text-ink-faint">
+            <p className="t-meta -mt-2 text-ink-mute">
               Stops this node honestly (not the whole run) if its own turn spends at or over this
               many tokens. Separate from Max Tokens, which only caps generation length.
             </p>
@@ -625,16 +625,16 @@ export function PropertiesPanel() {
         <>
           <SectionHead label="Last run" />
           <div className="space-y-1 p-2.5">
-            <div className="t-meta flex justify-between text-ink-faint">
-              status <span className="text-signal">{d.status}</span>
+            <div className="t-meta flex justify-between text-ink-mute">
+              status <span className="text-signal-text">{d.status}</span>
             </div>
             {d.tokens !== undefined && (
-              <div className="t-meta flex justify-between text-ink-faint">
+              <div className="t-meta flex justify-between text-ink-mute">
                 tokens <span className="text-ink-dim">{d.tokens}</span>
               </div>
             )}
             {d.latencyMs !== undefined && (
-              <div className="t-meta flex justify-between text-ink-faint">
+              <div className="t-meta flex justify-between text-ink-mute">
                 latency <span className="text-ink-dim">{d.latencyMs}ms</span>
               </div>
             )}
@@ -643,7 +643,7 @@ export function PropertiesPanel() {
                 {d.output}
               </pre>
             )}
-            {d.error && <div className="t-meta pt-1 text-fault">{d.error}</div>}
+            {d.error && <div className="t-meta pt-1 text-fault-text">{d.error}</div>}
           </div>
         </>
       )}

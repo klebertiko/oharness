@@ -1,12 +1,12 @@
 [package]
-name = "openharness"
+name = "oharness"
 version = "0.0.1-alpha"
-description = "OpenHarness — Agent + Harness Design Studio"
-authors = ["OpenHarness"]
+description = "OHarness — Agent + Harness Design Studio"
+authors = ["OHarness"]
 edition = "2021"
 
 [lib]
-name = "openharness_lib"
+name = "oharness_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -1,10 +1,10 @@
-# Sprint 2026-09-18 — OpenHarness
+# Sprint 2026-09-18 — OHarness
 
 **Sprint Goal:** No chat, o usuário digita `/` e o assistente (Ollama/HTTP ou CLI) lê arquivos e
 executa comandos de verdade no workspace autorizado, com contenção e aprovação explícitas — e a
 execução direta passa a guardar histórico.
 
-**Fonte:** `D:\Development\handoffs\2026-09-18-openharness-consolidated-continuation.md` §"Próximos passos".
+**Fonte:** `D:\Development\handoffs\2026-09-18-oharness-consolidated-continuation.md` §"Próximos passos".
 **Restrição de capacidade:** as duas contas (Claude e Codex) bateram limite semanal; reset
 2026-09-20 05:00 America/Sao_Paulo. Até lá: trabalho interativo, sem subagentes em background.
 Gates QA/SEC (fresh-context) só depois do reset.

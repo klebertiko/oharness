@@ -9,7 +9,7 @@ import {
 } from "@/store/harnessSessionStore";
 
 export const HARNESS_LIBRARY_KEY = "oh.harnessLibrary";
-export const DEFAULT_BUNDLE_ID = "openharness.default.agile";
+export const DEFAULT_BUNDLE_ID = "oharness.default.agile";
 
 export interface LibraryEntry {
   id: string;

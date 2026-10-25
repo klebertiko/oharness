@@ -1,4 +1,4 @@
 
-> openharness@0.1.0 typecheck
+> oharness@0.1.0 typecheck
 > tsc --noEmit
 

@@ -15,7 +15,7 @@ const defaultBundle: HarnessBundle = {
   schemaVersion: "1.0.0",
   manifest: {
     id: DEFAULT_BUNDLE_ID,
-    name: "OpenHarness Agile (skills-framework)",
+    name: "OHarness Agile (skills-framework)",
     description: "Default agile harness",
   },
 };
@@ -23,7 +23,7 @@ const defaultBundle: HarnessBundle = {
 const customBundle: HarnessBundle = {
   schemaVersion: "1.0.0",
   manifest: {
-    id: "openharness.custom.demo",
+    id: "oharness.custom.demo",
     name: "Custom Demo",
     description: "Imported harness",
   },
@@ -75,14 +75,14 @@ describe("harnessLibraryStore", () => {
     const { entries } = useHarnessLibraryStore.getState();
     expect(entries.map((e) => e.id)).toEqual([
       DEFAULT_BUNDLE_ID,
-      "openharness.custom.demo",
+      "oharness.custom.demo",
     ]);
 
     const raw = localStorage.getItem(HARNESS_LIBRARY_KEY);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.imports).toHaveLength(1);
-    expect(parsed.imports[0].id).toBe("openharness.custom.demo");
+    expect(parsed.imports[0].id).toBe("oharness.custom.demo");
   });
 
   it("hydrate restores persisted imports after default", async () => {
@@ -112,7 +112,7 @@ describe("harnessLibraryStore", () => {
 
     expect(useHarnessLibraryStore.getState().entries.map((e) => e.id)).toEqual([
       DEFAULT_BUNDLE_ID,
-      "openharness.custom.demo",
+      "oharness.custom.demo",
     ]);
   });
 
@@ -128,14 +128,14 @@ describe("harnessLibraryStore", () => {
     useHarnessLibraryStore.getState().importBundle(customBundle);
     useHarnessSessionStore.getState().setEnabled(false);
 
-    useHarnessLibraryStore.getState().activate("openharness.custom.demo");
+    useHarnessLibraryStore.getState().activate("oharness.custom.demo");
 
     const session = useHarnessSessionStore.getState();
     expect(session.enabled).toBe(true);
-    expect(session.activeBundle?.manifest.id).toBe("openharness.custom.demo");
+    expect(session.activeBundle?.manifest.id).toBe("oharness.custom.demo");
     expect(JSON.parse(localStorage.getItem(HARNESS_SESSION_KEY)!)).toMatchObject({
       enabled: true,
-      activeBundleId: "openharness.custom.demo",
+      activeBundleId: "oharness.custom.demo",
     });
   });
 
@@ -156,7 +156,7 @@ describe("harnessLibraryStore", () => {
 
     expect(useHarnessLibraryStore.getState().entries).toHaveLength(1);
     expect(useHarnessLibraryStore.getState().entries[0].name).toBe(
-      "OpenHarness Agile (skills-framework)"
+      "OHarness Agile (skills-framework)"
     );
   });
 
@@ -172,7 +172,7 @@ describe("harnessLibraryStore", () => {
     useHarnessLibraryStore.getState().importBundle(customBundle);
 
     useHarnessLibraryStore.getState().remove(DEFAULT_BUNDLE_ID);
-    useHarnessLibraryStore.getState().remove("openharness.custom.demo");
+    useHarnessLibraryStore.getState().remove("oharness.custom.demo");
 
     expect(useHarnessLibraryStore.getState().entries.map((e) => e.id)).toEqual([
       DEFAULT_BUNDLE_ID,

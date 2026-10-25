@@ -76,7 +76,7 @@ def test_approved_exec_events_are_attributed_and_complete(tmp_path):
 
 
 def test_failed_exec_reports_failure_without_raw_exception(tmp_path):
-    events=run_call(tmp_path,'exec',{'argv':['nonexistent-openharness-fixture-executable']},'approve')
+    events=run_call(tmp_path,'exec',{'argv':['nonexistent-oharness-fixture-executable']},'approve')
     result=events[-1]
     assert result=={'kind':'tool_result','call_id':events[0]['call_id'],'ok':False,
         'result':'Unable to start or read the requested local resource.','duration_ms':0,'exit_code':None,

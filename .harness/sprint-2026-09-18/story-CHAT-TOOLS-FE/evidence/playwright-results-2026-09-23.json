@@ -2,11 +2,11 @@
   "config": {
     "argv": [
       "C:\\Users\\klebe\\.vfox\\sdks\\nodejs\\node.exe",
-      "D:\\Development\\.worktrees\\openharness-fe-gate-20260923\\frontend\\node_modules\\@playwright\\test\\cli.js",
+      "D:\\Development\\.worktrees\\oharness-fe-gate-20260923\\frontend\\node_modules\\@playwright\\test\\cli.js",
       "test"
     ],
-    "configFile": "D:\\Development\\.worktrees\\openharness-fe-gate-20260923\\frontend\\playwright.config.ts",
-    "rootDir": "D:/Development/.worktrees/openharness-fe-gate-20260923/frontend/e2e",
+    "configFile": "D:\\Development\\.worktrees\\oharness-fe-gate-20260923\\frontend\\playwright.config.ts",
+    "rootDir": "D:/Development/.worktrees/oharness-fe-gate-20260923/frontend/e2e",
     "failOnFlakyTests": false,
     "forbidOnly": false,
     "fullyParallel": false,
@@ -22,7 +22,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "D:/Development/.worktrees/openharness-fe-gate-20260923/frontend/test-results",
+        "outputDir": "D:/Development/.worktrees/oharness-fe-gate-20260923/frontend/test-results",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -30,7 +30,7 @@
         },
         "id": "",
         "name": "",
-        "testDir": "D:/Development/.worktrees/openharness-fe-gate-20260923/frontend/e2e",
+        "testDir": "D:/Development/.worktrees/oharness-fe-gate-20260923/frontend/e2e",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"

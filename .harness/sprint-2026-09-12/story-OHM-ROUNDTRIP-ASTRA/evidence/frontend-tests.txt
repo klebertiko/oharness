@@ -1,9 +1,9 @@
 
-> openharness@0.1.0 test
+> oharness@0.1.0 test
 > vitest run
 
 
- RUN  v3.2.7 D:/Development/src/OpenHarness/frontend
+ RUN  v3.2.7 D:/Development/src/OHarness/frontend
 
  ✓ src/components/providers/secrets.test.ts (4 tests) 15ms
  ✓ src/lib/reposApi.test.ts (10 tests) 20ms
@@ -21,10 +21,10 @@
  ✓ src/components/brand/niloFrames.test.ts (10 tests) 11ms
  ✓ src/components/providers/providerStore.secrets.test.ts (1 test) 10ms
  ✓ src/components/agent/AgentStage.composition.test.tsx (1 test) 154ms
-stderr | Fetch.resolve (file:\D:\Development\src\OpenHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:556:40)
+stderr | Fetch.resolve (file:\D:\Development\src\OHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:556:40)
 GET http://127.0.0.1:8000/bundles/default 401 (Unauthorized)
 
-stderr | Fetch.resolve (file:\D:\Development\src\OpenHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:556:40)
+stderr | Fetch.resolve (file:\D:\Development\src\OHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:556:40)
 GET http://127.0.0.1:8000/cowork/projects 401 (Unauthorized)
 
  ✓ src/components/agent/AgentStage.test.tsx (4 tests) 162ms

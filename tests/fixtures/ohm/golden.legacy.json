@@ -1,6 +1,6 @@
 {
   "manifest": {
-    "id": "openharness.golden.fixture",
+    "id": "oharness.golden.fixture",
     "name": "Golden OHM Fixture",
     "version": "0.2.0",
     "description": "Shared Python/TypeScript fixture exercising every P1 preservation case: multiline LF/CRLF content, Unicode, ambiguous-looking scalars, a big int, node Provider/position/handle data, and an authored (non-executable) cycle.",

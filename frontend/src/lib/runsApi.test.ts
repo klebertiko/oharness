@@ -5,7 +5,7 @@ const rawList = [
   {
     id: "r1",
     harness_id: "h1",
-    harness_name: "OpenHarness Agile",
+    harness_name: "OHarness Agile",
     status: "complete",
     started_at: "2026-09-10T12:00:00Z",
     finished_at: "2026-09-10T12:00:42Z",
@@ -28,7 +28,7 @@ describe("runsApi", () => {
 
     const runs = await runsApi.list();
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/execute/logs", { cache: "no-store" });
-    expect(runs[0]).toMatchObject({ id: "r1", harnessName: "OpenHarness Agile", status: "complete" });
+    expect(runs[0]).toMatchObject({ id: "r1", harnessName: "OHarness Agile", status: "complete" });
     // Unknown status falls back rather than leaking a bad enum.
     expect(runs[1].status).toBe("unknown");
   });

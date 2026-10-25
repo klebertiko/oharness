@@ -14,7 +14,7 @@ const conn = (over: Partial<Connection>): Connection =>
     health: "live", enabled: true, secret: null, ...over,
   }) as Connection;
 
-const secret = { service: "openharness/c", prefix: "", tail: "····", length: 0, vault: "backend", savedAt: "" } as Connection["secret"];
+const secret = { service: "oharness/c", prefix: "", tail: "····", length: 0, vault: "backend", savedAt: "" } as Connection["secret"];
 
 describe("providerReadiness", () => {
   it("enabled + live probe is ready and verified", () => {

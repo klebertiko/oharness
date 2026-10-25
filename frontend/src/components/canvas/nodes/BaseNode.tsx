@@ -49,18 +49,18 @@ const STATE_BORDER: Record<string, string> = {
 /** The mono slot in the header, when there is something machine-true to say. */
 export function StateSlot({ data, type, mark }: { data: NodeData; type: NodeType; mark?: "added" | "changed" }) {
   const status = (data.status as string) ?? "idle";
-  if (status === "running") return <span className="t-meta text-signal">running</span>;
-  if (status === "error") return <span className="t-meta text-fault">error</span>;
-  if (status === "paused") return <span className="t-meta text-warn">held</span>;
+  if (status === "running") return <span className="t-meta text-signal-text">running</span>;
+  if (status === "error") return <span className="t-meta text-fault-text">error</span>;
+  if (status === "paused") return <span className="t-meta text-warn-text">held</span>;
   // A pending Copilot proposal is live state: it wins over a stale "done".
-  if (mark) return <span className="t-meta text-signal">{mark === "added" ? "+ new" : "~ edited"}</span>;
+  if (mark) return <span className="t-meta text-signal-text">{mark === "added" ? "+ new" : "~ edited"}</span>;
   if (status === "complete")
     return (
       <span className="t-meta text-ink-dim">
         {data.latencyMs !== undefined ? `${data.latencyMs}ms` : "done"}
       </span>
     );
-  return <span className="t-meta text-ink-faint">{ROLE_CODE[type]}</span>;
+  return <span className="t-meta text-ink-mute">{ROLE_CODE[type]}</span>;
 }
 
 function ToolbarButton({
@@ -80,8 +80,8 @@ function ToolbarButton({
       title={label}
       aria-label={label}
       onClick={onClick}
-      className={`grid h-[22px] w-[24px] place-items-center border-r border-line-soft text-ink-mute transition-colors last:border-r-0 hover:bg-sub-300 hover:text-ink ${
-        danger ? "hover:text-fault" : ""
+      className={`grid h-6 w-6 place-items-center border-r border-line-soft text-ink-mute transition-colors last:border-r-0 hover:bg-sub-300 hover:text-ink ${
+        danger ? "hover:text-fault-text" : ""
       }`}
     >
       <Icon size={12} strokeWidth={1.7} absoluteStrokeWidth />
@@ -141,6 +141,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
   const error = data.error as string | undefined;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover only reveals the toolbar, which a selected node also shows; React Flow owns node focus and keys
     <div
       className="relative"
       style={{ width: PLATE_W }}
@@ -173,7 +174,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
         {/* Role spine — constant, never state. */}
         <span
           aria-hidden
-          className="absolute inset-y-[2px] left-0 w-[3px] rounded-[1px]"
+          className="absolute inset-y-[2px] left-0 w-[3px] rounded-none"
           style={{ background: role }}
         />
 
@@ -181,7 +182,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
         <div className="flex h-[26px] items-center gap-2 pl-[11px] pr-2">
           <span
             aria-hidden
-            className="grid h-[16px] w-[16px] flex-none place-items-center rounded-[2px]"
+            className="grid h-[16px] w-[16px] flex-none place-items-center rounded-none"
             style={{
               background: "color-mix(in oklab, var(--role-c) 16%, var(--sub-200))",
               ["--role-c" as string]: role,
@@ -208,7 +209,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
 
         {isAwaitingHuman && awaitingHuman?.context && (
           <details className="border-t border-line-soft px-[11px] py-[4px]">
-            <summary className="t-meta cursor-pointer text-ink-faint hover:text-ink-dim">
+            <summary className="t-meta cursor-pointer text-ink-mute hover:text-ink-dim">
               show what it is asking you to approve
             </summary>
             <p className="t-body mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap text-ink-mute">
@@ -255,9 +256,9 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
                             ? "Approve this step and continue the run"
                             : "Reject this step and end the run"
                         }
-                        className="oh-focus-inner t-meta truncate rounded-[2px] underline decoration-dotted underline-offset-2"
+                        className="oh-focus-inner t-meta truncate rounded-none underline decoration-dotted underline-offset-2"
                         style={{
-                          color: pout.tone === "accept" ? "var(--signal-deep)" : "var(--fault)",
+                          color: pout.tone === "accept" ? "var(--signal-text)" : "var(--fault-text)",
                         }}
                       >
                         {pout.label}
@@ -268,9 +269,9 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
                         style={{
                           color:
                             pout.tone === "accept"
-                              ? "var(--signal-deep)"
+                              ? "var(--signal-text)"
                               : pout.tone === "reject"
-                                ? "var(--fault)"
+                                ? "var(--fault-text)"
                                 : "var(--ink-mute)",
                         }}
                       >
@@ -308,7 +309,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
           </div>
         )}
         {error && (
-          <div className="t-meta line-clamp-2 rounded-b-panel border-t border-line-soft py-[5px] pl-[11px] pr-2 text-fault">
+          <div className="t-meta line-clamp-2 rounded-b-panel border-t border-line-soft py-[5px] pl-[11px] pr-2 text-fault-text">
             {error}
           </div>
         )}

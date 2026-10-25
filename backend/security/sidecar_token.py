@@ -44,7 +44,7 @@ TOKEN_ENV_VAR = "OH_SIDECAR_TOKEN"
 
 def _token_dir() -> Path:
     base = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("HOME") or str(Path.home()))
-    d = base / "OpenHarness"
+    d = base / "OHarness"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

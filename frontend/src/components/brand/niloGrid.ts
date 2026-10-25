@@ -47,10 +47,13 @@ const FILL: Record<string, string> = {
 /** One SVG path per colour, as [fill, d] pairs. */
 export function cellPaths(rows: readonly (string | readonly string[])[]): [string, string][] {
   const paths: Record<string, string[]> = {};
-  rows.forEach((row, y) =>
+  rows.forEach((row, y) => {
     Array.from(row).forEach((c, x) => {
-      if (c !== ".") (paths[FILL[c] ?? "currentColor"] ??= []).push(`M${x} ${y}h1v1h-1z`);
-    }),
-  );
+      if (c === ".") return;
+      const fill = FILL[c] ?? "currentColor";
+      if (!paths[fill]) paths[fill] = [];
+      paths[fill].push(`M${x} ${y}h1v1h-1z`);
+    });
+  });
   return Object.entries(paths).map(([fill, d]) => [fill, d.join("")]);
 }

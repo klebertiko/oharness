@@ -71,7 +71,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         }
     }
 
@@ -90,7 +90,7 @@ def test_stop_interrupts_a_slow_yielding_adapter_promptly(monkeypatch: pytest.Mo
     stub = _HangingAdapter()
     monkeypatch.setattr("providers.resolution.get_adapter", lambda name: stub)
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
 
     async def drive() -> list[str]:
         control = RunControl("t")

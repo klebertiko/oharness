@@ -57,7 +57,7 @@ it("a keyless local connection that is off offers Turn on, which enables then te
 });
 
 it("a ready connection has no setup action, only Test and Turn off", () => {
-  mount([connection({ enabled: true, health: "live", defaultModel: "deepseek/deepseek-v4", secret: { prefix: "sk-or-", tail: "abcd", length: 40, vault: "memory", service: "openharness/or", savedAt: "" } as Connection["secret"] })]);
+  mount([connection({ enabled: true, health: "live", defaultModel: "deepseek/deepseek-v4", secret: { prefix: "sk-or-", tail: "abcd", length: 40, vault: "memory", service: "oharness/or", savedAt: "" } as Connection["secret"] })]);
   expect(within(header()).queryByRole("button", { name: /paste|turn on/i })).toBeNull();
   expect(within(header()).getByRole("button", { name: "Test" })).toBeTruthy();
   expect(within(header()).getByRole("button", { name: "Turn off" })).toBeTruthy();

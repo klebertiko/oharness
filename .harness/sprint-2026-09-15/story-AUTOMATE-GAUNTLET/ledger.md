@@ -10,7 +10,7 @@ verdadeiras." Simulation must stay explicitly, visibly separate from real execut
 — user was explicit and repeated this.
 
 Progress page (live, updates after every verdict): https://claude.ai/artifact/NMatPP51aVq1odHSRANxvy
-("Trigger & Truth" — checked `https://claude.ai/artifact/XxQXFAszaBfQ6aJuBGQtqC` ("OpenHarness
+("Trigger & Truth" — checked `https://claude.ai/artifact/XxQXFAszaBfQ6aJuBGQtqC` ("OHarness
 Gauntlet") first since it shares this project's 🥊 favicon; read it and confirmed it's a
 different, unrelated 2026-09-04 run — desktop shell/canvas/agent-UX/providers build-out, 1/4
 pieces won, still mid-flight on its own pieces. Not reusable; published fresh rather than
@@ -19,7 +19,7 @@ clobbering it.)
 ## Coordination check (done first, per task brief)
 
 Read `.gauntlet/automate-story.md`, `.gauntlet/automate-recovery.md`,
-`handoffs/2026-09-15-openharness-ajustes-codex-para-sonnet.md` (section 5, "Automate: execução
+`handoffs/2026-09-15-oharness-ajustes-codex-para-sonnet.md` (section 5, "Automate: execução
 real" — Codex proposed taking this scope but its own doc says explicitly "ainda não concluídas",
 a proposal not a lock), and the sibling `story-CONNECTION-CONTEXT-GAUNTLET/ledger.md` (precedent
 for format + the mid-flight-second-bar rule).
@@ -73,10 +73,10 @@ while this run adds the real-execution half it deliberately deferred.
   **different concept** from "executions" (runs) — two lists, not one. Manual execution
   (canvas "Execute workflow" button) is functionally distinct from production (trigger-fired) but
   — important nuance, stated honestly — n8n's manual execution is **still real**, not a mock/fake
-  mode; n8n has no true zero-cost simulate mode the way OpenHarness's own `mock` adapter does.
+  mode; n8n has no true zero-cost simulate mode the way OHarness's own `mock` adapter does.
 
 **Second-bar reasoning (logged, not silently swapped, per the skill's rule and this project's own
-precedent for adding one mid-flight):** OpenHarness automations run *harness graphs* — the same
+precedent for adding one mid-flight):** OHarness automations run *harness graphs* — the same
 node/edge/schedule shape as an n8n workflow, not Zapier's single linear app-trigger→app-action
 Zap. n8n's schedule-trigger taxonomy, timezone transparency, and Executions-vs-History split are
 directly, structurally comparable to what this screen needs; Zapier remains the stronger bar for
@@ -86,7 +86,7 @@ is the more relevant comparator, stated in that piece's brief.
 
 **Real-vs-simulation honesty has no external bar at all** (logged now, shapes the Gate below):
 neither Zapier nor n8n has a genuine zero-cost "this doesn't really call anything" preview mode —
-Zapier's Test pulls real sample data, n8n's manual execution is a real run. OpenHarness's `mock`
+Zapier's Test pulls real sample data, n8n's manual execution is a real run. OHarness's `mock`
 adapter (Studio's own authoring/testing mode, confirmed in `routers/execution.py`'s comments) is
 a bar-*exceeding* feature, not something either competitor demonstrates. So honesty-of-labeling
 can't be blind-judged against either bar — it's a pass/fail gate, same reasoning the sibling run
@@ -233,7 +233,7 @@ handoff corroborates either name doing anything here. (3) Its claimed files show
 activity beyond the single 09-15 23:21 honest-mock-labeling commit already accounted for above —
 no AC-by-AC progress (no new history-model module per its AC5, `scheduler.py` per its AC6 still
 8 days stale). (4) Substantively this reads as the same 09-15 Codex proposal
-(`handoffs/2026-09-15-openharness-ajustes-codex-para-sonnet.md` §5) the original coordination
+(`handoffs/2026-09-15-oharness-ajustes-codex-para-sonnet.md` §5) the original coordination
 check already read and correctly weighed as "a proposal, not a lock" — just also filed as a
 story.md that pass didn't enumerate. This session's live-agent roster (`main`,
 `fix-studio-mock-execution-v2`) has no Kepler/Pascal to coordinate with. Logged rather than
@@ -307,7 +307,7 @@ label's presence).
    + IANA zone name (`Intl.DateTimeFormat().resolvedOptions().timeZone`, e.g.
    "America/Sao_Paulo") via a new `formatNextRun`/`localTimeZoneLabel` pair in `scheduleCron.ts` —
    this is the piece's answer to the bar's "explicit timezone" criterion. **Honest limitation,
-   stated plainly:** OpenHarness has no per-job or instance timezone *setting* at all (confirmed —
+   stated plainly:** OHarness has no per-job or instance timezone *setting* at all (confirmed —
    `AutomationJob` has no such field, scheduler always runs in UTC) — so unlike n8n there is no
    workflow-setting → instance-timezone → Cloud-auto-detect *resolution chain* to expose. There's
    exactly one fixed reality (always UTC), and the UI now states that plainly and shows what it
@@ -386,7 +386,7 @@ Base: leitura integral deste ledger + git diff HEAD das implementações. Nenhum
 
 - backend/.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider tests/test_scheduler_real_execute.py tests/test_scheduler.py tests/test_automation_validation.py tests/test_cowork_automations_api.py → **58 passed in 2.17s**.
 - O teste novo nasceu GREEN: implementação real já existia. Nenhum RED de produto foi inventado.
-- Mutação semântica isolada em D:/Development/.worktrees/openharness-audit-20260918-f33b839c: substituir somente default return await real_execute(...) por return await mock_execute(j). Rodar test_scheduler_real_execute.py → **2 failed, 1 passed in 1.55s** (manual-default e scheduled-default falham; explicit-mock continua passando). Fonte restaurada em finally. Log backend/automation-all-mock-mutation.log.
+- Mutação semântica isolada em D:/Development/.worktrees/oharness-audit-20260918-f33b839c: substituir somente default return await real_execute(...) por return await mock_execute(j). Rodar test_scheduler_real_execute.py → **2 failed, 1 passed in 1.55s** (manual-default e scheduled-default falham; explicit-mock continua passando). Fonte restaurada em finally. Log backend/automation-all-mock-mutation.log.
 - BDD da auditoria: testes parametrizados Given configured job / When triggered / Then only explicit mock skips provider. Não é alegado score geral de mutmut nem E2E visual.
 - **Crítico fresh-context: pendente**, conforme bloqueio combinado até 20/09. Nenhuma peça foi declarada pronta e nenhum WINNER foi fabricado.
 - **Pedido ao Claude:** explicitar mode=mock no FE do botão Simulate antes de usar integração real. Registrado no STATUS do sprint atual.

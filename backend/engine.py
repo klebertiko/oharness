@@ -675,7 +675,7 @@ async def execute_harness(
 
             latency_ms = payload.get("latency_ms", round((time.time() - call_start) * 1000, 2))
             decision_result = {
-                "schema_version": payload.get("schema_version", "openharness-decision-node-v1"),
+                "schema_version": payload.get("schema_version", "oharness-decision-node-v1"),
                 # Constant -- never graph-author-supplied. See ADR-0005 item 1.
                 "authority": "advisory-shadow",
                 "model_result": payload.get("model_result"),

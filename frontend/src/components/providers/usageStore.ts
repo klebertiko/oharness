@@ -31,7 +31,7 @@ async function load(set: (partial: Partial<UsageState>) => void): Promise<void> 
     set({ summary, error: null, loading: false });
   } catch (err) {
     set({
-      error: err instanceof Error ? err.message : "Could not reach the OpenHarness sidecar for usage.",
+      error: err instanceof Error ? err.message : "Could not reach the OHarness sidecar for usage.",
       loading: false,
     });
   }

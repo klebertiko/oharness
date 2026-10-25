@@ -1,8 +1,8 @@
 {
-  "name": "openharness-desktop",
+  "name": "oharness-desktop",
   "version": "0.0.1-alpha",
   "private": true,
-  "description": "OpenHarness Tauri shell — run from repo root",
+  "description": "OHarness Tauri shell — run from repo root",
   "scripts": {
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

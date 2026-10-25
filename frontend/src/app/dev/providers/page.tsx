@@ -82,7 +82,7 @@ export default function ProvidersDevPage() {
           meta={name}
           actions={
             <span
-              className="t-meta flex items-center gap-1 text-ink-faint"
+              className="t-meta flex items-center gap-1 text-ink-mute"
               title={`Credentials are held in the ${VAULT_LABEL[vault]}`}
             >
               <ShieldCheck size={11} strokeWidth={1.8} />

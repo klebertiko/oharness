@@ -1,10 +1,10 @@
 # Paridade do chat agêntico: densidade de informação por passo
 
-Pesquisa feita em 2026-10-10. Base do OpenHarness: `main` @ `a96eeff`.
+Pesquisa feita em 2026-10-10. Base do OHarness: `main` @ `a96eeff`.
 
-**Pergunta.** O que os apps desktop de referência (DeepSeek Harness desktop, Claude desktop na aba Code, Cursor desktop e Codex app) mostram sobre o que o agente está fazendo, a cada passo e a cada turno, que o chat do OpenHarness não mostra ou mostra mal?
+**Pergunta.** O que os apps desktop de referência (DeepSeek Harness desktop, Claude desktop na aba Code, Cursor desktop e Codex app) mostram sobre o que o agente está fazendo, a cada passo e a cada turno, que o chat do OHarness não mostra ou mostra mal?
 
-**Recorte.** A reclamação é de **densidade de informação**. O OpenHarness já mostra o harness passo a passo, via `RunLadder`, `Transcript`, `ToolCard`, `Gate` e `rollup` em `frontend/src/components/agent-run/`. Por isso a matriz começa pelo que aparece em cada passo e em cada turno. Os recursos de interação vêm depois.
+**Recorte.** A reclamação é de **densidade de informação**. O OHarness já mostra o harness passo a passo, via `RunLadder`, `Transcript`, `ToolCard`, `Gate` e `rollup` em `frontend/src/components/agent-run/`. Por isso a matriz começa pelo que aparece em cada passo e em cada turno. Os recursos de interação vêm depois.
 
 Dois itens já estão sendo implementados por outros agentes e só aparecem listados aqui: o resumo de atividade ("Ran N commands") e os modos de permissão.
 
@@ -22,7 +22,7 @@ Dois itens já estão sendo implementados por outros agentes e só aparecem list
 | ✗ | não tem |
 | ? | não verificado em fonte primária |
 
-Na coluna OpenHarness, cada lacuna recebe uma de três classes:
+Na coluna OHarness, cada lacuna recebe uma de três classes:
 - **[evento]**: o dado já chega do backend e só não é renderizado.
 - **[backend]**: o backend não emite o dado.
 - **[UI]**: o backend já suporta e falta só a interface.
@@ -39,7 +39,7 @@ O bundle contém os identificadores `QueueDock`, `ContextMeter`, `TodoPanel`, `D
 
 Dois identificadores **não** aparecem no bundle por nome: `StatsLine` e `interrupt_receipt`. `TrajectoryView` aparece com contagem baixa. As células que dependem de `StatsLine` dizem "fonte; não confirmado no bundle".
 
-A fixture `backend/oharness/fixtures/deepseek-harness.ohm` do OpenHarness cita a release `dsh-v0.2.1-alpha.2`. O checkout local é mais antigo (tag `dsh-v0.1.1-rc.2`).
+A fixture `backend/oharness/fixtures/deepseek-harness.ohm` do OHarness cita a release `dsh-v0.2.1-alpha.2`. O checkout local é mais antigo (tag `dsh-v0.1.1-rc.2`).
 
 ### Claude desktop (aba Code)
 
@@ -56,7 +56,7 @@ As páginas de `developers.openai.com/codex/...` redirecionam (308) para `learn.
 - **[X4]** https://learn.chatgpt.com/docs/long-running-work
 - **[X5]** https://learn.chatgpt.com/docs/integrated-terminal
 - **[X7]** https://learn.chatgpt.com/docs/app
-- **[X6]** https://github.com/openai/codex @ `c3d3b14`, `sdk/typescript/src/items.ts`. É o schema dos eventos de `codex exec --json`, ou seja, CLI/SDK e não o app. Entra aqui só para mostrar o que o adapter do OpenHarness descarta.
+- **[X6]** https://github.com/openai/codex @ `c3d3b14`, `sdk/typescript/src/items.ts`. É o schema dos eventos de `codex exec --json`, ou seja, CLI/SDK e não o app. Entra aqui só para mostrar o que o adapter do OHarness descarta.
 
 ### Cursor desktop
 
@@ -67,13 +67,13 @@ As páginas de `developers.openai.com/codex/...` redirecionam (308) para `learn.
 - **[U5]** https://cursor.com/docs/agent/agents-window
 - **[U6]** https://cursor.com/docs/agent/tools/terminal
 
-### OpenHarness
+### OHarness
 
 Código em `main` @ `a96eeff`. Os caminhos citados na matriz são relativos à raiz do repo.
 
 ## Matriz 1: o que aparece por passo e por turno (foco)
 
-| # | Recurso | DSH desktop | Claude desktop (Code) | Cursor desktop | Codex app | OpenHarness hoje |
+| # | Recurso | DSH desktop | Claude desktop (Code) | Cursor desktop | Codex app | OHarness hoje |
 |---|---|---|---|---|---|---|
 | 1 | **Comando executado com saída e exit code** | ✅ toolview de bash com a saída via `TerminalBlock`, linha recolhível; em erro, a primeira linha da falha aparece em cor de erro (`ui-tool/src/client/tool/toolviews/bash-sample.tsx`) [D1, D0] | ◐ o modo **Verbose** mostra "every tool call, file read, and intermediate step"; o **Normal** recolhe as tool calls em resumos [A1]. Exit code: ? | ◐ o Agent "runs terminal commands" e mostra saída inline [U1, U6]. Exit code: ? | ? o terminal integrado existe, mas a página não diz como os comandos do agente aparecem no thread [X5] | ◐ ver detalhe 1 abaixo |
 | 2 | **Arquivos lidos e editados, com diff** | ✅ `file-mutation-row.tsx` mostra edit/write com o diff aplicado em `DiffBlock`; `read-row.tsx` mostra leituras [D1, D0] | ✅ indicador `+12 -1`, diff por arquivo, comentários por linha; no modo Manual, aceitar ou rejeitar cada mudança [A1] | ✅ "Review them in the diff view and reject" [U1]; "New diffs view" [U5] | ✅ painel de review com escopos Unstaged/Staged/Commit/Branch/**Last turn**, stage e revert por arquivo ou hunk, comentários inline [X1] | ✗ ver detalhe 2 abaixo |
@@ -89,7 +89,7 @@ Código em `main` @ `a96eeff`. Os caminhos citados na matriz são relativos à r
 | 12 | **Resumo de atividade ("Ran N commands")** | ◐ árvore de tool calls `ui-tool/.../ToolCallTree.tsx` [D1] | ✅ o modo Normal recolhe as tool calls em resumos [A1] | ? | ? | **em implementação (outro agente)** |
 | 13 | **Resposta final em markdown, com blocos de código** | ✅ `ui-conversation/.../AssistantMarkdown.tsx` [D1] | ? | ? | ? | ✗ texto puro com `whitespace-pre-wrap` (`frontend/src/components/agent/AgentStage.tsx:308-315`) **[UI]** |
 
-### Detalhes da coluna OpenHarness
+### Detalhes da coluna OHarness
 
 **1. Comando com saída e exit code.**
 - `ToolCard.tsx` mostra argv, exit code, "saída truncada", redações e a saída expansível. Mas só aparece para chamadas do broker: approval, denied, simulated ou origin (`Transcript.tsx:105`).
@@ -137,7 +137,7 @@ Código em `main` @ `a96eeff`. Os caminhos citados na matriz são relativos à r
 
 ## Matriz 2: interação (secundária)
 
-| # | Recurso | DSH desktop | Claude desktop (Code) | Cursor desktop | Codex app | OpenHarness hoje |
+| # | Recurso | DSH desktop | Claude desktop (Code) | Cursor desktop | Codex app | OHarness hoje |
 |---|---|---|---|---|---|---|
 | 14 | **Steer e fila durante a execução** | ✅ `QueueDock.tsx`; envio com modo `'queue' \| 'steer'` (`runtime/src/client/contract/session.ts:38-43`) [D1, D0] | ✅ "type a correction and press Enter to send it without stopping the running action" [A1] | ✅ fila e **Send now** ("delivered at the agent's next tool call") [U2]; "Submit your next instruction while Agent is busy" [U1] | ✅ Steer contra Queue; fila editável e reordenável acima do composer [X2] | ✗ o composer fica `disabled={live}` (`ChatComposer.tsx:95,117`). O backend já aceita `action: "message"` (`execution.py:796`, gera `user_message`). `useRunStream.steer` existe mas nenhuma UI o chama. `RunState.steers` nunca é renderizado. **[UI]** |
 | 15 | **Interromper** | ? | ✅ `Esc` ou botão stop [A1] | ✅ "Stop" [U1] | ? | ✅ botão Stop (`AgentStage.tsx` ~395) |
@@ -237,7 +237,7 @@ Os tamanhos são estimativas grosseiras: S ≤ 1 dia, M 2–4 dias, L 1 semana o
 - **Onde encaixa.**
   - backend: `usage` com input tokens por request (adapters), janela de contexto por modelo no catálogo de provedores (`backend/routers/providers.py`)
   - frontend: barra do composer em `frontend/src/components/agent/AgentStage.tsx:378-381`, ao lado de `ChatProviderPicker`
-- **Dependências.** Item 5 (separação in/out). Compactação de verdade depende de o OpenHarness manter um histórico multi-turno enviado ao modelo, o que não foi verificado aqui. **[backend]**
+- **Dependências.** Item 5 (separação in/out). Compactação de verdade depende de o OHarness manter um histórico multi-turno enviado ao modelo, o que não foi verificado aqui. **[backend]**
 - **DSH.** ✅ (`ContextMeter.tsx`, `CompactionItem.tsx`).
 
 ### Fora do top 8 (próximos, em ordem)

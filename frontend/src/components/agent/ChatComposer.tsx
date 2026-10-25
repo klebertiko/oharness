@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { PERMISSION_HINT, PERMISSION_LABEL, PERMISSION_MODES, PERMISSION_SUMMARY, nextPermissionMode, type PermissionMode } from "@/lib/permissionMode";
+import { Button, Notice, Segmented } from "@/components/ui";
 import { chatCommands, splitArgv, type ChatCommand, type ChatToolsInput, type ToolPreset } from "./chatCommands";
 interface Props {
   value: string;
@@ -28,7 +29,7 @@ export function presetFromSlashText(value: string): { preset: ToolPreset } | { w
   if (m[1] === "read") return { preset: { name: "read", path: m[2].trim() } };
   const { argv, shellSyntax } = splitArgv(m[2]);
   if (!argv.length) return null;
-  if (shellSyntax.length) return { warning: `Sem shell do outro lado: ${shellSyntax.join(" ")} seria passado literalmente. Rode um programa por vez.` };
+  if (shellSyntax.length) return { warning: `There is no shell on the other side: ${shellSyntax.join(" ")} would be passed literally. Run one program at a time.` };
   return { preset: { name: "exec", argv } };
 }
 export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, tools, onPreset, permissionMode, onPermissionModeChange, permissionNotice, workspaceTrust }: Props) {
@@ -93,29 +94,29 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
     onSend();
   };
   return <div className="relative min-w-0">
-    {open && <div className="oh-float absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-40 overflow-hidden rounded-panel border border-line bg-sub-100 shadow-lg">
-      <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-2 text-[11px] text-ink-faint">
-        <span>{tools?.workspace ? `Commands, skills & tools · ${tools.workspace.name}` : "Commands & skills"}</span><span>↑↓ select · Enter · Esc</span>
+    {open && <div className="oh-float absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-40 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-2 text-meta text-ink-mute">
+        <span>{tools?.workspace ? `Commands, skills & tools · ${tools.workspace.name}` : "Commands & skills"}</span><span className="max-sm:hidden">↑↓ select · Enter · Esc</span>
       </div>
-      {live && <p role="status" className="px-3 py-2 text-[12px] text-warn">Stop or finish the run to use commands.</p>}
-      {noWorkspace && !live && <p role="note" className="px-3 py-2 text-[12px] text-ink-mute">Selecione uma pasta para usar ferramentas</p>}
+      {live && <p role="status" className="px-3 py-2 text-body text-warn-text">Stop or finish the run to use commands.</p>}
+      {noWorkspace && !live && <p role="note" className="px-3 py-2 text-body text-ink-mute">Choose a folder to use tools.</p>}
       <div ref={listRef} id={id + "-commands"} role="listbox" aria-label="Commands and skills" className="max-h-[min(320px,45vh)] overflow-y-auto p-1">
         {options.map((command, index) => <button key={command.id} id={optionId(index)} type="button" role="option" tabIndex={-1}
           aria-selected={index === selected} aria-disabled={live}
           onMouseDown={event => event.preventDefault()} onMouseMove={() => setCursor(index)} onClick={() => choose(command)}
-          className={"flex w-full items-center gap-3 rounded-control px-3 py-2 text-left outline-none " + (index === selected ? "bg-sub-300" : "hover:bg-sub-200") + (live ? " opacity-50" : "")}>
-          <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium text-ink">/{command.name}</span>
-            <span className="block text-[11px] leading-4 text-ink-mute">{command.description}</span></span>
-          {command.hint && <span className={"flex-none rounded-control px-1.5 py-0.5 text-[10px] " + (command.kind === "Tool" ? "bg-signal/15 text-signal" : "bg-sub-300 text-ink-mute")}>{command.hint}</span>}
-          <span className="flex-none text-[10px] text-ink-faint">{command.kind}</span>
+          className={"flex min-h-control-lg w-full items-center gap-3 rounded-control px-3 py-1.5 text-left " + (index === selected ? "bg-sub-300" : "hover:bg-sub-200") + (live ? " opacity-50" : "")}>
+          <span className="min-w-0 flex-1"><span className="t-meta block truncate text-ink">/{command.name}</span>
+            <span className="block text-body text-ink-mute">{command.description}</span></span>
+          {command.hint && <span className={"t-meta flex-none rounded-control px-1.5 py-0.5 " + (command.kind === "Tool" ? "bg-signal/15 text-signal-text" : "bg-sub-300 text-ink-mute")}>{command.hint}</span>}
+          <span className="t-meta flex-none text-ink-mute">{command.kind}</span>
         </button>)}
       </div>
-      {options.length === 0 && <p role="status" className="px-4 py-3 text-[12px] text-ink-mute">No matching commands. Esc keeps your text.</p>}
+      {options.length === 0 && <p role="status" className="px-4 py-3 text-body text-ink-mute">No matching commands. Esc keeps your text.</p>}
     </div>}
-    {slashPreset && "warning" in slashPreset && <p role="alert" className="px-4 pt-2 text-[12px] text-warn">{slashPreset.warning}</p>}
-    {loading && <p role="status" className="px-4 pt-2 text-[12px] text-ink-mute">Lendo a skill do workspace…</p>}
-    {loadError && <p role="alert" className="px-4 pt-2 text-[12px] text-warn">{loadError}</p>}
-    <textarea ref={inputRef} value={value} rows={2} aria-label="Message OpenHarness" disabled={live}
+    {slashPreset && "warning" in slashPreset && <Notice tone="warn" className="mx-3 mt-3">{slashPreset.warning}</Notice>}
+    {loading && <p role="status" className="px-4 pt-2 text-body text-ink-mute">Reading the workspace skill…</p>}
+    {loadError && <Notice tone="fault" className="mx-3 mt-3">{loadError}</Notice>}
+    <textarea ref={inputRef} value={value} rows={2} aria-label="Message OHarness" disabled={live}
       aria-autocomplete="list" aria-haspopup="listbox" aria-controls={open ? id + "-commands" : undefined}
       aria-activedescendant={open && options.length ? optionId(selected) : undefined}
       onChange={event => { loadGeneration.current++; setLoading(null); setLoadError(null); onChange(event.target.value); setCursor(0); setDismissed(null); }}
@@ -142,31 +143,28 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
         }
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !live) { event.preventDefault(); submit(); }
       }}
-      placeholder={live ? "Waiting on this run — click Stop to send something new" : tools?.workspace ? `Ask OpenHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OpenHarness… Type / for commands and skills"}
-      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60" />
+      placeholder={live ? "Waiting on this run. Stop it to send something new." : tools?.workspace ? `Ask OHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OHarness… Type / for commands and skills"}
+      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:opacity-60" />
     {permissionMode && onPermissionModeChange && <div className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
-      <div role="radiogroup" aria-label="Permission mode" title="Shift+Tab alterna o modo" className="inline-flex overflow-hidden rounded-control border border-line-soft">
-        {PERMISSION_MODES.map(mode => <button key={mode} type="button" role="radio" aria-checked={mode === permissionMode} disabled={live}
-          title={PERMISSION_HINT[mode]} onClick={() => onPermissionModeChange(mode)}
-          className={"h-6 px-2.5 text-[11px] font-[550] outline-none focus-visible:ring-1 focus-visible:ring-signal disabled:opacity-50 " + (mode === permissionMode ? "bg-sub-300 text-ink" : "text-ink-mute hover:bg-sub-200")}>{PERMISSION_LABEL[mode]}</button>)}
-      </div>
-      <span className="text-[11px] text-ink-faint">{PERMISSION_SUMMARY[permissionMode]} · Shift+Tab</span>
-      {permissionNotice && <p role="alert" className="w-full text-[11px] text-warn">{permissionNotice}</p>}
-      {permissionMode === "auto_workspace" && workspaceTrust && <div className="w-full text-[11px] text-ink-mute">
+      <Segmented label="Permission mode" value={permissionMode} onChange={onPermissionModeChange}
+        options={PERMISSION_MODES.map(mode => ({ value: mode, label: PERMISSION_LABEL[mode], hint: PERMISSION_HINT[mode], disabled: live }))} />
+      <span className="text-meta text-ink-mute">{PERMISSION_SUMMARY[permissionMode]} · Shift+Tab cycles the mode</span>
+      {permissionNotice && <Notice tone="fault" className="w-full">{permissionNotice}</Notice>}
+      {permissionMode === "auto_workspace" && workspaceTrust && <div className="w-full text-body text-ink-mute">
         {workspaceTrust.trusted
-          ? <p className="flex flex-wrap items-center gap-2"><span>Workspace confiável: Auto roda os scripts do projeto (npm, pytest) sem perguntar.</span>
-              <button type="button" disabled={live} onClick={() => workspaceTrust.onChange(false)} className="rounded-control border border-line-soft px-2 py-0.5 text-ink hover:bg-sub-200 disabled:opacity-50">Revogar confiança</button></p>
-          : <p className="flex flex-wrap items-center gap-2"><span>Auto: só git somente leitura roda sozinho; os scripts do projeto continuam pedindo aprovação.</span>
-              <button type="button" disabled={live} onClick={() => setConfirmingTrust(true)} className="rounded-control border border-line-soft px-2 py-0.5 text-ink hover:bg-sub-200 disabled:opacity-50">Confiar neste workspace…</button></p>}
-        {confirmingTrust && !workspaceTrust.trusted && <div role="alertdialog" aria-label="Confiar neste workspace" className="mt-1.5 rounded-control border border-warn p-2.5 text-ink">
-          <p>Confiar em <strong>{workspaceTrust.workspaceName}</strong>? Em um workspace confiável, os scripts do projeto (package.json, conftest.py) rodam e podem executar código sem pedir aprovação.
-            Confie só em pastas cujo código você escreveu ou revisou; um repositório baixado de terceiros pode usar isso contra você.</p>
+          ? <p className="flex flex-wrap items-center gap-2"><span>Trusted workspace: Auto runs the project&apos;s scripts (npm, pytest) without asking.</span>
+              <Button size="sm" disabled={live} onClick={() => workspaceTrust.onChange(false)}>Revoke trust</Button></p>
+          : <p className="flex flex-wrap items-center gap-2"><span>Auto: only read-only git runs on its own; the project&apos;s scripts still ask for approval.</span>
+              <Button size="sm" disabled={live} onClick={() => setConfirmingTrust(true)}>Trust this workspace…</Button></p>}
+        {confirmingTrust && !workspaceTrust.trusted && <div role="alertdialog" aria-label="Trust this workspace" className="mt-2 rounded-control border border-warn p-3 text-ink">
+          <p>Trust <strong>{workspaceTrust.workspaceName}</strong>? In a trusted workspace, the project&apos;s scripts (package.json, conftest.py) run and can execute code without asking for approval.
+            Trust only folders whose code you wrote or reviewed; a repository downloaded from a third party can use this against you.</p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => { setConfirmingTrust(false); workspaceTrust.onChange(true); }} className="rounded-control bg-signal px-2.5 py-1 font-[550] text-signal-ink">Confiar</button>
-            <button type="button" onClick={() => setConfirmingTrust(false)} className="rounded-control border border-line px-2.5 py-1 font-[550]">Cancelar</button>
+            <Button variant="primary" onClick={() => { setConfirmingTrust(false); workspaceTrust.onChange(true); }}>Trust</Button>
+            <Button autoFocus onClick={() => setConfirmingTrust(false)}>Cancel</Button>
           </div>
         </div>}
-        {workspaceTrust.error && <p role="alert" className="mt-1 text-warn">{workspaceTrust.error}</p>}
+        {workspaceTrust.error && <Notice tone="fault" className="mt-1">{workspaceTrust.error}</Notice>}
       </div>}
     </div>}
   </div>;

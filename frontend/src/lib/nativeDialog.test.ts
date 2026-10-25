@@ -40,11 +40,11 @@ describe("nativeDialog", () => {
 
   it("pickFolder returns the chosen path inside Tauri", async () => {
     setTauriInternals(() => Promise.resolve());
-    openMock.mockResolvedValue("D:\\Development\\src\\OpenHarness");
+    openMock.mockResolvedValue("D:\\Development\\src\\OHarness");
 
     const result = await pickFolder();
 
-    expect(result).toBe("D:\\Development\\src\\OpenHarness");
+    expect(result).toBe("D:\\Development\\src\\OHarness");
     expect(openMock).toHaveBeenCalledWith({
       directory: true,
       multiple: false,

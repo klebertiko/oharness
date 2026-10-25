@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { Mark } from "./Mark";
 import { useShellStore } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
+import { KbdChord } from "@/components/ui";
 
 /**
  * Window chrome.
@@ -21,6 +22,8 @@ interface Props {
   harnessName: string;
   onHarnessNameChange: (v: string) => void;
   mode: string;
+  /** Names where the person is ("Chats", "Providers"). Defaults to the mode. */
+  destination?: string;
   running: boolean;
   nodeCount: number;
   editingHarness?: boolean;
@@ -55,7 +58,7 @@ function WindowButton({
       onClick={onClick}
       className={[
         "grid h-titlebar w-[44px] place-items-center text-ink-mute transition-colors",
-        danger ? "hover:bg-fault hover:text-[color:var(--sub-000)]" : "hover:bg-sub-300 hover:text-ink",
+        danger ? "hover:bg-fault hover:text-signal-ink" : "hover:bg-sub-300 hover:text-ink",
       ].join(" ")}
     >
       {children}
@@ -67,6 +70,7 @@ export function TitleBar({
   harnessName,
   onHarnessNameChange,
   mode,
+  destination,
   running,
   nodeCount,
   editingHarness,
@@ -90,28 +94,28 @@ export function TitleBar({
         className="oh-header-brand flex min-w-0 flex-none items-center gap-2.5 px-4"
       >
         <Mark />
-        <span className="oh-wordmark select-none text-[13px] font-[600] tracking-[-0.03em] text-ink">
-          OpenHarness
+        <span className="oh-wordmark t-title select-none text-ink">
+          OHarness
         </span>
       </div>
 
       <div data-tauri-drag-region className="oh-header-context flex min-w-0 flex-1 items-center gap-3 px-4">
-        <span className="oh-header-mode shrink-0 text-[12px] text-ink-mute">{mode === "Studio" ? "Harness Studio" : mode}</span>
+        <span className="oh-header-mode t-body shrink-0 text-ink-mute">{destination ?? (mode === "Studio" ? "Harness Studio" : mode)}</span>
         {/* Name a draft in the editor, including before its first node. */}
         {mode === "Studio" && (editingHarness ?? (nodeCount > 0)) && (
           <>
-            <span className="text-ink-faint" aria-hidden>/</span>
+            <span className="text-ink-mute" aria-hidden>/</span>
             <input
               value={harnessName}
               onChange={(e) => onHarnessNameChange(e.target.value)}
               spellCheck={false}
               aria-label="Harness name"
               title="Rename this harness"
-              className="oh-header-name oh-focus-inner w-full max-w-[240px] min-w-0 rounded-control border border-transparent bg-sub-200/70 px-2 py-1 text-[13px] text-ink outline-none transition-colors hover:border-line hover:bg-sub-200 focus:border-line focus:bg-sub-200"
+              className="oh-header-name t-title h-control-md w-full min-w-0 max-w-[240px] rounded-control border border-line-strong bg-sub-100 px-2 text-ink transition-colors hover:bg-sub-200 focus-visible:border-signal"
             />
           </>
         )}
-        {running && <span role="status" className="shrink-0 text-[12px] text-ink-mute">Working…</span>}
+        {running && <span role="status" className="t-body shrink-0 text-ink-mute">Working…</span>}
       </div>
 
       <div data-tauri-drag-region className="flex flex-none items-center px-3">
@@ -122,16 +126,12 @@ export function TitleBar({
           aria-expanded={paletteOpen}
           aria-label="Search and commands"
           title={`Search and commands (${caps.join("+")})`}
-          className="oh-focus-inner flex h-8 items-center gap-2 rounded-control px-2 text-ink-mute transition-colors hover:bg-sub-200 hover:text-ink"
+          className="oh-focus-inner flex h-control-lg items-center gap-2 rounded-control px-2 text-ink-mute transition-colors hover:bg-sub-200 hover:text-ink"
         >
           <Search size={15} aria-hidden="true" />
-          <span className="oh-header-search-label text-[12px]">Search</span>
-          <span aria-hidden="true" className="oh-header-shortcut flex items-center gap-1 pl-2">
-            {caps.map((c) => (
-              <kbd key={c} className="oh-kbd">
-                {c}
-              </kbd>
-            ))}
+          <span className="oh-header-search-label t-body">Search</span>
+          <span aria-hidden="true" className="oh-header-shortcut pl-2">
+            <KbdChord caps={caps} />
           </span>
         </button>
       </div>

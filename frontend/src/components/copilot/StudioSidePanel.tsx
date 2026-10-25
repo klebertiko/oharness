@@ -33,7 +33,7 @@ export function StudioSidePanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div role="tablist" aria-label="Side panel" onKeyDown={onKeyDown} className="flex h-[26px] flex-none items-center gap-1 border-b border-line bg-sub-100 px-1.5">
+      <div role="tablist" aria-label="Side panel" onKeyDown={onKeyDown} className="flex min-h-panelhead flex-none items-center gap-1 border-b border-line-soft bg-sub-100 px-1.5">
         {TABS.map((t) => (
           <button
             key={t}
@@ -47,8 +47,8 @@ export function StudioSidePanel() {
             aria-controls="side-tabpanel"
             tabIndex={tab === t ? 0 : -1}
             onClick={() => setTab(t)}
-            className={`h-[20px] rounded-control px-2 text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal ${
-              tab === t ? "bg-sub-300 font-medium text-ink" : "text-ink-mute hover:text-ink"
+            className={`h-control-sm rounded-control px-2 text-body max-sm:h-control-lg ${
+              tab === t ? "bg-sub-300 font-medium text-ink shadow-[inset_0_-2px_0_var(--signal)]" : "text-ink-mute hover:bg-sub-200 hover:text-ink"
             }`}
           >
             {label(t)}

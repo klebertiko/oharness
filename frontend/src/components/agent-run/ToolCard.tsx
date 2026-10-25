@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { sendControl } from "./runClient";
 import type { ToolCall } from "./types";
+import { Button } from "@/components/ui";
 import { readDisclosure, useReadDisclosureStore, type DisclosureConnection } from "./readDisclosure";
 
 /* ── Tool card (chat tools broker, contract v1.1 §2.5–2.6) ─────────────────
@@ -13,19 +14,19 @@ import { readDisclosure, useReadDisclosureStore, type DisclosureConnection } fro
 type Decision = "approve" | "reject";
 
 function stateOf(call: ToolCall): { label: string; tone: "signal" | "ok" | "fault" | "warn" | "mute" } {
-  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejeitado", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "sem resposta" : "bloqueado", tone: "fault" };
-  if (call.simulated) return { label: "simulado", tone: "mute" };
+  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejected", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "no answer" : "blocked", tone: "fault" };
+  if (call.simulated) return { label: "simulated", tone: "mute" };
   if (call.timedOut) return { label: "timeout", tone: "fault" };
-  if (call.ok === false) return { label: "falhou", tone: "fault" };
-  if (call.ok === true) return { label: "concluído", tone: "ok" };
-  if (call.approval?.decision === "approve") return { label: "aprovado", tone: "signal" };
-  if (call.approval?.decision === "reject") return { label: "rejeitado", tone: "fault" };
-  if (call.approval) return { label: "aguardando aprovação", tone: "warn" };
-  return { label: "executando", tone: "signal" };
+  if (call.ok === false) return { label: "failed", tone: "fault" };
+  if (call.ok === true) return { label: "done", tone: "ok" };
+  if (call.approval?.decision === "approve") return { label: "approved", tone: "signal" };
+  if (call.approval?.decision === "reject") return { label: "rejected", tone: "fault" };
+  if (call.approval) return { label: "waiting for approval", tone: "warn" };
+  return { label: "running", tone: "signal" };
 }
 
 const TONE: Record<string, string> = {
-  signal: "var(--signal)", ok: "var(--ok, var(--ink-mute))", fault: "var(--fault)", warn: "var(--warn)", mute: "var(--ink-faint)",
+  signal: "var(--signal-text)", ok: "var(--ink-mute)", fault: "var(--fault-text)", warn: "var(--warn-text)", mute: "var(--ink-mute)",
 };
 
 export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: string | null; connection?: DisclosureConnection | null }) {
@@ -48,7 +49,7 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
   const pendingApproval = Boolean(call.approval) && !call.approval?.decision && !call.denied;
   const high = call.approval?.risk === "high";
   const state = stateOf(call);
-  const title = call.name === "exec" || call.name === "run_command" ? "Executar comando" : call.name === "read" || call.name === "read_file" ? "Ler arquivo" : call.name === "discover" || call.name === "list_workspace" ? "Listar workspace" : call.name;
+  const title = call.name === "exec" || call.name === "run_command" ? "Run command" : call.name === "read" || call.name === "read_file" ? "Read file" : call.name === "discover" || call.name === "list_workspace" ? "List workspace" : call.name;
 
   const decide = (decision: Decision) => {
     if (sent || !runId || !pendingApproval) return;
@@ -64,65 +65,63 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
     >
       <div className="flex items-center gap-2">
         <span className="t-meta text-ink">{title}</span>
-        {call.origin && <span className="t-meta text-ink-faint">· {call.origin === "model" ? "pedido pelo modelo" : "pedido por você"}</span>}
-        {call.autoApproved && <span data-auto-approved className="rounded-control bg-sub-300 px-1.5 py-0.5 text-[10px] text-ink-mute">auto-aprovado: modo workspace</span>}
-        {high && <span className="rounded-control px-1.5 py-0.5 text-[10px] font-[600] uppercase" style={{ background: "var(--fault)", color: "var(--signal-ink, #fff)" }}>alto risco</span>}
+        {call.origin && <span className="t-meta text-ink-mute">· {call.origin === "model" ? "requested by the model" : "requested by you"}</span>}
+        {call.autoApproved && <span data-auto-approved className="rounded-control bg-sub-300 px-1.5 py-0.5 text-meta text-ink-mute">auto-approved: workspace mode</span>}
+        {high && <span className="rounded-control px-1.5 py-0.5 text-meta font-semibold uppercase" style={{ background: "var(--fault)", color: "var(--signal-ink)" }}>high risk</span>}
         <span className="flex-1" />
         <span className="t-meta" style={{ color: TONE[state.tone] }}>{state.label}</span>
       </div>
 
       {call.argv ? (
-        <ol className="mt-2 rounded-control bg-sub-100 px-3 py-2 font-mono text-[12px] leading-5 text-ink" aria-label="argv">
+        <ol className="mt-2 rounded-control bg-sub-100 px-3 py-2 font-mono text-body leading-5 text-ink" aria-label="argv">
           {call.argv.map((a, i) => <li key={i} className="whitespace-pre-wrap break-all">{a}</li>)}
         </ol>
       ) : call.path ? (
-        <p className="mt-2 rounded-control bg-sub-100 px-3 py-2 font-mono text-[12px] text-ink">{call.path}</p>
+        <p className="mt-2 rounded-control bg-sub-100 px-3 py-2 font-mono text-body text-ink">{call.path}</p>
       ) : null}
 
       {high && call.approval?.riskHints.length ? (
-        <p className="mt-1.5 text-[12px] text-ink-mute">
-          Padrão de risco: {call.approval.riskHints.map((h) => <code key={h} data-hint className="mr-1 rounded bg-sub-100 px-1">{h}</code>)}
+        <p className="mt-1.5 text-body text-ink-mute">
+          Risk pattern: {call.approval.riskHints.map((h) => <code key={h} data-hint className="mr-1 rounded bg-sub-100 px-1">{h}</code>)}
         </p>
       ) : null}
 
       {call.approval && (
-        <p className="mt-1.5 text-[12px] text-ink-mute">
+        <p className="mt-1.5 text-body text-ink-mute">
           {call.approval.reason === "secret_pattern"
-            ? "Este caminho parece conter segredos. Só será lido se você aprovar."
-            : "Isto é execução local, com os seus privilégios — não há sandbox de sistema. Só roda se você aprovar."}
+            ? "This path looks like it contains secrets. It is read only if you approve."
+            : "This runs locally with your privileges; there is no system sandbox. It runs only if you approve."}
         </p>
       )}
 
       {pendingApproval && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={Boolean(sent) || !runId} onClick={() => decide("approve")}
-            className="h-8 rounded-[8px] bg-signal px-3 text-[12px] font-[550] text-signal-ink disabled:opacity-40">Aprovar</button>
-          <button type="button" disabled={Boolean(sent) || !runId} onClick={() => decide("reject")}
-            className="h-8 rounded-control border border-line px-3 text-[12px] font-[550] text-ink disabled:opacity-40">Rejeitar</button>
-          <input value={note} onChange={(e) => setNote(e.target.value)} disabled={Boolean(sent)} placeholder="nota (opcional, fica no histórico)"
-            aria-label="Nota da decisão" className="h-8 min-w-0 flex-1 rounded-control border border-line-soft bg-sub-100 px-2 text-[12px] text-ink" />
-          {sent && <span className="t-meta text-ink-faint">enviando…</span>}
+          <Button variant="primary" disabled={Boolean(sent) || !runId} onClick={() => decide("approve")}>Approve</Button>
+          <Button disabled={Boolean(sent) || !runId} onClick={() => decide("reject")}>Reject</Button>
+          <input value={note} onChange={(e) => setNote(e.target.value)} disabled={Boolean(sent)} placeholder="Note (optional, kept in the history)"
+            aria-label="Decision note" className="h-control-md min-w-0 flex-1 rounded-control border border-line-strong bg-sub-100 px-2 text-body text-ink placeholder:text-ink-mute max-sm:h-control-lg" />
+          {sent && <span className="t-meta text-ink-mute">sending…</span>}
         </div>
       )}
 
-      {call.approval?.decision && call.approval.note ? <p className="mt-1 text-[11px] text-ink-faint">nota: {call.approval.note}</p> : null}
-      {call.denied?.note ? <p className="mt-1 text-[11px] text-ink-faint">{call.denied.note}</p> : null}
+      {call.approval?.decision && call.approval.note ? <p className="mt-1 text-meta text-ink-mute">note: {call.approval.note}</p> : null}
+      {call.denied?.note ? <p className="mt-1 text-meta text-ink-mute">{call.denied.note}</p> : null}
       {claimedDisclosure && disclosure ? (
-        <p className="mt-1.5 text-[12px] text-ink-mute" data-read-disclosure>{disclosure}</p>
+        <p className="mt-1.5 text-body text-ink-mute" data-read-disclosure>{disclosure}</p>
       ) : null}
 
       {(call.result || call.truncated || typeof call.exitCode === "number") && (
         <div className="mt-2">
-          <div className="flex items-center gap-2 text-[11px] text-ink-faint">
+          <div className="flex items-center gap-2 text-meta text-ink-mute">
             {typeof call.exitCode === "number" && <span>exit {call.exitCode}</span>}
-            {call.truncated && <span style={{ color: "var(--warn)" }}>saída truncada</span>}
-            {call.redactions ? <span>{call.redactions} segredo{call.redactions > 1 ? "s" : ""} redigido{call.redactions > 1 ? "s" : ""}</span> : null}
+            {call.truncated && <span style={{ color: "var(--warn-text)" }}>output truncated</span>}
+            {call.redactions ? <span>{call.redactions} secret{call.redactions > 1 ? "s" : ""} redacted</span> : null}
             {call.result && call.result.length > 240 && (
-              <button type="button" onClick={() => setOpen((v) => !v)} className="text-ink-mute hover:text-ink">{open ? "recolher" : "expandir"}</button>
+              <button type="button" onClick={() => setOpen((v) => !v)} className="text-ink-mute hover:text-ink">{open ? "collapse" : "expand"}</button>
             )}
           </div>
           {call.result && (
-            <pre className={"mt-1 overflow-x-auto rounded-control bg-sub-100 px-3 py-2 font-mono text-[12px] leading-5 text-ink " + (open ? "" : "max-h-40 overflow-y-hidden")}>{call.result}</pre>
+            <pre className={"mt-1 overflow-x-auto rounded-control bg-sub-100 px-3 py-2 font-mono text-body leading-5 text-ink " + (open ? "" : "max-h-40 overflow-y-hidden")}>{call.result}</pre>
           )}
         </div>
       )}

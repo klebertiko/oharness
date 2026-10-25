@@ -2,7 +2,7 @@
 
 Dono: **Claude** (ARCH + SEC inline, com `threat-model` skill). Spike: o produto é um documento, não código.
 
-As a usuário do chat do OpenHarness,
+As a usuário do chat do OHarness,
 I want que "o assistente pode ler e executar no meu workspace" seja definido com fronteiras claras antes de existir,
 So that BE (Codex) e FE (Claude) implementem contra o mesmo contrato e o SEC gate tenha algo falsificável para auditar.
 

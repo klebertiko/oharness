@@ -528,7 +528,7 @@
           "op": "updateNode",
           "id": "a1",
           "config": {
-            "secretRef": "openharness/openai"
+            "secretRef": "oharness/openai"
           }
         }
       ],

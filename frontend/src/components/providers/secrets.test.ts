@@ -13,10 +13,10 @@ describe("secrets.saveSecret", () => {
   it("inside the desktop shell, stores the key in the sidecar (the store runs read from), never a native command", async () => {
     const invoke = vi.fn().mockRejectedValue(new Error("command secret_save not found"));
     (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = { invoke };
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ secretRef: "openharness/openrouter" }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ secretRef: "oharness/openrouter" }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ref = await saveSecret("openharness/openrouter", "sk-or-desktopkey1234");
+    const ref = await saveSecret("oharness/openrouter", "sk-or-desktopkey1234");
 
     expect(invoke).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -30,11 +30,11 @@ describe("secrets.saveSecret", () => {
   it("POSTs plaintext to backend and returns only a SecretRef", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ secretRef: "openharness/openai" }),
+      json: async () => ({ secretRef: "oharness/openai" }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ref = await saveSecret("openharness/openai", RAW);
+    const ref = await saveSecret("oharness/openai", RAW);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/providers/openai/secret",
@@ -47,7 +47,7 @@ describe("secrets.saveSecret", () => {
 
     expect(ref).toEqual(
       expect.objectContaining<Partial<SecretRef>>({
-        service: "openharness/openai",
+        service: "oharness/openai",
         prefix: "sk-proj-",
         tail: "0aT7",
         length: RAW.length,
@@ -72,11 +72,11 @@ describe("secrets.saveSecret", () => {
       .mockResolvedValueOnce({ ok: true, status: 201 }) // create connection
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ secretRef: "openharness/ollama-cloud" }),
+        json: async () => ({ secretRef: "oharness/ollama-cloud" }),
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ref = await saveSecret("openharness/ollama-cloud", "sk-or-cloudkeyZZ99");
+    const ref = await saveSecret("oharness/ollama-cloud", "sk-or-cloudkeyZZ99");
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenNthCalledWith(1, "http://127.0.0.1:8000/providers/ollama-cloud/secret", {
@@ -97,7 +97,7 @@ describe("secrets.saveSecret", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "sk-or-cloudkeyZZ99" }),
     });
-    expect(ref.service).toBe("openharness/ollama-cloud");
+    expect(ref.service).toBe("oharness/ollama-cloud");
     expect(ref.vault).toBe("backend");
     expect(JSON.stringify(ref)).not.toContain("cloudkey");
   });
@@ -105,7 +105,7 @@ describe("secrets.saveSecret", () => {
   it("refuses (never parks the key in renderer memory) when the backend is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
-    const err = await saveSecret("openharness/openai", RAW).catch((e: Error) => e);
+    const err = await saveSecret("oharness/openai", RAW).catch((e: Error) => e);
 
     expect(err).toBeInstanceOf(Error);
     expect(String((err as Error).message)).not.toContain("SUPERSECRET");
@@ -114,7 +114,7 @@ describe("secrets.saveSecret", () => {
   it("refuses when the sidecar rejects the key", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
 
-    await expect(saveSecret("openharness/openai", RAW)).rejects.toThrow(/not stored/);
+    await expect(saveSecret("oharness/openai", RAW)).rejects.toThrow(/not stored/);
   });
 
   it("activeVault prefers backend outside Tauri", () => {

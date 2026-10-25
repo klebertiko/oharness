@@ -1,9 +1,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const publicUrl = 'https://klebertiko.github.io/OpenHarness/';
+const publicUrl = 'https://klebertiko.github.io/OHarness/';
 const catalog = JSON.parse(await readFile(new URL('locales/en-US.json', root), 'utf8'));
-const neutral = new Set(['OpenHarness', 'Manifesto', 'manifesto', 'Menu', 'Skill', 'Gate', 'Harness Studio', 'Chats', 'Automate', 'Pull requests', 'Open Harness Model', 'OPEN HARNESS MODEL', 'YAML', 'manifest + graph', 'content', 'runtime + validation', 'AGENTS.md', 'Agent Skills', 'MCP', 'A2A', 'OpenHarness desktop', 'schemaVersion', 'manifest', 'graph', 'nodes', 'edges', 'runtime', 'validation', 'license', 'hello.ohm', '.ohm', '.oharness', 'Manifesto ↗', 'Manifesto — OpenHarness', 'Harness Model.']);
+const neutral = new Set(['OHarness', 'Manifesto', 'manifesto', 'Menu', 'Skill', 'Gate', 'Harness Studio', 'Chats', 'Automate', 'Pull requests', 'OHarness Model', 'OHARNESS MODEL', 'YAML', 'manifest + graph', 'content', 'runtime + validation', 'AGENTS.md', 'Agent Skills', 'MCP', 'A2A', 'OHarness desktop', 'schemaVersion', 'manifest', 'graph', 'nodes', 'edges', 'runtime', 'validation', 'license', 'hello.ohm', '.ohm', '.oharness', 'Manifesto ↗', 'Manifesto — OHarness', 'Harness Model.']);
 const missing = new Set();
 const htmlEscapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const escape = text => text.replace(/[&<>"]/g, character => htmlEscapes[character]);
@@ -66,7 +66,7 @@ function decorate(html, file, english) {
 
 const yaml = (await readFile(new URL('examples/hello.ohm', root), 'utf8'))
   .replace('OHM em YAML 1.2 — contrato declarativo.', 'OHM in YAML 1.2 — declarative contract.')
-  .replace('Exemplo mínimo do Open Harness Model.', 'Minimal Open Harness Model example.')
+  .replace('Exemplo mínimo do OHarness Model.', 'Minimal OHarness Model example.')
   .replace('objetivo:', 'objective:')
   .replace('Descreva o objetivo do trabalho.', 'Describe the objective of the work.')
   .replace('Defina as evidências para aceitar o resultado.', 'Define the evidence required to accept the result.');
@@ -92,7 +92,7 @@ for (const file of ['index.html', 'model.html', 'manifesto.html']) {
     const paragraphs = [...article.matchAll(/<p>([\s\S]*?)<\/p>/g)].map(match => match[1]
       .replace(/<\/?strong>/g, '**').replace(/<\/?code>/g, '`').replace(/<[^>]+>/g, '')
       .replace(/&(quot|amp);/g, entity => ({ '&quot;': '"', '&amp;': '&' })[entity]).trim());
-    outputs.push(['en/MANIFESTO.md', '# Toward an Open Harness Model\n\n' + paragraphs.join('\n\n') + '\n']);
+    outputs.push(['en/MANIFESTO.md', '# Toward an OHarness Model\n\n' + paragraphs.join('\n\n') + '\n']);
   }
 }
 if (missing.size) throw new Error('Missing en-US translations:\n' + [...missing].join('\n'));

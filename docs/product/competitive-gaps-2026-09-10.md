@@ -1,10 +1,10 @@
-# OpenHarness — Competitive Gap Audit (2026-09-10)
+# OHarness — Competitive Gap Audit (2026-09-10)
 
 Scope: read-only code audit of `frontend/src/components/**`, `frontend/src/store/**`, `frontend/src/lib/**`, `frontend/src/app/page.tsx`, and `backend/routers/**`, compared against Cursor, Claude Code / the Claude desktop app, and OpenAI Codex as of 2026. All claims below are backed by a file path (and line, where a single line is the evidence); anything not directly verified in code is marked **uncertain**.
 
 ---
 
-## 1. What OpenHarness actually implements today
+## 1. What OHarness actually implements today
 
 | Area | Status | Evidence |
 |---|---|---|
@@ -40,7 +40,7 @@ Scope: read-only code audit of `frontend/src/components/**`, `frontend/src/store
 
 P0 = expected by any user of an agent app · P1 = parity or strong differentiator · P2 = later
 
-| # | Feature | Who has it | OpenHarness today | Priority | New IA location | Size |
+| # | Feature | Who has it | OHarness today | Priority | New IA location | Size |
 |---|---|---|---|---|---|---|
 | 1 | Run history / past runs list | Cursor, Claude Code, Codex | Backend endpoint exists (`/execute/logs`) but zero frontend consumer; rail item hard-disabled | **P0** | Agent (per-thread) + a real Runs/History item | S |
 | 2 | Thinking indicator with elapsed time / status verbs | Claude Code, Claude desktop, Cursor | Static "Running…" text only, no timer, no phase verbs surfaced to the user | **P0** | Agent composer/transcript | S |

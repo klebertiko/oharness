@@ -34,7 +34,8 @@ def _default_keyring() -> KeyringBackend:
 class KeychainSecrets:
     """SecretsStore backed by an OS keychain (or a test double)."""
 
-    SERVICE = "openharness"
+    SERVICE = "oharness"
+    LEGACY_SERVICE = "openharness"  # pre-rebrand entries, read-through and migrated on first get
 
     def __init__(
         self,
@@ -49,7 +50,13 @@ class KeychainSecrets:
         self._kr.set_password(self._service, ref, value)
 
     def get(self, ref: str) -> str | None:
-        return self._kr.get_password(self._service, ref)
+        value = self._kr.get_password(self._service, ref)
+        if value is None and self._service == self.SERVICE:
+            value = self._kr.get_password(self.LEGACY_SERVICE, ref)
+            if value is not None:
+                self._kr.set_password(self._service, ref, value)
+                self._kr.delete_password(self.LEGACY_SERVICE, ref)
+        return value
 
     def delete(self, ref: str) -> None:
         if not self.exists(ref):

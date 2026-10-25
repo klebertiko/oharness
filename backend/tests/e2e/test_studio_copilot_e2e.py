@@ -98,7 +98,7 @@ def model_server():
             system = payload["messages"][0]["content"]
             if mode["reply"] is not None:
                 content = mode["reply"]
-            elif system.startswith("You edit OpenHarness harness graphs"):
+            elif system.startswith("You edit OHarness harness graphs"):
                 content = "Here is the plan:\n```json\n" + json.dumps({"summary": "Added a Reviewer.", "ops": GOOD_OPS}) + "\n```"
             else:
                 content = json.dumps({"text": "You are the Reviewer agent. Finish with a verdict.", "notes": ["Added a hand-off."]})

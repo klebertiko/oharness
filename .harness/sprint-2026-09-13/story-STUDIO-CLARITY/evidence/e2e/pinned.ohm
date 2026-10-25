@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1.1.0",
   "manifest": {
-    "id": "openharness.default.agile",
-    "name": "OpenHarness Agile (skills-framework)",
+    "id": "oharness.default.agile",
+    "name": "OHarness Agile (skills-framework)",
     "version": "0.1.0",
     "description": "Authoring fidelity",
     "license": "MIT",

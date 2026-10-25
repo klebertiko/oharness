@@ -76,7 +76,7 @@ describe("ThinkingStatus", () => {
 
   it("keeps elapsed/token digits out of the accessible name behind one stable sr-only line", () => {
     render(<ThinkingStatus elapsed={12000} tokens={500} />);
-    expect(screen.getByText(/OpenHarness is working/i)).toBeTruthy();
+    expect(screen.getByText(/OHarness is working/i)).toBeTruthy();
   });
 
   it("shows the detail line when provided", () => {

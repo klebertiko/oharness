@@ -26,7 +26,7 @@ describe("AgentStage composition", () => {
   it("offers a labelled composer and focuses an editable task suggestion without starting a run", () => {
     render(<AgentStage />);
     expect(screen.getByRole("heading", { name: "What are we working on?" })).toBeTruthy();
-    const input = screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+    const input = screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
     fireEvent.click(screen.getByRole("button", { name: "Work through a task" }));
     expect(input.value).toBe("Break this work into clear steps and take the first one.");
     expect(document.activeElement).toBe(input);

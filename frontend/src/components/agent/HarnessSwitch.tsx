@@ -6,6 +6,7 @@ import { ChevronDown, Workflow } from "lucide-react";
 import { harnessSubtitle, splitHarnessName } from "@/components/harnesses/harnessLabel";
 import { ComboAction, Combobox, type ComboOption } from "@/components/ui/Combobox";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
+import { Button } from "@/components/ui/Button";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 
 export type HarnessSwitchProps = {
@@ -36,6 +37,11 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
   const activate = useHarnessLibraryStore((s) => s.activate);
 
   const [error, setError] = useState("");
+  const retry = () => {
+    setError("");
+    void hydrateSession().catch((err: Error) => setError(err.message));
+    void hydrateLibrary().catch((err: Error) => setError(err.message));
+  };
 
   useEffect(() => {
     if (!hydrated) void hydrateSession().catch((err: Error) => setError(err.message));
@@ -60,7 +66,7 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
 
   const activeId = enabled ? (activeBundle?.manifest?.id ?? NONE_ID) : NONE_ID;
   const activeName = activeBundle?.manifest?.name || activeBundle?.manifest?.id;
-  const label = !enabled ? "No harness" : activeName ? splitHarnessName(activeName).title : hydrated ? "No harness" : "Loading…";
+  const label = !enabled ? "No harness" : activeName ? splitHarnessName(activeName).title : error ? "Harness unavailable" : hydrated ? "No harness" : "Loading…";
 
   const choose = (id: string) => {
     if (id === NONE_ID) {
@@ -82,12 +88,12 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
         status={libraryHydrated ? "ready" : error ? "error" : "loading"}
         loadingText="Loading harnesses…"
         errorText="Couldn't load harnesses."
-        triggerClassName="h-8 max-w-[260px] px-2.5 text-[12px] font-[550] text-ink-dim hover:text-ink"
+        triggerClassName="h-control-md max-w-[260px] px-2.5 text-body font-medium text-ink-dim hover:text-ink max-sm:h-control-lg"
         trigger={
           <>
-            <Workflow size={14} strokeWidth={1.8} className={enabled ? "flex-none text-signal" : "flex-none text-ink-faint"} aria-hidden />
+            <Workflow size={14} strokeWidth={1.8} className={enabled ? "flex-none text-signal-text" : "flex-none text-ink-mute"} aria-hidden />
             <span className="min-w-0 truncate">{label}</span>
-            <ChevronDown size={13} strokeWidth={1.8} className="flex-none text-ink-faint" aria-hidden />
+            <ChevronDown size={13} strokeWidth={1.8} className="flex-none text-ink-mute" aria-hidden />
           </>
         }
         footer={
@@ -110,8 +116,9 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
         }
       />
       {error && (
-        <span className="max-w-[140px] truncate text-[11px] text-fault" title={error}>
-          Couldn&apos;t load harnesses
+        <span role="alert" className="flex items-center gap-1 text-meta text-fault-text" title={error}>
+          Couldn&apos;t load harnesses.
+          <Button size="sm" variant="ghost" onClick={retry}>Retry</Button>
         </span>
       )}
     </>

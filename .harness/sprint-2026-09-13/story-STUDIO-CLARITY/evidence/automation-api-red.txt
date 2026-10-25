@@ -459,7 +459,7 @@ E            +  where 200 = <Response [200 OK]>.status_code
 tests\test_automation_validation.py:31: AssertionError
 ============================== warnings summary ===============================
 tests/test_automation_validation.py::test_api_rejects_invalid_update_and_supports_clearing_schedule
-  D:\Development\src\OpenHarness\backend\routers\automations.py:101: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  D:\Development\src\OHarness\backend\routers\automations.py:101: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     job.updated_at = datetime.utcnow()
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

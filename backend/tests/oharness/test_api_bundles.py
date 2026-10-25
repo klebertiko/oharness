@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_get_default_bundle():
     r = client.get("/bundles/default")
     assert r.status_code == 200
-    assert r.json()["manifest"]["id"] == "openharness.default.agile"
+    assert r.json()["manifest"]["id"] == "oharness.default.agile"
 
 
 def test_validate_endpoint_ok():

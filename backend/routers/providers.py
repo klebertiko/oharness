@@ -243,7 +243,7 @@ async def put_secret(
     value = body.key.strip()
     if not value:
         raise HTTPException(400, "empty credential")
-    ref = f"openharness/{connection_id}"
+    ref = f"oharness/{connection_id}"
     store.put(ref, value)
     row["secretRef"] = ref
     row["enabled"] = True

@@ -1,5 +1,5 @@
 
-> openharness@0.1.0 test:ohm:mutation
+> oharness@0.1.0 test:ohm:mutation
 > node scripts/mutate-ohm-roundtrip.mjs
 
 node-position: killed
@@ -14,4 +14,4 @@ import-position: killed
 import-data: killed
 import-edges: killed
 import-legacy-role: killed
-Report: D:\Development\src\OpenHarness\.harness\sprint-2026-09-12\story-OHM-ROUNDTRIP-ASTRA\evidence\mutation.json
+Report: D:\Development\src\OHarness\.harness\sprint-2026-09-12\story-OHM-ROUNDTRIP-ASTRA\evidence\mutation.json

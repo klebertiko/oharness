@@ -1,0 +1,71 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!.next",
+      "!out",
+      "!coverage",
+      "!next-env.d.ts",
+      "!node_modules"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "css": {
+    "linter": {
+      "enabled": false
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "react": "recommended",
+      "next": "recommended"
+    },
+    "rules": {
+      "correctness": {
+        "useExhaustiveDependencies": {
+          "level": "error",
+          "options": {
+            "reportUnnecessaryDependencies": false
+          }
+        }
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useTemplate": "off",
+        "useImportType": "off",
+        "noCommonJs": "error",
+        "noNamespace": "error"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noUselessEscapeInString": "off",
+        "noUnusedExpressions": "error",
+        "noTsIgnore": "error"
+      },
+      "complexity": {
+        "noImportantStyles": "off",
+        "useOptionalChain": "off",
+        "useArrowFunction": "off"
+      },
+      "a11y": {
+        "useSemanticElements": "off",
+        "noAutofocus": "off",
+        "noNoninteractiveElementToInteractiveRole": "off"
+      },
+      "performance": {
+        "noSyncScripts": "error"
+      }
+    }
+  },
+  "plugins": [
+    "./lint/no-unescaped-entities.grit",
+    "./lint/no-anonymous-default-export.grit"
+  ]
+}

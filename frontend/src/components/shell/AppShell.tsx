@@ -8,6 +8,7 @@ import { KeymapSheet } from "./KeymapSheet";
 import { HarnessLibrarySheet } from "./HarnessLibrarySheet";
 import { useShellStore, LEFT_MIN, LEFT_MAX, RIGHT_MIN, RIGHT_MAX, type RailSection } from "./shellStore";
 import { isEditingTarget, isTypeaheadTarget, matchesChord, useIsMac } from "./keys";
+import { Sheet } from "@/components/ui";
 import { shellNavCommands, type Command } from "./commands";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
@@ -55,6 +56,7 @@ function Resizer({
       ref={el}
       role="separator"
       aria-orientation="vertical"
+      aria-label={side === "left" ? "Resize navigation panel" : "Resize inspector"}
       aria-valuenow={value}
       aria-valuemin={min}
       aria-valuemax={max}
@@ -73,13 +75,19 @@ function Resizer({
           onChange(value + (side === "left" ? step : -step));
         }
       }}
-      className="group relative z-10 w-[5px] flex-none cursor-col-resize bg-transparent"
-      style={{ marginInline: "-2px" }}
+      className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "-right-[3px]" : "-left-[3px]"}`}
     >
-      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-line transition-colors group-hover:bg-ink-faint group-data-[dragging]:bg-signal" />
+      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-[dragging]:bg-signal" />
     </div>
   );
 }
+
+/** What the header calls each destination. */
+const DESTINATION: Record<RailSection, string> = {
+  chats: "Chats",
+  studio: "Harness Studio",
+  providers: "Providers",
+};
 
 interface Props {
   commands: Command[];
@@ -96,6 +104,8 @@ interface Props {
   left: React.ReactNode;
   stage: React.ReactNode;
   right: React.ReactNode;
+  /** Closes the right panel's content. Below 1020px the panel is a sheet and this is what dismissing it does. */
+  onDismissRight?: () => void;
 }
 
 export function AppShell({
@@ -113,17 +123,17 @@ export function AppShell({
   left,
   stage,
   right,
+  onDismissRight,
 }: Props) {
   const mac = useIsMac();
   const shell = useShellStore();
   const shellMode = useModeStore((s) => s.mode);
   const hydrateProviders = useProviderStore((s) => s.hydrate);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Hydration runs once, deliberately
   useEffect(() => {
     shell.hydrate();
     void hydrateProviders();
-    // Hydration runs once, deliberately.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Narrow-window policy. A stated preference is never overwritten — the
@@ -248,10 +258,23 @@ export function AppShell({
       className="oh-shell flex h-screen flex-col overflow-hidden"
       data-shell-mode={shellMode}
     >
+      {/* First tab stop: lets a keyboard user skip the header and rail. */}
+      {/* biome-ignore lint/a11y/useValidAnchor: a real in-page link; the handler only moves focus into the main region as well as scrolling to it */}
+      <a
+        href="#oh-main"
+        className="t-body fixed left-2 top-2 z-[60] -translate-y-[200%] rounded-control border border-line-strong bg-sub-100 px-3 py-2 text-ink focus:translate-y-0"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("oh-main")?.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       <TitleBar
         harnessName={harnessName}
         onHarnessNameChange={onHarnessNameChange}
         mode={shellMode === "agent" ? "Agent" : "Studio"}
+        destination={DESTINATION[shell.section]}
         running={running}
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
@@ -261,35 +284,30 @@ export function AppShell({
       {toolbar}
 
       <div className="flex min-h-0 flex-1">
-        <ActivityRail collapsed={narrow.left}>{leftOpen && !immersive ? left : null}</ActivityRail>
-        {!narrow.left && (
-          <Resizer side="left" value={leftWidth} min={LEFT_MIN} max={LEFT_MAX} onChange={setLeftWidth} />
-        )}
+        <ActivityRail
+          collapsed={narrow.left}
+          edge={!narrow.left ? <Resizer side="left" value={leftWidth} min={LEFT_MIN} max={LEFT_MAX} onChange={setLeftWidth} /> : null}
+        >
+          {leftOpen && !immersive ? left : null}
+        </ActivityRail>
 
-        <main className="relative min-w-0 flex-1 bg-sub-000">{stage}</main>
+        <main id="oh-main" tabIndex={-1} className="relative min-w-0 flex-1 bg-sub-000 outline-none">{stage}</main>
 
         {rightOpen && !immersive && right && (
-          <>
-            <Resizer
-              side="right"
-              value={rightWidth}
-              min={RIGHT_MIN}
-              max={RIGHT_MAX}
-              onChange={setRightWidth}
-            />
-            <div
-              className="min-h-0 flex-none border-l border-line"
-              style={{ width: hydrated ? rightWidth : undefined, minWidth: RIGHT_MIN }}
-            >
-              {right}
-            </div>
-          </>
+          <aside
+            aria-label="Inspector"
+            className="relative min-h-0 flex-none border-l border-line"
+            style={{ width: hydrated ? rightWidth : undefined, minWidth: RIGHT_MIN }}
+          >
+            <Resizer side="right" value={rightWidth} min={RIGHT_MIN} max={RIGHT_MAX} onChange={setRightWidth} />
+            {right}
+          </aside>
         )}
       </div>
 
       {shellMode === "studio" && shell.studioView === "editor" && (
         <StatusBar
-          mode={`Studio · exec ${mode}`}
+          mode={mode.charAt(0).toUpperCase() + mode.slice(1)}
           running={running}
           nodeCount={nodeCount}
           edgeCount={edgeCount}
@@ -297,6 +315,19 @@ export function AppShell({
           backendOk={backendOk}
         />
       )}
+
+      {/* Too narrow for a column: the same panel opens as a sheet, so a node can
+          still be inspected and Nilo still reached on a phone or a small window. */}
+      <Sheet
+        open={narrow.right && !immersive && Boolean(right) && Boolean(onDismissRight)}
+        onOpenChange={(v) => !v && onDismissRight?.()}
+        title="Inspector"
+        hideTitle
+        showClose
+        className="h-[min(640px,calc(100dvh-var(--h-titlebar)-20px))] w-[min(520px,calc(100vw-24px))]"
+      >
+        <div className="min-h-0 flex-1">{right}</div>
+      </Sheet>
 
       <CommandPalette
         open={paletteOpen}

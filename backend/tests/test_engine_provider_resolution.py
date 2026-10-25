@@ -57,7 +57,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         },
         "openai-disabled": {
             "id": "openai-disabled",
@@ -66,7 +66,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.openai.com/v1",
             "enabled": False,
-            "secretRef": "openharness/openai-disabled",
+            "secretRef": "oharness/openai-disabled",
         },
         "cursor": {
             "id": "cursor",
@@ -75,7 +75,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.cursor.com",
             "enabled": True,
-            "secretRef": "openharness/cursor",
+            "secretRef": "oharness/cursor",
         },
     }
 
@@ -113,7 +113,7 @@ def _one_llm_node_graph(node_data: dict) -> dict:
 def test_pinned_provider_id_resolves_to_real_adapter_not_mock(monkeypatch) -> None:
     graph = _one_llm_node_graph({"providerIds": ["anthropic"], "model": "claude-sonnet-5"})
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
 
     events, stub = _run(graph, _connections(), store, monkeypatch)
 
@@ -163,7 +163,7 @@ def test_disabled_connection_is_honest_error_names_the_connection(monkeypatch) -
 def test_cursor_pinned_to_llm_node_is_honest_error(monkeypatch) -> None:
     graph = _one_llm_node_graph({"providerIds": ["cursor"]})
     store = MemorySecrets()
-    store.put("openharness/cursor", "crsr_x")
+    store.put("oharness/cursor", "crsr_x")
 
     events, stub = _run(graph, _connections(), store, monkeypatch)
 

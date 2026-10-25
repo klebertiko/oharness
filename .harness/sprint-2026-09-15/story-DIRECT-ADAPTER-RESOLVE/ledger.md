@@ -5,8 +5,8 @@ AC and seams are in story.md. No production edits yet — PO intake only.
 ## PO intake verification (2026-09-15)
 
 Reporter's diagnosis re-verified against current source rather than trusted as-is, since the file it cited
-as background (`handoffs/2026-09-13-openharness-provider-verified-report.md`) does not exist under that exact
-name — closest match is `handoffs/2026-09-13-openharness-provider-status-astra.md`, and the actual working
+as background (`handoffs/2026-09-13-oharness-provider-verified-report.md`) does not exist under that exact
+name — closest match is `handoffs/2026-09-13-oharness-provider-status-astra.md`, and the actual working
 artifact for that sibling bug is `.harness/sprint-2026-09-15/story-PROVIDER-VERIFY-BUDGET/` (evidence/ only,
 no story.md yet at intake time). Flagged to the user; not blocking, since this story's own root cause was
 independently confirmed against live code, not against the cited handoff.
@@ -59,4 +59,4 @@ No commit/merge. Independent QA/SEC remain pending until integration.
 - RED partial HTTP transport failure: node_error missing provider_failure (direct and harness).
 - GREEN provider resolution + engine token limits + engine provider resolution: 28 passed; reported partial 37 tokens retained, safe transport error and concrete connection emitted.
 - Shared checkout changed externally during work: Sonnet's per-node budget callback, intake ledger and stricter direct resolution budget check preserved. Reconciled duplicate verification fields; stopped turns never verify.
-- Runtime: started local backend :8000 (health ok), Next :3000 (HTTP 200), Tauri dev compiled and window OpenHarness observed. Packaged sidecar binary absent; dev backend is managed separately.
+- Runtime: started local backend :8000 (health ok), Next :3000 (HTTP 200), Tauri dev compiled and window OHarness observed. Packaged sidecar binary absent; dev backend is managed separately.

@@ -74,9 +74,9 @@ describe("bundlesApi", () => {
   it("fetchExample GETs one example by encoded id", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => sample }));
 
-    const bundle = await fetchExample("openharness.example.deepseek-harness");
+    const bundle = await fetchExample("oharness.example.deepseek-harness");
     expect(fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/bundles/examples/openharness.example.deepseek-harness",
+      "http://127.0.0.1:8000/bundles/examples/oharness.example.deepseek-harness",
       { cache: "no-store" }
     );
     expect(bundle.manifest.id).toBe("hello");
@@ -155,7 +155,7 @@ describe("bundlesApi", () => {
         prompt: "Check the proposal.\nReturn a Signal.",
         roleId: "qa",
         emits: ["accept", "reject"],
-        secretRef: "openharness/reviewer",
+        secretRef: "oharness/reviewer",
         apiKey: "legacy-secret-must-not-export",
         extension: { reviewer: { checks: ["tests", "accessibility"] } },
       },
@@ -176,7 +176,7 @@ describe("bundlesApi", () => {
         prompt: "Check the proposal.\nReturn a Signal.",
         roleId: "qa",
         emits: ["accept", "reject"],
-        secretRef: "openharness/reviewer",
+        secretRef: "oharness/reviewer",
         extension: { reviewer: { checks: ["tests", "accessibility"] } },
       },
     });
@@ -234,7 +234,7 @@ describe("bundlesApi", () => {
         id: "draft",
         type: "skill",
         position: { x: 16, y: -42 },
-        data: { label: "Draft", providerIds: ["pinned"], secretRef: "openharness/draft", apiKey: "do-not-export" },
+        data: { label: "Draft", providerIds: ["pinned"], secretRef: "oharness/draft", apiKey: "do-not-export" },
       }],
       edges: [{ id: "self", source: "draft", target: "draft", sourceHandle: "done", targetHandle: "in", data: { condition: "accept", signal: "Ready for QA" } }],
       harnessMeta: { name: "Edited harness", description: "Edited description" },
@@ -246,7 +246,7 @@ describe("bundlesApi", () => {
       graph: {
         viewport: { x: -18, y: 72, zoom: 0.75 },
         extension: { routes: ["accept", "reject"] },
-        nodes: [{ id: "draft", type: "skill", role: "skill", label: "Draft", position: { x: 16, y: -42 }, data: { label: "Draft", providerIds: ["pinned"], secretRef: "openharness/draft" } }],
+        nodes: [{ id: "draft", type: "skill", role: "skill", label: "Draft", position: { x: 16, y: -42 }, data: { label: "Draft", providerIds: ["pinned"], secretRef: "oharness/draft" } }],
         edges: [{ id: "self", source: "draft", target: "draft", sourceHandle: "done", targetHandle: "in", data: { condition: "accept", signal: "Ready for QA" } }],
       },
     });

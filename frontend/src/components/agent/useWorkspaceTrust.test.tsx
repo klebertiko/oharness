@@ -52,7 +52,7 @@ it("stays untrusted and says so when the sidecar refuses", async () => {
   const { result } = renderHook(() => useWorkspaceTrust(ROOT, true));
   await act(async () => { await result.current.setTrusted(true); });
   expect(result.current.trusted).toBe(false);
-  expect(result.current.error).toMatch(/confiar|confiança/i);
+  expect(result.current.error).toMatch(/workspace trust/i);
 });
 
 it("an unreachable sidecar never reads as trusted", async () => {

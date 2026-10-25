@@ -2,7 +2,7 @@
 
 Status: Proposto (2026-10-02) · spike, não story — ver "Futuro" antes de expandir escopo
 Origem: pedido do usuário (klebertiko), relayed pela sessão `skills-framework`
-Prior art: `src/laya-playground/research-pack/03-openharness-harness-skills-comparison.md` §4.2/§6/§7
+Prior art: `src/laya-playground/research-pack/03-oharness-harness-skills-comparison.md` §4.2/§6/§7
 
 ## Contexto
 
@@ -17,7 +17,7 @@ Studio é fixo — `NodeType` em `frontend/src/lib/types.ts:1-7`
 (`agent | gate | hitl | skill | mcp | tool`) — e o grafo padrão Agile vem
 hardcoded de `backend/oharness/compile_skills_harness.py` (`AGENT_ROLES`,
 `_GRAPH_EDGES`), não de um doc. Adicionar Laya como nó de verdade é trabalho
-de código do OpenHarness, não uma mudança de conteúdo.
+de código do OHarness, não uma mudança de conteúdo.
 
 O research pack já desenhou o encaixe mecânico (§4.2): processo Laya
 separado, HTTP loopback em `127.0.0.1:<porta>` com lock, sidecar chama esse

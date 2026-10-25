@@ -83,10 +83,10 @@ const result = await new Promise((resolve, reject) => {
 });
 socket.close();
 
-if (result.title !== "OpenHarness") throw new Error(`Unexpected window title: ${result.title}`);
+if (result.title !== "OHarness") throw new Error(`Unexpected window title: ${result.title}`);
 if (result.readyState !== "complete") throw new Error(`WebView document is ${result.readyState}`);
-if (result.body.length < 100 || !result.body.includes("OpenHarness")) {
-  throw new Error("OpenHarness UI did not render expected content");
+if (result.body.length < 100 || !result.body.includes("OHarness")) {
+  throw new Error("OHarness UI did not render expected content");
 }
 
 console.log(JSON.stringify({

@@ -2,4 +2,4 @@ locator.waitFor: Timeout 12000ms exceeded.
 Call log:
 [2m  - waiting for locator('.react-flow__node[data-id="impl"]') to be visible[22m
 
-    at D:\Development\src\OpenHarness\frontend\scripts\e2e-studio-clarity.mjs:116:59
+    at D:\Development\src\OHarness\frontend\scripts\e2e-studio-clarity.mjs:116:59

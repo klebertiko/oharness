@@ -139,7 +139,7 @@ const seed: Connection[] = [
     residence: "cloud",
     endpoint: "https://api.openai.com/v1",
     secret: {
-      service: "openharness/openai",
+      service: "oharness/openai",
       prefix: "sk-proj-",
       tail: "0aT7",
       length: 164,
@@ -212,7 +212,7 @@ const seed: Connection[] = [
     residence: "cloud",
     endpoint: "https://openrouter.ai/api/v1",
     secret: {
-      service: "openharness/openrouter",
+      service: "oharness/openrouter",
       prefix: "sk-or-",
       tail: "c07e",
       length: 73,
@@ -223,7 +223,7 @@ const seed: Connection[] = [
     detail: "$1.84 of credits left. Runs will start failing mid-graph once it hits zero.",
     probes: [312, 298, 341, 305, 288, 366, 299, 402, 317, 294, 355, 308],
     facts: [
-      { k: "label", v: "openharness" },
+      { k: "label", v: "oharness" },
       { k: "credits", v: "$1.84 of $25.00", tone: "warn" },
       { k: "spent 30d", v: "$23.16" },
       { k: "free tier", v: "no" },
@@ -369,7 +369,7 @@ async function runProbe(id: string, set: (partial: Partial<ProviderState>) => vo
         detail:
           err instanceof Error
             ? err.message
-            : "Could not reach the OpenHarness sidecar to test this connection.",
+            : "Could not reach the OHarness sidecar to test this connection.",
         probes: [...c.probes.slice(-11), { ms: 0, ok: false }],
         lastProbe: new Date().toISOString(),
       })),
@@ -558,7 +558,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   attachSecret: async (id, plaintext) => {
     const c = get().connections.find((x) => x.id === id);
     if (!c) return;
-    const ref = await saveSecret(`openharness/${id}`, plaintext);
+    const ref = await saveSecret(`oharness/${id}`, plaintext);
     set({
       connections: patch(get().connections, id, (x) => ({
         ...x,
@@ -585,7 +585,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       removed = false;
     }
     if (!removed) return false;
-    await forgetSecret(`openharness/${id}`);
+    await forgetSecret(`oharness/${id}`);
     set({
       connections: patch(get().connections, id, (c) => ({
         ...c,

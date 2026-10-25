@@ -319,11 +319,11 @@ export function runReducer(state: RunState, action: Action): RunState {
       const caps = action.data as unknown as NonNullable<RunState["capabilities"]>;
       const notice =
         caps.reason === "cli-adapter"
-          ? "este provedor não pede ferramentas; /exec e /read continuam disponíveis"
+          ? "this provider doesn't request tools; /exec and /read stay available"
           : caps.reason === "provider-no-tools"
-            ? "este modelo não suporta ferramentas; a resposta segue só em texto"
+            ? "this model doesn't support tools; the reply continues as text only"
             : caps.reason === "no-workspace"
-              ? "sem pasta selecionada: sem ferramentas nesta conversa"
+              ? "no folder selected: no tools in this conversation"
               : null;
       return {
         ...state,

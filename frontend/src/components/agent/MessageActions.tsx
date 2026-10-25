@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 export function MessageActions({ content, onReuse }: { content: string; onReuse?: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -15,11 +16,10 @@ export function MessageActions({ content, onReuse }: { content: string; onReuse?
       setError(true);
     }
   };
-  const buttonClass = "rounded-control px-1.5 py-1 text-[11px] text-ink-faint hover:bg-sub-200 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal";
-  return <div className="flex flex-wrap items-center gap-2">
-    <button type="button" onClick={() => void copy()} className={buttonClass}>Copy message</button>
-    {onReuse && <button type="button" onClick={onReuse} className={buttonClass}>Reuse message</button>}
-    {copied && <span role="status" className="text-[11px] text-ink-mute">Copied</span>}
-    {error && <span role="alert" className="text-[11px] text-warn">Could not copy. Select the message text and copy it manually.</span>}
+  return <div className="-ml-2 flex flex-wrap items-center gap-1">
+    <Button size="sm" variant="ghost" onClick={() => void copy()}>Copy message</Button>
+    {onReuse && <Button size="sm" variant="ghost" onClick={onReuse}>Reuse message</Button>}
+    {copied && <span role="status" className="text-meta text-ink-mute">Copied</span>}
+    {error && <span role="alert" className="text-meta text-fault-text">Could not copy. Select the message text and copy it manually.</span>}
   </div>;
 }

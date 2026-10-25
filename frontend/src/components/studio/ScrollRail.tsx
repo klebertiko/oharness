@@ -1,10 +1,9 @@
 "use client";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cardSpan, nextCardIndex, pageTarget, parseInset, railState, revealTarget, wheelToScroll, type RailState } from "@/lib/scrollRail";
 
-const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal";
-const stepButton = `inline-flex h-7 w-7 items-center justify-center rounded-control border border-line bg-sub-100 text-ink-dim transition-colors hover:bg-sub-200 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-sub-100 disabled:hover:text-ink-dim ${focusRing}`;
 const IDLE: RailState = { canPrev: false, canNext: false, fadeStart: false, fadeEnd: false };
 const TEXT_ENTRY = "input, textarea, select, [contenteditable=''], [contenteditable='true']";
 const FOCUSABLE = "button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
@@ -114,12 +113,8 @@ export function ScrollRail({ labelledBy, as: Tag = "div", className = "", childr
     <>
       {scrollable && (
         <div className="absolute right-0 top-0 flex gap-1.5">
-          <button type="button" id={prevId} aria-label="Previous" aria-labelledby={`${prevId} ${labelledBy}`} disabled={!state.canPrev} onClick={() => page("prev")} className={stepButton}>
-            <ChevronLeft size={14} strokeWidth={1.8} aria-hidden />
-          </button>
-          <button type="button" id={nextId} aria-label="Next" aria-labelledby={`${nextId} ${labelledBy}`} disabled={!state.canNext} onClick={() => page("next")} className={stepButton}>
-            <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
-          </button>
+          <Button iconOnly size="sm" id={prevId} aria-label="Previous" aria-labelledby={`${prevId} ${labelledBy}`} disabled={!state.canPrev} onClick={() => page("prev")} icon={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />} />
+          <Button iconOnly size="sm" id={nextId} aria-label="Next" aria-labelledby={`${nextId} ${labelledBy}`} disabled={!state.canNext} onClick={() => page("next")} icon={<ChevronRight size={14} strokeWidth={1.8} aria-hidden />} />
         </div>
       )}
       <Tag

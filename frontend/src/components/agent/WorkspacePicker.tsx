@@ -81,7 +81,7 @@ export function WorkspacePicker() {
       onChange={(id) => setChosen(id || null)}
       onOpenChange={(open) => open && setNotice(null)}
       width={280}
-      triggerClassName="h-8 max-w-[180px] px-2 text-[11px] font-[550] text-ink-faint hover:text-ink"
+      triggerClassName="h-control-md max-w-[180px] px-2 text-body font-medium text-ink-mute hover:text-ink max-sm:h-control-lg"
       trigger={
         <>
           <Folder size={13} strokeWidth={1.8} className="flex-none" aria-hidden />
@@ -95,7 +95,7 @@ export function WorkspacePicker() {
             {adding ? "Adding…" : "Add folder…"}
           </ComboAction>
           {notice && (
-            <p role="status" className="px-2 pb-1 text-[11px] text-ink-faint">
+            <p role="status" className="px-2 pb-1 text-meta text-ink-mute">
               {notice}
             </p>
           )}

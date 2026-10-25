@@ -7,7 +7,7 @@ const TONE: Record<Tone, string> = {
   ok: "var(--signal)",
   warn: "var(--warn)",
   fault: "var(--fault)",
-  idle: "var(--ink-faint)",
+  idle: "var(--ink-mute)",
 };
 
 /** A single state signal: one small dot, coloured only when it carries news. */
@@ -53,14 +53,14 @@ export function ListRow({
         title={hint}
         aria-current={selected || undefined}
         className={[
-          "flex w-full items-center gap-3 rounded-[8px] px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-1 focus-visible:ring-signal",
-          selected ? "bg-sub-300/70" : "hover:bg-sub-200/70",
+          "oh-focus-inner flex min-h-control-lg w-full items-center gap-3 rounded-control px-2.5 py-2 text-left transition-colors",
+          selected ? "bg-sub-200 shadow-[inset_2px_0_0_var(--signal)]" : "hover:bg-sub-200",
         ].join(" ")}
       >
         {leading}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-[550] leading-5 text-ink">{title}</span>
-          {subtitle && <span className="block truncate text-[12px] leading-[18px] text-ink-mute">{subtitle}</span>}
+          <span className="t-title block truncate text-ink">{title}</span>
+          {subtitle && <span className="block truncate text-body text-ink-mute">{subtitle}</span>}
         </span>
         {trailing && (
           <span className={`flex-none transition-opacity ${actions ? "group-focus-within:opacity-0 group-hover:opacity-0" : ""}`}>
@@ -81,7 +81,7 @@ export function ListRow({
 export function ListGroup({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <section className="px-1.5 pt-2">
-      {label && <h3 className="px-2.5 pb-1 pt-2 text-[11px] font-[550] text-ink-faint">{label}</h3>}
+      {label && <h3 className="px-2.5 pb-1 pt-2 text-meta font-medium text-ink-mute">{label}</h3>}
       <ul className="flex flex-col gap-px">{children}</ul>
     </section>
   );
@@ -95,7 +95,7 @@ export function RowAction({ label, onClick, children }: { label: string; onClick
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-[6px] px-2 text-[12px] font-[550] text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink"
+      className="inline-flex h-control-md min-w-control-md items-center justify-center gap-1 rounded-control px-2 text-body font-medium text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink"
     >
       {children}
     </button>

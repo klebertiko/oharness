@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenHarness",
+  "productName": "OHarness",
   "version": "0.0.1-alpha",
-  "identifier": "dev.openharness.app",
+  "identifier": "dev.oharness.app",
   "build": {
     "beforeDevCommand": "npm run build --prefix frontend",
     "devUrl": "http://127.0.0.1:3000",
@@ -15,7 +15,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "OpenHarness",
+        "title": "OHarness",
         "width": 1280,
         "height": 800,
         "minWidth": 720,
@@ -36,7 +36,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "externalBin": ["binaries/openharness-sidecar"],
+    "externalBin": ["binaries/oharness-sidecar"],
     "resources": [
       "resources/default-agile.oharness",
       "resources/deepseek-harness.oharness",

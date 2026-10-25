@@ -330,7 +330,7 @@ describe("Transcript — trajectory breakdown", () => {
         } }] })],
       });
       render(<Transcript run={run} onResolve={() => {}} />);
-      const approve = screen.getByRole("button", { name: "Aprovar" }) as HTMLButtonElement;
+      const approve = screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement;
       expect(approve.disabled).toBe(true);
     });
 
@@ -344,7 +344,7 @@ describe("Transcript — trajectory breakdown", () => {
         } }] })],
       });
       render(<Transcript run={run} onResolve={() => {}} />);
-      const approve = screen.getByRole("button", { name: "Aprovar" }) as HTMLButtonElement;
+      const approve = screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement;
       expect(approve.disabled).toBe(false);
     });
   });

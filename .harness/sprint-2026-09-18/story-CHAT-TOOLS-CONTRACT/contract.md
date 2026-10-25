@@ -62,8 +62,8 @@ Todos sob o middleware de token de sidecar (401 sem `Authorization: Bearer`). Pr
   "items": [
     { "kind": "skill",   "name": "harness", "path": ".claude/skills/harness/SKILL.md",
       "description": "Agile/Scrum/Kanban agent harness orchestrator…", "source": "claude-skills" },
-    { "kind": "command", "name": "test", "path": "src/OpenHarness/frontend/package.json",
-      "argv": ["npm", "run", "test"], "cwd": "src/OpenHarness/frontend", "source": "package-scripts" }
+    { "kind": "command", "name": "test", "path": "src/OHarness/frontend/package.json",
+      "argv": ["npm", "run", "test"], "cwd": "src/OHarness/frontend", "source": "package-scripts" }
   ],
   "truncated": false,
   "scanned_dirs": 412
@@ -114,7 +114,7 @@ Campos novos em `DirectRequest` (todos opcionais; sem eles, comportamento atual 
   "connection_id": "ollama-local", "mode": "live", "cwd": "D:\\Development",
   "tools": {
     "enabled": true,
-    "preset": { "name": "exec", "argv": ["npm", "run", "test"], "cwd": "src/OpenHarness/frontend" },
+    "preset": { "name": "exec", "argv": ["npm", "run", "test"], "cwd": "src/OHarness/frontend" },
     "summarize": true
   }
 }

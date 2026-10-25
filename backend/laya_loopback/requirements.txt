@@ -9,9 +9,9 @@
 # Pinned to the same laya version .github/workflows/laya-shadow.yml already
 # runs in CI (scripts/laya_issue_shadow.py), so the loopback and the CI
 # shadow job stay on provably-equivalent behaviour.
-laya==0.3.22
+laya==0.4.9
 # Pulled in transitively by huggingface_hub today, but pinned explicitly
 # here because this file's whole job is the loopback's file-lock-based
 # single-process guarantee -- that guarantee must not silently depend on
 # whatever version another dependency happened to drag in.
-filelock==4.0.9
+filelock==4.2.4

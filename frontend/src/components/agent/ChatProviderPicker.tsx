@@ -105,12 +105,12 @@ export function ChatProviderPicker({ onConnect, disabled = false }: { onConnect:
   // setup. A named connection is fixed on the Providers screen; with no name
   // there is nothing to open, so show the list. `token` fires even on a
   // repeat request for the same id.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Fires only when a new setup request arrives (token); connections and handlers are read at that moment
   useEffect(() => {
     if (setupRequestToken === 0) return;
     const target = setupRequestId && connections.some((c) => c.id === setupRequestId && isChatCapable(c)) ? setupRequestId : null;
     if (target) goToProviders(target);
     else setOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setupRequestToken]);
 
   return (
@@ -125,7 +125,7 @@ export function ChatProviderPicker({ onConnect, disabled = false }: { onConnect:
       open={open}
       onOpenChange={setOpen}
       header={readyCount === 0 ? "No provider is ready to answer. Set one up in Providers." : "Chat default. Agents with a pinned connection use their own provider."}
-      triggerClassName="h-8 max-w-[260px] px-2 text-[11px] font-[550] text-ink-dim"
+      triggerClassName="h-control-md max-w-[260px] px-2 text-body font-medium text-ink-dim max-sm:h-control-lg"
       trigger={
         <>
           <span className={"h-1.5 w-1.5 flex-none rounded-full " + dotClass} aria-hidden />
@@ -141,7 +141,7 @@ export function ChatProviderPicker({ onConnect, disabled = false }: { onConnect:
         >
           <span className="truncate">Manage providers</span>
           {needSetup > 0 && (
-            <span className="ml-auto flex-none text-[11px] font-[450] text-ink-faint">
+            <span className="ml-auto flex-none text-meta font-normal text-ink-mute">
               {needSetup} {needSetup === 1 ? "needs" : "need"} setup
             </span>
           )}

@@ -1,5 +1,5 @@
 
- RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/openharness-qa-ab567a542950401bb7fc4112cbfc06b8
+ RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/oharness-qa-ab567a542950401bb7fc4112cbfc06b8
 
 x·
 
@@ -42,7 +42,7 @@ Ignored nodes: comments, script, style
     </div>
   </body>
 </html>
- ❯ waitForWrapper ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ waitForWrapper ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/wait-for.js:163:27
  ❯ src/components/agent/MessageActions.test.tsx:9:9
       7|   render(<MessageActions content="<script>not HTML</script>" />);
       8|   fireEvent.click(screen.getByRole("button", { name: "Copy message" })…

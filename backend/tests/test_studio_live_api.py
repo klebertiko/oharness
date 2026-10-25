@@ -45,11 +45,11 @@ async def _reset():
 @pytest.fixture()
 def live(monkeypatch):
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
     connections = {
         "conn": {
             "id": "conn", "provider": "anthropic", "label": "Anthropic", "residence": "cloud",
-            "endpoint": "https://api.anthropic.com", "enabled": True, "secretRef": "openharness/anthropic",
+            "endpoint": "https://api.anthropic.com", "enabled": True, "secretRef": "oharness/anthropic",  # gitleaks:allow
             "defaultModel": "claude-sonnet-5",
         }
     }
@@ -117,7 +117,7 @@ def test_plan_repairs_an_invalid_reply_once(live):
 
 def test_model_ops_that_touch_credentials_are_never_returned(live):
     client, install = live
-    evil = json.dumps({"summary": "pwn", "ops": [{"op": "updateNode", "id": "a1", "config": {"secretRef": "openharness/anthropic"}}]})
+    evil = json.dumps({"summary": "pwn", "ops": [{"op": "updateNode", "id": "a1", "config": {"secretRef": "oharness/anthropic"}}]})  # gitleaks:allow
     adapter = install(evil, evil)
     res = client.post("/studio/copilot/plan", json=_plan())
     assert res.status_code == 422
@@ -307,7 +307,7 @@ def test_non_editable_config_never_reaches_the_provider(live):
     adapter = install(json.dumps({"summary": "ok", "ops": []}))
     graph = {
         "nodes": [{"id": "a1", "type": "agent", "label": "A", "config": {
-            "roleId": "writer", "apiKey": "hunter2-super-secret", "secretRef": "openharness/anthropic",
+            "roleId": "writer", "apiKey": "hunter2-super-secret", "secretRef": "oharness/anthropic",  # gitleaks:allow
             "endpoint": "https://evil.test", "systemPrompt": "You draft.",
         }}],
         "edges": [],
@@ -315,7 +315,7 @@ def test_non_editable_config_never_reaches_the_provider(live):
     res = client.post("/studio/copilot/plan", json=_plan(graph=graph))
     assert res.status_code == 200
     sent = adapter.calls[0][0]
-    for leaked in ("hunter2", "openharness/anthropic", "evil.test", "apiKey", "secretRef", "endpoint"):
+    for leaked in ("hunter2", "oharness/anthropic", "evil.test", "apiKey", "secretRef", "endpoint"):
         assert leaked not in sent
     assert "You draft." in sent and "writer" in sent
 

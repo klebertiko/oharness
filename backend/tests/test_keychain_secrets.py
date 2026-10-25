@@ -13,7 +13,7 @@ from secret_store.memory import MemorySecrets
 
 
 SECRET_VALUE = "sk-test-NEVER-LOG-THIS-VALUE-9f3a"
-SECRET_REF = "openharness/test-provider"
+SECRET_REF = "oharness/test-provider"
 
 
 class FakeKeyring:
@@ -101,9 +101,32 @@ def test_build_secrets_store_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_keychain_integration_optional_real_backend() -> None:
     """Live OS keychain smoke — skipped on CI without keyring."""
     store = KeychainSecrets()
-    ref = "openharness/ci-skip-integration-probe"
+    ref = "oharness/ci-skip-integration-probe"
     try:
         store.put(ref, "probe-value")
         assert store.get(ref) == "probe-value"
     finally:
         store.delete(ref)
+
+
+def test_keychain_migrates_pre_rebrand_service_on_first_get() -> None:
+    kr = FakeKeyring()
+    kr.set_password(KeychainSecrets.LEGACY_SERVICE, SECRET_REF, SECRET_VALUE)
+    store = KeychainSecrets(backend=kr)
+    assert store.get(SECRET_REF) == SECRET_VALUE
+    assert kr.get_password(KeychainSecrets.SERVICE, SECRET_REF) == SECRET_VALUE
+    assert kr.get_password(KeychainSecrets.LEGACY_SERVICE, SECRET_REF) is None
+
+
+def test_file_store_default_root_keeps_pre_rebrand_dir_when_only_it_exists(
+    tmp_path, monkeypatch
+) -> None:
+    from secret_store.factory import _default_file_root
+
+    monkeypatch.delenv("OH_SECRETS_DIR", raising=False)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    assert _default_file_root() == tmp_path / ".oharness" / "secrets"
+    (tmp_path / ".openharness" / "secrets").mkdir(parents=True)
+    assert _default_file_root() == tmp_path / ".openharness" / "secrets"
+    (tmp_path / ".oharness" / "secrets").mkdir(parents=True)
+    assert _default_file_root() == tmp_path / ".oharness" / "secrets"

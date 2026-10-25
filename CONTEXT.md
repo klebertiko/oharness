@@ -1,12 +1,12 @@
-# OpenHarness
+# OHarness
 
-Desktop Agent + Harness Design Studio: run agents against Providers, and author harnesses as an Open Harness Model (`.ohm`).
+Desktop Agent + Harness Design Studio: run agents against Providers, and author harnesses as an OHarness Model (`.ohm`).
 
 ## Language
 
 ### Model
 
-**Open Harness Model (OHM)**:
+**OHarness Model (OHM)**:
 The portable JSON document that describes a harness — graph, content, connectors, and runtime. File extension `.ohm`.
 _Avoid_: oharness file, wallet bundle, pipeline JSON
 
@@ -20,7 +20,7 @@ _Avoid_: example harness (as a UI label), built-in template, snapshot, default s
 
 **Agile Harness**:
 The bundled harness for Agile/Scrum/Kanban delivery, adapted from the skills-framework `engineering/harness` project. The first harness listed in Starting points.
-_Avoid_: OpenHarness Agile, the framework, skills-framework (as a product label)
+_Avoid_: OHarness Agile, the framework, skills-framework (as a product label)
 
 **Starting points**:
 The Studio overview section that lists the Agile Harness and the other bundled harnesses.
@@ -83,7 +83,7 @@ _Avoid_: wallet, model host, adapter (UI copy — adapter remains an internal ru
 ### Assistant and places
 
 **Nilo**:
-The OpenHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
+The OHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
 _Avoid_: Copilot (a Microsoft brand; never in UI copy, docs or examples), AI assistant, bot
 
 **Studio**:
@@ -100,8 +100,8 @@ Every user-facing string follows the terms above: UI, dialogs, menus, README, an
 
 | Retired wording | Say instead |
 |---|---|
-| "OpenHarness Agile (skills-framework)", "OpenHarness Agile", "the framework" | Agile Harness |
-| "Sample: Agent + review", "OpenHarness sample", "Open sample" | Agent + review (Bundled harness) |
+| "OHarness Agile (skills-framework)", "OHarness Agile", "the framework" | Agile Harness |
+| "Sample: Agent + review", "OHarness sample", "Open sample" | Agent + review (Bundled harness) |
 | "skills-framework · bundled snapshot" | Bundled harness |
 | "Open framework", "Open copy", "Open sample" | Open harness (same label on every starting point) |
 | "Open example" (menu) | Open bundled harness |

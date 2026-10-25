@@ -4,7 +4,7 @@ const PATHS = cellPaths(NILO_FACE);
 const W = NILO_FACE[0].length;
 const H = NILO_FACE.length;
 
-/** OpenHarness' compact mark: Nilo's face, cropped from the mascot sprite.
+/** OHarness' compact mark: Nilo's face, cropped from the mascot sprite.
     `cell` is CSS px per grid cell; keep it an integer so edges stay crisp. */
 export function Mark({ cell = 2 }: { cell?: number }) {
   return (

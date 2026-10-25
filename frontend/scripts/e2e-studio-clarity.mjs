@@ -12,7 +12,7 @@ const startedAt = new Date().toISOString();
 const fixture = JSON.parse(readFileSync(resolve(frontend, "src/lib/fixtures/ohm-roundtrip.json"), "utf8"));
 const bundled = {
   ...fixture,
-  manifest: { ...fixture.manifest, id: "openharness.default.agile", name: "Agile Harness" },
+  manifest: { ...fixture.manifest, id: "oharness.default.agile", name: "Agile Harness" },
   graph: {
     nodes: [
       { id: "writer", type: "agent", position: { x: 120, y: 90 }, data: { label: "Writer", providerIds: [] } },
@@ -47,6 +47,14 @@ async function download(name) {
   await file.saveAs(resolve(output, name));
   return JSON.parse(readFileSync(resolve(output, name), "utf8"));
 }
+// setViewportSize resolves when the browser accepted the size, not when the page has re-laid out: on a loaded
+// runner the next measurement can still see the previous (1440px) layout, where the right-aligned header
+// buttons sit past a 320px edge. Wait for the width and for two frames before measuring.
+async function resize(width) {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.waitForFunction(w => innerWidth === w, width);
+  await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+}
 async function pin(id, provider) {
   await page.locator('.react-flow__node[data-id="' + id + '"]').click();
   // The pin is a Combobox (eced171), not a <select>.
@@ -55,7 +63,7 @@ async function pin(id, provider) {
 }
 try {
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
-  browser = await chromium.launch({ channel: process.env.OHM_BROWSER_CHANNEL || "msedge", headless: true });
+  browser = await chromium.launch(process.env.OHM_BROWSER_EXECUTABLE ? { executablePath: process.env.OHM_BROWSER_EXECUTABLE, headless: true } : { channel: process.env.OHM_BROWSER_CHANNEL || "msedge", headless: true });
   context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1440, height: 1000 } });
   page = await context.newPage();
   page.setDefaultTimeout(12000);
@@ -99,7 +107,7 @@ try {
   });
   await page.goto(process.env.OHM_E2E_URL || "http://127.0.0.1:3000", { waitUntil: "networkidle" });
   step = "slash command menu";
-  const composer = page.getByRole("textbox", { name: "Message OpenHarness" });
+  const composer = page.getByRole("textbox", { name: "Message OHarness" });
   await composer.fill("/");
   await page.getByRole("listbox", { name: "Commands and skills" }).waitFor();
   await composer.press("ArrowDown");
@@ -188,7 +196,7 @@ try {
   step = "overview responsive bounds";
   await page.getByRole("button", { name: "Back to Studio", exact: true }).click();
   for (const width of [320, 375, 414, 768, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
+    await resize(width);
     const overview = page.locator('section[aria-labelledby="studio-heading"]');
     // Cards in a horizontal rail (#106) sit past the edge by design; the rail
     // itself must fit, and each card button must come into view when scrolled to.
@@ -214,10 +222,10 @@ try {
     await page.screenshot({ path: resolve(output, "overview-" + width + ".png") });
   }
   step = "provider and slash menu responsive keyboard";
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await resize(1440);
   await page.getByRole("button", { name: "Chats", exact: true }).click();
   for (const width of [320, 375, 414, 768, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
+    await resize(width);
     const chip = page.getByRole("button", { name: /Chat provider: OpenAI/ });
     await chip.click();
     const menu = page.getByRole("listbox", { name: "Chat provider" });
@@ -227,7 +235,7 @@ try {
     await menu.press("ArrowUp");
     await page.screenshot({ path: resolve(output, "provider-" + width + ".png") });
     await menu.press("Escape");
-    const draft = page.getByRole("textbox", { name: "Message OpenHarness" });
+    const draft = page.getByRole("textbox", { name: "Message OHarness" });
     await draft.fill("/");
     const commands = page.getByRole("listbox", { name: "Commands and skills" });
     const cb = await commands.boundingBox();

@@ -1,5 +1,5 @@
 Independent QA test execution — 2026-09-15
-Environment: D:\Development\src\OpenHarness (shared, uncommitted checkout)
+Environment: D:\Development\src\OHarness (shared, uncommitted checkout)
 
 === frontend: npm test -- --run ===
 Test Files  57 passed (57)

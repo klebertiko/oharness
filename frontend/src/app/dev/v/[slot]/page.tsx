@@ -19,13 +19,13 @@ export default function Slot({ params }: { params: Promise<{ slot: string }> }) 
       style={{
         position: "fixed",
         inset: 0,
-        background: "#0d0f13",
+        background: "var(--sub-000)",
         display: "grid",
         placeItems: "center",
         overflow: "hidden",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {/* biome-ignore lint/performance/noImgElement: dev-only reference overlay of a static bitmap, not an app image */}
       <img
         src="/ref/bar.png"
         alt=""

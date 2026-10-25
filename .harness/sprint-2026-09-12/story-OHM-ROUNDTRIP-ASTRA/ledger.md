@@ -6,7 +6,7 @@ Gate update: independent QA Approved for Architecture Review after corrected E2E
 
 Final evidence: frontend 170/170 in 38 files, typecheck clean, 12/12 targeted semantic mutants killed with 0 survivors/invalid/timeouts, independent corrected browser E2E passed. git diff --check passed for scoped tracked files (only platform line-ending warnings). Coverage percentage was not measured and is not claimed.
 
-External return handoff: D:/Development/handoffs/2026-09-12-openharness-ohm-roundtrip-astra-retorno.md. User/Sonnet retains integration, commit and merge decisions. Historical entries below preserve the RED/GREEN and QA bounce sequence; the final status above supersedes their pending notes.
+External return handoff: D:/Development/handoffs/2026-09-12-oharness-ohm-roundtrip-astra-retorno.md. User/Sonnet retains integration, commit and merge decisions. Historical entries below preserve the RED/GREEN and QA bounce sequence; the final status above supersedes their pending notes.
 
 Contract: story.md. Export evidence: tdd-export.md. Import/E2E/mutation and gates recorded here.
 

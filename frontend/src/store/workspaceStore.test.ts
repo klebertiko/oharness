@@ -9,7 +9,7 @@ import {
 const projectA: CoworkProject = {
   id: "a",
   name: "Project A",
-  rootPath: "D:\\Development\\src\\OpenHarness",
+  rootPath: "D:\\Development\\src\\OHarness",
   instructions: "",
   memoryJson: {},
   harnessBundleId: null,
@@ -105,8 +105,8 @@ describe("workspaceStore", () => {
   it("addProject posts to /cowork/projects, prepends the result and selects it", async () => {
     const created: CoworkProject = {
       id: "c",
-      name: "OpenHarness",
-      rootPath: "D:\\Development\\src\\OpenHarness",
+      name: "OHarness",
+      rootPath: "D:\\Development\\src\\OHarness",
       instructions: "",
       memoryJson: {},
       harnessBundleId: null,
@@ -121,13 +121,13 @@ describe("workspaceStore", () => {
 
     const id = await useWorkspaceStore
       .getState()
-      .addProject({ name: "OpenHarness", rootPath: "D:\\Development\\src\\OpenHarness" });
+      .addProject({ name: "OHarness", rootPath: "D:\\Development\\src\\OHarness" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/cowork/projects",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ name: "OpenHarness", rootPath: "D:\\Development\\src\\OpenHarness" }),
+        body: JSON.stringify({ name: "OHarness", rootPath: "D:\\Development\\src\\OHarness" }),
       })
     );
     expect(id).toBe("c");

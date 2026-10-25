@@ -15,19 +15,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($AppPath)) {
-  $AppPath = Join-Path $PSScriptRoot "..\src-tauri\target\release\openharness.exe"
+  $AppPath = Join-Path $PSScriptRoot "..\src-tauri\target\release\oharness.exe"
 }
 
 $resolvedApp = (Resolve-Path -LiteralPath $AppPath).Path
 $appDirectory = Split-Path -Parent $resolvedApp
-$sidecarPath = (Resolve-Path -LiteralPath (Join-Path $appDirectory "openharness-sidecar.exe")).Path
+$sidecarPath = (Resolve-Path -LiteralPath (Join-Path $appDirectory "oharness-sidecar.exe")).Path
 
-$existingApp = @(Get-CimInstance Win32_Process -Filter "Name = 'openharness.exe'")
-$existingSidecars = @(Get-CimInstance Win32_Process -Filter "Name = 'openharness-sidecar.exe'" |
+$existingApp = @(Get-CimInstance Win32_Process -Filter "Name = 'oharness.exe'")
+$existingSidecars = @(Get-CimInstance Win32_Process -Filter "Name = 'oharness-sidecar.exe'" |
   Where-Object { $_.ExecutablePath -eq $sidecarPath })
 if ($existingApp.Count -gt 0 -or $existingSidecars.Count -gt 0) {
   $runningPaths = @($existingApp | ForEach-Object { $_.ExecutablePath } | Where-Object { $_ }) -join ", "
-  throw "Desktop smoke requires no existing OpenHarness process because the app is single-instance. Close: $runningPaths"
+  throw "Desktop smoke requires no existing OHarness process because the app is single-instance. Close: $runningPaths"
 }
 
 $debugListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
@@ -42,10 +42,10 @@ try {
   $listener = $null
   for ($attempt = 0; $attempt -lt 80; $attempt++) {
     if ($app.HasExited) {
-      throw "OpenHarness exited during startup with code $($app.ExitCode)"
+      throw "OHarness exited during startup with code $($app.ExitCode)"
     }
 
-    $sidecars = @(Get-CimInstance Win32_Process -Filter "Name = 'openharness-sidecar.exe'" |
+    $sidecars = @(Get-CimInstance Win32_Process -Filter "Name = 'oharness-sidecar.exe'" |
       Where-Object { $_.ExecutablePath -eq $sidecarPath })
     if ($sidecars.Count -gt 0) {
       $sidecarPids = $sidecars.ProcessId
@@ -61,12 +61,12 @@ try {
   }
 
   if ($null -eq $listener) {
-    throw "OpenHarness sidecar did not expose a loopback listener"
+    throw "OHarness sidecar did not expose a loopback listener"
   }
 
   $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($listener.LocalPort)/health" -TimeoutSec 3
   if ($health.status -ne "ok") {
-    throw "OpenHarness sidecar health was '$($health.status)'"
+    throw "OHarness sidecar health was '$($health.status)'"
   }
 
   $webView = & node (Join-Path $PSScriptRoot "check-webview.mjs") $debugPort
@@ -86,7 +86,7 @@ try {
     # check-webview.mjs exits 3 only when the debugging endpoint never answered;
     # every other non-zero code means the WebView was reachable but wrong.
     $endpointUnavailable = ($webViewExit -eq 3)
-    $message = "OpenHarness WebView did not render (probe exit $webViewExit; app $state; msedgewebview2 processes: $($webViewProcesses.Count))"
+    $message = "OHarness WebView did not render (probe exit $webViewExit; app $state; msedgewebview2 processes: $($webViewProcesses.Count))"
     if (-not $WebViewOptional -or -not $endpointUnavailable -or $app.HasExited) {
       throw $message
     }
@@ -100,24 +100,24 @@ try {
   }
 
   if (-not $app.CloseMainWindow()) {
-    throw "OpenHarness did not expose a closable main window"
+    throw "OHarness did not expose a closable main window"
   }
   $app.WaitForExit(10000) | Out-Null
   if (-not $app.HasExited) {
-    throw "OpenHarness did not exit after its main window closed"
+    throw "OHarness did not exit after its main window closed"
   }
 
   Start-Sleep -Seconds 2
-  $remaining = @(Get-CimInstance Win32_Process -Filter "Name = 'openharness-sidecar.exe'" |
+  $remaining = @(Get-CimInstance Win32_Process -Filter "Name = 'oharness-sidecar.exe'" |
     Where-Object { $_.ExecutablePath -eq $sidecarPath })
   if ($remaining.Count -ne 0) {
-    throw "OpenHarness left $($remaining.Count) sidecar process(es) after exit"
+    throw "OHarness left $($remaining.Count) sidecar process(es) after exit"
   }
   if (
     (Test-Path -LiteralPath (Join-Path $appDirectory "harness.db")) -or
     (Test-Path -LiteralPath (Join-Path $appDirectory "secrets"))
   ) {
-    throw "OpenHarness wrote persistent user data into its installation directory"
+    throw "OHarness wrote persistent user data into its installation directory"
   }
 
   [pscustomobject]@{
@@ -136,7 +136,7 @@ finally {
   if (-not $app.HasExited) {
     Stop-Process -Id $app.Id -Force
   }
-  @(Get-CimInstance Win32_Process -Filter "Name = 'openharness-sidecar.exe'" |
+  @(Get-CimInstance Win32_Process -Filter "Name = 'oharness-sidecar.exe'" |
     Where-Object { $_.ExecutablePath -eq $sidecarPath }) |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 }

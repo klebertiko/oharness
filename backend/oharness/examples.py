@@ -22,9 +22,9 @@ class Example:
 
 
 _EXAMPLES: tuple[Example, ...] = (
-    Example("openharness.default.agile", FIXTURES / "default-agile.ohm"),
-    Example("openharness.example.deepseek-harness", FIXTURES / "deepseek-harness.ohm"),
-    Example("openharness.example.mattpocock-skills", FIXTURES / "mattpocock-skills.ohm"),
+    Example("oharness.default.agile", FIXTURES / "default-agile.ohm"),
+    Example("oharness.example.deepseek-harness", FIXTURES / "deepseek-harness.ohm"),
+    Example("oharness.example.mattpocock-skills", FIXTURES / "mattpocock-skills.ohm"),
 )
 
 

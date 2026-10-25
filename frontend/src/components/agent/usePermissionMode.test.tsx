@@ -41,7 +41,7 @@ it("reverts the display when the backend refuses, so the UI never claims a laxer
   const { result } = renderHook(() => usePermissionMode("t1"));
   await act(async () => { await result.current.setMode("auto_workspace"); });
   expect(result.current.mode).toBe("plan");
-  expect(result.current.error).toMatch(/modo/i);
+  expect(result.current.error).toMatch(/permission mode/i);
 });
 
 it("trusts the backend over the local cache when a thread opens", async () => {

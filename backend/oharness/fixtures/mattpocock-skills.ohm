@@ -1,6 +1,6 @@
 schemaVersion: 1.0.0
 manifest:
-  id: openharness.example.mattpocock-skills
+  id: oharness.example.mattpocock-skills
   name: Matt Pocock skills
   version: 0.1.0
   description: 'Bundled harness modelled on mattpocock/skills: setup, grill-with-docs, to-spec, to-tickets, implement (tdd), two-axis code-review, pr, human merge and retro. Source: https://github.com/mattpocock/skills.'

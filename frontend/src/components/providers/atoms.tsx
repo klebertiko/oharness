@@ -26,8 +26,8 @@ export const TONE_DOT: Record<ChatProviderTone, string> = {
     verified connection reads in plain ink; only trouble takes a hue. */
 export const TONE_TEXT: Record<ChatProviderTone, string> = {
   verified: "text-ink",
-  attention: "text-warn",
-  failing: "text-fault",
+  attention: "text-warn-text",
+  failing: "text-fault-text",
   checking: "text-ink-dim",
   unverified: "text-ink-dim",
   unconfigured: "text-ink-mute",
@@ -36,7 +36,7 @@ export const TONE_TEXT: Record<ChatProviderTone, string> = {
 /** One readiness dot. Hollow when nothing is configured, filled once there is
     something to report — the same filled/hollow grammar as the residence mark. */
 export function ToneDot({ tone }: { tone: ChatProviderTone }) {
-  return <span aria-hidden className={`h-[7px] w-[7px] flex-none rounded-[2px] ${TONE_DOT[tone]}`} />;
+  return <span aria-hidden className={`h-[7px] w-[7px] flex-none rounded-none ${TONE_DOT[tone]}`} />;
 }
 
 /* ── Monogram ─────────────────────────────────────────────────────────────────
@@ -47,8 +47,8 @@ export function ToneDot({ tone }: { tone: ChatProviderTone }) {
    collide head-on with this app's rule that chroma means *state*. `live`
    (verified, per `providerReadiness`) only deepens the hairline. */
 const MONO_SIZE = {
-  sm: "h-[18px] w-[18px] text-[8px]",
-  lg: "h-8 w-8 text-[13px]",
+  sm: "h-5 w-5 text-meta",
+  lg: "h-8 w-8 text-title",
 } as const;
 
 export function Monogram({
@@ -90,7 +90,7 @@ export function ResidenceMark({ residence }: { residence: Residence }) {
     <span
       aria-hidden
       className={[
-        "h-[6px] w-[6px] flex-none rounded-[1px]",
+        "h-[6px] w-[6px] flex-none rounded-none",
         residence === "local" ? "bg-ink-dim" : "border border-ink-mute",
       ].join(" ")}
     />
@@ -105,8 +105,8 @@ export function ResidenceMark({ residence }: { residence: Residence }) {
    squeezing fixed columns until their text overlaps. */
 const FACT_TONE = {
   ink: "text-ink",
-  warn: "text-warn",
-  fault: "text-fault",
+  warn: "text-warn-text",
+  fault: "text-fault-text",
 } as const;
 
 export function Fact({
@@ -131,7 +131,7 @@ export function Fact({
         {mark}
         {value}
       </dd>
-      {note && <dd className="t-body mt-0.5 text-ink-faint [overflow-wrap:anywhere]">{note}</dd>}
+      {note && <dd className="t-body mt-0.5 text-ink-mute [overflow-wrap:anywhere]">{note}</dd>}
     </div>
   );
 }
@@ -163,7 +163,7 @@ export function ProbeTrace({
         return (
           <span
             key={i}
-            className={`w-[2px] rounded-[0.5px] ${!p.ok ? "bg-fault" : last ? TONE_DOT[tone] : "bg-ink-faint"}`}
+            className={`w-[2px] rounded-none ${!p.ok ? "bg-fault" : last ? TONE_DOT[tone] : "bg-ink-faint"}`}
             style={{ height: h }}
           />
         );
@@ -178,7 +178,7 @@ export function StateRule({ tone, tall }: { tone: ChatProviderTone; tall?: boole
   return (
     <span
       aria-hidden
-      className={`w-[2px] flex-none rounded-[1px] ${tall ? "h-[26px]" : "h-[18px]"} ${TONE_DOT[tone]}`}
+      className={`w-[2px] flex-none rounded-none ${tall ? "h-[26px]" : "h-[18px]"} ${TONE_DOT[tone]}`}
     />
   );
 }
@@ -187,9 +187,9 @@ export function StateRule({ tone, tall }: { tone: ChatProviderTone; tall?: boole
    Squared, hairline, mono. Not a pill — design.md caps controls at 7px. */
 const CHIP_TONE = {
   dim: "text-ink-dim",
-  signal: "text-signal",
-  warn: "text-warn",
-  fault: "text-fault",
+  signal: "text-signal-text",
+  warn: "text-warn-text",
+  fault: "text-fault-text",
 } as const;
 
 export function Chip({

@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/Button";
 import { useRef, useState } from "react";
 import { KeyRound, ShieldCheck, Terminal, Trash2, TriangleAlert } from "lucide-react";
 import { VAULT_LABEL, activeVault, prefixMatches } from "./secrets";
@@ -41,8 +42,9 @@ function Redaction({ length }: { length: number | null }) {
   const width = length === null ? 96 : Math.min(260, Math.max(48, length * 1.9));
   return (
     <span
+      role="img"
       aria-label={length === null ? "Credential value withheld; length unavailable" : `${length} characters withheld`}
-      className="inline-block h-[9px] flex-none select-none rounded-[1px] bg-[repeating-linear-gradient(90deg,var(--sub-400)_0_2px,transparent_2px_4px)]"
+      className="inline-block h-[9px] flex-none select-none rounded-none bg-[repeating-linear-gradient(90deg,var(--sub-400)_0_2px,transparent_2px_4px)]"
       style={{ width }}
     />
   );
@@ -118,14 +120,14 @@ export function CredentialSeal({
         }
       >
         <p className="t-body max-w-[62ch] text-ink-dim">
-          OpenHarness stores no credential for this connection. It runs the local{" "}
+          OHarness stores no credential for this connection. It runs the local{" "}
           <span className="t-meta text-ink">{spec.vendor === "Cursor" ? "cursor-agent" : "claude"}</span>{" "}
           CLI in your own login session — there is nothing to paste here, and nothing this app could
           leak even if it tried.
         </p>
         {failure === "store" && (
-        <p role="alert" className="t-body mt-1.5 text-fault">
-          The key was not stored: the OpenHarness sidecar did not accept it. Check the app is running and try again.
+        <p role="alert" className="t-body mt-1.5 text-fault-text">
+          The key was not stored: the OHarness sidecar did not accept it. Check the app is running and try again.
         </p>
       )}
       <p className="t-body mt-2.5 max-w-[62ch] text-ink-mute">
@@ -151,7 +153,7 @@ export function CredentialSeal({
         }
       >
         <div className="flex min-w-0 items-center gap-2.5 overflow-hidden rounded-control border border-line-soft bg-sub-200 px-2.5 py-2">
-          <span className="h-[15px] w-[2px] flex-none rounded-[1px] bg-signal-deep" aria-hidden />
+          <span className="h-[15px] w-[2px] flex-none rounded-none bg-signal-deep" aria-hidden />
           <span className="t-meta flex min-w-0 items-center gap-1.5">
             <span className="text-ink-dim">{s.prefix}</span>
             <Redaction length={s.length > 0 ? Math.max(0, s.length - s.prefix.length - 4) : null} />
@@ -166,7 +168,7 @@ export function CredentialSeal({
         </dl>
 
         <p className="t-body mt-3 max-w-[62ch] text-ink-mute">
-          OpenHarness cannot read this value back — not into this window, not into a node, not into
+          OHarness cannot read this value back — not into this window, not into a node, not into
           a run log. The runtime asks the vault for it at request time and never hands it across.
         </p>
 
@@ -191,7 +193,7 @@ export function CredentialSeal({
           </Btn>
         </div>
         {failure === "remove" && (
-          <p role="alert" className="t-body mt-2 text-fault">
+          <p role="alert" className="t-body mt-2 text-fault-text">
             Couldn&apos;t remove the key: the sidecar did not confirm it. It is still stored; try again.
           </p>
         )}
@@ -244,7 +246,7 @@ export function CredentialSeal({
             setPrefixOk(prefixMatches(v, expected));
           }}
           onKeyDown={(e) => e.key === "Enter" && void submit()}
-          className="oh-focus-inner t-meta h-8 min-w-0 flex-[1_1_10rem] rounded-control border border-line-soft bg-sub-200 px-2 tracking-[0.16em] text-ink outline-none focus:border-signal-deep"
+          className="oh-focus-inner t-meta h-control-md min-w-0 flex-[1_1_10rem] rounded-control border border-line-strong bg-sub-200 px-2 tracking-[0.16em] text-ink max-sm:h-control-lg focus-visible:border-signal-deep"
         />
         <Btn onClick={() => void submit()} primary disabled={!len || !prefixOk || busy}>
           {busy ? "Storing…" : "Store"}
@@ -253,7 +255,7 @@ export function CredentialSeal({
       </div>
 
       {!prefixOk && (
-        <p className="t-body mt-1.5 flex items-start gap-1.5 text-warn">
+        <p className="t-body mt-1.5 flex items-start gap-1.5 text-warn-text">
           <TriangleAlert size={12} strokeWidth={1.8} className="mt-[2px] flex-none" />
           {spec.vendor} keys begin <span className="t-meta">{expected}</span>. This one does not —
           check you have not pasted a key from another vendor.
@@ -262,17 +264,17 @@ export function CredentialSeal({
 
       <p className="t-body mt-2.5 max-w-[62ch] text-ink-mute">
         Stored in the {VAULT_LABEL[vault]} under{" "}
-        <span className="t-meta text-ink-dim">openharness/{connection.id}</span>, then{" "}
+        <span className="t-meta text-ink-dim">oharness/{connection.id}</span>, then{" "}
         <span className="text-ink-dim">never shown again</span> — including to you. Keep the vendor
         copy if you need it elsewhere.
       </p>
       {vault === "memory" && (
-        <p className="t-body mt-1 max-w-[62ch] text-warn">
+        <p className="t-body mt-1 max-w-[62ch] text-warn-text">
           This build is running in a browser, so there is no OS keychain to write to. The key is
           held in memory for this session only and is lost on reload.
         </p>
       )}
-      <p className="t-body mt-2 text-ink-faint">
+      <p className="t-body mt-2 text-ink-mute">
         Get one at <span className="text-ink-mute">{spec.credential.where}</span>
       </p>
     </Section>
@@ -293,7 +295,7 @@ function Section({
   return (
     <section className="border-t border-line-soft py-4">
       <header className="mb-2.5 flex flex-wrap items-center gap-2">
-        <h3 className="t-title text-ink">{title}</h3>
+        <h2 className="t-title text-ink">{title}</h2>
         {chip}
       </header>
       {children}
@@ -304,7 +306,7 @@ function Section({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <>
-      <dt className="t-body text-ink-faint">{k}</dt>
+      <dt className="t-body text-ink-mute">{k}</dt>
       <dd className="t-meta text-ink-dim [overflow-wrap:anywhere]">{v}</dd>
     </>
   );
@@ -324,20 +326,8 @@ export function Btn({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={[
-        "t-body inline-flex h-8 flex-none items-center gap-1.5 whitespace-nowrap rounded-control border px-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-40",
-        primary
-          ? "border-signal bg-signal font-medium text-signal-ink hover:bg-signal-deep disabled:hover:bg-signal"
-          : tone === "fault"
-            ? "border-line bg-sub-200 text-ink-mute hover:border-fault hover:text-fault"
-            : "border-line bg-sub-200 text-ink-dim hover:bg-sub-300 hover:text-ink",
-      ].join(" ")}
-    >
+    <Button variant={primary ? "primary" : tone === "fault" ? "danger" : "secondary"} onClick={onClick} disabled={disabled}>
       {children}
-    </button>
+    </Button>
   );
 }

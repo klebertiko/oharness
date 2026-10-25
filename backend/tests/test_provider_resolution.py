@@ -35,7 +35,7 @@ def _connections(**overrides: dict) -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         },
         "ollama-local": {
             "id": "ollama-local",
@@ -54,7 +54,7 @@ def _connections(**overrides: dict) -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.cursor.com",
             "enabled": True,
-            "secretRef": "openharness/cursor",
+            "secretRef": "oharness/cursor",
         },
         "openrouter": {
             "id": "openrouter",
@@ -63,7 +63,7 @@ def _connections(**overrides: dict) -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://openrouter.ai/api/v1",
             "enabled": True,
-            "secretRef": "openharness/openrouter",
+            "secretRef": "oharness/openrouter",
             "defaultModel": "anthropic/claude-opus-5",
         },
     }
@@ -187,7 +187,7 @@ def test_cursor_connection_on_an_llm_node_is_an_honest_error() -> None:
             "llm",
             "Draft",
             connections=_connections(),
-            secrets_store=_store_with(("openharness/cursor", "crsr_x")),
+            secrets_store=_store_with(("oharness/cursor", "crsr_x")),
         )
 
 
@@ -233,7 +233,7 @@ def test_openrouter_connection_resolves_to_openai_compatible_adapter() -> None:
         "llm",
         "Draft",
         connections=_connections(),
-        secrets_store=_store_with(("openharness/openrouter", "sk-or-REAL")),
+        secrets_store=_store_with(("oharness/openrouter", "sk-or-REAL")),
     )
     assert resolved.adapter_name == "openrouter"
     assert isinstance(resolved.adapter, OpenAICompatibleAdapter)
@@ -248,7 +248,7 @@ def test_second_provider_id_is_never_consulted_when_first_is_usable() -> None:
         "llm",
         "Draft",
         connections=_connections(),
-        secrets_store=_store_with(("openharness/anthropic", "sk-ant-REAL-KEY")),
+        secrets_store=_store_with(("oharness/anthropic", "sk-ant-REAL-KEY")),
     )
     assert resolved.connection_id == "anthropic"
 
@@ -264,10 +264,10 @@ def test_cwd_is_carried_into_extra_as_both_cwd_and_cwd_root() -> None:
         "Draft",
         connections=_connections(),
         secrets_store=MemorySecrets(),
-        cwd="D:\\Development\\src\\OpenHarness",
+        cwd="D:\\Development\\src\\OHarness",
     )
-    assert resolved.config.extra["cwd"] == "D:\\Development\\src\\OpenHarness"
-    assert resolved.config.extra["cwd_root"] == "D:\\Development\\src\\OpenHarness"
+    assert resolved.config.extra["cwd"] == "D:\\Development\\src\\OHarness"
+    assert resolved.config.extra["cwd_root"] == "D:\\Development\\src\\OHarness"
 
 
 def test_no_cwd_means_extra_has_no_cwd_keys_at_all() -> None:
@@ -340,7 +340,7 @@ def test_first_id_usable_means_no_attempts_recorded_not_a_failover() -> None:
         "llm",
         "Draft",
         connections=_connections(),
-        secrets_store=_store_with(("openharness/anthropic", "sk-ant-REAL")),
+        secrets_store=_store_with(("oharness/anthropic", "sk-ant-REAL")),
     )
     assert resolved.connection_id == "anthropic"
     assert attempts == []

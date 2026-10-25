@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * OpenHarness token surface.
+ * OHarness token surface.
  *
  * Every value here points at a CSS custom property declared in globals.css.
  * Nothing in this file holds a literal colour — the palette has exactly one
@@ -22,6 +22,7 @@ const config: Config = {
         line: {
           DEFAULT: "var(--line)",
           soft: "var(--line-soft)",
+          strong: "var(--line-strong)",
         },
         ink: {
           DEFAULT: "var(--ink)",
@@ -33,9 +34,12 @@ const config: Config = {
           DEFAULT: "var(--signal)",
           deep: "var(--signal-deep)",
           ink: "var(--signal-ink)",
+          text: "var(--signal-text)",
         },
-        warn: "var(--warn)",
-        fault: "var(--fault)",
+        /* warn and fault are fills, markers and borders; their .text forms are
+           the only way either colour reaches text. */
+        warn: { DEFAULT: "var(--warn)", text: "var(--warn-text)" },
+        fault: { DEFAULT: "var(--fault)", text: "var(--fault-text)" },
         role: {
           input: "var(--role-input)",
           llm: "var(--role-llm)",
@@ -55,10 +59,12 @@ const config: Config = {
       /* Dense-desktop scale. The gaps are deliberate: there is no 14px, no
          15px, no 16px body size anywhere in this app. */
       fontSize: {
-        meta: ["10.5px", { lineHeight: "1.4", letterSpacing: "0.02em" }],
+        meta: ["11px", { lineHeight: "1.4", letterSpacing: "0.02em" }],
         label: ["10px", { lineHeight: "1.4", letterSpacing: "0.1em" }],
         body: ["12px", { lineHeight: "1.5" }],
         title: ["13px", { lineHeight: "1.3", letterSpacing: "-0.004em" }],
+        reading: ["14px", { lineHeight: "1.6" }],
+        code: ["12px", { lineHeight: "1.55" }],
         display: ["20px", { lineHeight: "1.2", letterSpacing: "-0.018em" }],
       },
       spacing: {
@@ -66,17 +72,25 @@ const config: Config = {
         statusbar: "var(--h-statusbar)",
         panelhead: "var(--h-panelhead)",
         rail: "var(--w-rail)",
+        "control-sm": "var(--control-sm)",
+        "control-md": "var(--control-md)",
+        "control-lg": "var(--control-lg)",
       },
       borderRadius: {
         control: "var(--r-control)",
         panel: "var(--r-panel)",
         float: "var(--r-float)",
+        composer: "var(--r-composer)",
+        hero: "var(--r-hero)",
       },
       transitionDuration: {
-        DEFAULT: "110ms",
+        DEFAULT: "var(--duration-fast)",
+        base: "var(--duration-base)",
+        enter: "var(--duration-enter)",
       },
       transitionTimingFunction: {
-        DEFAULT: "cubic-bezier(0.2, 0, 0, 1)",
+        DEFAULT: "var(--ease-standard)",
+        enter: "var(--ease-enter)",
       },
     },
   },

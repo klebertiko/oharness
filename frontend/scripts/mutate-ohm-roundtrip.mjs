@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 // Mutate a disposable source copy: the developer's running Studio stays intact.
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sandbox = mkdtempSync(join(tmpdir(), "openharness-ohm-mutation-"));
+const sandbox = mkdtempSync(join(tmpdir(), "oharness-ohm-mutation-"));
 cpSync(join(frontend, "src"), join(sandbox, "src"), { recursive: true });
 for (const file of ["package.json", "tsconfig.json", "vitest.config.ts"]) {
   cpSync(join(frontend, file), join(sandbox, file));

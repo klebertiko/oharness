@@ -1,8 +1,8 @@
-//! OpenHarness Tauri shell — window chrome + FastAPI sidecar lifecycle.
+//! OHarness Tauri shell — window chrome + FastAPI sidecar lifecycle.
 //!
 //! ADR 0001: decorations off; TitleBar is the real chrome. Sidecar is the
-//! FastAPI binary bundled from `binaries/openharness-sidecar` and installed
-//! beside the desktop executable as `openharness-sidecar`.
+//! FastAPI binary bundled from `binaries/oharness-sidecar` and installed
+//! beside the desktop executable as `oharness-sidecar`.
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -23,7 +23,7 @@ struct SidecarProcess {
 
 struct SidecarState(Mutex<Option<SidecarProcess>>);
 
-const SIDECAR_NAME: &str = "openharness-sidecar";
+const SIDECAR_NAME: &str = "oharness-sidecar";
 
 #[cfg(windows)]
 fn terminate_process_tree(pid: u32) {
@@ -39,7 +39,7 @@ fn terminate_process_tree(_pid: u32) {}
 
 fn stop_sidecar(process: SidecarProcess) {
     // PyInstaller one-file executables launch a worker process. Kill the tree
-    // first on Windows so closing OpenHarness cannot leave the API running.
+    // first on Windows so closing OHarness cannot leave the API running.
     terminate_process_tree(process.pid);
     let _ = process.child.kill();
 }
@@ -256,7 +256,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building OpenHarness")
+        .expect("error while building OHarness")
         .run(|app_handle, event| {
             if let RunEvent::Exit = event {
                 kill_sidecar(app_handle);

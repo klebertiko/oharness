@@ -31,6 +31,8 @@ import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useThreadStore } from "@/store/threadStore";
+import { Button, KbdChord, Notice } from "@/components/ui";
+import { chordCaps, useIsMac } from "@/components/shell/keys";
 
 /* Hallmark · genre: modern-minimal editorial workspace
    macrostructure: Quiet Desk · design-system: design.md · designed-as-app */
@@ -90,6 +92,7 @@ export function AgentStage() {
   const savedRunFor = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
+  const mac = useIsMac();
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const applySuggestion = (prompt: string) => {
@@ -152,13 +155,12 @@ export function AgentStage() {
     if (pendingToolApproval) setShowRunDetail(true);
   }, [pendingToolApproval]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Navigation must not cancel a turn that still belongs to another chat.
   useEffect(() => {
     if (activeThreadId !== null || live) return;
     reset();
     runOwner.current = null;
     composerRef.current?.focus();
-    // Navigation must not cancel a turn that still belongs to another chat.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThreadId, reset]);
 
   useEffect(() => {
@@ -243,6 +245,7 @@ export function AgentStage() {
     const text = instruction.trim();
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
+    setFollowing(true);
     const threadId = activeThreadId ?? createThread(text.slice(0, 60));
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: text });
@@ -285,82 +288,74 @@ export function AgentStage() {
 
   return (
     <div className="oh-agent-stage flex h-full min-h-0 flex-col">
-      {live && !runInCurrentChat && <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-4 py-2 text-[12px] text-ink-mute">
-        <span>A turn is still running in another chat.</span>
-        <button type="button" onClick={() => ownerThreadId && useThreadStore.getState().selectThread(ownerThreadId)} className="rounded-control px-2 py-1 text-signal focus-visible:ring-2 focus-visible:ring-signal">Return to running chat</button>
-      </div>}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 sm:px-8 lg:px-12" onScroll={(event) => {
-        const element = event.currentTarget;
-        setFollowing(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
-      }}>
+      {live && !runInCurrentChat && (
+        <div className="flex-none border-b border-line-soft px-4 py-2">
+          <Notice action={<Button size="sm" onClick={() => ownerThreadId && useThreadStore.getState().selectThread(ownerThreadId)}>Return to running chat</Button>}>
+            A turn is still running in another chat.
+          </Notice>
+        </div>
+      )}
+      <div
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          setFollowing(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
+        }}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8 lg:px-12"
+      >
         {messages.length === 0 && !live ? (
-          <div className="oh-agent-welcome mx-auto flex w-full max-w-[680px] flex-col pt-[clamp(4rem,13vh,9rem)]">
-            <div className="mb-8 flex items-end justify-between gap-8">
-              <div className="max-w-[560px]">
-                <h1 className="t-display text-[clamp(2rem,3.6vw,3rem)] font-[600] leading-[1.08] text-ink">
-                  What are we working on?
-                </h1>
-                <p className="mt-3 text-[14px] leading-6 text-ink-mute">Describe a task, or pick one to start.</p>
+          <div className="oh-agent-welcome mx-auto flex w-full max-w-[680px] flex-col pt-[clamp(2rem,10vh,7rem)]">
+            <div className="mb-6 flex items-end justify-between gap-8">
+              <div className="min-w-0 max-w-[560px]">
+                <h1 className="t-display text-display text-ink">What are we working on?</h1>
+                <p className="mt-2 text-reading text-ink-mute">Describe a task, or pick one to start.</p>
               </div>
               <Nilo className="hidden flex-none sm:block" />
             </div>
 
-            <div className="divide-y divide-line-soft border-y border-line-soft">
+            <ul className="divide-y divide-line-soft border-y border-line-soft" aria-label="Starting prompts">
               {suggestions.map(({ icon: Icon, title, prompt }) => (
-                <button
-                  key={title}
-                  type="button"
-                  className="group flex w-full items-center gap-3 px-1 py-3.5 text-left transition-colors hover:text-ink"
-                  onClick={() => applySuggestion(prompt)}
-                >
-                  <span className="grid h-8 w-8 place-items-center text-ink-faint transition-colors group-hover:text-signal">
-                    <Icon size={16} strokeWidth={1.7} aria-hidden />
-                  </span>
-                  <span className="text-[13px] font-[550] text-ink-dim group-hover:text-ink">{title}</span>
-                </button>
+                <li key={title}>
+                  <button
+                    type="button"
+                    className="oh-focus-inner group flex min-h-control-lg w-full items-center gap-3 px-1 py-2.5 text-left transition-colors hover:bg-sub-100"
+                    onClick={() => applySuggestion(prompt)}
+                  >
+                    <span className="grid h-8 w-8 place-items-center text-ink-mute transition-colors group-hover:text-signal-text">
+                      <Icon size={16} strokeWidth={1.7} aria-hidden />
+                    </span>
+                    <span className="text-title text-ink-dim group-hover:text-ink">{title}</span>
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
 
-            <p className="mt-5 text-[12px] text-ink-faint">
+            <p className="mt-4 flex min-h-control-md items-center text-body text-ink-mute">
               {provider ? (
                 <>
                   {enabled ? `${activeBundle?.manifest?.name ?? "Your harness"} · ` : "Direct · "}
-                  <span className="text-ink-mute">{provider.label}</span>
+                  <span className="ml-1 text-ink-dim">{provider.label}</span>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => requestProviderSetup(missing?.id ?? null)}
-                  className="font-[550] text-signal underline-offset-2 hover:underline"
-                >
+                <Button variant="ghost" size="sm" className="-ml-2 text-signal-text" onClick={() => requestProviderSetup(missing?.id ?? null)}>
                   {missing?.text ?? "Connect a provider to send"}
-                </button>
+                </Button>
               )}
             </p>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-[760px] flex-col gap-7 pb-6 pt-3">
+          <div role="log" aria-label="Conversation" aria-busy={live || undefined} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-6 pt-3">
             {messages.map((m) => (
               <div
                 key={m.id}
                 className={[
-                  "flex min-w-0 max-w-[95%] sm:max-w-[88%] flex-col gap-2",
+                  "flex min-w-0 max-w-[95%] flex-col gap-1.5 sm:max-w-[88%]",
                   m.role === "user" ? "self-end px-4 py-3 oh-agent-message--user" : "self-start pl-4 oh-agent-message--assistant",
                 ].join(" ")}
               >
-                <span className="text-[11px] font-[600] tracking-[0.02em] text-ink-faint">
-                  {m.role === "user"
-                    ? "You"
-                    : m.providerLabel
-                      ? `OpenHarness · ${m.providerLabel}`
-                      : "OpenHarness"}
+                <span className="text-body font-medium text-ink-mute">
+                  {m.role === "user" ? "You" : m.providerLabel ? `OHarness · ${m.providerLabel}` : "OHarness"}
                 </span>
-                <div
-                  className={[
-                    "whitespace-pre-wrap text-[15px] leading-7 [overflow-wrap:anywhere]",
-                    m.role === "user" ? "text-ink" : "text-ink-dim",
-                  ].join(" ")}
-                >
+                <div className={["max-w-[68ch] whitespace-pre-wrap text-reading [overflow-wrap:anywhere]", m.role === "user" ? "text-ink" : "text-ink-dim"].join(" ")}>
                   {m.content}
                 </div>
                 <MessageActions content={m.content} onReuse={!live ? () => applySuggestion(m.content) : undefined} />
@@ -386,7 +381,7 @@ export function AgentStage() {
                   elapsed={elapsed}
                   tokens={run.totals.tokens}
                 />
-                {liveAnswer && <div role="region" aria-label="Live answer" className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink-dim [overflow-wrap:anywhere]">{liveAnswer}</div>}
+                {liveAnswer && <div role="region" aria-label="Live answer" className="mt-3 max-w-[68ch] whitespace-pre-wrap text-reading text-ink-dim [overflow-wrap:anywhere]">{liveAnswer}</div>}
                 {gateSeg && (
                   <div className="mt-2">
                     <Gate segment={gateSeg} onResolve={resolveGate} />
@@ -395,19 +390,17 @@ export function AgentStage() {
               </div>
             )}
 
-            {runInCurrentChat && (run.status === "error" || run.status === "stopped") && <div role={run.status === "error" ? "alert" : "status"} className="rounded-control border border-line-soft p-3 text-[13px] text-ink-mute">
-              <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
-              {run.notices?.map((notice, index) => <p key={index} className="mt-1 [overflow-wrap:anywhere]">{notice}</p>)}
-              {runOwner.current?.instruction && <button type="button" onClick={() => applySuggestion(runOwner.current!.instruction)} className="mt-2 rounded-control border border-line px-2 py-1 text-ink focus-visible:ring-2 focus-visible:ring-signal">Reuse instruction</button>}
-            </div>}
-
-            {showStageDetailControl && (
-              <RunDetailToggle
-                open={showRunDetail}
-                onToggle={() => setShowRunDetail((v) => !v)}
-                controlsId={stageDetailId}
-              />
+            {runInCurrentChat && (run.status === "error" || run.status === "stopped") && (
+              <Notice
+                tone={run.status === "error" ? "fault" : "info"}
+                action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
+              >
+                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
+                {run.notices?.map((notice, index) => <p key={index} className="mt-1 [overflow-wrap:anywhere]">{notice}</p>)}
+              </Notice>
             )}
+
+            {showStageDetailControl && <RunDetailToggle open={showRunDetail} onToggle={() => setShowRunDetail((v) => !v)} controlsId={stageDetailId} />}
 
             {showStageDetailControl && showRunDetail && (
               <RunDetailRegion id={stageDetailId}>
@@ -421,7 +414,7 @@ export function AgentStage() {
       </div>
 
       <div className="flex-none px-3 pb-4 pt-2 sm:px-6">
-        {!following && <div className="mb-2 text-center"><button type="button" onClick={() => setFollowing(true)} className="rounded-control border border-line bg-sub-100 px-3 py-1 text-[12px] text-ink focus-visible:ring-2 focus-visible:ring-signal">Jump to latest</button></div>}
+        {!following && <div className="mb-2 text-center"><Button size="sm" onClick={() => setFollowing(true)}>Jump to latest</Button></div>}
         <div className="oh-agent-composer mx-auto max-w-[820px]">
           <ChatComposer
             key={activeThreadId ?? "no-thread"}
@@ -438,10 +431,10 @@ export function AgentStage() {
             permissionNotice={permission.error}
             workspaceTrust={chatTools.workspace ? { workspaceName: chatTools.workspace.name, trusted: trust.trusted, onChange: (value) => void trust.setTrusted(value), error: trust.error } : undefined}
           />
-          {chatTools.loading && <p role="status" className="px-4 py-1 text-[11px] text-ink-faint">Checking workspace tools…</p>}
-          {chatTools.error && <p role="status" className="px-4 py-1 text-[11px] text-warn">Workspace tools unavailable. Text chat is still available. {chatTools.error}</p>}
-          {chatTools.capabilities && <p className="px-4 py-1 text-[11px] text-ink-faint">{chatTools.capabilities.reason === "ok" ? "Workspace tools available in / commands" : chatTools.capabilities.reason === "cli-adapter" ? "Workspace tools are managed by this provider’s CLI" : "This connection does not offer workspace tools"}</p>}
-          <div className="flex flex-wrap items-center gap-2 px-2.5 pb-2.5 pt-1">
+          {chatTools.loading && <p role="status" className="px-4 py-1 text-meta text-ink-mute">Checking workspace tools…</p>}
+          {chatTools.error && <p role="status" className="px-4 py-1 text-meta text-warn-text">Workspace tools unavailable. Text chat is still available. {chatTools.error}</p>}
+          {chatTools.capabilities && <p className="px-4 py-1 text-meta text-ink-mute">{chatTools.capabilities.reason === "ok" ? "Workspace tools available in / commands" : chatTools.capabilities.reason === "cli-adapter" ? "Workspace tools are managed by this provider’s CLI" : "This connection does not offer workspace tools"}</p>}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pb-2.5 pt-1">
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
@@ -449,46 +442,35 @@ export function AgentStage() {
             {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
               <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
                 label="Model for next turn" inheritLabel="Connection default" inheritDetail={connection?.defaultModel || "The provider CLI chooses its model"} disabled={live}
-                triggerClassName="h-8 max-w-full px-2 text-[11px] text-ink-dim" />
+                triggerClassName="h-control-md max-w-full px-2 text-body text-ink-dim max-sm:h-control-lg" />
             </div>}
             </fieldset>
             <span className="flex-1" />
             {missing ? (
-              <button
-                type="button"
-                onClick={() => requestProviderSetup(missing.id)}
-                title={missing.text}
-                className="hidden min-w-0 max-w-[240px] truncate text-[11px] font-[550] text-signal underline-offset-2 hover:underline sm:block"
-              >
-                {missing.text}
-              </button>
+              <Button variant="ghost" size="sm" onClick={() => requestProviderSetup(missing.id)} title={missing.text} className="min-w-0 max-w-[240px] text-signal-text max-sm:hidden">
+                <span className="truncate">{missing.text}</span>
+              </Button>
             ) : (
-              <span className="hidden text-[11px] text-ink-faint sm:inline">Ctrl ↵ to send</span>
+              <span className="flex items-center gap-1.5 text-meta text-ink-mute max-sm:hidden">
+                <KbdChord caps={chordCaps("Mod+Enter", mac)} /> to send
+              </span>
             )}
             {live ? (
-              <button
-                type="button"
-                onClick={stop}
-                aria-label="Stop run"
-                title="Stop run"
-                className="grid h-8 w-8 flex-none place-items-center rounded-[8px] border border-line text-ink-mute transition-colors hover:bg-sub-200 hover:text-ink"
-              >
-                <Square size={11} strokeWidth={2} fill="currentColor" aria-hidden />
-              </button>
+              <Button iconOnly size="lg" onClick={stop} aria-label="Stop run" title="Stop run" icon={<Square size={11} strokeWidth={2} fill="currentColor" aria-hidden />} />
             ) : (
-              <button
-                type="button"
+              <Button
+                iconOnly
+                size="lg"
+                variant="primary"
                 disabled={!canStart}
                 onClick={onStart}
-                title={!canStart && missing ? missing.text : undefined}
+                title={!canStart ? (missing ? missing.text : "Type a message to send") : "Send message"}
                 aria-label="Send message"
-                className="grid h-8 w-8 flex-none place-items-center rounded-[8px] bg-signal text-signal-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <ArrowUp size={16} strokeWidth={2.2} aria-hidden />
-              </button>
+                icon={<ArrowUp size={16} strokeWidth={2.2} aria-hidden />}
+              />
             )}
           </div>
-          <p className="px-4 pb-2 text-[11px] text-ink-faint">{enabled ? "Harness agents use their pinned models or connection defaults. " : `Model: ${selectedModel || connection?.defaultModel || "provider default"}. `}Each turn sends your instruction; earlier messages are not included automatically.</p>
+          <p className="px-4 pb-2 text-meta text-ink-mute">{enabled ? "Harness agents use their pinned models or connection defaults. " : `Model: ${selectedModel || connection?.defaultModel || "provider default"}. `}Each turn sends your instruction; earlier messages are not included automatically.</p>
         </div>
       </div>
     </div>

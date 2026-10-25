@@ -1,6 +1,6 @@
 import { DEFAULT_BUNDLE_ID } from "@/store/harnessLibraryStore";
 
-/** Names saved before the rename carry a source: "OpenHarness Agile (skills-framework)" → title "OpenHarness Agile", source "skills-framework". */
+/** Names saved before the rename carry a source: "OHarness Agile (skills-framework)" → title "OHarness Agile", source "skills-framework". */
 export function splitHarnessName(name: string): { title: string; source?: string } {
   const m = name.match(/^(.+?)\s*\(([^()]+)\)\s*$/);
   return m ? { title: m[1], source: m[2] } : { title: name };

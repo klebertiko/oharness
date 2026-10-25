@@ -5,7 +5,7 @@
 
 ## Decisão
 
-O Open Harness Model (`.ohm`) adota **YAML 1.2 para autoria humana**. APIs, payloads de execução e respostas da CLI continuam JSON. JSON legado em `.ohm` e `.oharness` permanece importável. A serialização converge para um único modelo normalizado; não haverá um modelo funcional diferente para cada formato.
+O OHarness Model (`.ohm`) adota **YAML 1.2 para autoria humana**. APIs, payloads de execução e respostas da CLI continuam JSON. JSON legado em `.ohm` e `.oharness` permanece importável. A serialização converge para um único modelo normalizado; não haverá um modelo funcional diferente para cada formato.
 
 A topologia continua em `graph.nodes` e `graph.edges`, com IDs e referências `source/target`. Âncoras não representam conexões, Signals ou controle de execução. O YAML admite grafos de representação com ciclos ([especificação §3.2.1](https://yaml.org/spec/1.2.2/#321-representation-graph)); aliases referenciam ocorrências anteriores de nós ([§7.1](https://yaml.org/spec/1.2.2/#71-alias-nodes)). Isso não define a semântica de execução do Harness: ciclos entre IDs também são representáveis em JSON.
 

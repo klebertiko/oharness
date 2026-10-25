@@ -41,7 +41,7 @@ export function RunBinding() {
           </p>
 
           {bound.length === 0 && (
-            <p className="t-body rounded-control border border-dashed border-line px-2.5 py-3 text-ink-faint">
+            <p className="t-body rounded-control border border-dashed border-line px-2.5 py-3 text-ink-mute">
               Nothing bound. This harness cannot run.
             </p>
           )}
@@ -58,7 +58,7 @@ export function RunBinding() {
                     }`}
                   >
                     <span
-                      className={`t-meta grid h-[16px] w-[16px] flex-none place-items-center rounded-[1px] ${
+                      className={`t-meta grid h-[16px] w-[16px] flex-none place-items-center rounded-none ${
                         i === 0 ? "bg-signal text-signal-ink" : "bg-sub-400 text-ink-dim"
                       }`}
                     >
@@ -72,7 +72,7 @@ export function RunBinding() {
                       className="oh-focus-inner min-w-0 flex-1 text-left"
                     >
                       <span
-                        className={`t-body block truncate ${dead ? "text-ink-faint line-through" : "text-ink-dim"}`}
+                        className={`t-body block truncate ${dead ? "text-ink-mute line-through" : "text-ink-dim"}`}
                       >
                         {c.label}
                       </span>
@@ -123,7 +123,7 @@ export function RunBinding() {
           )}
 
           {broken.length > 0 && (
-            <p className="t-body mt-2.5 flex items-start gap-1.5 text-warn">
+            <p className="t-body mt-2.5 flex items-start gap-1.5 text-warn-text">
               <TriangleAlert size={12} strokeWidth={1.8} className="mt-[2px] flex-none" />
               {broken.length === 1
                 ? `Step ${bound.indexOf(broken[0]) + 1} will be skipped — ${providerReadiness(broken[0]).label.toLowerCase()}.`
@@ -148,7 +148,7 @@ export function RunBinding() {
                     onClick={() => bindToggle(c.id)}
                     className="oh-focus-inner flex items-center gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-sub-200"
                   >
-                    <Plus size={11} strokeWidth={1.9} className="flex-none text-ink-faint" />
+                    <Plus size={11} strokeWidth={1.9} className="flex-none text-ink-mute" />
                     <Monogram text={spec.monogram} />
                     <span className="t-body min-w-0 flex-1 truncate text-ink-mute">{c.label}</span>
                     <span className={`t-body flex-none ${TONE_TEXT[providerReadiness(c).tone]}`}>
@@ -169,7 +169,7 @@ export function RunBinding() {
           {connections
             .filter((c) => !specOf(c).capabilities.includes("chat"))
             .map((c) => (
-              <p key={c.id} className="t-body text-ink-faint">
+              <p key={c.id} className="t-body text-ink-mute">
                 <span className="text-ink-mute">{c.label}</span> answers delegation, not completion
                 — bind it to a Delegate node instead.
               </p>
@@ -198,7 +198,7 @@ function Icon({
       aria-label={label}
       title={label}
       disabled={disabled}
-      className="grid h-[18px] w-[18px] place-items-center rounded-[1px] text-ink-faint transition-colors hover:bg-sub-300 hover:text-ink-dim disabled:opacity-30"
+      className="grid h-[18px] w-[18px] place-items-center rounded-none text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink-dim disabled:opacity-30"
     >
       {children}
     </button>

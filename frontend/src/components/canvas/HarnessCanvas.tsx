@@ -92,6 +92,7 @@ export function HarnessCanvas({ onNodeClick }: Props) {
      while the current graph has never been fitted at that width. Keyed on ids
      only: keying on the whole node array refits on every drag frame. */
   const idKey = nodes.map((n) => n.id).join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Fit when the graph identity or pane width changes, not on every node-count change
   useEffect(() => {
     if (!initialised || nodes.length === 0) return;
     if (paneWidth < 40) return;
@@ -110,7 +111,6 @@ export function HarnessCanvas({ onNodeClick }: Props) {
       cancelAnimationFrame(raf);
       timers.forEach(window.clearTimeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialised, idKey, paneWidth, fitView]);
 
   /* "Auto-arrange graph" moves every node at once, usually far from where the
@@ -175,6 +175,7 @@ export function HarnessCanvas({ onNodeClick }: Props) {
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop target for palette drags only; nodes are also added by click and from the command palette, so no keyboard path is lost
     <div
       className={panMode ? `${styles.stage} ${styles.panMode}` : styles.stage}
       onDragOver={onDragOver}

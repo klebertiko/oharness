@@ -31,15 +31,10 @@ updates:
       - dependency-name: "@vitest/*"
         update-types: ["version-update:semver-major"]
       # Majors below break the build (Tailwind 4 needs @tailwindcss/postcss,
-      # ESLint 10 drops @eslint/eslintrc, eslint-config-next 16 pairs Next 16,
       # @types/node must track the Node 22 runtime) — migrate deliberately.
       - dependency-name: tailwindcss
         update-types: ["version-update:semver-major"]
       - dependency-name: tailwind-merge
-        update-types: ["version-update:semver-major"]
-      - dependency-name: eslint
-        update-types: ["version-update:semver-major"]
-      - dependency-name: eslint-config-next
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]

@@ -98,7 +98,7 @@ Verificação direcionada: 3 files / 36 tests passed; `tsc --noEmit` exit 0.
   Por arquivo: `chatCommands` 90,91%; `runReducer` 83,97%; `ToolCard` 67,59%; fallback de
   `Transcript` 33,33%; `rollup` 100%. Uma execução diagnóstica de arquivos inteiros deu 38,36% por
   incluir JSX/estilos e código anterior à story; esse número não foi usado como gate. Relatório:
-  `D:\Development\.worktrees\openharness-fe-integration-20260918\frontend\reports\mutation.json`.
+  `D:\Development\.worktrees\oharness-fe-integration-20260918\frontend\reports\mutation.json`.
 
 ## 2026-09-23 — Evidência Stryker/Playwright refeita (a original foi destruída)
 
@@ -107,7 +107,7 @@ foi apagado nesta mesma sessão (limpeza de rotina, sem checar se algo dependia 
 poder abrir o relatório, e o `mutation.json` citado acima não sobrevive em nenhum outro lugar do
 disco. Números de prosa acima preservados como estavam, não descartados — mas não reabríveis.
 
-Refeito do zero em worktree novo (`D:\Development\.worktrees\openharness-fe-gate-20260923`, via
+Refeito do zero em worktree novo (`D:\Development\.worktrees\oharness-fe-gate-20260923`, via
 `git worktree add` a partir do commit real desta vez, não robocopy) com Stryker e Playwright
 instalados como devDependencies reais no `package.json` do worktree (nunca commitados no checkout
 principal, por decisão do sprint.md). Evidência desta vez copiada para

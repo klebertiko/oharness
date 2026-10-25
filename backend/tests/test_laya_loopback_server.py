@@ -73,7 +73,7 @@ def test_predict_returns_schema_version_and_latency_ms(server) -> None:
     with urllib.request.urlopen(req, timeout=5) as resp:  # nosemgrep: opengrep-rules.python.lang.security.audit.dynamic-urllib-use-detected -- fixed http://127.0.0.1 test server
         assert resp.status == 200
         payload = json.loads(resp.read())
-    assert payload["schema_version"] == "openharness-decision-node-v1"
+    assert payload["schema_version"] == "oharness-decision-node-v1"
     assert payload["model_result"] == {"answers": {"needs_review": {"noul": 0.2}}}
     assert isinstance(payload["latency_ms"], (int, float))
     assert fake.calls == [({"output": "hello"}, {"q": {"type": "noul"}})]

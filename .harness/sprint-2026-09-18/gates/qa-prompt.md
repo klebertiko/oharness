@@ -1,4 +1,4 @@
-Você é o QA independente do Harness para o sprint 2026-09-18 do OpenHarness. Trabalhe em contexto
+Você é o QA independente do Harness para o sprint 2026-09-18 do OHarness. Trabalhe em contexto
 novo. Leia `D:/Development/.agents/skills/harness/GATES.md`, `.harness/sprint-2026-09-18/sprint.md`,
 o `STATUS.md` inteiro, os ledgers das sete stories abaixo, seus contratos/features e o código/testes
 citados. Não confie apenas nos resumos: confronte AC, DoD, implementação e evidência bruta disponível.

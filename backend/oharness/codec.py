@@ -100,7 +100,7 @@ __all__ = [
 @dataclass(frozen=True)
 class ResourceLimits:
     """Cost ceilings applied *before* a document is turned into a Python
-    object. These are OpenHarness's own limits, proposed in
+    object. These are OHarness's own limits, proposed in
     ohm-yaml-migration.md P1 step 3 and not yet an approved contract number --
     the defaults below were measured against this repo's real default bundle
     (``backend/oharness/fixtures/default-agile.ohm``, ~120 KiB decoded, 9

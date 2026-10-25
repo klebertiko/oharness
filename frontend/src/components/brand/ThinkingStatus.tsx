@@ -51,15 +51,15 @@ export function ThinkingStatus({
     <div role="status" className="flex items-center gap-3">
       <NiloSprite state={state} crop="face" cell={2} />
       <div className="min-w-0">
-        <p className="text-[13px] leading-5 text-ink">
+        <p className="text-title leading-5 text-ink">
           <span aria-hidden>{verb}…</span>
-          <span className="sr-only">OpenHarness is working</span>{" "}
-          <span aria-hidden className="font-mono text-[12px] tabular-nums text-ink-faint">
+          <span className="sr-only">OHarness is working</span>{" "}
+          <span aria-hidden className="font-mono text-body tabular-nums text-ink-mute">
             {formatElapsed(elapsedSec)}
             {tokens !== undefined ? ` · ${fmtTokens(tokens)} tok` : ""}
           </span>
         </p>
-        {detail && <p className="text-[12px] leading-5 text-ink-mute">{detail}</p>}
+        {detail && <p className="text-body leading-5 text-ink-mute">{detail}</p>}
       </div>
     </div>
   );

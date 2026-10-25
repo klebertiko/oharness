@@ -6,7 +6,7 @@ import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore, type HarnessBundle } from "@/store/harnessSessionStore";
 import { HarnessLibrarySheet } from "./HarnessLibrarySheet";
 vi.mock("@/components/harnesses/HarnessLibrary", () => ({
-  HarnessLibrary: ({ onPicked }: { onPicked: (bundle: HarnessBundle) => void }) => <button onClick={() => onPicked(useHarnessSessionStore.getState().activeBundle!)}>Open selected bundle</button>,
+  HarnessLibrary: ({ onPicked }: { onPicked: (bundle: HarnessBundle) => void }) => <button type="button" onClick={() => onPicked(useHarnessSessionStore.getState().activeBundle!)}>Open selected bundle</button>,
 }));
 afterEach(cleanup);
 it("opens the selected library bundle in the editor before dismissing the sheet", async () => {

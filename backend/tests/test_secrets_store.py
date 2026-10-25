@@ -13,7 +13,7 @@ from secret_store.memory import MemorySecrets
 
 
 SECRET_VALUE = "sk-test-NEVER-LOG-THIS-VALUE-9f3a"
-SECRET_REF = "openharness/test-provider"
+SECRET_REF = "oharness/test-provider"
 
 
 def _assert_roundtrip(store: SecretsStore) -> None:

@@ -15,7 +15,7 @@ vi.mock("./usePermissionMode", () => ({ usePermissionMode: () => ({ mode: "ask",
 vi.mock("@/lib/usageApi", () => ({ usageApi: { summary: vi.fn(async () => ({})) } }));
 
 const connection: Connection = { id: "local", provider: "ollama", label: "Local test", residence: "local", endpoint: "http://localhost:11434", secret: null, health: "live", detail: "", probes: [], facts: [], models: [{ id: "test-model", ctx: 8192 }], defaultModel: "test-model", enabled: true, lastProbe: "" };
-const input = () => screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+const input = () => screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
 function send(text = "Explain this") {
   fireEvent.change(input(), { target: { value: text } });
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));

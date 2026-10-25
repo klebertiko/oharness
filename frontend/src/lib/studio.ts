@@ -39,7 +39,7 @@ export function openStudioPreset(preset: (typeof HARNESS_PRESETS)[number]): void
   const bundle = composeBundleFromCanvas(null, {
     nodes: [], edges: [], harnessMeta: { name: preset.name, description: preset.description },
   });
-  bundle.manifest.id = "openharness.studio.sample." + preset.id;
+  bundle.manifest.id = "oharness.studio.sample." + preset.id;
   bundle.graph = structuredClone(preset.graph);
   openStudioBundle(bundle as unknown as HarnessBundle);
   useCanvasStore.getState().setExecutionMode("mock");

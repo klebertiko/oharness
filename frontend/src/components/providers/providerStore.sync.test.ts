@@ -5,7 +5,7 @@ import { useProviderStore } from "./providerStore";
 const initial = useProviderStore.getState();
 const rows = (over: Record<string, unknown> = {}) => ({
   connections: [
-    { id: "openrouter", provider: "openrouter", label: "OpenRouter", residence: "cloud", endpoint: "", enabled: true, secretRef: "openharness/openrouter", ...over },
+    { id: "openrouter", provider: "openrouter", label: "OpenRouter", residence: "cloud", endpoint: "", enabled: true, secretRef: "oharness/openrouter", ...over },
   ],
 });
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });

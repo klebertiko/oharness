@@ -1,41 +1,25 @@
 "use client";
+import { cn } from "@/lib/utils";
+import { Kbd } from "@/components/ui";
 import { useShellStore } from "./shellStore";
 
 /**
- * Status bar — 22px, entirely mono, entirely machine-written.
- *
- * The rule this bar enforces for the whole app: if a string was written by a
- * machine (an id, a model name, a count, a latency), it is mono and dim. If a
- * person wrote it, it is the grotesque. That single split is what keeps a
- * dense desktop UI legible without adding a second accent colour.
+ * Status bar: what is true right now about the editor, in words. Counts and
+ * ids are measured values set in mono; everything else is plain text. Cells
+ * that only repeat the header are not shown. Below 640px only the run state
+ * and the engine stay, so nothing clips.
  */
 
-function Cell({
-  k,
-  v,
-  tone = "dim",
-}: {
-  k: string;
-  v: string;
-  tone?: "dim" | "signal" | "warn" | "fault";
-}) {
-  const color =
-    tone === "signal"
-      ? "var(--signal)"
-      : tone === "warn"
-        ? "var(--warn)"
-        : tone === "fault"
-          ? "var(--fault)"
-          : "var(--ink-dim)";
+function Cell({ children, tone = "dim", className }: { children: React.ReactNode; tone?: "dim" | "fault"; className?: string }) {
   return (
-    <span className="t-meta flex items-center gap-1.5 border-r border-line-soft px-2.5 text-ink-faint">
-      {k}
-      <span style={{ color }}>{v}</span>
+    <span className={cn("t-meta flex items-center gap-1.5 border-r border-line-soft px-2.5 whitespace-nowrap", tone === "fault" ? "text-fault-text" : "text-ink-mute", className)}>
+      {children}
     </span>
   );
 }
 
 interface Props {
+  /** Execution mode of the next run: mock, live or local. */
   mode: string;
   running: boolean;
   nodeCount: number;
@@ -44,39 +28,36 @@ interface Props {
   backendOk: boolean;
 }
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 export function StatusBar({ mode, running, nodeCount, edgeCount, selectedId, backendOk }: Props) {
-  const { section, setKeymapOpen } = useShellStore();
+  const setKeymapOpen = useShellStore((s) => s.setKeymapOpen);
 
   return (
-    <footer className="flex h-statusbar flex-none items-stretch border-t border-line bg-sub-100">
-      <span className="t-meta flex items-center gap-1.5 border-r border-line-soft px-2.5">
-        <span
-          className="h-[5px] w-[5px] rounded-[1px]"
-          style={{ background: running ? "var(--signal)" : "var(--ink-faint)" }}
-          aria-hidden
-        />
-        <span className="uppercase text-ink-dim">{running ? "executing" : "ready"}</span>
-      </span>
-
-      <Cell k="mode" v={mode} tone={mode.includes("live") ? "warn" : "dim"} />
-      <Cell k="section" v={section} />
-      <Cell k="graph" v={`${nodeCount}n · ${edgeCount}e`} />
-      {selectedId && <Cell k="sel" v={selectedId} />}
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: this footer is the page-level contentinfo landmark, which accepts a label
+    <footer aria-label="Status" className="flex h-statusbar flex-none items-stretch bg-sub-100 shadow-[inset_0_1px_0_var(--line)]">
+      <Cell>
+        <span className={cn("h-1.5 w-1.5 rounded-none", running ? "bg-signal" : "bg-ink-mute")} aria-hidden />
+        <span className="text-ink-dim" role="status">{running ? "Running" : "Ready"}</span>
+      </Cell>
+      <Cell className="max-sm:hidden">{mode} runs</Cell>
+      <Cell className="max-sm:hidden">
+        {plural(nodeCount, "node", "nodes")} · {plural(edgeCount, "connection", "connections")}
+      </Cell>
+      {selectedId && <Cell className="min-w-0 max-sm:hidden"><span className="truncate">Selected {selectedId}</span></Cell>}
 
       <span className="flex-1" />
 
-      <Cell
-        k="backend"
-        v={backendOk ? "connected" : "offline"}
-        tone={backendOk ? "dim" : "fault"}
-      />
+      <Cell tone={backendOk ? "dim" : "fault"} className="border-l border-r-0">
+        <span role="status">{backendOk ? "Engine connected" : "Engine offline"}</span>
+      </Cell>
       <button
         type="button"
         onClick={() => setKeymapOpen(true)}
-        className="t-meta flex items-center gap-1.5 px-2.5 text-ink-faint transition-colors hover:bg-sub-300 hover:text-ink-dim"
+        className="oh-focus-inner t-meta flex items-center gap-1.5 px-2.5 text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink-dim max-sm:hidden"
       >
-        <kbd className="oh-kbd">?</kbd>
-        keys
+        <Kbd>?</Kbd>
+        Shortcuts
       </button>
     </footer>
   );

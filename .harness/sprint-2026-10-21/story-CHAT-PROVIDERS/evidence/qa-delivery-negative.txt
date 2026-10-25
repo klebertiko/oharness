@@ -1,5 +1,5 @@
 
- RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/openharness-qa-ab567a542950401bb7fc4112cbfc06b8
+ RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/oharness-qa-ab567a542950401bb7fc4112cbfc06b8
 
 xxxxxxx
 
@@ -103,7 +103,7 @@ Ignored nodes: comments, script, style
                   <span
                     class="sr-only"
                   >
-                    OpenHarness is working
+                    OHarness is working
                   </span>
 
                   <span
@@ -145,7 +145,7 @@ Ignored nodes: comments, script, style
             <textarea
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-label="Message OpenHarness"
+              aria-label="Message OHarness"
               class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
               disabled=""
               placeholder="Waiting on this run — click Stop to send something new"
@@ -264,10 +264,10 @@ Ignored nodes: comments, script, style
     </div>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ getAllByLabelText ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/AgentStage.delivery.test.tsx:56:17
      54|   event("node_start", { node_id: "reply", adapter: "ollama", model: "t…
      55|   event("node_stream", { node_id: "reply", chunk: "Visible while strea…
@@ -314,13 +314,13 @@ Here are the accessible roles:
   --------------------------------------------------
   textbox:
 
-  Name "Message OpenHarness":
+  Name "Message OHarness":
   <textarea
     aria-autocomplete="list"
     aria-haspopup="listbox"
-    aria-label="Message OpenHarness"
+    aria-label="Message OHarness"
     class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-    placeholder="Ask OpenHarness… Type / for commands and skills"
+    placeholder="Ask OHarness… Type / for commands and skills"
     rows="2"
   />
 
@@ -416,9 +416,9 @@ Ignored nodes: comments, script, style
             <textarea
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-label="Message OpenHarness"
+              aria-label="Message OHarness"
               class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-              placeholder="Ask OpenHarness… Type / for commands and skills"
+              placeholder="Ask OHarness… Type / for commands and skills"
               rows="2"
             />
             <div
@@ -530,10 +530,10 @@ Ignored nodes: comments, script, style
     </div>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/AgentStage.delivery.test.tsx:71:17
      69|   send("Recover my prompt");
      70|   act(() => vi.mocked(startDirectRun).mock.calls[0][2](new Error("side…
@@ -572,9 +572,9 @@ Here are the accessible roles:
   --------------------------------------------------
   button:
 
-  Name "Nilo, the OpenHarness owl guide":
+  Name "Nilo, the OHarness owl guide":
   <button
-    aria-label="Nilo, the OpenHarness owl guide"
+    aria-label="Nilo, the OHarness owl guide"
     class="relative cursor-pointer oh-nilo hidden flex-none sm:block"
     type="button"
   />
@@ -618,13 +618,13 @@ Here are the accessible roles:
   --------------------------------------------------
   textbox:
 
-  Name "Message OpenHarness":
+  Name "Message OHarness":
   <textarea
     aria-autocomplete="list"
     aria-haspopup="listbox"
-    aria-label="Message OpenHarness"
+    aria-label="Message OHarness"
     class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-    placeholder="Ask OpenHarness… Type / for commands and skills"
+    placeholder="Ask OHarness… Type / for commands and skills"
     rows="2"
   />
 
@@ -701,7 +701,7 @@ Ignored nodes: comments, script, style
               </p>
             </div>
             <button
-              aria-label="Nilo, the OpenHarness owl guide"
+              aria-label="Nilo, the OHarness owl guide"
               class="relative cursor-pointer oh-nilo hidden flex-none sm:block"
               type="button"
             >
@@ -778,10 +778,10 @@ Ignored nodes: comments, script, style
             >
               <span
                 class="grid h-8 w-8 place-items-center text-ink-faint transition-colors group-h...
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/AgentStage.delivery.test.tsx:79:26
      77| it("offers a model per direct turn without changing the connection def…
      78|   render(<AgentStage />);
@@ -887,7 +887,7 @@ Ignored nodes: comments, script, style
             <span
               class="text-[11px] font-[600] tracking-[0.02em] text-ink-faint"
             >
-              OpenHarness
+              OHarness
             </span>
             <div
               class="whitespace-pre-wrap text-[15px] leading-7 text-ink-dim"
@@ -922,9 +922,9 @@ Ignored nodes: comments, script, style
             <textarea
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-label="Message OpenHarness"
+              aria-label="Message OHarness"
               class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-              placeholder="Ask OpenHarness… Type / for commands and skills"
+              placeholder="Ask OHarness… Type / for commands and skills"
               rows="2"
             />
             <div
@@ -1036,10 +1036,10 @@ Ignored nodes: comments, script, style
     </div>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/AgentStage.delivery.test.tsx:108:17
 
     106|   event("run_stopped", {});

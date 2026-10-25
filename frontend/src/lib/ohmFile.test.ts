@@ -56,7 +56,7 @@ describe("saveOhmFile", () => {
       const result = await saveOhmFile(bundle, "My_Harness.ohm");
       expect(saveMock).toHaveBeenCalledWith({
         defaultPath: "My_Harness.ohm",
-        filters: [{ name: "OpenHarness", extensions: ["ohm"] }],
+        filters: [{ name: "OHarness", extensions: ["ohm"] }],
       });
       expect(writeTextFileMock).toHaveBeenCalledWith("C:\\Users\\me\\Docs\\chosen.ohm", JSON.stringify(bundle, null, 2));
       expect(downloadMock).not.toHaveBeenCalled();

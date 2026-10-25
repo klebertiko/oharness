@@ -99,12 +99,12 @@ def test_post_secret_stores_via_secrets_store_returns_ref(client: TestClient) ->
     assert r.status_code == 200
     body = r.json()
     assert "secretRef" in body
-    assert body["secretRef"] == "openharness/openai"
+    assert body["secretRef"] == "oharness/openai"
     assert RAW_KEY not in json.dumps(body)
 
     store: MemorySecrets = app.state.secrets_store
-    assert store.exists("openharness/openai")
-    assert store.get("openharness/openai") == RAW_KEY
+    assert store.exists("oharness/openai")
+    assert store.get("oharness/openai") == RAW_KEY
 
 
 def test_get_connections_never_contains_sk_material(client: TestClient) -> None:
@@ -127,7 +127,7 @@ def test_get_connections_never_contains_sk_material(client: TestClient) -> None:
         assert RAW_KEY not in blob
         assert "sk-" not in blob
         meta = r.json()["connections"][0] if "connections" in r.json() else r.json()
-        assert meta.get("secretRef") == "openharness/openai"
+        assert meta.get("secretRef") == "oharness/openai"
         for banned in ("key", "apiKey", "api_key", "secret", "plaintext"):
             assert banned not in meta or meta[banned] is None
 
@@ -193,11 +193,11 @@ def test_delete_secret_removes_it_from_the_store_and_disables_the_connection(cli
     )
     client.post("/providers/openrouter/secret", json={"key": RAW_KEY})
     store: MemorySecrets = app.state.secrets_store
-    assert store.exists("openharness/openrouter")
+    assert store.exists("oharness/openrouter")
 
     r = client.delete("/providers/openrouter/secret")
     assert r.status_code == 204
-    assert not store.exists("openharness/openrouter")
+    assert not store.exists("oharness/openrouter")
     row = client.get("/providers/connections/openrouter").json()
     assert row["secretRef"] is None
     assert row["enabled"] is False
@@ -277,9 +277,9 @@ def test_delete_secret_keeps_db_and_memory_consistent_when_the_commit_fails(
         client.delete("/providers/openrouter/secret")
 
     # Nothing changed: the key is still stored and the row still points at it.
-    assert store.exists("openharness/openrouter")
+    assert store.exists("oharness/openrouter")
     row = app.state.provider_connections["openrouter"]
-    assert row["secretRef"] == "openharness/openrouter"
+    assert row["secretRef"] == "oharness/openrouter"
     assert row["enabled"] is True
 
 

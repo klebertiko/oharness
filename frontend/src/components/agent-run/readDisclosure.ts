@@ -19,7 +19,7 @@ export function readDisclosure(connection: DisclosureConnection | null | undefin
   if (!connection || connection.residence === "local") return null;
   if (!READ_TOOLS.has(call.name)) return null;
   if (call.ok !== true && call.result === undefined) return null;
-  return `arquivos lidos são enviados a ${connection.provider}`;
+  return `files it reads are sent to ${connection.provider}`;
 }
 
 interface ReadDisclosureState {

@@ -1,9 +1,9 @@
 
-> openharness@0.1.0 test
+> oharness@0.1.0 test
 > vitest run
 
 
- RUN  v3.2.7 D:/Development/src/OpenHarness/frontend
+ RUN  v3.2.7 D:/Development/src/OHarness/frontend
 
  ✓ src/components/agent-run/RunsPanel.test.tsx (2 tests) 661ms
    ✓ RunsPanel > lists past runs with a human status and opens one for detail  526ms
@@ -31,29 +31,29 @@
  ✓ src/components/agent/AgentStage.composition.test.tsx (1 test) 295ms
  ✓ src/components/canvas/StudioPanels.test.tsx (1 test) 1396ms
    ✓ adds a block with the keyboard and exposes its selected settings  1392ms
-stderr | Fetch.onError (file:\D:\Development\src\OpenHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:669:37)
+stderr | Fetch.onError (file:\D:\Development\src\OHarness\frontend\node_modules\happy-dom\src\fetch\Fetch.ts:669:37)
 DOMException [AbortError]: The operation was aborted.
-    at Fetch.onAsyncTaskManagerAbort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:682:17)
-    at Object.<anonymous> (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:518:10)
-    at AsyncTaskManager.abortAll (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:328:21)
-    at AsyncTaskManager.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:61:15)
-    at DetachedBrowserFrame.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:147:49)
-    at DetachedWindowAPI.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/window/DetachedWindowAPI.ts:62:29)
-    at teardownWindow (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:336:22)
-    at Object.teardown (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:391:10)
-    at withEnv (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:89:13)
-    at run (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:109:2)
+    at Fetch.onAsyncTaskManagerAbort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:682:17)
+    at Object.<anonymous> (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:518:10)
+    at AsyncTaskManager.abortAll (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:328:21)
+    at AsyncTaskManager.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:61:15)
+    at DetachedBrowserFrame.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:147:49)
+    at DetachedWindowAPI.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/window/DetachedWindowAPI.ts:62:29)
+    at teardownWindow (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:336:22)
+    at Object.teardown (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:391:10)
+    at withEnv (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:89:13)
+    at run (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:109:2)
 DOMException [AbortError]: The operation was aborted.
-    at Fetch.onAsyncTaskManagerAbort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:682:17)
-    at Object.<anonymous> (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:518:10)
-    at AsyncTaskManager.abortAll (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:328:21)
-    at AsyncTaskManager.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:61:15)
-    at DetachedBrowserFrame.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:147:49)
-    at DetachedWindowAPI.abort (file:///D:/Development/src/OpenHarness/frontend/node_modules/happy-dom/src/window/DetachedWindowAPI.ts:62:29)
-    at teardownWindow (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:336:22)
-    at Object.teardown (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:391:10)
-    at withEnv (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:89:13)
-    at run (file:///D:/Development/src/OpenHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:109:2)
+    at Fetch.onAsyncTaskManagerAbort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:682:17)
+    at Object.<anonymous> (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/fetch/Fetch.ts:518:10)
+    at AsyncTaskManager.abortAll (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:328:21)
+    at AsyncTaskManager.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/async-task-manager/AsyncTaskManager.ts:61:15)
+    at DetachedBrowserFrame.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/browser/detached-browser/DetachedBrowserFrame.ts:147:49)
+    at DetachedWindowAPI.abort (file:///D:/Development/src/OHarness/frontend/node_modules/happy-dom/src/window/DetachedWindowAPI.ts:62:29)
+    at teardownWindow (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:336:22)
+    at Object.teardown (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/index.CmSc2RE5.js:391:10)
+    at withEnv (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:89:13)
+    at run (file:///D:/Development/src/OHarness/frontend/node_modules/vitest/dist/chunks/runBaseTests.9Ij9_de-.js:109:2)
 
  ✓ src/components/agent/AgentStage.test.tsx (4 tests) 403ms
  ✓ src/components/git/GitPanel.test.tsx (6 tests) 2037ms

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useEffect, useRef, useState } from "react";
 import { Check, Trash2, Upload, Workflow } from "lucide-react";
 
@@ -77,23 +78,16 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
               if (f) void onImportFile(f);
             }}
           />
-          <button
-            type="button"
-            disabled={busy}
-            title="Import a .ohm file"
-            onClick={() => fileRef.current?.click()}
-            className="inline-flex h-6 items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-ink-mute transition-colors hover:bg-sub-200 hover:text-ink disabled:opacity-40"
-          >
-            <Upload size={13} strokeWidth={1.8} />
+          <Button size="sm" variant="ghost" disabled={busy} title="Import a .ohm file" onClick={() => fileRef.current?.click()} icon={<Upload size={13} strokeWidth={1.8} aria-hidden />}>
             Import
-          </button>
+          </Button>
         </>
       }
     >
-      {!hydrated && !error && <p className="px-4 py-3 text-[12px] text-ink-mute">Loading harnesses…</p>}
+      {!hydrated && !error && <p className="px-4 py-3 text-body text-ink-mute">Loading harnesses…</p>}
 
       {error && (
-        <p className="mx-3 mt-3 rounded-[8px] bg-sub-200 px-3 py-2 text-[12px] text-fault" role="alert">
+        <p className="mx-3 mt-3 rounded-float bg-sub-200 px-3 py-2 text-body text-fault-text" role="alert">
           {error}
         </p>
       )}
@@ -112,8 +106,8 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
               leading={
                 <span
                   className={[
-                    "grid h-8 w-8 flex-none place-items-center rounded-[8px] bg-sub-200",
-                    active ? "text-signal" : "text-ink-mute",
+                    "grid h-8 w-8 flex-none place-items-center rounded-float bg-sub-200",
+                    active ? "text-signal-text" : "text-ink-mute",
                   ].join(" ")}
                 >
                   <Workflow size={15} strokeWidth={1.7} />
@@ -129,7 +123,7 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
               }
               trailing={
                 active ? (
-                  <span className="inline-flex items-center gap-1 text-[12px] font-[550] text-signal">
+                  <span className="inline-flex items-center gap-1 text-body font-medium text-signal-text">
                     <Check size={13} strokeWidth={2} />
                     {onPicked ? "Current" : "In use"}
                   </span>

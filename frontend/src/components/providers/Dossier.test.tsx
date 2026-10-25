@@ -154,7 +154,7 @@ it("uses the same status word the chat combo uses for the header badge", () => {
 });
 
 it("does not invent a key length for a credential reference restored from backend", () => {
-  const c = connection({ provider: "openrouter", secret: { service: "openharness/openrouter", prefix: "", tail: "", length: 0, savedAt: "", vault: "backend" } });
+  const c = connection({ provider: "openrouter", secret: { service: "oharness/openrouter", prefix: "", tail: "", length: 0, savedAt: "", vault: "backend" } });
   useProviderStore.setState({ connections: [c], selectedId: c.id });
   useUsageStore.setState({ hydrated: true });
   render(<Dossier />);

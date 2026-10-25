@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * Keyboard conventions for OpenHarness.
+ * Keyboard conventions for OHarness.
  *
  * Rules, in the order they were applied:
  *  1. Never shadow a chord the host OS or browser owns (Ctrl+W, Ctrl+T, F5…).

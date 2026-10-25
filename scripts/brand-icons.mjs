@@ -184,9 +184,9 @@ function out(rel, data) {
   console.log(`wrote ${rel} (${data.length} bytes)`);
 }
 
-out("brand/nilo.svg", svg(GRID, 8, "Nilo, the OpenHarness owl"));
-out("brand/mark.svg", svg(FACE, 2, "OpenHarness"));
-out("brand/app-icon.svg", svg(GRID, 8, "Nilo, the OpenHarness app icon"));
+out("brand/nilo.svg", svg(GRID, 8, "Nilo, the OHarness owl"));
+out("brand/mark.svg", svg(FACE, 2, "OHarness"));
+out("brand/app-icon.svg", svg(GRID, 8, "Nilo, the OHarness app icon"));
 out("brand/icon.png", png(1024));
 out("src-tauri/icons/32x32.png", png(32));
 out("src-tauri/icons/128x128.png", png(128));

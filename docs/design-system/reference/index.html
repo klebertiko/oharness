@@ -1,0 +1,15 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>OHarness design system, reference previews</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css">
+<style>body{margin:0;background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.card{border-bottom:1px solid var(--line-soft)}.h{padding:6px 16px;font:400 10.5px var(--font-mono);color:var(--ink-mute)}iframe{display:block;width:100%;border:0}</style></head><body>
+<div id="app"></div>
+<!-- Local preview harness only. Each component preview is its own page, loaded in an iframe: no HTML strings, no dynamic code. It is never published to Pages and never ships in the app. -->
+<script>
+var theme=new URLSearchParams(location.search).get('theme')||'dark';document.documentElement.dataset.theme=theme;
+var cards={"Badge": 110, "Button": 190, "Cover": 288, "Input": 200, "Kbd": 80, "ListRow": 200, "Nilo": 340, "Panel": 220};
+Object.keys(cards).forEach(function(n){
+  var card=document.createElement('div');card.className='card';
+  var h=document.createElement('div');h.className='h';h.textContent=n;
+  var frame=document.createElement('iframe');frame.title=n+' preview';frame.height=cards[n];frame.src=n+'/preview.html?theme='+encodeURIComponent(theme);
+  card.appendChild(h);card.appendChild(frame);document.getElementById('app').appendChild(card);
+});
+</script></body></html>

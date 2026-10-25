@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useCallback, useEffect, useState } from "react";
 import { FolderPlus, Trash2 } from "lucide-react";
 
@@ -89,7 +90,7 @@ export function CoworkPanel() {
   return (
     <Panel title="Cowork" meta={`${projects.length}`} className="h-full">
       <div className="border-b border-line-soft p-2.5">
-        <p className="t-meta mb-2 text-ink-faint">
+        <p className="t-meta mb-2 text-ink-mute">
           Session harness: {sessionEnabled ? "on" : "off"}
           {activeBundleId ? ` · ${activeBundleId}` : ""}
         </p>
@@ -98,22 +99,22 @@ export function CoworkPanel() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Project name"
-            className="h-[28px] rounded-control border border-line bg-sub-200 px-2 text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-mute"
+            className="h-control-md rounded-control border border-line-strong bg-sub-200 px-2 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
           <input
             value={rootPath}
             onChange={(e) => setRootPath(e.target.value)}
             placeholder="Folder path (e.g. D:/workspaces/research)"
-            className="h-[28px] rounded-control border border-line bg-sub-200 px-2 text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-mute"
+            className="h-control-md rounded-control border border-line-strong bg-sub-200 px-2 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
           <textarea
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={2}
             placeholder="Standing instructions…"
-            className="resize-none rounded-control border border-line bg-sub-200 px-2 py-1.5 text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-mute"
+            className="resize-none rounded-control border border-line-strong bg-sub-200 px-2 py-1.5 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
-          <label className="flex items-center gap-1.5 text-[11px] text-ink-mute">
+          <label className="flex items-center gap-1.5 text-meta text-ink-mute">
             <input
               type="checkbox"
               checked={harnessOverride}
@@ -122,20 +123,14 @@ export function CoworkPanel() {
             />
             Harness enabled for this project
           </label>
-          <button
-            type="button"
-            disabled={busy || !name.trim()}
-            onClick={() => void onCreate()}
-            className="inline-flex h-[28px] items-center justify-center gap-1.5 rounded-control bg-signal px-2 text-[12px] font-[550] text-signal-ink transition hover:bg-signal-deep disabled:opacity-40"
-          >
-            <FolderPlus size={12} strokeWidth={1.8} />
+          <Button variant="primary" disabled={busy || !name.trim()} loading={busy} onClick={() => void onCreate()} icon={<FolderPlus size={12} strokeWidth={1.8} aria-hidden />}>
             Create project
-          </button>
+          </Button>
         </div>
       </div>
 
       {error && (
-        <p className="t-body border-b border-line-soft px-3 py-2 text-fault" role="alert">
+        <p className="t-body border-b border-line-soft px-3 py-2 text-fault-text" role="alert">
           {error}
         </p>
       )}
@@ -147,15 +142,15 @@ export function CoworkPanel() {
         {projects.map((p) => (
           <li key={p.id} className="flex items-start gap-2 px-3 py-2.5">
             <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-[550] text-ink">{p.name}</div>
-              <div className="t-meta truncate text-ink-faint" title={p.rootPath}>
+              <div className="text-body font-medium text-ink">{p.name}</div>
+              <div className="t-meta truncate text-ink-mute" title={p.rootPath}>
                 {p.rootPath || "(no path)"}
               </div>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void onToggleHarness(p)}
-                className="mt-1 text-[11px] text-ink-mute underline-offset-2 hover:text-ink hover:underline"
+                className="mt-1 text-meta text-ink-mute underline-offset-2 hover:text-ink hover:underline"
               >
                 Harness {p.harnessEnabled ? "on" : "off"} (override)
               </button>
@@ -165,7 +160,7 @@ export function CoworkPanel() {
               disabled={busy}
               title="Delete project"
               onClick={() => void onDelete(p.id)}
-              className="grid h-[22px] w-[22px] flex-none place-items-center rounded-control text-ink-faint hover:bg-sub-200 hover:text-ink"
+              className="grid h-[22px] w-[22px] flex-none place-items-center rounded-control text-ink-mute hover:bg-sub-200 hover:text-ink"
             >
               <Trash2 size={12} strokeWidth={1.8} />
             </button>

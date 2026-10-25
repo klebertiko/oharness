@@ -8,7 +8,7 @@ const runs = [
   {
     id: "r1",
     harnessId: "h1",
-    harnessName: "OpenHarness Agile",
+    harnessName: "OHarness Agile",
     status: "complete" as const,
     startedAt: new Date().toISOString(),
     finishedAt: new Date(Date.now() + 42_000).toISOString(),
@@ -41,13 +41,13 @@ describe("RunsPanel", () => {
     const user = userEvent.setup();
     render(<RunsPanel />);
 
-    const row = await screen.findByText("OpenHarness Agile");
+    const row = await screen.findByText("OHarness Agile");
     expect(screen.getByText(/Completed · 42s/)).toBeTruthy();
 
     await user.click(row);
     expect(await screen.findByText("the plan ran")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "All activity" }));
-    expect(await screen.findByText("OpenHarness Agile")).toBeTruthy();
+    expect(await screen.findByText("OHarness Agile")).toBeTruthy();
   });
 
   it("shows an honest empty state when there are no runs", async () => {
@@ -59,7 +59,7 @@ describe("RunsPanel", () => {
 
   it("tells a direct chat turn apart from a harness run and shows a persisted failure", async () => {
     render(<RunsPanel />);
-    await screen.findByText("OpenHarness Agile");
+    await screen.findByText("OHarness Agile");
     expect(screen.getByText("Direct chat")).toBeTruthy();
     expect(screen.getByText(/Direct · Failed · 3s/)).toBeTruthy();
   });

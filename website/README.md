@@ -1,9 +1,9 @@
-# OpenHarness website
+# OHarness website
 
 Página de produto independente do desktop, em português brasileiro (pt-BR). HTML, CSS e JavaScript nativos, sem dependências de execução ou build.
 
 ```powershell
-cd D:\Development\src\OpenHarness\website
+cd D:\Development\src\OHarness\website
 npm run dev
 ```
 
@@ -11,8 +11,8 @@ Prévia: http://127.0.0.1:4174. O servidor escuta apenas no loopback; `PORT` per
 
 ## Idiomas e GitHub Pages
 
-- pt-BR: https://klebertiko.github.io/OpenHarness/
-- en-US: https://klebertiko.github.io/OpenHarness/en/
+- pt-BR: https://klebertiko.github.io/OHarness/
+- en-US: https://klebertiko.github.io/OHarness/en/
 
 As três páginas possuem versões estáticas nos dois idiomas, inclusive sem JavaScript. O seletor EN/PT mantém a página e, com JavaScript, sua seção atual. A navegação mantém o idioma escolhido pela URL; não há redirecionamento automático pelo idioma do navegador. A preferência de tema é compartilhada entre idiomas.
 
@@ -53,7 +53,7 @@ YAML 1.2 é a sintaxe adotada para `.ohm`; o desktop ainda precisa implementar a
 
 ## Temas, leitura e movimento
 
-O seletor no cabeçalho alterna claro/escuro. A preferência fica em `openharness-website-theme`; sem escolha, acompanha o sistema. As capturas reais de Studio e Chats acompanham o tema. Os dados das capturas são de demonstração, sem gravações no backend.
+O seletor no cabeçalho alterna claro/escuro. A preferência fica em `oharness-website-theme`; sem escolha, acompanha o sistema. As capturas reais de Studio e Chats acompanham o tema. Os dados das capturas são de demonstração, sem gravações no backend.
 
 Textos de leitura usam 15–17 px, com referências e controles menores a partir de 12 px. Os títulos preservam espaços quando uma quebra de linha deixa de aparecer no celular. O manifesto acompanha o fluxo da página para não invadir a nota seguinte.
 

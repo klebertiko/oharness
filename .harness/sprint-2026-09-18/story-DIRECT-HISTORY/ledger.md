@@ -37,7 +37,7 @@ Status persistido failed; status SSE error preservado. Diagnósticos seguros, co
 
 ## Regressão e E2E BDD adicional
 Regressão antes de E2E: pytest -q -p no:cacheprovider → 397 passed in 49.74s.
-Worktree isolado: D:/Development/.worktrees/openharness-sprint-20260918-7fd22a38 (HEAD 3689da0 + snapshot backend atual; banco/secrets vivos excluídos).
+Worktree isolado: D:/Development/.worktrees/oharness-sprint-20260918-7fd22a38 (HEAD 3689da0 + snapshot backend atual; banco/secrets vivos excluídos).
 BDD executável tests/e2e/test_direct_history_e2e.py: Given completed run / When server restarts / Then history survives; Given running stream / When stop or disconnect / Then stopped history.
 E2E usa uvicorn :8001, banco temporário e fixture HTTP somente na fronteira do modelo. Não é E2E visual do frontend.
 RED: 1 failed, 2 passed in 20.29s. Desconexão deixava registro running por cancelamento da sessão de gravação.
@@ -57,5 +57,5 @@ mutmut 2.4.5, escopo patch DIRECT-HISTORY + finalização RunControl: 53 mutante
 ## Mutation R2 / pronto para QA
 Reforçados testes observáveis: identificação do histórico, snapshot running sem eventos, terminal stopped com nó/tokens/latência, uso por source/provider após desconexão e múltiplos chunks. Teste RED original segue sem edição.
 Mutmut 2.4.5 R2: 45 killed / 8 survived / 53 total = 84,91%, acima de 70%. Escopo patch documentado em direct-history-scope.patch, routers/execution.py (criação, coletor, cancelamento/finalização, source nos endpoints). Não é score do arquivo todo/projeto. Cancelamento RunControl segue coberto por regressão/E2E, não incluído no score R2.
-Evidência: worktree D:/Development/.worktrees/openharness-sprint-20260918-7fd22a38/backend/mutation-direct-r2.log e cache mutmut (consultado após fim); SQL status counts 45/8. Sobreviventes IDs 24,27,28,39,40,43,45,50: arredondamento/guardas/fallbacks e exceção externa residual; não declarados mortos/equivalentes sem revisão.
+Evidência: worktree D:/Development/.worktrees/oharness-sprint-20260918-7fd22a38/backend/mutation-direct-r2.log e cache mutmut (consultado após fim); SQL status counts 45/8. Sobreviventes IDs 24,27,28,39,40,43,45,50: arredondamento/guardas/fallbacks e exceção externa residual; não declarados mortos/equivalentes sem revisão.
 E2E histórico após reforço: 3 dentro de 9 passed in 30.98s (suite inclui broker). Regressão backend 494 passed, 15 skipped in 38.76s. BDD pytest-bdd da story 3 passou anteriormente. Board QA; QA/ARCH frescos e aceite PO continuam pendentes.

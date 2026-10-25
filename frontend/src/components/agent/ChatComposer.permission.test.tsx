@@ -14,7 +14,7 @@ function Composer({ initial = "ask", live = false, notice }: { initial?: Permiss
   return <ChatComposer value={value} onChange={setValue} onSend={send} inputRef={ref} live={live}
     permissionMode={mode} onPermissionModeChange={(next) => { changed(next); setMode(next); }} permissionNotice={notice} />;
 }
-const textbox = () => screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+const textbox = () => screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
 const checked = () => screen.getAllByRole("radio").find((r) => r.getAttribute("aria-checked") === "true")?.textContent;
 
 beforeEach(() => { vi.clearAllMocks(); HTMLElement.prototype.scrollIntoView = vi.fn(); });
@@ -102,43 +102,43 @@ function TrustComposer({ trusted, onChange = vi.fn(), error = null, mode = "auto
 
 it("Auto in an untrusted workspace says that only read-only git runs unasked and project scripts still ask", () => {
   render(<TrustComposer trusted={false} />);
-  expect(screen.getByText(/só git somente leitura roda sozinho/i)).toBeTruthy();
-  expect(screen.getByText(/scripts do projeto continuam pedindo/i)).toBeTruthy();
+  expect(screen.getByText(/only read-only git runs on its own/i)).toBeTruthy();
+  expect(screen.getByText(/scripts still ask for approval/i)).toBeTruthy();
 });
 
 it("Auto in a trusted workspace says plainly that the project's own scripts run without asking", () => {
   render(<TrustComposer trusted />);
-  expect(screen.getByText(/roda os scripts do projeto .*sem perguntar/i)).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Revogar confiança" })).toBeTruthy();
+  expect(screen.getByText(/runs the project's scripts .*without asking/i)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Revoke trust" })).toBeTruthy();
 });
 
 it("trusting needs a deliberate second step with a warning; nothing is sent by the first click", () => {
   const onChange = vi.fn();
   render(<TrustComposer trusted={false} onChange={onChange} />);
-  fireEvent.click(screen.getByRole("button", { name: "Confiar neste workspace…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trust this workspace…" }));
   expect(onChange).not.toHaveBeenCalled();
   const dialog = screen.getByRole("alertdialog");
   expect(dialog.textContent).toMatch(/Development/);
-  expect(dialog.textContent).toMatch(/executar código sem pedir aprovação/i);
+  expect(dialog.textContent).toMatch(/execute code without asking for approval/i);
   expect(dialog.textContent).toMatch(/package\.json/);
-  fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(onChange).not.toHaveBeenCalled();
   expect(screen.queryByRole("alertdialog")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Confiar neste workspace…" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confiar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trust this workspace…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trust" }));
   expect(onChange).toHaveBeenCalledWith(true);
 });
 
 it("revoking is one click", () => {
   const onChange = vi.fn();
   render(<TrustComposer trusted onChange={onChange} />);
-  fireEvent.click(screen.getByRole("button", { name: "Revogar confiança" }));
+  fireEvent.click(screen.getByRole("button", { name: "Revoke trust" }));
   expect(onChange).toHaveBeenCalledWith(false);
 });
 
 it("shows no trust controls outside Auto, and reports a refused change", () => {
   const { rerender } = render(<TrustComposer trusted={false} mode="ask" />);
-  expect(screen.queryByRole("button", { name: "Confiar neste workspace…" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Trust this workspace…" })).toBeNull();
   rerender(<TrustComposer trusted={false} error="Não foi possível salvar a confiança" />);
   expect(screen.getByRole("alert").textContent).toContain("Não foi possível salvar a confiança");
 });

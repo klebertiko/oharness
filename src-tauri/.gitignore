@@ -5,7 +5,7 @@ WixTools/
 *.pdb
 
 # Local sidecar builds (platform-suffixed binaries)
-/binaries/openharness-sidecar*
+/binaries/oharness-sidecar*
 !/binaries/README.md
 
 # Icons are committed so CI cargo/clippy can run without a brand-tooling

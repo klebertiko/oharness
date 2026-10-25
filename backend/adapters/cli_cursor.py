@@ -87,9 +87,17 @@ def _windows_wsl_prefix() -> list[str] | None:
     wsl = which("wsl") or which("wsl.exe")
     if not wsl:
         return None
-    distro = os.environ.get("OPENHARNESS_CURSOR_WSL_DISTRO", WSL_DISTRO)
+    distro = (
+        os.environ.get("OHARNESS_CURSOR_WSL_DISTRO")
+        or os.environ.get("OPENHARNESS_CURSOR_WSL_DISTRO")  # legacy name
+        or WSL_DISTRO
+    )
     windows_user = os.environ.get("USERNAME", "")
-    linux_home = os.environ.get("OPENHARNESS_CURSOR_WSL_HOME") or f"/home/{windows_user}"
+    linux_home = (
+        os.environ.get("OHARNESS_CURSOR_WSL_HOME")
+        or os.environ.get("OPENHARNESS_CURSOR_WSL_HOME")  # legacy name
+        or f"/home/{windows_user}"
+    )
     return [wsl, "-d", distro, "--", f"{linux_home}/.local/bin/cursor-agent"]
 
 
@@ -159,7 +167,7 @@ class CursorCliAdapter(AgentAdapter):
                 "Cursor delegation on Windows requires Cursor Agent inside WSL2 "
                 "because the native Windows CLI has no filesystem sandbox (SEC-2). "
                 "Install cursor-agent in Ubuntu-24.04 and sign in there, or set "
-                "OPENHARNESS_CURSOR_WSL_DISTRO to a prepared distribution."
+                "OHARNESS_CURSOR_WSL_DISTRO to a prepared distribution."
             )
         return None
 

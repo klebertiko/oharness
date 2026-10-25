@@ -1,4 +1,4 @@
-OpenHarness
+OHarness
 Harness Studio
 /
 Search

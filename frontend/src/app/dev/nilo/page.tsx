@@ -8,13 +8,13 @@ const STATES: NiloState[] = ["idle", "thinking", "working", "waiting", "success"
 export default function NiloGallery() {
   return (
     <main className="min-h-screen bg-sub-000 p-10 text-ink">
-      <h1 className="text-[20px] font-[600]">Nilo</h1>
-      <p className="mt-1 text-[13px] text-ink-mute">Every state, live. Click the first one; move the pointer around it.</p>
+      <h1 className="text-[20px] font-semibold">Nilo</h1>
+      <p className="mt-1 text-title text-ink-mute">Every state, live. Click the first one; move the pointer around it.</p>
       <div className="mt-8 flex flex-wrap items-end gap-10">
         {STATES.map((s, i) => (
           <figure key={s} className="flex flex-col items-center gap-2">
             <NiloSprite state={s} cell={6} interactive={i === 0} label={`Nilo, ${s}`} />
-            <figcaption className="font-mono text-[11px] text-ink-faint">{s}</figcaption>
+            <figcaption className="font-mono text-meta text-ink-mute">{s}</figcaption>
           </figure>
         ))}
       </div>

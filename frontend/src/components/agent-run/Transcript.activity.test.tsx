@@ -78,10 +78,10 @@ describe("Transcript — activity summary", () => {
     renderRun(run([seg("dev", [tool("read"), pending], { state: "gate" })], { status: "running" }));
     const btn = screen.getByRole("button", { name: /Waiting for approval: npm test/ });
     expect(btn.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("button", { name: "Aprovar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
     fireEvent.click(btn);
     expect(btn.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("button", { name: "Aprovar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 
   it("defaults open and shows a failure count when a call failed", () => {

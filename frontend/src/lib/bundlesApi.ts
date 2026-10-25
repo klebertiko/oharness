@@ -151,7 +151,7 @@ export function canvasEdgeToBundleEdge<T extends {
 }
 
 /**
- * Compose an exportable `.ohm` (Open Harness Model) from the live canvas graph
+ * Compose an exportable `.ohm` (OHarness Model) from the live canvas graph
  * plus content / runtime stubs taken from a base bundle.
  */
 export function composeBundleFromCanvas<
@@ -168,7 +168,7 @@ export function composeBundleFromCanvas<
   const fallback: OHarnessBundle = {
     schemaVersion: "1.1.0",
     manifest: {
-      id: "openharness.studio.export",
+      id: "oharness.studio.export",
       name: canvas.harnessMeta.name || "Untitled Harness",
       version: "0.1.0",
       description: canvas.harnessMeta.description || "",

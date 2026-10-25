@@ -1,5 +1,5 @@
 
- RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/openharness-qa-ab567a542950401bb7fc4112cbfc06b8
+ RUN  v4.1.11 C:/Users/klebe/AppData/Local/Temp/oharness-qa-ab567a542950401bb7fc4112cbfc06b8
 
 xx··x··x·xxxx
 
@@ -17,9 +17,9 @@ Ignored nodes: comments, script, style
       <textarea
         aria-autocomplete="list"
         aria-haspopup="listbox"
-        aria-label="Message OpenHarness"
+        aria-label="Message OHarness"
         class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-        placeholder="Ask OpenHarness… Type / for commands, skills and tools in Isolated"
+        placeholder="Ask OHarness… Type / for commands, skills and tools in Isolated"
         rows="2"
       />
     </div>
@@ -37,16 +37,16 @@ Ignored nodes: comments, script, style
         <textarea
           aria-autocomplete="list"
           aria-haspopup="listbox"
-          aria-label="Message OpenHarness"
+          aria-label="Message OHarness"
           class="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Ask OpenHarness… Type / for commands, skills and tools in Isolated"
+          placeholder="Ask OHarness… Type / for commands, skills and tools in Isolated"
           rows="2"
         />
       </div>
     </div>
   </body>
 </html>
- ❯ waitForWrapper ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ waitForWrapper ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/wait-for.js:163:27
  ❯ src/components/agent/ChatComposer.recovery.test.tsx:18:9
      16|   render(<Composer readSkill={vi.fn().mockRejectedValue(new Error("off…
      17|   fireEvent.click(screen.getByRole("option", { name: /skill:review/ })…
@@ -82,10 +82,10 @@ Ignored nodes: comments, script, style
 <body>
   <div />
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/MessageActions.test.tsx:8:26
       6|   const copy = vi.spyOn(navigator.clipboard, "writeText").mockResolved…
       7|   render(<MessageActions content="<script>not HTML</script>" />);
@@ -105,10 +105,10 @@ Ignored nodes: comments, script, style
 <body>
   <div />
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/MessageActions.test.tsx:16:26
      14|   const reuse = vi.fn();
      15|   render(<MessageActions content="hello" onReuse={reuse} />);
@@ -435,10 +435,10 @@ Ignored nodes: comments, script, style
     </section>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/agent/ThreadsSidebar.delivery.test.tsx:12:27
      10|   useThreadStore.getState().createThread("Notes");
      11|   render(<ThreadsSidebar />);
@@ -984,10 +984,10 @@ Ignored nodes: comments, script, style
     </div>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/providers/ProvidersList.recovery.test.tsx:17:18
      15|   fireEvent.click(screen.getByRole("button", { name: "Save" }));
      16|   await waitFor(() => expect(screen.getByRole("alert").textContent).to…
@@ -1514,10 +1514,10 @@ Ignored nodes: comments, script, style
     </div>
   </div>
 </body>
- ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ Object.getElementError ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
  ❯ src/components/providers/ProvidersList.recovery.test.tsx:24:26
      22|   vi.mocked(usageApi.summary).mockResolvedValue({ byConnection: [], bu…
      23|   render(<ProvidersList />);
@@ -1542,13 +1542,13 @@ Error: offline
        |                                                         ^
      17|   fireEvent.click(screen.getByRole("option", { name: /skill:review/ })…
      18|   await waitFor(() => expect(screen.getByRole("alert").textContent).to…
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
- ❯ runWithCancel ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
- ❯ runWithTimeout ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10
- ❯ ../../../../.codex/worktrees/ca7d/OpenHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+ ❯ runWithCancel ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+ ❯ runWithTimeout ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10
+ ❯ ../../../../.codex/worktrees/ca7d/OHarness/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
 
 This error originated in "src/components/agent/ChatComposer.recovery.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
 The latest test that might've caused the error is "retains the command and exposes recovery when a workspace skill read fails". It might mean one of the following:

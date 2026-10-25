@@ -80,7 +80,7 @@ describe("AgentStage chat-only surface", () => {
 
     act(() => useThreadStore.getState().startNewChat());
 
-    const composer = screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+    const composer = screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
     expect(resetRunMock).toHaveBeenCalledTimes(1);
     expect(composer.value).toBe("");
     expect(document.activeElement).toBe(composer);

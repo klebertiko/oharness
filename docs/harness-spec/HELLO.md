@@ -1,4 +1,4 @@
-# Hello, OpenHarness Bundle
+# Hello, OHarness Bundle
 
 An **`.oharness`** file is a single JSON document that packages an agent harness: who acts (roles), how work flows (graph + gates), and the embedded markdown that drives them (skills, agents, hooks, prompts, commands, scripts).
 
@@ -32,10 +32,10 @@ python -m oharness validate path/to/bundle.oharness
 
 ## Agile Harness
 
-OpenHarness ships the Agile Harness, an Agile/Scrum/Kanban harness adapted from the skills-framework project, as the product default:
+OHarness ships the Agile Harness, an Agile/Scrum/Kanban harness adapted from the skills-framework project, as the product default:
 
 - **Fixture:** [`backend/oharness/fixtures/default-agile.oharness`](../../backend/oharness/fixtures/default-agile.oharness)
-- **Manifest id:** `openharness.default.agile`
+- **Manifest id:** `oharness.default.agile`
 - **Source:** `skills-framework/skills/engineering/harness/`
 - **Compiler:** `oharness.compile_skills_harness.compile_skills_harness`
 

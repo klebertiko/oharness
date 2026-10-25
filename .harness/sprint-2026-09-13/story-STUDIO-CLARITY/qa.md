@@ -49,7 +49,7 @@ No other observable production defect was found within this review scope. This d
 | Browser on existing :3000 with isolated context and explicit API contracts | Script uses a new Edge context and intercepts sidecar traffic. Latest run failed; not complete. |
 | Provider/Studio keyboard and widths | Component keyboard journey passes; browser completion pending. Desktop layout limits must be reported from measured results. |
 | Fresh QA, ARCH and SEC gates | Fresh QA performed, currently bounced. Architecture and security remain later gates. |
-| External handoff | `D:/Development/handoffs/2026-09-13-openharness-studio-clarity-sonnet.md` exists with source paths, provenance, reference URLs and runtime limits; final verification section remains pending. |
+| External handoff | `D:/Development/handoffs/2026-09-13-oharness-studio-clarity-sonnet.md` exists with source paths, provenance, reference URLs and runtime limits; final verification section remains pending. |
 | No commit/merge/backend edits/server restart/concurrent overwrite | QA performed none. The shared checkout contains many pre-existing changes; QA did not reset or modify them. |
 
 Existing limits are documented rather than represented as new capabilities: session-only draft retention; Studio Run has no chat fallback; AgentStage still needs an eligible chat selection for fully pinned harnesses; embedded framework Markdown is not proof of automatic runtime enforcement; old save paths may use bundle identity as a database identity.

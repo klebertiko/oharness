@@ -79,7 +79,7 @@ def _ok_transport(model_result: dict | None = None) -> httpx.MockTransport:
         return httpx.Response(
             200,
             json={
-                "schema_version": "openharness-decision-node-v1",
+                "schema_version": "oharness-decision-node-v1",
                 "model_result": model_result or {"answers": {"needs_review": {"noul": 0.1}}},
                 "latency_ms": 12.3,
             },
@@ -168,7 +168,7 @@ def test_decision_node_attaches_evidence_and_passes_through_unchanged(monkeypatc
     assert laya_done["output"] == "ACCEPT this please"  # pass-through, unchanged
     result = laya_done["decisionResult"]
     assert result["authority"] == "advisory-shadow"
-    assert result["schema_version"] == "openharness-decision-node-v1"
+    assert result["schema_version"] == "oharness-decision-node-v1"
     assert result["model_result"] == {"answers": {"needs_review": {"noul": 0.1}}}
     assert result["latency_ms"] == 12.3
 

@@ -1,9 +1,9 @@
 
-> openharness@0.0.1-alpha test
+> oharness@0.0.1-alpha test
 > vitest run src/components/agent src/components/providers src/components/agent-run --reporter=dot
 
 
- RUN  v4.1.11 C:/Users/klebe/.codex/worktrees/ca7d/OpenHarness/frontend
+ RUN  v4.1.11 C:/Users/klebe/.codex/worktrees/ca7d/OHarness/frontend
 
 Error: connect ECONNREFUSED 127.0.0.1:8000
     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {

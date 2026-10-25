@@ -22,6 +22,7 @@ _SAFE_REF = re.compile(r"[^A-Za-z0-9._-]+")
 def _fernet_for_root(root: Path) -> Fernet:
     """Derive a Fernet key from the machine-local absolute store path."""
     material = str(root.resolve()).encode("utf-8")
+    # Frozen pre-rebrand domain tag: changing it would make existing files undecryptable.
     salt = hashlib.sha256(b"openharness.file-secrets.v1:" + material).digest()
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),

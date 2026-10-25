@@ -11,7 +11,7 @@ function Composer({ skills = {}, live = false }: { skills?: unknown; live?: bool
   return <ChatComposer value={value} onChange={setValue} onSend={send} inputRef={ref} skills={skills} live={live} />;
 }
 function type(value: string) {
-  const input = screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+  const input = screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
   input.focus(); fireEvent.change(input, { target: { value } }); return input;
 }
 beforeEach(() => {
@@ -76,7 +76,7 @@ it("disables the composer while a run is live — Ctrl+Enter must not silently n
   // to a canStart-gated handler upstream) already refused to start a second
   // run, but gave no feedback. The composer itself must make this obvious.
   render(<Composer live />);
-  const input = screen.getByRole("textbox", { name: "Message OpenHarness" }) as HTMLTextAreaElement;
+  const input = screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
   expect(input.disabled).toBe(true);
   expect(input.placeholder).toMatch(/waiting|stop/i);
   fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
@@ -136,5 +136,5 @@ it("Selecting a Tool starts a run with a preset", () => {
 it("No workspace hides tools and says why", () => {
   render(<ToolsComposer tools={{ workspace: null, capabilities: null, items: [], readSkill: async () => "" }} />); type("/");
   expect(screen.queryByRole("option", { name: /\/exec/ })).toBeNull();
-  expect(screen.getByText("Selecione uma pasta para usar ferramentas")).toBeTruthy();
+  expect(screen.getByText("Choose a folder to use tools.")).toBeTruthy();
 });

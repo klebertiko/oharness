@@ -21,7 +21,7 @@ Uma revisão independente identificou menu móvel permanecendo aberto ao ampliar
 
 - Implementação YAML no desktop e fidelidade do roundtrip: plano em `../docs/product/ohm-yaml-migration.md`.
 - Contrato de ciclos no motor: entrega separada no mesmo plano.
-- Publicado no GitHub Pages em 11/09/2026: `https://klebertiko.github.io/OpenHarness/`, com inglês em `/en/`, HTTPS e canonical/hreflang. Uma imagem social dedicada e um domínio próprio continuam opcionais.
+- Publicado no GitHub Pages em 11/09/2026: `https://klebertiko.github.io/OHarness/`, com inglês em `/en/`, HTTPS e canonical/hreflang. Uma imagem social dedicada e um domínio próprio continuam opcionais.
 
 O produto é mostrado em desenvolvimento, sem alegações de release, licença geral, métricas de adoção ou compatibilidade universal.
 

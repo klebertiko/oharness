@@ -23,7 +23,7 @@ export function RunDetailToggle({
       onClick={onToggle}
       aria-expanded={open}
       aria-controls={controlsId}
-      className="self-start rounded-control text-[12px] text-ink-faint underline-offset-2 hover:text-ink-mute hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
+      className="self-start rounded-control text-body text-ink-mute underline-offset-2 hover:text-ink-mute hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
     >
       {open ? "Hide run detail" : "Show run detail"}
     </button>

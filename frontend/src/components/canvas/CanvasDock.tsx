@@ -41,8 +41,8 @@ function DockButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-[24px] w-[26px] place-items-center transition-colors hover:bg-sub-300 disabled:pointer-events-none disabled:opacity-30 ${
-        active ? "bg-sub-400 text-signal" : "text-ink-mute hover:text-ink"
+      className={`oh-focus-inner grid h-6 w-7 place-items-center transition-colors hover:bg-sub-300 disabled:pointer-events-none disabled:opacity-30 ${
+        active ? "bg-sub-400 text-signal-text" : "text-ink-mute hover:text-ink"
       }`}
     >
       <Icon size={13} strokeWidth={1.6} absoluteStrokeWidth />
@@ -82,17 +82,18 @@ export function CanvasDock({ snap, onSnap, locked, onLock, panMode, onPanMode }:
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-[10px] z-10 flex justify-center">
-      <div className="oh-float pointer-events-auto flex h-[26px] items-stretch overflow-hidden">
+      <div className="oh-float pointer-events-auto flex h-7 items-stretch overflow-hidden">
         <DockButton icon={Minus} label="Zoom out" onClick={() => zoomOut({ duration: 140 })} />
         <button
           type="button"
           title="Reset zoom to 100%"
+          aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`}
           onClick={() => {
             zoomTo(1, { duration: 140 });
             setFlash(true);
           }}
-          className={`t-meta grid w-[46px] place-items-center border-x border-line-soft transition-colors hover:bg-sub-300 hover:text-ink ${
-            flash ? "text-signal" : "text-ink-dim"
+          className={`oh-focus-inner t-meta grid w-[46px] place-items-center border-x border-line-soft transition-colors hover:bg-sub-300 hover:text-ink ${
+            flash ? "text-signal-text" : "text-ink-dim"
           }`}
         >
           {Math.round(zoom * 100)}%

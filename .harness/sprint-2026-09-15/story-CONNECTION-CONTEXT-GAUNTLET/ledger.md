@@ -10,7 +10,7 @@ Progress page (live, updates after every verdict): https://claude.ai/artifact/Rj
 ## Coordination check (done first, per task brief)
 
 Read `story-FE-CONNECTION-EVIDENCE/ledger.md`+`story.md`, `story-PROVIDER-VERIFY-BUDGET/ledger.md`,
-and `handoffs/2026-09-15-openharness-ajustes-codex-para-sonnet.md` before touching anything.
+and `handoffs/2026-09-15-oharness-ajustes-codex-para-sonnet.md` before touching anything.
 
 `git status` (245 changed paths) + file mtimes at recon time (now ≈2026-09-16 02:57 UTC):
 - **Hot (≤35 min old — do not touch, owned by the concurrent FE-CONNECTION-EVIDENCE/
@@ -210,7 +210,7 @@ was not achievable — this session's browser tool has no working region-crop (`
 necessarily learns which is which by construction. Mitigation used: each critic was told to judge
 only the specific control in question and disregard any branding/URL it noticed. Weaker than real
 blinding; noted so nobody over-trusts these verdicts as fully rigorous. The upside: in round 1
-below, the critic's own free-text reasoning shows it *did* know which side was "OpenHarness" vs
+below, the critic's own free-text reasoning shows it *did* know which side was "OHarness" vs
 "Cursor" — and picked ours anyway, on a concrete, checkable functional gap in the other side. If
 anything, unblinded bias would be expected to favor the established product, not the local build,
 so a same-direction result gives some confidence despite the weaker method.
@@ -302,7 +302,7 @@ breakdown remain entirely unstarted — no builder dispatched for either yet.
 ## 2026-09-17 — Sonnet resumes as lead, dispatches pieces 2 and 4
 
 Resumed per a fresh task brief. Re-read this ledger, the progress-page Artifact, and
-`handoffs/2026-09-17-openharness-next-work-studio-automate-workspace.md` section 3 (the
+`handoffs/2026-09-17-oharness-next-work-studio-automate-workspace.md` section 3 (the
 real, separate user complaint about the dropdown's ambiguous "setup" vocabulary — screenshot
 `Captura de tela 2026-09-13 031143.png`, opened directly, confirms the complaint: every
 option's second line reads generic "setup" including under the active/checked one, and
@@ -442,7 +442,7 @@ verdict never landed anywhere — genuinely orphaned/lost to the same session de
 unlogged.** Per instruction, did not attempt to message that agent (it was the dead lead's own
 subagent, not this session's). Dispatched a fresh replacement instead: `p2-critic-r1b`
 (general-purpose, background, browser tools), told to re-fetch Cursor's dropdown live today and
-judge only the OpenHarness dropdown's row-list state-coding (6 tones: verified/unverified/
+judge only the OHarness dropdown's row-list state-coding (6 tones: verified/unverified/
 checking/attention/failing/unconfigured) against it, same tie-favors-the-bar and blinding-caveat
 rules as every prior round in this story. Verdict to be logged here when it lands, not assumed.
 
@@ -499,7 +499,7 @@ GAP: Side A's (Cursor's) expanded model menu is a flat, purely textual list — 
 identical color/shape, with zero icons, dots, or animation to signal anything at a glance.
 EVIDENCE: Live DOM inspection of Cursor's open role="menu" (7 menuitems) found 0 <svg>, 0 <img>,
 0 circular/dot elements in any row; all text the same color, varying only by CSS opacity (1 /
-0.6 / 0.4) plus one "✓" glyph on the active row. OpenHarness's open "Chat provider" listbox
+0.6 / 0.4) plus one "✓" glyph on the active row. OHarness's open "Chat provider" listbox
 gives every row a dedicated 6×6px status dot with distinct treatments confirmed live: solid
 filled circle for "Not verified" vs. a hollow unfilled ring for the disabled "Not connected"
 row — real shape-coding Side A has none of.
@@ -594,7 +594,7 @@ dispatching this critic. The critic itself finished cleanly and reported directl
 ```
 WINNER: A (DeepSeek Harness)
 GAP: DeepSeek Harness's Token Meter discloses a typed `baseline.kind: 'usage' | 'estimated'`
-on every measurement, while OpenHarness's rollup silently prefers the backend-measured total
+on every measurement, while OHarness's rollup silently prefers the backend-measured total
 over the live tick with no on-screen or typed signal of which source produced the number
 currently shown.
 EVIDENCE: `docs/subsystems/token-meter.md` (fetched fresh) defines
@@ -607,7 +607,7 @@ showed `—`/`0`/`0/9` with no measured-vs-live indicator anywhere.
 Critic verified live (not just by reading code): re-fetched DSH's docs fresh via `gh api`,
 additionally pulled GitHub Discussion #1530 to confirm "dashboards aren't core DSH" still holds
 (#1530 is a still-open request asking DSH to adopt a third-party token-dashboard plugin — so the
-per-step legible-table advantage OpenHarness ships by default really is a genuine win on the
+per-step legible-table advantage OHarness ships by default really is a genuine win on the
 *other* dimension). Sent a real chat message against the live dev server; the run failed almost
 immediately on a local CLI error (unrelated sandbox flakiness, not a Transcript defect) and the
 critic used that real failure state as evidence rather than discarding it — rollup correctly
@@ -684,7 +684,7 @@ third-party, still unmerged.
 
 ```
 WINNER: B (ours)
-GAP: None outstanding on the round-1 gap. Round 1's GAP was: "OpenHarness's rollup silently
+GAP: None outstanding on the round-1 gap. Round 1's GAP was: "OHarness's rollup silently
 prefers the backend-measured total over the live tick with no on-screen or typed signal of which
 source produced the number currently shown." Both halves are now closed: `RollupTotals.source`
 is a typed `"measured" | "estimated"` field (parity with DSH's typed `baseline.kind`), and
@@ -697,7 +697,7 @@ attribution table vs. DSH's docs-only Session Log description), both dimensions 
 EVIDENCE: `docs/subsystems/token-meter.md` (fetched fresh today) types `baseline.kind: 'usage' |
 'estimated'` but the repo's own Discussion #1530 (fetched fresh today, `state: "open"`) shows a
 third party proposing to upstream the *only* token-usage dashboard that exists for DSH, still
-unmerged. OpenHarness's `rollup.ts` types the same measured/estimated distinction
+unmerged. OHarness's `rollup.ts` types the same measured/estimated distinction
 (`RollupSource`) AND `Transcript.tsx`'s `RunRollup` renders it on screen — confirmed both by
 17/17 passing unit tests (including two tests that assert the *other* label is absent, and one
 that asserts the label flips on rerender) and by a live browser session against a real running
@@ -708,4 +708,4 @@ never-fabricate-zero contract on elapsed.
 
 **Piece 4 exits WON.** Score: **4/4 pieces won** (chip, thinking indicator, dropdown, trajectory
 breakdown). This closes the CONNECTION-CONTEXT-GAUNTLET story's gauntlet-loop — all 4 pieces now
-have a blind, fresh-context critic verdict on record picking OpenHarness over its fetched bar.
+have a blind, fresh-context critic verdict on record picking OHarness over its fetched bar.

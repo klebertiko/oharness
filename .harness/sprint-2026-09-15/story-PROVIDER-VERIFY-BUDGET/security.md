@@ -310,7 +310,7 @@ reading their names for coverage gaps, and no reading of `qa.md` (independence).
   only source modules, tests and docs — no tracked `.env` or credential file. `.gitignore` covers
   `frontend/.env.local:8`, `backend/data/:16`, `backend/.env:17`, `frontend/.next/:7`, so neither the SQLite
   ledger (which now holds usage rows) nor the baked dev token can be committed. The sidecar token itself lives
-  outside the checkout at `%LOCALAPPDATA%/OpenHarness/sidecar.token` (`security/sidecar_token.py:52`).
+  outside the checkout at `%LOCALAPPDATA%/OHarness/sidecar.token` (`security/sidecar_token.py:52`).
 - Gitleaks/trufflehog are not installed on this machine. This was a bounded pattern scan plus manual review, not
   a claim of exhaustive secret detection.
 

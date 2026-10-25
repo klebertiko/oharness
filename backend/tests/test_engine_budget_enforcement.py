@@ -76,7 +76,7 @@ def _connections() -> dict[str, dict]:
             "residence": "cloud",
             "endpoint": "https://api.anthropic.com",
             "enabled": True,
-            "secretRef": "openharness/anthropic",
+            "secretRef": "oharness/anthropic",  # gitleaks:allow
         },
         "ollama-local": {
             "id": "ollama-local",
@@ -122,7 +122,7 @@ def _run(
     stub = _RecordingAdapter(tokens)
     monkeypatch.setattr("providers.resolution.get_adapter", lambda name: stub)
     store = MemorySecrets()
-    store.put("openharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/anthropic", "sk-ant-REAL")
 
     async def collect() -> list[str]:
         control = RunControl("t")

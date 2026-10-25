@@ -1,4 +1,4 @@
-# Threat model — Chat Tools Broker (OpenHarness)
+# Threat model — Chat Tools Broker (OHarness)
 
 Data: 2026-09-18 · Autor: Claude (ARCH + SEC inline) · Revisão SEC fresh-context: **pendente** (reset 20/09)
 Escopo: os endpoints e o loop que deixam o assistente do chat (adapters HTTP/OpenAI-compatível como

@@ -1,9 +1,9 @@
 
-> openharness@0.1.0 test
+> oharness@0.1.0 test
 > vitest run src/components/toolbar/Toolbar.modes.test.tsx
 
 
- RUN  v3.2.7 D:/Development/src/OpenHarness/frontend
+ RUN  v3.2.7 D:/Development/src/OHarness/frontend
 
  ✓ src/components/toolbar/Toolbar.modes.test.tsx (2 tests) 75ms
 

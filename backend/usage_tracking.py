@@ -134,7 +134,7 @@ async def record_usage(
     if call_id is not None:
         if not call_id.strip():
             raise ValueError("call_id must be nonempty when supplied")
-        row.id = str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(["openharness-usage", run_id, call_id])))
+        row.id = str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(["oharness-usage", run_id, call_id])))
     db.add(row)
     try:
         await db.commit()

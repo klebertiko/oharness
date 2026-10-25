@@ -2,7 +2,9 @@ name: OWASP Dependency-Check
 
 on:
   schedule:
-    - cron: "7 2 * * 0"
+    # Twice a week: GitHub evicts caches unused for 7 days, and a weekly run
+    # would lose the NVD cache right at that edge.
+    - cron: "7 2 * * 0,3"
   workflow_dispatch:
 
 permissions:
@@ -12,27 +14,53 @@ jobs:
   scan:
     name: Full dependency scan
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The first run with no cache downloads the whole NVD feed; without an
+    # NVD_API_KEY the API is rate limited, so that can take well over an hour.
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Run OWASP Dependency-Check 12.1.8
+      # The NVD database persists between runs, so each run only fetches what
+      # changed since the last one. NVD_API_KEY is optional: it only speeds
+      # the download up.
+      - name: Restore NVD database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dependency-check-data
+          key: owasp-nvd-${{ github.run_id }}
+          restore-keys: owasp-nvd-
+      - name: Update NVD database
+        id: update
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           set -euo pipefail
-          mkdir -p reports dependency-check-data
+          mkdir -p dependency-check-data
           nvd_args=()
           if [[ -n "${NVD_API_KEY}" ]]; then nvd_args=(--nvdApiKey "${NVD_API_KEY}"); fi
+          docker run --rm \
+            -v "$PWD/dependency-check-data:/usr/share/dependency-check/data" \
+            owasp/dependency-check@sha256:f213d2be6c6027571876741cc92f0ccd22fcbe3e51c6b47df1f9dae7b687154e \
+            --updateonly "${nvd_args[@]}"
+      - name: Save NVD database
+        if: steps.update.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dependency-check-data
+          key: owasp-nvd-${{ github.run_id }}
+      - name: Run OWASP Dependency-Check 12.1.8
+        run: |
+          set -euo pipefail
+          mkdir -p reports
           docker run --rm \
             -v "$PWD:/src:ro" \
             -v "$PWD/reports:/report" \
             -v "$PWD/dependency-check-data:/usr/share/dependency-check/data" \
             owasp/dependency-check@sha256:f213d2be6c6027571876741cc92f0ccd22fcbe3e51c6b47df1f9dae7b687154e \
-            --scan /src --out /report --format ALL --project OpenHarness \
-            --failOnCVSS 7 --enableExperimental "${nvd_args[@]}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            --scan /src --out /report --format ALL --project OHarness \
+            --failOnCVSS 7 --enableExperimental --noupdate
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: owasp-dependency-check

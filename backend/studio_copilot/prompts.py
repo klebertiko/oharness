@@ -121,7 +121,7 @@ def _catalogue_lines() -> list[str]:
 def plan_system_prompt() -> str:
     return "\n\n".join(
         [
-            "You edit OpenHarness harness graphs. Reply with one JSON object only, no prose outside it.",
+            "You edit OHarness harness graphs. Reply with one JSON object only, no prose outside it.",
             _VOCABULARY,
             "Allowed types: " + ", ".join(catalog.node_types()) + "\n" + "\n".join(_catalogue_lines()),
             _WIRING,
@@ -178,7 +178,7 @@ def assist_system_prompt(field: str, node_type: str, action: str) -> str:
     guide = _FIELD_GUIDE.get((field, node_type)) or _FIELD_GUIDE.get((field, "agent"), "")
     return "\n\n".join(
         [
-            "You write configuration text for one block of an OpenHarness graph. Reply with one JSON object only, no prose outside it.",
+            "You write configuration text for one block of an OHarness graph. Reply with one JSON object only, no prose outside it.",
             guide,
             _ACTION_GUIDE[action],
             f'Reply shape: {{"text": string or null, "notes": array of at most 5 short strings}}. text is at most {_FIELD_LIMIT[field]} characters. Never include secrets, credentials or commands.',

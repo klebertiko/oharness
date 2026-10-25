@@ -6,7 +6,7 @@
  *
  * Preference order:
  *   1. `window.__OH_API__` — injected by the Tauri shell at startup
- *   2. `NEXT_PUBLIC_API_URL` / `OPENHARNESS_BACKEND_URL` (build-time / env)
+ *   2. `NEXT_PUBLIC_API_URL` / `OHARNESS_BACKEND_URL` (build-time / env)
  *   3. Default sidecar loopback (`http://127.0.0.1:8000`)
  */
 
@@ -32,6 +32,8 @@ export function apiBase(): string {
 
   const env =
     process.env.NEXT_PUBLIC_API_URL?.trim() ||
+    process.env.OHARNESS_BACKEND_URL?.trim() ||
+    // Legacy name from before the OHarness rebrand.
     process.env.OPENHARNESS_BACKEND_URL?.trim();
   if (env) return stripTrailingSlash(env);
 

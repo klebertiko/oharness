@@ -99,7 +99,7 @@ it("shows no route, tie-break or request preview the app never sends (F6)", () =
   expect(screen.queryByText(/tie-break/i)).toBeNull();
   expect(screen.queryByText(/chat\/completions/)).toBeNull();
   expect(screen.queryByRole("heading", { name: "Route" })).toBeNull();
-  expect(screen.getByText(/from the openharness catalog/i)).toBeTruthy();
+  expect(screen.getByText(/from the oharness catalog/i)).toBeTruthy();
 });
 
 it("renders no dead buttons on an agent-only connection (F11)", () => {
@@ -114,7 +114,7 @@ it("Remove key that the sidecar refused keeps the key and says so (F10)", async 
   show(connection({
     id: "openrouter", provider: "openrouter", label: "OpenRouter", residence: "cloud", endpoint: "https://openrouter.ai/api/v1",
     defaultModel: "deepseek/deepseek-v4",
-    secret: { service: "openharness/openrouter", prefix: "sk-or-", tail: "9f3a", length: 40, vault: "backend", savedAt: "" },
+    secret: { service: "oharness/openrouter", prefix: "sk-or-", tail: "9f3a", length: 40, vault: "backend", savedAt: "" },
   }), { revokeSecret });
   await user.click(screen.getByRole("button", { name: /remove/i }));
   expect(revokeSecret).toHaveBeenCalledWith("openrouter");

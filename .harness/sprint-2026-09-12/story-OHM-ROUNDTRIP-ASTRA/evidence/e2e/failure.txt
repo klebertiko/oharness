@@ -2,5 +2,5 @@ locator.click: Timeout 30000ms exceeded.
 Call log:
 [2m  - waiting for getByRole('button', { name: 'Studio', exact: true })[22m
 
-    at D:\Development\src\OpenHarness\frontend\scripts\e2e-ohm-roundtrip.mjs:60:67
+    at D:\Development\src\OHarness\frontend\scripts\e2e-ohm-roundtrip.mjs:60:67
 Page errors: []

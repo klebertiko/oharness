@@ -42,7 +42,7 @@ export async function saveOhmFile(bundle: OHarnessBundle, suggestedName?: string
   try {
     chosen = await save({
       defaultPath: name,
-      filters: [{ name: "OpenHarness", extensions: ["ohm"] }],
+      filters: [{ name: "OHarness", extensions: ["ohm"] }],
     });
   } catch (error) {
     throw new Error(`Could not open the Save dialog: ${reason(error)}`);

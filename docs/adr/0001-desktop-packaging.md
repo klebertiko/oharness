@@ -7,7 +7,7 @@
 
 ## Context
 
-OpenHarness is becoming a desktop application: a canvas where a person wires an
+OHarness is becoming a desktop application: a canvas where a person wires an
 agent harness, plus interactive coding-agent behaviour driven by that harness.
 It runs on the user's own provider subscriptions — Anthropic, Cursor, OpenAI,
 OpenRouter, Ollama (local and cloud).
@@ -38,7 +38,7 @@ Tauri window; supervise the FastAPI backend as a Tauri sidecar process.
 Electron is the obvious counter-proposal and it is not a weak one. It is what
 VS Code and Cursor ship, its multi-window and detachable-panel story is mature,
 and its bundled Node runtime makes spawning local agent processes trivial. If
-OpenHarness had no backend process, Electron would probably win on the strength
+OHarness had no backend process, Electron would probably win on the strength
 of that last point alone.
 
 It does have a backend process. That removes Electron's biggest advantage and

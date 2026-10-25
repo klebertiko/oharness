@@ -86,7 +86,7 @@ _ENGAGE_HARNESS_TOKEN = "<<ENGAGE_HARNESS>>"
 _LAYA_LOOPBACK_DEFAULT_PORT = 8761
 _LAYA_TIMEOUT_S = 0.75
 _LAYA_CONFIDENCE_THRESHOLD = 0.80
-_LAYA_SCHEMA_VERSION = "openharness-decision-node-v1"
+_LAYA_SCHEMA_VERSION = "oharness-decision-node-v1"
 
 _INTAKE_PROMPT = f"""If this message asks the crew to build, plan, investigate, fix, review, or change something, reply with these exact characters and nothing else, no punctuation, no explanation:
 {_ENGAGE_HARNESS_TOKEN}
