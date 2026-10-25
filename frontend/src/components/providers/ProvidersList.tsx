@@ -153,7 +153,7 @@ function BudgetStrip() {
       {loading && !summary && <p role="status" className="t-body text-ink-mute">Loading usage…</p>}
       {error && (
         <Notice tone="warn" role="alert" className="mt-2">
-          Usage may be out of date. <span className="t-meta [overflow-wrap:anywhere]">{error}</span>
+          Usage may be out of date. <span className="t-meta wrap-anywhere">{error}</span>
         </Notice>
       )}
       {editing ? (
@@ -170,7 +170,7 @@ function BudgetStrip() {
               if (e.key === "Escape") setEditing(false);
             }}
             placeholder="no limit"
-            className="t-meta h-control-md w-full min-w-0 rounded-control border border-line-strong bg-sub-200 px-1.5 text-ink focus-visible:border-signal aria-[invalid=true]:border-fault max-sm:h-control-lg"
+            className="t-meta h-control-md w-full min-w-0 rounded-control border border-line-strong bg-sub-200 px-1.5 text-ink focus-visible:border-signal aria-invalid:border-fault max-sm:h-control-lg"
           />
           <Button size="sm" variant="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</Button>
           <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>

@@ -307,7 +307,7 @@ function Row({ k, v }: { k: string; v: string }) {
   return (
     <>
       <dt className="t-body text-ink-mute">{k}</dt>
-      <dd className="t-meta text-ink-dim [overflow-wrap:anywhere]">{v}</dd>
+      <dd className="t-meta text-ink-dim wrap-anywhere">{v}</dd>
     </>
   );
 }

@@ -1,9 +1,10 @@
 const english = document.documentElement.lang === 'en-US';
 const messages = {
-  agent: ['O agente tem um papel, instruções e um provedor. O harness define como esse trabalho se conecta ao restante.', 'An agent has a role, instructions, and a provider. The harness defines how its work connects to the rest.'],
+  agent: ['O agente tem um papel, instruções e, se você quiser, provedores vinculados. O harness define como esse trabalho se conecta ao restante.', 'An agent has a role, instructions, and, if you choose, bound providers. The harness defines how its work connects to the rest.'],
   skill: ['A skill reúne conhecimento para uma tarefa: revisar código, desenhar uma interface ou investigar um problema. Ela orienta quem executa.', 'A skill brings together knowledge for a task: reviewing code, designing an interface, or investigating a problem. It guides the agent doing the work.'],
   gate: ['O gate é um checkpoint com critérios explícitos. Ele descreve quando o trabalho pode seguir e quando precisa voltar para revisão.', 'A gate is a checkpoint with explicit criteria. It describes when work can move forward and when it needs another review.'],
   human: ['A autoridade humana faz parte do desenho. Você define onde a automação deve parar para uma decisão sua.', 'Human authority is part of the design. You decide where automation must stop for your input.'],
+  zoomRun: ['Execução simulada', 'Mock run'],
   copied: ['Copiado', 'Copied'],
   copyFallback: ['Selecione o código para copiar', 'Select the code to copy'],
   greeting: ['Um olá do Nilo.', 'A hello from Nilo.'],

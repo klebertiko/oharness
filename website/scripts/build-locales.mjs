@@ -1,18 +1,19 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const publicUrl = 'https://klebertiko.github.io/OHarness/';
+const publicUrl = 'https://klebertiko.github.io/oharness/';
 const catalog = JSON.parse(await readFile(new URL('locales/en-US.json', root), 'utf8'));
-const neutral = new Set(['OHarness', 'Manifesto', 'manifesto', 'Menu', 'Skill', 'Gate', 'Harness Studio', 'Chats', 'Automate', 'Pull requests', 'OHarness Model', 'OHARNESS MODEL', 'YAML', 'manifest + graph', 'content', 'runtime + validation', 'AGENTS.md', 'Agent Skills', 'MCP', 'A2A', 'OHarness desktop', 'schemaVersion', 'manifest', 'graph', 'nodes', 'edges', 'runtime', 'validation', 'license', 'hello.ohm', '.ohm', '.oharness', 'Manifesto ↗', 'Manifesto — OHarness', 'Harness Model.']);
+const neutral = new Set(['OHarness', 'Manifesto', 'manifesto', 'Menu', 'Skill', 'Gate', 'Harness Studio', 'Chats', 'OHarness Model', 'OHARNESS MODEL', 'YAML', 'manifest + graph', 'content', 'runtime + validation', 'AGENTS.md', 'Agent Skills', 'MCP', 'A2A', 'OHarness desktop', 'schemaVersion', 'manifest', 'graph', 'nodes', 'edges', 'runtime', 'validation', 'license', 'hello.ohm', '.ohm', '.oharness', 'Manifesto ↗', 'Manifesto — OHarness', 'OHarness Model.']);
 const missing = new Set();
 const htmlEscapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const escape = text => text.replace(/[&<>"]/g, character => htmlEscapes[character]);
 
 function translate(text) {
-  const key = text.trim();
+  const raw = text.trim();
+  const key = raw.replaceAll('\r\n', '\n');
   if (!key || !/\p{L}/u.test(key) || neutral.has(key)) return text;
   if (!Object.hasOwn(catalog, key)) { missing.add(key); return text; }
-  return text.replace(key, escape(catalog[key]));
+  return text.replace(raw, escape(catalog[key]));
 }
 
 function stripLocaleMarkup(html) {
@@ -66,7 +67,7 @@ function decorate(html, file, english) {
 
 const yaml = (await readFile(new URL('examples/hello.ohm', root), 'utf8'))
   .replace('OHM em YAML 1.2 — contrato declarativo.', 'OHM in YAML 1.2 — declarative contract.')
-  .replace('Exemplo mínimo do OHarness Model.', 'Minimal OHarness Model example.')
+  .replace('Documento mínimo do OHarness Model.', 'Minimal OHarness Model document.')
   .replace('objetivo:', 'objective:')
   .replace('Descreva o objetivo do trabalho.', 'Describe the objective of the work.')
   .replace('Defina as evidências para aceitar o resultado.', 'Define the evidence required to accept the result.');

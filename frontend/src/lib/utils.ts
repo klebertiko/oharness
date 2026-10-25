@@ -8,7 +8,7 @@ const twMerge = extendTailwindMerge({
   extend: {
     theme: {
       spacing: ["control-sm", "control-md", "control-lg", "titlebar", "statusbar", "panelhead", "rail"],
-      borderRadius: ["control", "panel", "float", "composer", "hero"],
+      radius: ["control", "panel", "float", "composer", "hero"],
     },
     classGroups: {
       "font-size": [{ text: ["meta", "label", "body", "title", "reading", "code", "display"] }],

@@ -193,7 +193,7 @@ export function StudioActionsBar() {
             autoFocus
             onChange={(e) => setCopyName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") setPending(null); }}
-            className="h-control-md min-w-[12rem] max-w-[320px] flex-1 rounded-control border border-line-strong bg-sub-200 px-2 text-title text-ink focus-visible:border-signal max-sm:h-control-lg"
+            className="h-control-md min-w-48 max-w-[320px] flex-1 rounded-control border border-line-strong bg-sub-200 px-2 text-title text-ink focus-visible:border-signal max-sm:h-control-lg"
           />
           <Button type="submit" variant="primary" disabled={busy || !copyName.trim()}>Save copy</Button>
           <Button variant="ghost" onClick={() => setPending(null)}>Cancel</Button>
@@ -209,7 +209,7 @@ export function StudioActionsBar() {
           onKeyDown={(e) => { if (e.key === "Escape") setPending(null); }}
           className="flex flex-wrap items-center gap-3 border-t border-line-soft px-3 py-2"
         >
-          <p className="min-w-0 flex-1 text-title text-ink [overflow-wrap:anywhere]">
+          <p className="min-w-0 flex-1 text-title text-ink wrap-anywhere">
             {pending === "discard"
               ? origin === "saved"
                 ? `Discard the changes to “${harnessMeta.name}” and go back to the saved version?`
