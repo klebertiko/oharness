@@ -34,12 +34,12 @@ class Planter(threading.Thread):
             try:
                 make_dir_link(self.where, self.target)
             except (OSError, pytest.skip.Exception):
-                pass
+                pass  # the toggler races the service on purpose; losing a toggle (or no link support) is expected
             time.sleep(self.on)
             try:
                 remove_dir_link(self.where)
             except OSError:
-                pass
+                pass  # the link may already be gone: the service removed it first, which is the race under test
             time.sleep(self.off)
 
     def finish(self):
@@ -48,7 +48,7 @@ class Planter(threading.Thread):
         try:
             remove_dir_link(self.where)
         except OSError:
-            pass
+            pass  # cleanup only: nothing to remove if the last toggle left no link
 
 
 @pytest.mark.parametrize("place", ["worktree", "admin"])
