@@ -5,7 +5,7 @@ export type PanelVariant = "panel" | "float" | "inset";
 
 const VARIANT: Record<PanelVariant, string> = {
   panel: "rounded-panel border border-line-soft bg-sub-100 shadow-[inset_0_1px_0_var(--surface-highlight)]",
-  float: "rounded-float border border-line bg-sub-100 shadow-[var(--shadow-float)]",
+  float: "rounded-float border border-line bg-sub-100 shadow-(--shadow-float)",
   inset: "rounded-control border border-line-soft bg-sub-200",
 };
 

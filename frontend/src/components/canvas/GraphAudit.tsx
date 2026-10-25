@@ -94,7 +94,7 @@ export function GraphAudit() {
           key={f.nodeId}
           type="button"
           onClick={() => reveal(f.nodeId)}
-          className="oh-float oh-focus-inner pointer-events-auto flex min-h-control-md w-full items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-sub-200"
+          className="oh-float oh-focus-inner pointer-events-auto flex min-h-control-md w-full items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-sub-200!"
         >
           <span className="t-body flex-1 truncate text-ink-dim">{f.label}</span>
           <span className="t-meta flex-none text-warn-text">{f.note}</span>

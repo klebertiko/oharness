@@ -4,7 +4,7 @@ The design reference for every surface of the app. Tokens are the single vocabul
 
 | File | What it is |
 | --- | --- |
-| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 58 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and `tailwind.config.ts`. |
+| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 58 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and the `--text-*` scale in the `@theme` block of `globals.css`. |
 | `README.md` | This brand book: content, visual foundations, iconography, layout, contrast audit. |
 | `experience.md` | The experience contract: no flicker, shift or lag; findable and legible; honest and reversible. |
 | `brand.md` | Nilo: identity, style lock, animation language, where she may appear. |

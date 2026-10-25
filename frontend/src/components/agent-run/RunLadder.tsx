@@ -45,7 +45,7 @@ export function RunLadder({ run }: { run: RunState }) {
 
       <div className="mt-1.5 flex items-baseline gap-2">
         <span
-          className="h-[9px] w-[2px] flex-none translate-y-[1px] rounded-none"
+          className="h-[9px] w-[2px] flex-none translate-y-px rounded-none"
           style={{ background: active ? ROLE_VAR[active.type] : "var(--ink-faint)" }}
           aria-hidden
         />

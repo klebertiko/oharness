@@ -39,7 +39,7 @@ Done: tokens in DTCG format, the brand book, the experience contract, the Nilo r
 
 Still open:
 
-1. The Tailwind 4 `@theme` migration (#120) and Biome (#119): not a prerequisite for any of this work. When #120 lands, update the `css` mapping in `tokens.json` and the parser's block selectors in `scripts/design-tokens.mjs` to the `@theme` names; `tailwind.config.ts` in this branch (colours `*.text`, `line.strong`, `control-*` spacing, radii, durations) needs the same move into `@theme`.
+1. The Tailwind 4 `@theme` migration (#120) and Biome (#119): done. The type scale, spacing, radii and colours now live in the `@theme` block of `globals.css`, and `scripts/design-tokens.mjs` checks the `.t-*` roles against `--text-*` there.
 2. `latin-ext` for the two faces, when a locale needs it.
 3. Playwright pixel snapshots of `/dev/design-system` in both themes.
 4. Decide with the providers owners whether the Providers screen should open on the first provider rather than OpenRouter (`providerStore.selectedId`).

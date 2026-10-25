@@ -39,7 +39,7 @@ export function ProposalCard({ turnId, proposal }: { turnId: string; proposal: P
           const body = (
             <>
               <span aria-hidden className="t-meta w-3 flex-none text-center text-ink-mute">{line.glyph}</span>
-              <span className="t-body min-w-0 flex-1 break-words text-ink-dim">{line.text}</span>
+              <span className="t-body min-w-0 flex-1 wrap-break-word text-ink-dim">{line.text}</span>
             </>
           );
           return (

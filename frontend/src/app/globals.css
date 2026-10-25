@@ -1,6 +1,111 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-sub-100: var(--sub-100);
+  --color-sub-200: var(--sub-200);
+  --color-sub-300: var(--sub-300);
+  --color-sub-400: var(--sub-400);
+  --color-sub-000: var(--sub-000);
+
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-mute: var(--ink-mute);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-signal: var(--signal);
+  --color-signal-deep: var(--signal-deep);
+  --color-signal-ink: var(--signal-ink);
+  --color-signal-text: var(--signal-text);
+
+  /* warn and fault are fills, markers and borders; their -text forms are the only way either colour reaches text. */
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-fault: var(--fault);
+  --color-fault-text: var(--fault-text);
+
+  --color-role-input: var(--role-input);
+  --color-role-llm: var(--role-llm);
+  --color-role-tool: var(--role-tool);
+  --color-role-evaluator: var(--role-evaluator);
+  --color-role-router: var(--role-router);
+  --color-role-hitl: var(--role-hitl);
+  --color-role-memory: var(--role-memory);
+  --color-role-aggregator: var(--role-aggregator);
+  --color-role-output: var(--role-output);
+
+
+  --text-meta: 11px;
+  --text-meta--line-height: 1.4;
+  --text-meta--letter-spacing: 0.02em;
+  --text-label: 10px;
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: 0.1em;
+  --text-body: 12px;
+  --text-body--line-height: 1.5;
+  --text-title: 13px;
+  --text-title--line-height: 1.3;
+  --text-title--letter-spacing: -0.004em;
+  --text-reading: 14px;
+  --text-reading--line-height: 1.6;
+  --text-code: 12px;
+  --text-code--line-height: 1.55;
+  --text-display: 20px;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.018em;
+
+  --spacing-titlebar: var(--h-titlebar);
+  --spacing-statusbar: var(--h-statusbar);
+  --spacing-panelhead: var(--h-panelhead);
+  --spacing-rail: var(--w-rail);
+  --spacing-control-sm: var(--control-sm);
+  --spacing-control-md: var(--control-md);
+  --spacing-control-lg: var(--control-lg);
+
+  --radius-control: var(--r-control);
+  --radius-panel: var(--r-panel);
+  --radius-float: var(--r-float);
+  --radius-composer: var(--r-composer);
+  --radius-hero: var(--r-hero);
+
+  --default-transition-duration: var(--duration-fast);
+
+  --default-transition-timing-function: var(--ease-standard);
+
+}
+
+/* `duration-*` has no theme namespace in Tailwind 4 and `--ease-enter` is already declared on :root (a theme
+   variable of the same name would reference itself): these keep `duration-base`, `duration-enter`, `ease-enter` working. */
+@utility duration-base {
+  transition-duration: var(--duration-base);
+}
+@utility duration-enter {
+  transition-duration: var(--duration-enter);
+}
+@utility ease-enter {
+  transition-timing-function: var(--ease-enter);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OHarness — design tokens
@@ -154,24 +259,9 @@
   box-sizing: border-box;
 }
 
-html,
-body,
-#__next {
-  height: 100%;
-  overflow-x: clip;
-}
 
-body {
-  margin: 0;
-  overflow: hidden;
-  background: var(--sub-000);
-  color: var(--ink);
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.45;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+
+
 
 @media (max-width: 640px) {
   .oh-navigation { width: 52px; }
@@ -279,11 +369,12 @@ body {
   border-inline-start: 2px solid color-mix(in oklab, var(--signal) 60%, var(--line));
 }
 
-/* Sheets: opacity and an 8px translate only. The individual `translate`
-   property leaves the centring `transform` alone. */
+/* Sheets: opacity and an 8px lift only. Tailwind 4 centres with the individual `translate`
+   property (-translate-x-1/2), so the animation uses `transform`, which composes with it;
+   animating `translate` here replaced the centring and pushed every sheet 280px right. */
 @keyframes oh-sheet-in {
-  from { opacity: 0; translate: 0 8px; }
-  to { opacity: 1; translate: 0 0; }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes oh-scrim-in {
   from { opacity: 0; }
@@ -422,13 +513,17 @@ body {
 /* ── Focus — one ring, signal-coloured, never removed. The outline follows
    each element's own border-radius; forcing a fixed radius here made the ring
    corners disagree with rounder controls. ─────────────────────────────────── */
-:focus-visible {
-  outline: 2px solid var(--signal);
-  outline-offset: 2px;
-}
+/* In @layer base on purpose: Tailwind 4 utilities are layered, and unlayered CSS beats every layer, so an
+   unlayered `:focus-visible` would defeat `focus-visible:outline-none` (which beat it by specificity in v3). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
 
-.oh-focus-inner:focus-visible {
-  outline-offset: -2px;
+  .oh-focus-inner:focus-visible {
+    outline-offset: -2px;
+  }
 }
 
 /* The composer shows focus on the whole 14px card, not the bare textarea, so
@@ -446,26 +541,11 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--sub-400) transparent;
 }
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--sub-400);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-faint);
-  background-clip: content-box;
-}
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
+
+
+
+
+
 
 /* ── Scroll rail — equal-height cards that snap, fade where more waits, and
    carry no scrollbar (the step buttons, the fade and the clipped next card say
@@ -496,17 +576,9 @@ body {
 .oh-rail > * { scroll-snap-align: start; }
 
 /* ── Native control resets ──────────────────────────────────────────────── */
-input,
-textarea,
-select,
-button {
-  font: inherit;
-  color: inherit;
-}
 
-select {
-  appearance: none;
-}
+
+
 
 input[type="range"] {
   appearance: none;
@@ -524,14 +596,9 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
 }
 
-::placeholder {
-  color: var(--ink-faint);
-}
 
-::selection {
-  background: color-mix(in oklab, var(--signal) 28%, transparent);
-  color: var(--ink);
-}
+
+
 
 /* ── xyflow, re-skinned to the token layer ──────────────────────────────────
    Selectors are doubled up (`.react-flow .react-flow__x`) on purpose: the
@@ -666,4 +733,84 @@ input[type="range"]::-webkit-slider-thumb {
   width: 33%;
   background: var(--signal);
   animation: oh-sweep 1.1s linear infinite;
+}
+
+/* ── Element and pseudo-element rules ─────────────────────────────────────
+   Tailwind 4 puts utilities in a cascade layer, and unlayered CSS beats every
+   layered rule regardless of specificity. These selectors are weaker than a
+   single class, so in Tailwind 3 any utility overrode them. Keeping them in
+   @layer base preserves that: `button { font: inherit }` must not beat
+   `font-[550]`. Class-selector rules above stay unlayered on purpose: they
+   won by source order before and still do. */
+@layer base {
+  html,
+  body,
+  #__next {
+    height: 100%;
+    overflow-x: clip;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--sub-000);
+    color: var(--ink);
+    font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--sub-400);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-faint);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  select {
+    appearance: none;
+  }
+
+  ::placeholder {
+    color: var(--ink-faint);
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--signal) 28%, transparent);
+    color: var(--ink);
+  }
+
+  /* Tailwind 3 preflight gave buttons a pointer cursor; Tailwind 4 does not. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
