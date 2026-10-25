@@ -134,6 +134,7 @@ class GitRunner:
             # the environment is rebuilt from an allowlist, stdin is closed and the call is time-bounded (killed with its process tree).
             # OpenGrep flags any non-literal subprocess argv (dangerous-subprocess-use-audit); this one suppression is the reviewed one
             # (two SEC reviews, ADR 0008); it is the only suppression in workspaces/.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
             proc = subprocess.Popen(argv, cwd=str(cwd), env=self._environment(env),  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
                                     stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, **options)
