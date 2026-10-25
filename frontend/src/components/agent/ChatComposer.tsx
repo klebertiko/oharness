@@ -144,7 +144,7 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !live) { event.preventDefault(); submit(); }
       }}
       placeholder={live ? "Waiting on this run. Stop it to send something new." : tools?.workspace ? `Ask OHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OHarness… Type / for commands and skills"}
-      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-none placeholder:text-ink-mute disabled:cursor-not-allowed disabled:opacity-60" />
+      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-hidden placeholder:text-ink-mute disabled:cursor-not-allowed disabled:opacity-60" />
     {permissionMode && onPermissionModeChange && <div className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
       <Segmented label="Permission mode" value={permissionMode} onChange={onPermissionModeChange}
         options={PERMISSION_MODES.map(mode => ({ value: mode, label: PERMISSION_LABEL[mode], hint: PERMISSION_HINT[mode], disabled: live }))} />
