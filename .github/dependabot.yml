@@ -30,12 +30,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/*"
         update-types: ["version-update:semver-major"]
-      # Majors below break the build (Tailwind 4 needs @tailwindcss/postcss,
-      # @types/node must track the Node 22 runtime) — migrate deliberately.
-      - dependency-name: tailwindcss
-        update-types: ["version-update:semver-major"]
-      - dependency-name: tailwind-merge
-        update-types: ["version-update:semver-major"]
+      # Majors below break the build (@types/node must track the Node 22 runtime) — migrate
+      # deliberately. Tailwind 4 is adopted, so its majors are no longer ignored.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
       # Vite 8 swaps esbuild for rolldown/oxc; vitest.config.ts uses esbuild.jsx.

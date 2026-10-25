@@ -329,10 +329,10 @@ function RegistrationMarks() {
   const base = "pointer-events-none absolute h-[8px] w-[8px] border-signal";
   return (
     <>
-      <span aria-hidden className={`${base} -left-[5px] -top-[5px] border-l border-t`} />
-      <span aria-hidden className={`${base} -right-[5px] -top-[5px] border-r border-t`} />
-      <span aria-hidden className={`${base} -bottom-[5px] -left-[5px] border-b border-l`} />
-      <span aria-hidden className={`${base} -bottom-[5px] -right-[5px] border-b border-r`} />
+      <span aria-hidden className={`${base} left-[-5px] top-[-5px] border-l border-t`} />
+      <span aria-hidden className={`${base} right-[-5px] top-[-5px] border-r border-t`} />
+      <span aria-hidden className={`${base} bottom-[-5px] left-[-5px] border-b border-l`} />
+      <span aria-hidden className={`${base} bottom-[-5px] right-[-5px] border-b border-r`} />
     </>
   );
 }

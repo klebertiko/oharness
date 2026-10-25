@@ -373,7 +373,7 @@ export function Combobox({
           const next = e.relatedTarget as Node | null;
           if (next && !e.currentTarget.contains(next) && next !== triggerRef.current && !inNestedPopover(popRef.current, next)) close(false);
         }}
-        className="oh-float fixed z-[60] flex flex-col py-1"
+        className="oh-float fixed z-60 flex flex-col py-1"
         style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
       >
         {header && <div className="flex-none px-3 py-2 text-meta leading-4 text-ink-mute">{header}</div>}
@@ -394,7 +394,7 @@ export function Combobox({
               autoComplete="off"
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onNavKeyDown}
-              className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-mute"
+              className="min-w-0 flex-1 bg-transparent text-body text-ink outline-hidden placeholder:text-ink-mute"
             />
           </div>
         )}

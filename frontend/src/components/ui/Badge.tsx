@@ -35,7 +35,7 @@ export function Badge({
     >
       <span
         aria-hidden
-        className={cn("h-2 w-2 flex-none rounded-none", role ? "bg-[var(--role)]" : t.dot)}
+        className={cn("h-2 w-2 flex-none rounded-none", role ? "bg-(--role)" : t.dot)}
         style={role ? ({ "--role": `var(--role-${role})` } as CSSProperties) : undefined}
       />
       {children}

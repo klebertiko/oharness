@@ -119,7 +119,7 @@ export function CoworkPanel() {
               type="checkbox"
               checked={harnessOverride}
               onChange={(e) => setHarnessOverride(e.target.checked)}
-              className="accent-[var(--signal)]"
+              className="accent-(--signal)"
             />
             Harness enabled for this project
           </label>

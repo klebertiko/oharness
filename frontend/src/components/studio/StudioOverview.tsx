@@ -19,7 +19,7 @@ import { ScrollRail } from "./ScrollRail";
 
 // One card for every rail in the overview: fixed width so a row of them reads as a rhythm,
 // equal height from the rail's stretch, long text wrapped or clamped instead of overflowing.
-const railCard = "flex w-[17rem] flex-none flex-col items-start gap-3 rounded-float border border-line bg-sub-100 p-4 [&_h3]:line-clamp-2 [&_h3]:[overflow-wrap:anywhere] [&_p]:[overflow-wrap:anywhere] [&_h3+p]:line-clamp-3";
+const railCard = "flex w-68 flex-none flex-col items-start gap-3 rounded-float border border-line bg-sub-100 p-4 [&_h3]:line-clamp-2 [&_h3]:wrap-anywhere [&_p]:wrap-anywhere [&_h3+p]:line-clamp-3";
 const PROMPT_LIMIT = 2000;
 const DRAFT_ROW = "__draft__";
 
@@ -36,10 +36,10 @@ function DocumentLine({ name, status, live }: { name: string; status: string; li
     <div className="flex w-full min-w-0 items-start gap-3">
       <FileText size={16} strokeWidth={1.6} aria-hidden className="mt-0.5 flex-none text-ink-mute" />
       <div className="min-w-0 flex-1">
-        <h3 title={name} className="t-title text-ink [overflow-wrap:anywhere]">{name}</h3>
+        <h3 title={name} className="t-title text-ink wrap-anywhere">{name}</h3>
         <div className="mt-1 flex items-start gap-1.5 text-body leading-5 text-ink-mute">
           {live && <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-signal" />}
-          <p title={status} className="min-w-0 line-clamp-3 [overflow-wrap:anywhere]">{status}</p>
+          <p title={status} className="min-w-0 line-clamp-3 wrap-anywhere">{status}</p>
         </div>
       </div>
     </div>
@@ -149,7 +149,7 @@ export function StudioOverview() {
       <div className="mx-auto w-full max-w-[1040px]">
         {COPILOT_ENABLED ? (
           <header className="max-w-[760px]">
-            <h1 id="studio-heading" className="t-display text-display text-ink [overflow-wrap:anywhere]">Harness Studio</h1>
+            <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">Harness Studio</h1>
             <p className="mt-2 text-title leading-6 text-ink-mute">Say what the harness should do. Nilo drafts the graph; you review every change.</p>
             <form onSubmit={(e) => void draftWithCopilot(e)} className="oh-agent-composer mt-5">
               <label htmlFor="studio-describe" className="sr-only">Describe the harness you want</label>
@@ -162,7 +162,7 @@ export function StudioOverview() {
                 rows={3}
                 placeholder="Describe the harness you want… e.g. research a topic, draft a brief, then a review gate before a person approves."
                 aria-describedby={copilotError ? "studio-describe-error" : undefined}
-                className="block min-h-[88px] w-full resize-y rounded-t-composer bg-transparent px-4 pb-2 pt-4 text-reading text-ink placeholder:text-ink-mute focus-visible:outline-none"
+                className="block min-h-[88px] w-full resize-y rounded-t-composer bg-transparent px-4 pb-2 pt-4 text-reading text-ink placeholder:text-ink-mute focus-visible:outline-hidden"
               />
               <div className="flex flex-wrap items-center gap-2 px-2.5 pb-2.5 pt-1">
                 <div className="flex flex-wrap gap-2">{newHarness}{openOhm}</div>
@@ -179,7 +179,7 @@ export function StudioOverview() {
         ) : (
           <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
             <div className="min-w-0 max-w-[560px]">
-              <h1 id="studio-heading" className="t-display text-display text-ink [overflow-wrap:anywhere]">Harness Studio</h1>
+              <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">Harness Studio</h1>
               <p className="mt-2 text-title leading-6 text-ink-mute">Design a workflow. Connect its agents. Share it as OHM.</p>
             </div>
             <div className="flex flex-wrap gap-2">{newHarness}{openOhm}</div>
@@ -201,7 +201,7 @@ export function StudioOverview() {
               </Notice>
             )}
             {rowError && <Notice tone="fault" className="mt-3">{rowError}</Notice>}
-            {!loaded && !listError && <SkeletonRows rows={1} label="Loading your harnesses" className="mt-4 [&>*]:h-[9.5rem] [&>*]:w-[17rem]" />}
+            {!loaded && !listError && <SkeletonRows rows={1} label="Loading your harnesses" className="mt-4 *:h-38 *:w-68" />}
             {loaded && !listError && !hasRows && (
               <EmptyState className="mt-4" title="Nothing saved yet">A new harness is saved here as soon as you edit it.</EmptyState>
             )}
@@ -212,7 +212,7 @@ export function StudioOverview() {
                     {confirmId === DRAFT_ROW ? (
                       <div role="group" aria-label={`Delete ${harnessMeta.name}`} className="flex w-full flex-col gap-3"
                         onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(DRAFT_ROW); }}>
-                        <p className="min-w-0 flex-1 text-title leading-6 text-ink [overflow-wrap:anywhere]">Delete the draft “{harnessMeta.name}”? It hasn’t been saved, so it’s gone for good.</p>
+                        <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">Delete the draft “{harnessMeta.name}”? It hasn’t been saved, so it’s gone for good.</p>
                         <div className="flex gap-2">
                           <Button autoFocus onClick={() => cancelDelete(DRAFT_ROW)}>Cancel</Button>
                           <Button variant="danger" onClick={() => void discardDraft()}>Delete</Button>
@@ -243,7 +243,7 @@ export function StudioOverview() {
                       {confirmId === item.id ? (
                         <div role="group" aria-label={`Delete ${item.name}`} className="flex w-full flex-col gap-3"
                           onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(item.id); }}>
-                          <p className="min-w-0 flex-1 text-title leading-6 text-ink [overflow-wrap:anywhere]">Delete “{item.name}” from this device? This can’t be undone.</p>
+                          <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">Delete “{item.name}” from this device? This can’t be undone.</p>
                           <div className="flex gap-2">
                             <Button autoFocus onClick={() => cancelDelete(item.id)}>Cancel</Button>
                             <Button variant="danger" onClick={() => void remove(item.id)}>Delete</Button>

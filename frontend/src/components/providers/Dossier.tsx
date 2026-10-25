@@ -179,7 +179,7 @@ export function Dossier() {
           <div className="flex min-w-0 flex-[1_1_16rem] items-start gap-3">
             <Monogram text={spec.monogram} live={readiness.verified} size="lg" />
             <div className="min-w-0">
-              <h1 className="t-display text-display text-ink [overflow-wrap:anywhere]">{c.label}</h1>
+              <h1 className="t-display text-display text-ink wrap-anywhere">{c.label}</h1>
               <p className="t-body mt-1 flex items-center gap-1.5" aria-live="polite">
                 <ToneDot tone={readiness.tone} />
                 <span className={`font-medium ${TONE_TEXT[readiness.tone]}`}>{readiness.label}</span>
@@ -208,7 +208,7 @@ export function Dossier() {
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="max-w-[880px] px-4 pb-10 [container-type:inline-size] sm:px-6">
+        <div className="max-w-[880px] px-4 pb-10 @container sm:px-6">
           {/* A not-ready connection leads with the block that makes it ready;
               once it is ready, the same block moves below the spec sheet —
               nobody needs connect instructions for a provider they use daily. */}
@@ -340,7 +340,7 @@ export function Dossier() {
                     <dt className="t-body text-ink-mute">{f.k}</dt>
                     <dd
                       className={[
-                        "t-meta [overflow-wrap:anywhere]",
+                        "t-meta wrap-anywhere",
                         f.tone === "warn"
                           ? "text-warn-text"
                           : f.tone === "fault"
