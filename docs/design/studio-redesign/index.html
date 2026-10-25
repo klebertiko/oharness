@@ -216,6 +216,8 @@ svg.wires path.live{stroke:var(--signal)}
 </div>
 <div class="sr" aria-live="polite" id="live"></div>
 
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: opengrep-rules.html.security.audit.insecure-document-method -->
 <script>
 const $=s=>document.querySelector(s);
 /* Nilo's head, from NILO_FACE in frontend/src/components/brand/niloGrid.ts (tokens from globals.css). */
@@ -323,7 +325,7 @@ function renderPane(){
       <p class="hint">Structure checks run as you edit. Bundle validation runs on save and before Run. Click a problem to select the block and jump to the field.</p>`;
     return;
   }
-  if(state==="empty"){p.innerHTML=`<p class="hint" style="margin:0">Select a block to see its settings. Nothing here yet.</p>`;return}
+  if(state==="empty"){p.innerHTML=`<p class="hint" style="margin:0">Select a block to see its settings. Nothing here yet.</p>`;return;}
   const n=nodes().find(x=>x.id===sel)||BASE[1];
   p.innerHTML=`<h2>${n.k}</h2>
     ${n.id==="b"?`<div class="needs"><h3>Before this can run</h3><ul style="margin:0;padding-left:16px"><li>Choose a provider, or keep Mock · <a href="#prov">jump</a></li></ul></div>`:""}
@@ -344,7 +346,7 @@ function wire(){
     ask.oninput=()=>menu.classList.toggle("open",ask.value.startsWith("/"));
     $("#go").onclick=()=>{if(ask.value.trim()&&!ask.value.startsWith("/"))go("proposal")};
   }
-  document.querySelectorAll("[data-acc]").forEach(c=>c.onchange=()=>{c.checked?accepted.add(c.dataset.acc):accepted.delete(c.dataset.acc);renderCanvas()});
+  document.querySelectorAll("[data-acc]").forEach(c=>c.onchange=()=>{c.checked?accepted.add(c.dataset.acc):accepted.delete(c.dataset.acc);renderCanvas();});
   const ap=$("#apply");if(ap){ap.onclick=()=>{window._applied=1;say("Applied 4 changes");go("editing")};$("#discard").onclick=()=>{say("Proposal discarded");go("editing")}}
   const u=$("#undo");if(u)u.onclick=()=>{window._applied=0;render()};
   document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>go("editing"));
