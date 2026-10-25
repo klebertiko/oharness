@@ -31,7 +31,7 @@ Na coluna OHarness, cada lacuna recebe uma de três classes:
 
 ### DeepSeek Harness desktop (DSH)
 
-**[D1] Código-fonte.** `C:\Users\klebe\DeepSeekHarness\deepseek-harness` @ `b150a55` (2026-08-21), upstream https://github.com/deepseek-ai/deepseek-harness. A UI fica em `packages/client/*`. Os caminhos citados abaixo são relativos a `packages/client/`.
+**[D1] Código-fonte.** `C:\Users\<user>\DeepSeekHarness\deepseek-harness` @ `b150a55` (2026-08-21), upstream https://github.com/deepseek-ai/deepseek-harness. A UI fica em `packages/client/*`. Os caminhos citados abaixo são relativos a `packages/client/`.
 
 **[D0] Build desktop instalado.** `%LOCALAPPDATA%\Programs\DeepSeek Harness\resources\app.asar` é um app Electron, canal `nightly` segundo `resources/app-update.yml`, publicado pela Hangzhou DeepSeek AI.
 

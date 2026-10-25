@@ -2,7 +2,7 @@
 
 Bug: Studio canvas mock-mode execution reports a false red "4 errors" badge on a graph shaped
 Skill -> Agent -> Gate -> HITL, with the Gate's `fail` port wired back to Agent for a bounded
-retry/rework loop. Screenshot: `C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-17
+retry/rework loop. Screenshot: `C:\Users\<user>\Pictures\Screenshots\Captura de tela 2026-09-17
 043439.png`.
 
 **Third dispatch attempt at this exact bug.** The first two both died to this session's recurring
