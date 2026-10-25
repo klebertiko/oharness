@@ -197,7 +197,7 @@ export function AssistRow({ ctl }: { ctl: AssistController }) {
     return (
       <div className="mt-1.5 space-y-2">
         {typeof response.text === "string" && (
-          <pre className="max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-float border border-line bg-sub-300 p-2.5 font-sans text-body leading-relaxed text-ink">{response.text}</pre>
+          <pre className="max-h-[180px] overflow-auto whitespace-pre-wrap wrap-break-word rounded-float border border-line bg-sub-300 p-2.5 font-sans text-body leading-relaxed text-ink">{response.text}</pre>
         )}
         {response.source === "offline" && <span className="t-meta text-ink-mute">Offline draft</span>}
         {notes.length > 0 && (

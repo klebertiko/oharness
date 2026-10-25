@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const TOKENS_FILE = path.join(root, "docs/design-system/tokens.json");
 export const GLOBALS_FILE = path.join(root, "frontend/src/app/globals.css");
-export const TAILWIND_FILE = path.join(root, "frontend/tailwind.config.ts");
+export const TAILWIND_FILE = path.join(root, "frontend/src/app/globals.css"); // Tailwind 4: the scale lives in the @theme block
 /** Variables globals.css keeps for backwards compatibility; they alias a token and carry no value of their own. */
 const LEGACY_VARS = new Set(["--ink", "--ink-secondary", "--ink-tertiary"]);
 
@@ -110,21 +110,19 @@ function rule(css, selector) {
   return Object.fromEntries([...body.matchAll(/([\w-]+)\s*:\s*([^;]+);/g)].map((d) => [d[1], d[2].trim()]));
 }
 
-/** The `size` and the options object of `key: ["size", { ... }]` in the Tailwind config, found by string search. */
+/** The size and options of `--text-<key>` in the `@theme` block of globals.css, as `[slice, size, "{ lineHeight: \"..\", letterSpacing: \"..\" }"]` (the shape the checks below read). */
 function tailwindSize(text, key) {
-  for (let from = 0; ; ) {
-    const i = text.indexOf(`${key}: ["`, from);
-    if (i < 0) return null;
-    from = i + 1;
-    if (i > 0 && /[\w-]/.test(text[i - 1])) continue;
-    const end = text.indexOf("}]", i);
-    if (end < 0) return null;
-    const slice = text.slice(i, end + 2);
-    return [slice, /\["([^"]+)"/.exec(slice)[1], slice.slice(slice.indexOf("{"))];
-  }
+  const theme = text.slice(text.indexOf("@theme"), text.indexOf("}", text.indexOf("@theme")));
+  const vars = new Map([...theme.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((d) => [d[1], d[2].trim()]));
+  const read = (suffix) => vars.get(`--text-${key}${suffix}`);
+  const size = read("");
+  if (!size) return null;
+  const lh = read("--line-height"), ls = read("--letter-spacing");
+  const opts = `{ ${lh ? `lineHeight: "${lh}"` : ""}${ls ? `${lh ? ", " : ""}letterSpacing: "${ls}"` : ""} }`;
+  return [theme, size, opts];
 }
 
-/** Typography tokens have no CSS variable, so they are checked against the `.t-*` rules in globals.css (weight, line height, tracking, family, size where declared) and the `fontSize` scale in tailwind.config.ts. */
+/** Typography tokens have no CSS variable, so they are checked against the `.t-*` rules in globals.css (weight, line height, tracking, family, size where declared) and the `--text-*` scale in the @theme block of globals.css. */
 export function checkTypography(tokens = loadTokens(), globalsText = fs.readFileSync(GLOBALS_FILE, "utf8"), tailwindText = fs.readFileSync(TAILWIND_FILE, "utf8")) {
   const problems = [];
   const fontVar = { ui: "var(--font-ui)", mono: "var(--font-mono)" };
@@ -143,7 +141,7 @@ export function checkTypography(tokens = loadTokens(), globalsText = fs.readFile
       if (!(none(css["letter-spacing"]) && none(v.letterSpacing)) && css["letter-spacing"] !== v.letterSpacing) problems.push(`${tok.name}: .t-${key} letter-spacing ${css["letter-spacing"]}, tokens.json ${v.letterSpacing}`);
     }
     const tw = tailwindSize(tailwindText, key);
-    if (!tw) { problems.push(`${tok.name}: no fontSize.${key} in tailwind.config.ts`); continue; }
+    if (!tw) { problems.push(`${tok.name}: no --text-${key} in the @theme block of globals.css`); continue; }
     const lh = /lineHeight:\s*"([^"]+)"/.exec(tw[2])?.[1];
     const ls = /letterSpacing:\s*"([^"]+)"/.exec(tw[2])?.[1];
     if (tw[1] !== v.fontSize) problems.push(`${tok.name}: tailwind fontSize.${key} is ${tw[1]}, tokens.json ${v.fontSize}`);
@@ -166,7 +164,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (args.includes("--check")) {
     const problems = [...checkParity(), ...checkTypography()];
     if (problems.length) { console.error(`Token drift (${problems.length}):\n- ${problems.join("\n- ")}`); process.exit(1); }
-    console.log(`Tokens match globals.css (${loadTokens().filter((t) => t.css).length} variables checked) and the type roles match .t-* and tailwind.config.ts (${loadTokens().filter((t) => t.type === "typography").length} tokens checked).`);
+    console.log(`Tokens match globals.css (${loadTokens().filter((t) => t.css).length} variables checked) and the type roles match .t-* and the @theme text scale (${loadTokens().filter((t) => t.type === "typography").length} tokens checked).`);
   } else if (args.includes("--css")) {
     const out = args[args.indexOf("--css") + 1];
     const css = toCss();

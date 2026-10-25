@@ -37,13 +37,13 @@ function TurnView({ turn }: { turn: Turn }) {
   if (turn.role === "user") {
     return (
       <div className="flex justify-end">
-        <p className="t-body max-w-[88%] whitespace-pre-wrap break-words rounded-float bg-sub-300 px-3 py-2 text-ink">{turn.text}</p>
+        <p className="t-body max-w-[88%] whitespace-pre-wrap wrap-break-word rounded-float bg-sub-300 px-3 py-2 text-ink">{turn.text}</p>
       </div>
     );
   }
   return (
     <div className="space-y-2">
-      {turn.text && <p className="t-body whitespace-pre-wrap break-words text-ink-dim">{turn.text}</p>}
+      {turn.text && <p className="t-body whitespace-pre-wrap wrap-break-word text-ink-dim">{turn.text}</p>}
       {turn.source === "offline" && <span className="t-meta text-ink-mute">Offline draft</span>}
       {turn.error && (
         <div role="alert" className="space-y-1.5">

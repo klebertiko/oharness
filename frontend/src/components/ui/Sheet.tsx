@@ -41,7 +41,7 @@ export function Sheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="oh-sheet-scrim fixed inset-0 z-50 bg-[var(--overlay-backdrop)]" />
+        <Dialog.Overlay className="oh-sheet-scrim fixed inset-0 z-50 bg-(--overlay-backdrop)" />
         <Dialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={() => {
@@ -57,7 +57,7 @@ export function Sheet({
           }}
           className={cn(
             "oh-sheet fixed left-1/2 z-50 flex max-h-[calc(100dvh-var(--h-titlebar)-20px)] w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden",
-            "rounded-float border border-line bg-sub-100 shadow-[var(--shadow-float)]",
+            "rounded-float border border-line bg-sub-100 shadow-(--shadow-float)",
             placement === "top" ? "top-[calc(var(--h-titlebar)+10px)]" : "top-1/2 -translate-y-1/2",
             className,
           )}

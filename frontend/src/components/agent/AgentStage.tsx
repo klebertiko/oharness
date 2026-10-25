@@ -355,7 +355,7 @@ export function AgentStage() {
                 <span className="text-body font-medium text-ink-mute">
                   {m.role === "user" ? "You" : m.providerLabel ? `OHarness · ${m.providerLabel}` : "OHarness"}
                 </span>
-                <div className={["max-w-[68ch] whitespace-pre-wrap text-reading [overflow-wrap:anywhere]", m.role === "user" ? "text-ink" : "text-ink-dim"].join(" ")}>
+                <div className={["max-w-[68ch] whitespace-pre-wrap text-reading wrap-anywhere", m.role === "user" ? "text-ink" : "text-ink-dim"].join(" ")}>
                   {m.content}
                 </div>
                 <MessageActions content={m.content} onReuse={!live ? () => applySuggestion(m.content) : undefined} />
@@ -381,7 +381,7 @@ export function AgentStage() {
                   elapsed={elapsed}
                   tokens={run.totals.tokens}
                 />
-                {liveAnswer && <div role="region" aria-label="Live answer" className="mt-3 max-w-[68ch] whitespace-pre-wrap text-reading text-ink-dim [overflow-wrap:anywhere]">{liveAnswer}</div>}
+                {liveAnswer && <div role="region" aria-label="Live answer" className="mt-3 max-w-[68ch] whitespace-pre-wrap text-reading text-ink-dim wrap-anywhere">{liveAnswer}</div>}
                 {gateSeg && (
                   <div className="mt-2">
                     <Gate segment={gateSeg} onResolve={resolveGate} />
@@ -396,7 +396,7 @@ export function AgentStage() {
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
                 <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
-                {run.notices?.map((notice, index) => <p key={index} className="mt-1 [overflow-wrap:anywhere]">{notice}</p>)}
+                {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
               </Notice>
             )}
 

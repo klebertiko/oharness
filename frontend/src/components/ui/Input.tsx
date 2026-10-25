@@ -42,7 +42,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={cn(
           "h-control-md w-full rounded-control border border-line-strong bg-sub-100 px-2 text-ink transition-colors max-sm:h-control-lg",
           "placeholder:text-ink-mute hover:bg-sub-200 focus-visible:border-signal disabled:cursor-not-allowed disabled:opacity-45",
-          "aria-[invalid=true]:border-fault",
+          "aria-invalid:border-fault",
           mono ? "font-mono text-code" : "text-body",
         )}
         {...rest}
