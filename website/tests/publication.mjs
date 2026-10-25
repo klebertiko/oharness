@@ -17,7 +17,7 @@ const fresh = join(temporary, 'fresh');
 const result = build(fresh);
 assert.equal(result.status, 0, result.stderr);
 const entries = await readdir(fresh, {recursive:true,withFileTypes:true});
-assert.equal(entries.filter(entry => entry.isFile()).length, 33);
+assert.equal(entries.filter(entry => entry.isFile()).length, 39);
 assert.ok(!entries.some(entry => /internal-note|\.env|serve\.mjs|tests|scripts/.test(entry.name)));
 for (const prefix of ['', 'en/']) for (const file of ['index.html', 'model.html', 'manifesto.html']) {
   const html = await readFile(join(fresh, prefix + file), 'utf8');

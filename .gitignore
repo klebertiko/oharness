@@ -42,3 +42,6 @@ __pycache__/
 # ad-hoc GitHub API scripts and third-party reference screenshots.
 # Durable gauntlet write-ups live in docs/product/gauntlet-automate/.
 .gauntlet/
+
+# Local capture/build output (site screenshots, reports)
+/artifacts/

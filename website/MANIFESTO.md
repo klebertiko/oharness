@@ -12,6 +12,6 @@ Defendemos um OHarness Model aberto à inspeção e à evolução. Um harness re
 
 **A autoridade permanece humana.** Pessoas devem definir objetivos, estabelecer limites, examinar evidências e decidir a aceitação. Queremos pontos de intervenção claros, com espaço para interromper, recusar e corrigir o curso. Delegar uma atividade deve preservar a possibilidade de questionar como ela foi realizada.
 
-Adotamos YAML para os arquivos `.ohm`, favorecendo a leitura de instruções, comentários e conteúdo multilinha. O desktop está migrando de JSON para essa sintaxe; sua base atual já oferece grafos, conteúdo incorporado, validação estrutural e simulação. A mudança de formato preservará a leitura dos documentos anteriores. Ciclos de trabalho continuarão exigindo regras explícitas de execução.
+Adotamos YAML para os arquivos `.ohm`, favorecendo a leitura de instruções, comentários e conteúdo multilinha. Os harnesses incluídos no app que vêm de arquivos .ohm e a linha de comando já usam essa sintaxe; a importação e a exportação do Studio ainda usam JSON, e a migração do desktop não foi concluída. O app já oferece grafos, conteúdo incorporado, validação estrutural e simulação. Grafos com ciclo ainda não são executáveis, e os ciclos de trabalho continuarão exigindo regras explícitas de execução.
 
 Nosso horizonte é ampliar essa base com legibilidade, portabilidade e autoridade humana como critérios de decisão. Cada capacidade anunciada deve encontrar respaldo no que pode ser inspecionado. Cada aspiração deve continuar identificada como trabalho por realizar.
