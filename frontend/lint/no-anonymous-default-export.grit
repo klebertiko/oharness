@@ -1,0 +1,13 @@
+language js(typescript, jsx);
+
+// Equivalent of import/no-anonymous-default-export for functions and classes.
+or {
+  `export default function ($params) { $body }`,
+  `export default function* ($params) { $body }`,
+  `export default async function ($params) { $body }`,
+  `export default class { $body }`,
+  `export default ($args) => $body`,
+  `export default async ($args) => $body`
+} as $d where {
+  register_diagnostic(span = $d, message = "Give the default export a name (assign it to a const or name the function/class).", severity = "error")
+}

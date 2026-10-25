@@ -14,6 +14,8 @@
   ·
   <a href="https://klebertiko.github.io/OHarness/en/">English</a>
   ·
+  <a href="docs/USAGE.md">Usage guide</a>
+  ·
   <a href="docs/harness-spec/README.md">OHM format</a>
   ·
   <a href="docs/ci-security.md">CI &amp; security</a>
@@ -23,7 +25,7 @@
 
 <p align="center">
   <img alt="Status" src="https://img.shields.io/badge/status-public%20preview-3AB3AD?style=flat-square" />
-  <img alt="Platform" src="https://img.shields.io/badge/desktop-Windows%20(Tauri%20v2)-161412?style=flat-square" />
+  <img alt="Platform" src="https://img.shields.io/badge/desktop-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS%20(Tauri%20v2)-161412?style=flat-square" />
   <img alt="OHM" src="https://img.shields.io/badge/bundle-.ohm%20(YAML%201.2)-D9A441?style=flat-square" />
   <img alt="Node" src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=node.js&logoColor=white" />
   <img alt="Python" src="https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" />
@@ -67,7 +69,7 @@ The app has three destinations, reachable with `Alt+1` to `Alt+3`.
 
 | Surface | Intent |
 | --- | --- |
-| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar; `/exec` waits for your approval. Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). |
+| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar. Each chat has a permission mode (Ask, Auto, Plan): in Ask, `/exec` waits for your approval; Auto runs only an explicit allowlist without asking; Plan refuses `/exec`. Run history is saved and survives a restart ([`docs/product/durable-run-history.md`](docs/product/durable-run-history.md)). Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). |
 | **Studio** (`Alt+2`) | Visual harness authoring, validation, mock/live modes. Describe a flow to Nilo or open a bundled harness. |
 | **Providers** (`Alt+3`) | The roster of connections — cloud, local, CLI. See [Providers](#providers). |
 
@@ -113,7 +115,7 @@ Five vendors. Anthropic and OpenAI connect through the CLI you are already signe
 
 ```mermaid
 flowchart LR
-  subgraph Desktop["Windows desktop"]
+  subgraph Desktop["Desktop"]
     UI["Next.js UI<br/>(static export)"]
     Shell["Tauri v2 shell"]
     UI --- Shell
@@ -135,6 +137,20 @@ flowchart LR
 - **Credentials never leave your machine** through OHarness cloud — there is none for inference.
 
 Packaging decision: [`docs/adr/0001-desktop-packaging.md`](docs/adr/0001-desktop-packaging.md).
+
+---
+
+## Install
+
+Download from the [release page](https://github.com/klebertiko/OHarness/releases/tag/v0.0.1-alpha) (pre-release; a maintainer publishes it after review). Asset names are stable and carry no version:
+
+| OS | Asset |
+| --- | --- |
+| Windows (x64) | `OHarness-windows-x64-setup.exe` |
+| Linux (x86_64) | `OHarness-linux-x86_64.AppImage` or `OHarness-linux-amd64.deb` |
+| macOS | `OHarness-macos-arm64.dmg` (Apple silicon) or `OHarness-macos-x64.dmg` (Intel) |
+
+Check the download against `SHA256SUMS` ([verification](#ci-security-and-releases)). See the signing note under CI and releases. After installing, connect a provider on the **Providers** screen.
 
 ---
 
@@ -169,6 +185,19 @@ Desktop shell (Tauri) on top of that loop. The shell launches a PyInstaller-buil
 npm ci
 node scripts/build-sidecar.mjs   # needs backend/.venv or a system python
 npm run tauri:dev                # devUrl is http://127.0.0.1:3000 (Terminal B)
+```
+
+The UI finds the sidecar at `NEXT_PUBLIC_API_URL` or `OHARNESS_BACKEND_URL` (the pre-rebrand `OPENHARNESS_BACKEND_URL` still works); the default is `http://127.0.0.1:8000`.
+
+### Tests and checks
+
+These are what CI runs ([`ci.yml`](.github/workflows/ci.yml)):
+
+```bash
+cd frontend && npm run lint && npm run typecheck && npm test   # Biome, tsc, Vitest
+cd backend && python -m pip install -r requirements-test.txt && python -m pytest -q
+cargo fmt --all -- --check && cargo clippy --locked --all-targets --all-features -- -D warnings && cargo test --locked --all-features   # run in src-tauri
+cd frontend && npm run test:e2e                                  # Playwright, needs a build
 ```
 
 ### Windows installer
@@ -208,7 +237,7 @@ powershell -File scripts/smoke-desktop.ps1 -AppPath <path-to-exe>
 | `OH_SECRETS` | Store |
 | --- | --- |
 | `memory` | Process lifetime (tests / explicit dev) |
-| `file` | Default when packaged — Fernet files under `%LOCALAPPDATA%/OHarness/secrets` |
+| `file` | Default when packaged — Fernet files under `%LOCALAPPDATA%/OHarness/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
 | `keychain` | OS keychain (`pip install keyring`) |
 
 ---
@@ -296,7 +325,7 @@ Published: [klebertiko.github.io/OHarness](https://klebertiko.github.io/OHarness
 
 ## Domain vocabulary (short)
 
-Use these names in issues, PRs, and docs — see [`CONTEXT.md`](CONTEXT.md):
+Use these names in issues, PRs, and docs — see [`CONTEXT.md`](CONTEXT.md) and the [glossary](docs/GLOSSARY.md):
 
 | Term | Meaning |
 | --- | --- |

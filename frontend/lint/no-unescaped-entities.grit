@@ -1,0 +1,8 @@
+language js(typescript, jsx);
+
+// Equivalent of react/no-unescaped-entities for ' and " (Biome's parser already rejects > and }).
+`$text` as $t where {
+  $t <: JsxText(),
+  $t <: r".*['\"].*",
+  register_diagnostic(span = $t, message = "Escape quotes in JSX text (&apos; &quot;) or wrap the text in a string expression.", severity = "error")
+}
