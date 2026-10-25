@@ -1,7 +1,7 @@
 {
   "finishedAt": "2026-09-13T23:03:28.426Z",
   "scope": "10 targeted semantic mutants; not an exhaustive mutation score",
-  "sandbox": "C:\\Users\\klebe\\AppData\\Local\\Temp\\oharness-interactions-mutation-5XEy8k",
+  "sandbox": "C:\\Users\\<user>\\AppData\\Local\\Temp\\oharness-interactions-mutation-5XEy8k",
   "baseline": "passed",
   "originalTargetsUnchanged": true,
   "results": [

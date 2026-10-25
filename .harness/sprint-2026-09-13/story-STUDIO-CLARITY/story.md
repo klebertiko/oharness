@@ -2,7 +2,7 @@
 
 Status: In Progress. Planning estimate: 8 points.
 
-Authority: user screenshot C:/Users/klebe/Pictures/Screenshots/Captura de tela 2026-09-13 031143.png; request to fix unclear setup/Auto/green-dot behavior, polish Studio, verify origins of both starter examples, allow returning from an open graph, and leave Sonnet a handoff outside the repo. Traycer, LangGraph/LangSmith Studio and n8n are reference products, not a request to copy all their capabilities.
+Authority: user screenshot C:/Users/<user>/Pictures/Screenshots/Captura de tela 2026-09-13 031143.png; request to fix unclear setup/Auto/green-dot behavior, polish Studio, verify origins of both starter examples, allow returning from an open graph, and leave Sonnet a handoff outside the repo. Traycer, LangGraph/LangSmith Studio and n8n are reference products, not a request to copy all their capabilities.
 
 ## Acceptance criteria and public seams
 
