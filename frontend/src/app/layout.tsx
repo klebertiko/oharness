@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={fontVariables} data-theme="dark" suppressHydrationWarning>
       <head>
         {/* Blocking on purpose: the theme must be known before first paint. */}
+        {/* biome-ignore lint/performance/noSyncScripts: same-origin theme bootstrap; async/defer would flash the wrong theme */}
         <script src="/theme-init.js" />
       </head>
       <body>{children}</body>

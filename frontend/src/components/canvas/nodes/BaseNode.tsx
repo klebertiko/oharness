@@ -141,6 +141,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
   const error = data.error as string | undefined;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover only reveals the toolbar, which a selected node also shows; React Flow owns node focus and keys
     <div
       className="relative"
       style={{ width: PLATE_W }}

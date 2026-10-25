@@ -4,4 +4,4 @@ pytest-bdd==9.0.0
 # mutmut 3 does not support native Windows. Run only inside an isolated worktree.
 mutmut[patch]==3.8.0
 pytest-timeout==2.4.0
-filelock==4.0.12
+filelock==4.2.4

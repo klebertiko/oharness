@@ -9,6 +9,7 @@ from pathlib import Path
 import anyio
 
 from adapters.cli_shared import _kill, scrub_env
+from . import permission
 from .secrets import redact
 from .process_tree import ProcessTree
 
@@ -34,7 +35,9 @@ def _argv(argv: list[str]) -> list[str]:
         if node and script and script.is_file():
             return [node, str(script), *argv[1:]]
         raise OSError('npm entrypoint unavailable')
-    executable = shutil.which(argv[0]) or argv[0]
+    # The policy decided about the git it resolved at import (permission._GIT_EXE); run that one, not a PATH lookup made now.
+    pinned = permission._GIT_EXE if argv[0] == 'git' else None
+    executable = pinned or shutil.which(argv[0]) or argv[0]
     if os.name == 'nt' and Path(executable).suffix.lower() in {'.cmd', '.bat'}:
         raise OSError('batch scripts require an explicit shell')
     return [executable, *argv[1:]]

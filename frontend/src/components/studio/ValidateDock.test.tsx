@@ -23,6 +23,16 @@ describe("Studio OHM import", () => {
     expect(useCanvasStore.getState().harnessMeta.name).toBe("Legacy");
   });
 
+  it("keeps the import confirmation when the canvas settles right after the import", async () => {
+    const bundle = { schemaVersion: "1.0.0", manifest: { id: "settle", name: "Settle", description: "" },
+      graph: { nodes: [{ id: "po", role: "product-owner", label: "PO" }], edges: [] } };
+    const { container } = render(<ValidateDock />);
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File([JSON.stringify(bundle)], "settle.ohm")] } });
+    await screen.findByText("Imported · settle");
+    act(() => { useCanvasStore.setState(s => ({ nodes: s.nodes.map(n => ({ ...n, data: { ...n.data, label: "PO settled" } })) })); });
+    expect(screen.getByText("Imported · settle")).toBeTruthy();
+  });
+
   it("leaves the current graph and bundle intact when validation rejects a file", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: false, errors: ["Invalid graph"] })));
     const nodes = [{ id: "kept", type: "agent" as const, position: { x: 1, y: 2 }, data: { label: "Kept" } }];

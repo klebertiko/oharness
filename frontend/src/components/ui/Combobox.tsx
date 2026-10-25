@@ -296,6 +296,7 @@ export function Combobox({
   const groups = visible.some((o) => o.group);
 
   const optionRow = (o: ComboOption, i: number) => (
+    // biome-ignore lint/a11y/useFocusableInteractive: options stay out of the tab order; focus remains on the input/trigger and aria-activedescendant points at the active option
     // biome-ignore lint/a11y/useKeyWithClickEvents: options are driven by the listbox (aria-activedescendant); keys are handled on the list, not per option
     <div
       key={o.id + ":" + i}
@@ -363,6 +364,7 @@ export function Combobox({
     open &&
     pos &&
     createPortal(
+      // biome-ignore lint/a11y/noStaticElementInteractions: delegates keydown/blur from the focusable controls inside (input, trigger, options) to close and trap focus; the container itself is not a control
       <div
         ref={popRef}
         data-combobox-popover=""

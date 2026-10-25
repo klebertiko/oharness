@@ -56,6 +56,7 @@ function Row({
   }, [active]);
 
   return (
+    // biome-ignore lint/a11y/useFocusableInteractive: options stay out of the tab order; focus remains on the combobox input and aria-activedescendant points at the active option
     // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard selection is handled once on the combobox input (arrows and Enter), as in the ARIA combobox pattern
     <div
       ref={ref}

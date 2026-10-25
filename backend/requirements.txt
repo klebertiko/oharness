@@ -1,11 +1,11 @@
-fastapi==0.143.0
+fastapi==0.143.3
 uvicorn[standard]==0.54.0
-sqlalchemy[asyncio]==2.1.4
+sqlalchemy[asyncio]==2.1.5
 aiosqlite==0.22.1
-pydantic==2.13.5
+pydantic==2.14.1
 httpx==0.28.1
-anthropic==1.12.1
-openai==3.26.1
+anthropic==1.15.0
+openai==3.33.0
 python-dotenv==1.2.4
 anyio==4.15.1
 jsonschema==4.26.0
