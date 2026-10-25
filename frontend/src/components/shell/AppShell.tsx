@@ -75,9 +75,9 @@ function Resizer({
           onChange(value + (side === "left" ? step : -step));
         }
       }}
-      className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "-right-[3px]" : "-left-[3px]"}`}
+      className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "right-[-3px]" : "left-[-3px]"}`}
     >
-      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-[dragging]:bg-signal" />
+      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
     </div>
   );
 }
@@ -262,7 +262,7 @@ export function AppShell({
       {/* biome-ignore lint/a11y/useValidAnchor: a real in-page link; the handler only moves focus into the main region as well as scrolling to it */}
       <a
         href="#oh-main"
-        className="t-body fixed left-2 top-2 z-[60] -translate-y-[200%] rounded-control border border-line-strong bg-sub-100 px-3 py-2 text-ink focus:translate-y-0"
+        className="t-body fixed left-2 top-2 z-60 translate-y-[-200%] rounded-control border border-line-strong bg-sub-100 px-3 py-2 text-ink focus:translate-y-0"
         onClick={(e) => {
           e.preventDefault();
           document.getElementById("oh-main")?.focus();
@@ -291,7 +291,7 @@ export function AppShell({
           {leftOpen && !immersive ? left : null}
         </ActivityRail>
 
-        <main id="oh-main" tabIndex={-1} className="relative min-w-0 flex-1 bg-sub-000 outline-none">{stage}</main>
+        <main id="oh-main" tabIndex={-1} className="relative min-w-0 flex-1 bg-sub-000 outline-hidden">{stage}</main>
 
         {rightOpen && !immersive && right && (
           <aside

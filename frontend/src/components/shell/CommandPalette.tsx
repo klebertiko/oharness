@@ -144,7 +144,7 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
           placeholder="Run a command, add a node, open a harness"
           /* The tick to the left marks focus inside this context; a ring around
              the only field in a modal would say what is already known. */
-          className="t-title h-full min-w-0 flex-1 bg-transparent text-ink outline-none focus-visible:outline-none placeholder:text-ink-mute"
+          className="t-title h-full min-w-0 flex-1 bg-transparent text-ink outline-hidden focus-visible:outline-hidden placeholder:text-ink-mute"
         />
       </div>
 

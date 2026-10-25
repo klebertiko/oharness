@@ -388,7 +388,7 @@ function Metric({ value, unit }: { value: string; unit: string }) {
 function PinnedBadge({ label }: { label: string }) {
   return (
     <span
-      className="t-meta inline-flex items-center gap-1 rounded-control border px-1.5 py-[1px] text-ink-dim"
+      className="t-meta inline-flex items-center gap-1 rounded-control border px-1.5 py-px text-ink-dim"
       style={{ borderColor: "var(--warn)" }}
       title={`Ran on a pinned connection different from today's chat default: ${label}`}
     >
@@ -420,7 +420,7 @@ function FailoverBadge({
     .join("; ");
   return (
     <span
-      className="t-meta inline-flex items-center gap-1 rounded-control border px-1.5 py-[1px] text-ink-dim"
+      className="t-meta inline-flex items-center gap-1 rounded-control border px-1.5 py-px text-ink-dim"
       style={{ borderColor: "var(--signal)" }}
       title={`Failover: ${rejected} rejected before this node ran on ${servedLabel}.`}
     >

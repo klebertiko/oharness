@@ -126,12 +126,12 @@ export function Fact({
     <div className="min-w-0 border-t border-line-soft pt-2">
       <dt className="t-body text-ink-mute">{term}</dt>
       <dd
-        className={`t-title mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 [overflow-wrap:anywhere] ${FACT_TONE[tone]}`}
+        className={`t-title mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 wrap-anywhere ${FACT_TONE[tone]}`}
       >
         {mark}
         {value}
       </dd>
-      {note && <dd className="t-body mt-0.5 text-ink-mute [overflow-wrap:anywhere]">{note}</dd>}
+      {note && <dd className="t-body mt-0.5 text-ink-mute wrap-anywhere">{note}</dd>}
     </div>
   );
 }

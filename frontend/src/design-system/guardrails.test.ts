@@ -59,7 +59,7 @@ describe("design-system guardrails", () => {
   it("never removes the focus ring without a stated replacement", () => {
     // Allowed: a wrapper draws the ring (composer, palette tick) or the element is a programmatic focus target.
     const allowed = ["agent/ChatComposer.tsx", "studio/StudioOverview.tsx", "shell/CommandPalette.tsx", "shell/AppShell.tsx", "ui/Combobox.tsx"].map((f) => f.replace(/\//g, path.sep));
-    const bad = offenders(/\boutline-none\b/, /\.tsx$/).filter((o) => !allowed.some((a) => o.startsWith(`components${path.sep}${a}`)));
+    const bad = offenders(/\boutline-(?:none|hidden)\b/, /\.tsx$/).filter((o) => !allowed.some((a) => o.startsWith(`components${path.sep}${a}`)));
     expect(bad).toEqual([]);
   });
 
