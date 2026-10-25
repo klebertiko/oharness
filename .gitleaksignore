@@ -19,3 +19,7 @@ adf02dee896e58ef272b99eb0f7f660fc103c246:backend/tests/test_sandbox_secrets.py:p
 
 # Same scenario as above, copied into the sprint evidence record (commit dd4e186).
 dd4e1864fcd50cd81f3b0d193535d08406cd9ffb:.harness/sprint-2026-09-18/story-CHAT-TOOLS-CONTRACT/features/chat-tools-sandbox.feature:generic-api-key:56
+
+# Same synthetic apiKey fixture as b87f20e above, as it appears in the squash commit of #125.
+# Test data only; it never leaves the in-memory test graph.
+0c89756c1d020a4be748e8523f478a3ce2e2b100:frontend/src/components/sidebar/FieldAssist.test.tsx:generic-api-key:71

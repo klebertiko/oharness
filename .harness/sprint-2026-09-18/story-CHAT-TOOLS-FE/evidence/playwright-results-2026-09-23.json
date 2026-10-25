@@ -1,7 +1,7 @@
 {
   "config": {
     "argv": [
-      "C:\\Users\\klebe\\.vfox\\sdks\\nodejs\\node.exe",
+      "C:\\Users\\<user>\\.vfox\\sdks\\nodejs\\node.exe",
       "D:\\Development\\.worktrees\\oharness-fe-gate-20260923\\frontend\\node_modules\\@playwright\\test\\cli.js",
       "test"
     ],

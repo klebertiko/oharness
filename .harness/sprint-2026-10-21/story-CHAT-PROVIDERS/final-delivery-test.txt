@@ -3,7 +3,7 @@
 > vitest run AgentStage.delivery.test.tsx ChatComposer.recovery.test.tsx --reporter=dot
 
 
- RUN  v4.1.11 C:/Users/klebe/.codex/worktrees/ca7d/OHarness/frontend
+ RUN  v4.1.11 C:/Users/<user>/.codex/worktrees/ca7d/OHarness/frontend
 
 ·········
 

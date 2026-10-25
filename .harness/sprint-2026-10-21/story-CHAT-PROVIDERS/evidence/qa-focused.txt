@@ -3,7 +3,7 @@
 > vitest run src/components/agent src/components/providers src/components/agent-run
 
 
- RUN  v4.1.11 C:/Users/klebe/.codex/worktrees/ca7d/OHarness/frontend
+ RUN  v4.1.11 C:/Users/<user>/.codex/worktrees/ca7d/OHarness/frontend
 
 Error: connect ECONNREFUSED 127.0.0.1:8000
     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {
