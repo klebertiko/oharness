@@ -3,7 +3,6 @@ import copy
 import json
 from pathlib import Path
 
-import pytest
 from jsonschema import Draft202012Validator
 
 from oharness import codec
