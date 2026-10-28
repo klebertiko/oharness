@@ -5,7 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 /**
  * "Only this conversation": the model a person picked in the chat combo with
- * `s` (docs/adr/0014-chat-model-scope.md). It lives in the front end, per
+ * Shift+Enter (docs/adr/0014-chat-model-scope.md). It lives in the front end, per
  * thread and per connection, so the backend and the connection's saved default
  * (`setDefaultModel`) stay untouched. A thread with no entry for a connection
  * simply runs that connection's default. Picking with Enter writes the default

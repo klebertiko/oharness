@@ -1,6 +1,6 @@
-# ADR 0014 — Escolher modelo no combo do chat: `Enter` salva o padrão da conexão, `s` vale só para a conversa
+# ADR 0014 — Escolher modelo no combo do chat: `Enter` salva o padrão da conexão, `Shift+Enter` vale só para a conversa
 
-Status: Aceito (reversível) · 2026-10-28 · Issue #83 (mapa #82, P1) · Código: `frontend/src/store/chatModelStore.ts`
+Status: Aceito (reversível, teclas corrigidas) · 2026-10-28 · Issue #83 (mapa #82, P1) · Código: `frontend/src/store/chatModelStore.ts`
 
 ## Contexto
 O combo do chat passa a listar os modelos de cada conexão (#89). Escolher um modelo pode gravar o padrão da conexão (`setDefaultModel`, o mesmo que o
@@ -16,10 +16,11 @@ abaixo vem da comparação com as duas referências e do que o código já faz, 
 do combo (nenhum dado migra).
 
 ## Decisão
-Híbrido, como o Claude Code:
+Híbrido, na linha do Claude Code (`Enter` salva o padrão, outra tecla vale só para a sessão):
 - **`Enter`** num modelo: grava o padrão da conexão (`setDefaultModel`), vale para conversas novas e para as que seguem o padrão, e apaga qualquer
   override desta conversa naquela conexão.
-- **`s`** (e o botão "Só esta conversa" na linha focada): vale só para a conversa atual. O override fica no front, em
+- **`Shift+Enter`** (e o botão "Só esta conversa" na linha focada, para toque e mouse): vale só para a conversa atual. Não é `s` como no Claude Code:
+  o combo tem busca, e com o campo de busca em foco `s` é texto digitado. O override fica no front, em
   `chatModelStore` (`threadId → connectionId → modelo`, persistido em `oh.chat.model.v1`); sem entrada, a conversa segue o padrão.
 - O combo mostra qual dos dois está valendo no chip (`{conexão} · {modelo}`; um marcador "só esta conversa" quando é override) e a resposta registra
   o modelo que respondeu, o que responde "qual modelo respondeu a conversa anterior" sem medir nada.
@@ -33,4 +34,4 @@ Híbrido, como o Claude Code:
 ## Consequências
 - `AgentStage` passa a ler o override de `chatModelStore` em vez do estado local; isso entra com o combo (#89), para não mexer no composer agora.
 - Apagar uma conversa deve chamar `clearThread`; `prune` limpa as que sobraram.
-- Reverter para "sempre o padrão" é remover o `s` e o store; nada no backend depende dele.
+- Reverter para "sempre o padrão" é remover o `Shift+Enter`, o botão e o store; nada no backend depende dele.
