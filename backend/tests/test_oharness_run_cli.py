@@ -34,9 +34,6 @@ def keep(*ids):
 
 def without_hitl(data):
     keep("PO", "SM")(data)
-    graph = data["graph"]
-    ids = {n["id"] for n in graph["nodes"]}
-    graph["edges"] = [e for e in graph["edges"] if e["source"] in ids and e["target"] in ids]
 
 
 def lines(out):
@@ -94,3 +91,39 @@ def test_without_json_the_run_prints_a_human_summary(tmp_path, capsys):
     assert main(["run", str(write(tmp_path, without_hitl))]) == 0
     out = capsys.readouterr().out
     assert "complete" in out and not out.lstrip().startswith("{")
+
+
+def test_an_event_the_schema_rejects_is_never_printed_and_fails_the_run(tmp_path, capsys, monkeypatch):
+    import engine
+
+    async def drifting(*args, **kwargs):
+        yield 'event: node_done\ndata: {"node_id": "PO"}\n\n'  # `output` and `tokens` missing
+
+    monkeypatch.setattr(engine, "execute_harness", drifting)
+    assert main(["run", str(write(tmp_path, without_hitl)), "--json"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == "" and "node_done" in captured.err and "output" in captured.err
+
+
+def test_a_crash_in_the_engine_is_a_one_line_failure_not_a_traceback(tmp_path, capsys, monkeypatch):
+    import engine
+
+    async def boom(*args, **kwargs):
+        raise KeyError("nodes")
+        yield
+
+    monkeypatch.setattr(engine, "execute_harness", boom)
+    assert main(["run", str(write(tmp_path, without_hitl)), "--json"]) == 1
+    assert "run crashed: KeyError" in capsys.readouterr().err
+
+
+def test_it_runs_from_any_directory(tmp_path):
+    import subprocess
+    import sys
+
+    backend = Path(__file__).resolve().parent.parent
+    bundle = write(tmp_path, keep("PO"), name="one.ohm")
+    done = subprocess.run([sys.executable, "-m", "oharness", "run", str(bundle), "--json"], cwd=tmp_path, capture_output=True, text=True,
+                          env={**__import__("os").environ, "PYTHONPATH": str(backend)}, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert lines(done.stdout)[-1]["event"] == "harness_done"

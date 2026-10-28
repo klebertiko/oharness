@@ -15,15 +15,22 @@ def _frames(chunk: str) -> tuple[str, dict]:
     return event.removeprefix("event: ").strip(), json.loads(rest.removeprefix("data: ").strip())
 
 
-async def _stream(graph: dict):
+class ContractError(RuntimeError):
+    """The engine emitted something the published run-event schema rejects."""
+
+
+async def _stream(bundle: dict):
     """Run the harness in mock mode (no Provider, no network). A person-only checkpoint (HITL) stops the run: headless never approves for them."""
     import uuid
 
+    backend = str(Path(__file__).resolve().parent.parent)  # `engine` is a top-level module of the backend, not part of this package
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
     from engine import RunControl, execute_harness
 
     run_id = str(uuid.uuid4())
     control = RunControl(run_id)
-    async for chunk in execute_harness(graph, "mock", control=control, run_id=run_id):
+    async for chunk in execute_harness(bundle, "mock", control=control, run_id=run_id):
         event, data = _frames(chunk)
         yield event, data
         if event == "hitl_pause":
@@ -35,37 +42,42 @@ def _run(path: Path, as_json: bool) -> int:
     import asyncio
 
     from jsonschema import Draft202012Validator
-
-    from . import codec
+    from jsonschema.exceptions import best_match
 
     result = validate_path(path)
     if not result.ok:
         print("invalid harness: " + "; ".join(result.errors), file=sys.stderr)
         return EXIT_INVALID
-    graph = codec.decode_bytes(path.read_bytes())["graph"]
+    from . import codec
+
+    bundle = codec.decode_bytes(path.read_bytes())  # the whole bundle: the engine reads `runtime` from it too
     validator = Draft202012Validator(json.loads(RUN_EVENT_SCHEMA.read_text(encoding="utf-8")))
-    status = "error"
 
     async def drive() -> str:
         final, sequence = "error", 0
-        async for event, data in _stream(graph):
+        async for event, data in _stream(bundle):
             sequence += 1
             line = {"sequence": sequence, "event": event, "data": data}
-            problems = [e.message for e in validator.iter_errors(line)]
-            if problems:  # the engine and the published schema disagree: never print an event the schema rejects
-                raise RuntimeError(f"event {event!r} breaks the run-event schema: {problems[0]}")
+            worst = best_match(validator.iter_errors(line))
+            if worst is not None:  # the engine and the published schema disagree: never print an event the schema rejects
+                where = "/".join(str(part) for part in worst.absolute_path)
+                raise ContractError(f"event {event!r} breaks the run-event schema at {where or '<'}: {worst.message}")
             if event == "harness_done":
                 final = data["status"]
             if as_json:
                 print(json.dumps(line, ensure_ascii=False), flush=True)
-            elif event in ("node_start", "node_done", "node_error", "hitl_pause", "harness_done"):
-                print(f"{event}: {data.get('node_id') or data.get('status', '')}", flush=True)
+            elif event in ("node_start", "node_done", "node_error", "hitl_pause", "run_stopped", "harness_done"):
+                detail = data.get("error") or data.get("node_id") or data.get("at_node") or data.get("status", "")
+                print(f"{event}: {detail}", flush=True)
         return final
 
     try:
         status = asyncio.run(drive())
-    except RuntimeError as exc:
+    except ContractError as exc:
         print(str(exc), file=sys.stderr)
+        return EXIT_RUN_FAILED
+    except Exception as exc:  # a crash is a failed run, reported on stderr with a one-line cause rather than a traceback
+        print(f"run crashed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return EXIT_RUN_FAILED
     return EXIT_OK if status == "complete" else EXIT_RUN_FAILED
 

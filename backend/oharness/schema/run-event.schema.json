@@ -42,445 +42,616 @@
     }
   },
   "additionalProperties": false,
-  "oneOf": [
+  "allOf": [
     {
-      "properties": {
-        "event": {
-          "const": "run_start"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run_start"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "run_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "order": {
+                "type": "array"
+              }
             },
-            "mode": {
-              "type": "string"
-            },
-            "order": {
-              "type": "array"
-            }
-          },
-          "required": [
-            "run_id",
-            "mode",
-            "order"
-          ]
+            "required": [
+              "run_id",
+              "mode",
+              "order"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "runtime_selected"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "runtime_selected"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
             },
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "name"
-          ]
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "awaiting_step"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "awaiting_step"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "next": {
-              "type": "object"
-            }
-          },
-          "required": [
-            "next"
-          ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "next": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "next"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_start"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_start"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id"
-          ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_id"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_phase"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_phase"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              }
             },
-            "phase": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "phase"
-          ]
+            "required": [
+              "node_id",
+              "phase"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_reason"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_reason"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "chunk": {
+                "type": "string"
+              }
             },
-            "chunk": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "chunk"
-          ]
+            "required": [
+              "node_id",
+              "chunk"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_stream"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_stream"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "chunk": {
+                "type": "string"
+              }
             },
-            "chunk": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "chunk"
-          ]
+            "required": [
+              "node_id",
+              "chunk"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "tool_call"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "tool_call"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "call_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
             },
-            "call_id": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "call_id",
-            "name"
-          ]
+            "required": [
+              "node_id",
+              "call_id",
+              "name"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "tool_result"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "tool_result"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "call_id": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              }
             },
-            "call_id": {
-              "type": "string"
-            },
-            "ok": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "node_id",
-            "call_id",
-            "ok"
-          ]
+            "required": [
+              "node_id",
+              "call_id",
+              "ok"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_done"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_done"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "output": {
+                "type": "string"
+              },
+              "tokens": {
+                "type": "number"
+              }
             },
-            "output": {
-              "type": "string"
-            },
-            "tokens": {
-              "type": "number"
-            }
-          },
-          "required": [
-            "node_id",
-            "output",
-            "tokens"
-          ]
+            "required": [
+              "node_id",
+              "output",
+              "tokens"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_error"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_error"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
             },
-            "error": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "error"
-          ]
+            "required": [
+              "node_id",
+              "error"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_token_warning"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_token_warning"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "tokens": {
+                "type": "number"
+              },
+              "limit": {
+                "type": "number"
+              }
             },
-            "tokens": {
-              "type": "number"
-            },
-            "limit": {
-              "type": "number"
-            }
-          },
-          "required": [
-            "node_id",
-            "tokens",
-            "limit"
-          ]
+            "required": [
+              "node_id",
+              "tokens",
+              "limit"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "node_skipped"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_skipped"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
             },
-            "reason": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "reason"
-          ]
+            "required": [
+              "node_id",
+              "reason"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "gate_retry"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "gate_retry"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "integer"
+              },
+              "cap": {
+                "type": "integer"
+              }
             },
-            "attempt": {
-              "type": "integer"
-            },
-            "cap": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "node_id",
-            "attempt",
-            "cap"
-          ]
+            "required": [
+              "node_id",
+              "attempt",
+              "cap"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "hitl_pause"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "hitl_pause"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id"
-          ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_id"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "hitl_resolved"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "hitl_resolved"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "node_id": {
-              "type": "string"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "decision": {
+                "type": "string"
+              }
             },
-            "decision": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "node_id",
-            "decision"
-          ]
+            "required": [
+              "node_id",
+              "decision"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "user_message"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "user_message"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "text"
-          ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "run_stopped"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run_stopped"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "at_node": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "at_node"
-          ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "at_node": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "at_node"
+            ]
+          }
         }
       }
     },
     {
-      "properties": {
-        "event": {
-          "const": "harness_done"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "harness_done"
+          }
         },
-        "data": {
-          "type": "object",
-          "properties": {
-            "status": {
-              "enum": [
-                "complete",
-                "stopped",
-                "error"
-              ]
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "complete",
+                  "stopped",
+                  "error"
+                ]
+              },
+              "total_tokens": {
+                "type": "number"
+              },
+              "tokens_estimated": {
+                "type": "boolean"
+              },
+              "elapsed_ms": {
+                "type": "number"
+              },
+              "nodes_run": {
+                "type": "integer"
+              }
             },
-            "total_tokens": {
-              "type": "number"
-            },
-            "tokens_estimated": {
-              "type": "boolean"
-            },
-            "elapsed_ms": {
-              "type": "number"
-            },
-            "nodes_run": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "status",
-            "total_tokens",
-            "tokens_estimated",
-            "elapsed_ms",
-            "nodes_run"
-          ]
+            "required": [
+              "status",
+              "total_tokens",
+              "tokens_estimated",
+              "elapsed_ms",
+              "nodes_run"
+            ]
+          }
         }
       }
     }
