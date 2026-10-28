@@ -10,6 +10,8 @@ import { ModelPicker } from "@/components/providers/ModelPicker";
 import { useChatTools } from "@/components/agent/useChatTools";
 import { usePermissionMode } from "@/components/agent/usePermissionMode";
 import { useWorkspaceTrust } from "@/components/agent/useWorkspaceTrust";
+import { policyRefusals } from "@/components/agent/policyRefusals";
+import { PERMISSION_LABEL, isPermissionMode } from "@/lib/permissionMode";
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
@@ -23,6 +25,7 @@ import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
+import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
 import { Gate } from "@/components/agent-run/Gate";
 import { bundleGraphToEngine } from "@/lib/bundleGraph";
@@ -81,8 +84,8 @@ export function AgentStage() {
 
   // Permission mode of this conversation: selected here, enforced by the sidecar.
   const permission = usePermissionMode(activeThreadId);
-  // Workspace trust (stored by the sidecar) only matters under Auto.
-  const trust = useWorkspaceTrust(chatTools.workspace?.root ?? null, permission.mode === "auto_workspace");
+  // Workspace trust (stored by the sidecar) only matters under Auto and Workspace write.
+  const trust = useWorkspaceTrust(chatTools.workspace?.root ?? null, permission.mode === "auto_workspace" || permission.mode === "workspace_write");
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const draftKey = activeThreadId ?? "new";
@@ -406,12 +409,19 @@ export function AgentStage() {
               </div>
             )}
 
+            {runInCurrentChat && policyRefusals(run).map((refusal) => (
+              <Notice key={refusal.callId} tone="warn">
+                <p><strong>Not run:</strong> <code className="t-code wrap-anywhere">{refusal.command}</code></p>
+                <p className="mt-1 wrap-anywhere">{refusal.note} Preset: {isPermissionMode(refusal.mode) ? PERMISSION_LABEL[refusal.mode] : refusal.mode}.</p>
+              </Notice>
+            ))}
+
             {runInCurrentChat && (run.status === "error" || run.status === "stopped") && (
               <Notice
                 tone={run.status === "error" ? "fault" : "info"}
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
-                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
+                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready." : "The turn stopped. You can reuse your instruction when ready.")}</p>
                 {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
               </Notice>
             )}
@@ -463,6 +473,7 @@ export function AgentStage() {
             <HarnessBar />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
+            {!enabled && <RunBudgetField />}
             <ToolHooksButton />
             {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
               <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
