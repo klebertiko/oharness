@@ -11,6 +11,7 @@ import {
 } from "./catalog";
 import { activeVault, forgetSecret, saveSecret, type SecretRef } from "./secrets";
 import { apiUrl } from "@/lib/apiBase";
+import { modelNotPulled } from "./modelPull";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -320,7 +321,16 @@ type ProbeResponse = {
 /** Replace the catalog list with what the endpoint reported serving, keeping
     the catalog's context/price facts for ids it already knows. No list (a CLI
     adapter, or an empty answer) leaves the catalog — marked as such — alone. */
-function servedModels(c: Connection, ids: string[] | undefined): Pick<Connection, "models" | "modelsFromEndpoint"> {
+function servedModels(
+  c: Connection,
+  ids: string[] | undefined,
+  answered: boolean,
+): Pick<Connection, "models" | "modelsFromEndpoint"> {
+  // A local Ollama that answered with no models has none pulled: that empty
+  // list is evidence, not a missing one, and must not fall back to the catalog.
+  if (answered && c.provider === "ollama" && c.residence === "local" && ids?.length === 0) {
+    return { models: [], modelsFromEndpoint: true };
+  }
   if (!ids || ids.length === 0) return { models: c.models, modelsFromEndpoint: c.modelsFromEndpoint };
   const known = new Map(c.models.map((m) => [m.id, m]));
   return { models: ids.map((id) => known.get(id) ?? { id, ctx: 0 }), modelsFromEndpoint: true };
@@ -356,7 +366,7 @@ async function runProbe(id: string, set: (partial: Partial<ProviderState>) => vo
         health: body.health,
         detail: body.detail,
         facts: body.facts,
-        ...servedModels(c, body.models),
+        ...servedModels(c, body.models, body.ok && body.health === "live"),
         probes: [...c.probes.slice(-11), { ms: body.latencyMs, ok: body.ok }],
         lastProbe: new Date().toISOString(),
       })),
@@ -621,7 +631,12 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       set({
         connections: patch(get().connections, id, (x) => (x.defaultModel === value ? { ...x, defaultModel: previous } : x)),
       });
+      return ok;
     }
+    // The model list is a snapshot of the last probe; a model typed here (or
+    // pulled since) may be newer than it. Refresh before calling it unpulled.
+    const after = get().connections.find((x) => x.id === id);
+    if (after && modelNotPulled(after)) void get().probe(id);
     return ok;
   },
 

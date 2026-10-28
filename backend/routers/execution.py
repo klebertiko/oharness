@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import usage_tracking
 from database import SessionLocal, get_db
 from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
-from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream
+from run_worktree import RunWorktree, require_workspace
+from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run
 from adapters import get_adapter, AdapterConfig
 from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
@@ -31,6 +32,7 @@ from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
+from sandbox.plan_store import propose_plan
 from sandbox.schemas import ToolsRequest
 
 router = APIRouter(prefix="/execute", tags=["execution"])
@@ -43,6 +45,7 @@ class ExecuteRequest(BaseModel):
     step: bool = False
     instruction: str | None = None
     cwd: str | None = None
+    worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
 
 
 class DirectRequest(BaseModel):
@@ -318,6 +321,8 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
     connections = getattr(request.app.state, "provider_connections", None)
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
+    require_workspace(body.worktree, cwd)
+    isolation = RunWorktree(cwd) if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
     # routing call just below (it already invokes a real adapter). "mock" is
@@ -360,7 +365,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                 _first_provider_ids(graph),
                 connections=connections,
                 secrets_store=secrets_store,
-                cwd=cwd,
+                cwd=None if isolation is not None else cwd,  # a run asked to be isolated never lets the intake turn touch the main checkout
                 # SEC P2-5, 2026-09-15: this call already spends real tokens
                 # regardless of which way routing decides, and it used to run
                 # completely outside the budget gate — the most common path
@@ -402,6 +407,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         # store) so GET /execute/logs/{id} can replay them into the same
         # reducer client-side after a reload.
         events: list[dict] = []
+        run_cwd = cwd
         try:
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
@@ -418,6 +424,20 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                         status = evt["data"]["status"]
                     yield _sse(evt["event"], evt["data"])
             else:
+                if isolation is not None:  # only a run that really executes the harness gets a worktree
+                    try:
+                        run_cwd = await isolation.open()
+                    except RuntimeError as exc:  # the manager's own refusal, already scrubbed: shown as is rather than as a provider failure
+                        for evt in ({"event": "error", "data": {"error": str(exc)}},
+                                    {"event": "harness_done", "data": {"status": "error", "total_tokens": 0, "tokens_estimated": False,
+                                                                       "elapsed_ms": 0, "nodes_run": 0}}):
+                            events.append(evt)
+                            yield _sse(evt["event"], evt["data"])
+                        status = "error"
+                        return
+                    ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
+                    events.append(ready_evt)
+                    yield _sse(ready_evt["event"], ready_evt["data"])
                 async for chunk in execute_harness(
                     graph,
                     execution_mode=body.mode,
@@ -425,7 +445,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     run_id=run_id,
                     connections=connections,
                     secrets_store=secrets_store,
-                    cwd=cwd,
+                    cwd=run_cwd,
                     enforce_budget=_enforce_node_budget,
                 ):
                     parsed = _parse_sse_chunk(chunk)
@@ -453,7 +473,13 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
             RUNS.pop(run_id, None)
             # A fresh session: the request-scoped one is torn down by its
             # dependency and cannot be relied on inside a streaming generator.
-            await writer.finish(status)
+            try:
+                await writer.finish(status)
+            finally:  # the worktree goes whether or not the journal write succeeded
+                if isolation is not None:
+                    rescue = await isolation.close()
+                    if isolation.closed_id is not None:
+                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": rescue}})
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
@@ -747,6 +773,12 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
                         )
+                        if broker and stored == "plan" and broker.permission_mode == "plan" and tool_options.preset is None and tool_options.thread_id and output.strip():
+                            # Plan mode ends in a plan artifact; nothing executes until a person approves it. Only a plain turn in a conversation
+                            # stored in Plan: the approval barrier and the card follow the stored mode, and a `/read` or `/exec` is not a plan.
+                            async with SessionLocal() as plan_session:
+                                plan = await propose_plan(plan_session, tool_options.thread_id, output)
+                            yield emit("plan_proposed", {"node_id": node_id, **plan})
                 except Exception as exc:  # noqa: BLE001
                     status = STATUS_ERROR
                     total_tokens = node_tokens
@@ -901,6 +933,8 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         result = {"source": record.source, "events": [{"event": e.event_type, "data": json.loads(e.data_json)} for e in events]}
     return {
         **metadata(record),
+        **await lineage(db, log_id),
+        "resumable": is_resumable(lg, record),
         "id": lg.id,
         "harness_id": lg.harness_id,
         "harness_name": lg.harness_name,
@@ -911,6 +945,16 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         "result": result,
         "artifacts": await list_artifacts(log_id, db),
     }
+
+
+@router.post("/logs/{log_id}/continue", status_code=201)
+async def continue_log(log_id: str, db: AsyncSession = Depends(get_db)):
+    """A new run linked to this one, from its durable journal. The parent's events are left exactly as they are."""
+    await _require_log(db, log_id)
+    child = await continue_run(db, log_id)
+    if child is None:
+        raise HTTPException(409, {"code": "not_resumable", "message": "only a run that stopped before it finished, and has a saved journal, can be continued"})
+    return child
 
 
 async def _require_log(db, log_id):

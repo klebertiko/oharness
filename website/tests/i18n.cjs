@@ -48,12 +48,17 @@ const base = (process.env.WEBSITE_URL || 'http://127.0.0.1:4174').replace(/\/$/,
         await page.goto(base + locale + file + hash);
         const theme = await page.locator('html').getAttribute('data-theme');
         await page.locator('.language-switch').click();
-        await page.waitForURL(base + (locale ? '' : 'en/') + file + hash);
+        await page.waitForURL(url => url.href.split('#')[0] === base + (locale ? '' : 'en/') + file);
         assert.equal(await page.locator('html').getAttribute('data-theme'), theme);
         console.log(`${lang}: ${file}, both themes, five widths, links and language switch OK`);
       }
     }
     await page.setViewportSize({width:1280,height:900});
+    await page.goto(base + 'en/index.html#baixar');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('.language-switch').click();
+    await page.waitForURL(url => url.pathname.endsWith('/index.html') && !url.pathname.includes('/en/'));
+    assert.equal(new URL(page.url()).hash, '', 'stale #baixar must not carry over to the other language');
     await page.goto(base + 'en/index.html');
     await page.locator('[data-piece="skill"]').click();
     assert.match(await page.locator('#piece-description').innerText(), /^A skill/);
