@@ -57,4 +57,3 @@ class RunWorktree:
                 return None
             self.closed_id = workspace_id
             return (removed.get("rescue") or {}).get("ref")
-        return None

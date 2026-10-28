@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import anyio
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
