@@ -108,13 +108,13 @@ describe("CopilotPanel with no provider", () => {
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
     await user.type(composer(), "add a reviewer{Enter}");
     expect(mockPlan).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /Paste an OpenRouter key to send/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Paste an OpenRouter key/ })).toBeTruthy();
   });
 
   it("the missing-provider action requests the inline setup for that connection", async () => {
     useChatProviderStore.setState({ chosenId: "off" });
     renderPanel();
-    await userEvent.setup().click(screen.getByRole("button", { name: /to send/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Paste an OpenRouter key/ }));
     expect(useChatSetupRequestStore.getState()).toMatchObject({ id: "off", token: expect.any(Number) });
     expect(useChatSetupRequestStore.getState().token).toBeGreaterThan(0);
   });

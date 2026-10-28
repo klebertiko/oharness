@@ -64,11 +64,21 @@ try {
   // The open combo is axe-clean in both themes, with a group of models and the scope toggle showing.
   for (const theme of ['dark', 'light']) {
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    // Colours transition on a theme change; axe must read the settled colours, not a frame in between (slower CI hit this).
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
     await page.addScriptTag({ content: axeSource });
     const found = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] })).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`));
     assert.deepEqual(found, [], `axe with the model combo open (${theme})`);
   }
-  checks.push('Model combo open: axe clean in both themes');
+  const needs = page.getByRole('group', { name: 'Needs action' });
+  await needs.waitFor();
+  const needsText = await needs.textContent();
+  // The seeded connections that are not set up each show the one action they need; the rest are counted.
+  assert.match(needsText, /Not connected · Turn on/);
+  assert.match(needsText, /Paste an Ollama key/);
+  assert.match(needsText, /\d+ more need setup/);
+  checks.push('Model combo open with a Needs action group: axe clean in both themes');
   await page.getByRole('combobox').fill('qa-model');
   // Shift+Enter applies the typed model to this chat only; the connection default stays qa-default.
   await page.getByRole('combobox').press('Shift+Enter');

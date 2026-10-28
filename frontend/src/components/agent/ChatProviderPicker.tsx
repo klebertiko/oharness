@@ -17,6 +17,7 @@ import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useChatModelStore, modelOverride, NEW_CHAT_KEY } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { useThreadStore } from "@/store/threadStore";
+import { nextStep, distanceToReady } from "@/components/providers/nextStep";
 import { AUTO_ID, buildComboOptions, filterComboOptions, modelOptionId, parseOptionId, selectedOptionId } from "./chatCombo";
 
 /** Dropdown-row dot per tone. A distinct pulsing "checking" state, and a
@@ -81,6 +82,17 @@ export function ChatProviderPicker({
       needSetup: rest.filter((r) => !r.ready && !pickable(r.id)).length,
     };
   }, [connections, chosenId]);
+  // Connections that cannot answer yet, nearest to ready first (at most three are shown), each with its one action.
+  const needsAction = useMemo(
+    () =>
+      connections
+        .filter((c) => isChatCapable(c) && c.id !== chosenId && !rows.some((r) => r.id === c.id))
+        .map((c) => ({ c, d: distanceToReady(c), step: nextStep(c) }))
+        .filter((x): x is typeof x & { d: number; step: NonNullable<typeof x.step> } => x.d !== null && x.step !== null)
+        .sort((a, b) => a.d - b.d)
+        .map(({ c, step }) => ({ connection: c, detail: `${step.status ?? providerReadiness(c).label} · ${step.label}` })),
+    [connections, chosenId, rows],
+  );
   const readyCount = rows.filter((r) => r.id !== null && r.ready).length;
 
   const threadKey = useThreadStore((s) => s.activeThreadId) ?? NEW_CHAT_KEY;
@@ -131,6 +143,7 @@ export function ChatProviderPicker({
         overrideFor: (id) => modelOverride(overrides, threadKey, id),
         toneDot: (c) => <span className={"h-1.5 w-1.5 flex-none rounded-full " + toneDotClass(providerReadiness(c).tone)} aria-hidden />,
         rowDetail: (c) => rows.find((r) => r.id === c.id)?.detail ?? "",
+        needsAction,
     });
     // A choice whose connection is gone stays listed so the selection is never invisible.
     const stale = rows.find((r) => r.id && !connections.some((c) => c.id === r.id));
@@ -143,7 +156,7 @@ export function ChatProviderPicker({
       });
     }
     return built;
-  }, [connections, chosenId, rows, overrides, threadKey]);
+  }, [connections, chosenId, rows, overrides, threadKey, needsAction]);
 
   // A model the list does not carry (a new release, a custom id) can still be typed for the connection in use.
   const searchOptions = useCallback(
@@ -160,10 +173,24 @@ export function ChatProviderPicker({
     [connection],
   );
 
+  const goToProviders = useCallback(
+    (id: string | null) => {
+      if (id && connections.some((c) => c.id === id)) selectConnection(id);
+      setOpen(false);
+      onConnect();
+    },
+    [connections, selectConnection, onConnect],
+  );
+
   const choose = useCallback(
     (id: string, meta?: { shift: boolean }) => {
       const parsed = parseOptionId(id);
       if (!parsed) return;
+      // A connection that needs action is fixed on its Providers page, not selected here.
+      if (parsed.fix && parsed.connectionId) {
+        goToProviders(parsed.connectionId);
+        return;
+      }
       if (parsed.auto || !parsed.connectionId) {
         setChosen(null);
         return;
@@ -182,16 +209,10 @@ export function ChatProviderPicker({
         });
       }
     },
-    [scope, modelAppliesToChat, setChosen, setOverride, setDefaultModel, threadKey],
+    [scope, modelAppliesToChat, setChosen, setOverride, setDefaultModel, threadKey, goToProviders],
   );
 
   const optionValue = chosenId && connection ? selectedOptionId(connection, pinned || connection.defaultModel) : chosenId ?? AUTO_ID;
-
-  const goToProviders = (id: string | null) => {
-    if (id && connections.some((c) => c.id === id)) selectConnection(id);
-    setOpen(false);
-    onConnect();
-  };
 
   // An external control (the composer's "what's missing" action) asked for
   // setup. A named connection is fixed on the Providers screen; with no name

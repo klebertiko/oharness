@@ -115,3 +115,44 @@ export function nextStep(c: Connection): NextStep | null {
       return null;
   }
 }
+
+/** How far a connection is from answering a run, nearest first. Null when nothing is missing.
+    0 pick a model (none chosen, or the default is not pulled) · 1 flip the switch ·
+    2 fix a failure (key, endpoint, retry, sign in) · 3 obtain something (install a CLI, get a key). */
+export function distanceToReady(c: Connection): number | null {
+  const step = nextStep(c);
+  if (!step) return null;
+  switch (step.kind) {
+    case "model":
+      return 0;
+    case "turnOn":
+      return 1;
+    case "paste":
+      return 3;
+    case "link":
+      return providerFault(c) === "cli-missing" ? 3 : 2;
+    case "copy":
+      // `ollama pull` for an unpulled default is one command away; a login or `ollama serve` is a failure to fix.
+      return providerFault(c) ? 2 : 0;
+    default:
+      return 2;
+  }
+}
+
+/** The connection nearest to ready among those that cannot answer yet, in list order on ties. */
+export function closestToReady(connections: Connection[]): Connection | null {
+  let best: { c: Connection; d: number } | null = null;
+  for (const c of connections) {
+    const d = distanceToReady(c);
+    if (d !== null && (best === null || d < best.d)) best = { c, d };
+  }
+  return best?.c ?? null;
+}
+
+/** The step's words with the connection it belongs to, for places that show it away from its row
+    (the composer's call to action): "Turn on · Anthropic". The label alone when it already names the vendor. */
+export function stepText(c: Connection, step: NextStep): string {
+  const names = [c.label, specOf(c).vendor].filter((n) => n.length >= 3).map((n) => n.toLowerCase());
+  const label = step.label.toLowerCase();
+  return names.some((n) => label.includes(n)) ? step.label : `${step.label} · ${c.label}`;
+}

@@ -8,14 +8,23 @@ export const AUTO_ID = "";
 const SEP = "␟";
 /** Disabled row that says a group has more models than it shows. */
 const MORE = "more";
+/** Prefix of a "Needs action" row: choosing it opens that connection in Providers, it does not select it. */
+const ACTION = "action";
+/** Heading of the group of connections that cannot answer yet, and how many it lists. */
+export const NEEDS_ACTION_GROUP = "Needs action";
+export const NEEDS_ACTION_MAX = 3;
 
 export const modelOptionId = (connectionId: string, model: string) => connectionId + SEP + model;
 export const connectionOptionId = (connectionId: string) => connectionId;
+export const actionOptionId = (connectionId: string) => ACTION + SEP + connectionId;
 
 /** What a combo option id means: Auto, a whole connection (no model list), or one model of a connection. */
-export function parseOptionId(id: string): { connectionId: string | null; model: string | null; auto: boolean } | null {
+export function parseOptionId(
+  id: string,
+): { connectionId: string | null; model: string | null; auto: boolean; fix?: boolean } | null {
   if (id === AUTO_ID) return { connectionId: null, model: null, auto: true };
   if (id.startsWith(MORE + SEP)) return null;
+  if (id.startsWith(ACTION + SEP)) return { connectionId: id.slice(ACTION.length + SEP.length), model: null, auto: false, fix: true };
   const at = id.indexOf(SEP);
   if (at < 0) return { connectionId: id, model: null, auto: false };
   return { connectionId: id.slice(0, at), model: id.slice(at + 1), auto: false };
@@ -72,6 +81,8 @@ export type ComboBuildInput = {
   overrideFor: (connectionId: string) => string;
   toneDot: (c: Connection) => ComboOption["leading"];
   rowDetail: (c: Connection) => string;
+  /** Connections that cannot answer yet, nearest to ready first, with the one action each needs. */
+  needsAction?: { connection: Connection; detail: string }[];
 };
 
 /** Auto, then one group per usable connection holding its models (or, with no model list, the connection itself). */
@@ -98,6 +109,24 @@ export function buildComboOptions(i: ComboBuildInput): ComboOption[] {
         leading: i.toneDot(c),
       });
     }
+  }
+  const needs = i.needsAction ?? [];
+  for (const n of needs.slice(0, NEEDS_ACTION_MAX)) {
+    options.push({
+      id: actionOptionId(n.connection.id),
+      label: n.connection.label,
+      detail: n.detail,
+      group: NEEDS_ACTION_GROUP,
+      leading: i.toneDot(n.connection),
+    });
+  }
+  if (needs.length > NEEDS_ACTION_MAX) {
+    options.push({
+      id: `${MORE}${SEP}${NEEDS_ACTION_GROUP}`,
+      label: `${needs.length - NEEDS_ACTION_MAX} more need setup. Open Manage providers.`,
+      group: NEEDS_ACTION_GROUP,
+      disabled: true,
+    });
   }
   return options;
 }

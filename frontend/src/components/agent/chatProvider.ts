@@ -210,39 +210,6 @@ export function rowTone(connection: Connection): ChatProviderTone {
   }
 }
 
-/** What the composer tells the person when `pickChatProvider` came back null —
-    never a bare "Unavailable" (design.md § Provider stance). Returns null
-    once a provider actually resolves, so a caller can render this in place
-    of the send affordance without a separate `!provider` check drifting out
-    of sync. Credential shape comes from the catalog (`specOf`), not a
-    hardcoded vendor list, so a future provider gets the right verb for free:
-    `api-key` → paste a key, anything else (`cli` session or `none`) → an
-    on/off switch, nothing to type. `id` is the connection this action would
-    expand inline setup for — null when there is nothing concrete to expand
-    (nothing chosen, or an explicit choice that no longer exists), in which
-    case the caller should just open the combo. */
-export function missingProviderAction(
-  connections: Connection[],
-  chosenId?: string | null,
-): { text: string; id: string | null } | null {
-  if (pickChatProvider(connections, chosenId)) return null;
-  const target = chosenId ? connections.find((c) => c.id === chosenId) : null;
-  if (!target || !isChatCapable(target)) {
-    return { text: chosenId ? "Pick a provider to send" : "Connect a provider to send", id: null };
-  }
-  if (providerReadiness(target).missing === "model") {
-    return { text: `Choose a model for ${target.label} to send`, id: target.id };
-  }
-  if (providerReadiness(target).missing === "model-not-pulled") {
-    return { text: `Pull ${modelNotPulled(target)} to send`, id: target.id };
-  }
-  const spec = specOf(target);
-  const article = /^[aeiou]/i.test(spec.vendor) ? "an" : "a";
-  const verb =
-    spec.credential.kind === "api-key" ? `Paste ${article} ${spec.vendor} key` : `Turn on ${target.label}`;
-  return { text: `${verb} to send`, id: target.id };
-}
-
 /** Auto names its resolved connection; every other row states its own evidence. */
 export function chatProviderOptions(connections: Connection[]) {
   const auto = autoPick(connections);
