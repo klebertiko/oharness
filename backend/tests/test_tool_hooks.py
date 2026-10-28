@@ -151,17 +151,20 @@ def sse(response):
 
 def test_hook_registry_crud_and_validation(client, tmp_path):
     body = {'argv': script(tmp_path, 'pass'), 'timeout_s': 2, 'tools': ['read']}
-    assert client.put('/chat/tools/hooks/h1', json=body).status_code == 200
+    saved = client.put('/chat/tools/hooks/h1', json=body)
+    assert saved.status_code == 200
     assert [h['id'] for h in client.get('/chat/tools/hooks').json()['hooks']] == ['h1']
-    assert client.put('/chat/tools/hooks/h1', json={**body, 'argv': ['python']}).status_code == 400
-    assert client.delete('/chat/tools/hooks/h1').status_code == 200
+    refused = client.put('/chat/tools/hooks/h1', json={**body, 'argv': ['python']})
+    removed = client.delete('/chat/tools/hooks/h1')
+    assert refused.status_code == 400 and removed.status_code == 200
     assert client.get('/chat/tools/hooks').json()['hooks'] == []
 
 
 def test_blocked_call_is_in_the_run_journal_with_the_hook_id(client, tmp_path):
     (tmp_path / 'README.md').write_text('hi', encoding='utf-8')
     body = {'argv': script(tmp_path, 'raise SystemExit(2)'), 'timeout_s': 2, 'tools': ['read']}
-    assert client.put('/chat/tools/hooks/guard', json=body).status_code == 200
+    saved = client.put('/chat/tools/hooks/guard', json=body)
+    assert saved.status_code == 200
     try:
         resp = client.post('/execute/direct', json={'instruction': '', 'mode': 'mock', 'cwd': str(tmp_path),
                            'tools': {'enabled': True, 'summarize': False, 'preset': {'name': 'read', 'path': 'README.md'}}})
@@ -197,7 +200,8 @@ def test_exiting_hook_leaves_no_descendant(tmp_path):
     pidfile = tmp_path / 'pid'
     argv = script(tmp_path, f"""
         import subprocess, sys
-        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         open({str(pidfile)!r}, 'w').write(str(child.pid))
     """)
     assert decide(hook(argv), tmp_path).allowed
@@ -213,3 +217,9 @@ def test_exiting_hook_leaves_no_descendant(tmp_path):
         time.sleep(0.1)
     else:
         raise AssertionError('descendant still running')
+
+
+def test_hook_that_leaves_a_child_holding_its_pipes_is_blocked_by_the_timeout(tmp_path):
+    argv = script(tmp_path, "import subprocess, sys; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])")
+    d = decide(hook(argv, timeout_s=0.7), tmp_path)
+    assert not d.allowed and d.reason == 'timeout'

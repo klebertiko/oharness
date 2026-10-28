@@ -1,13 +1,12 @@
 """Pre-tool hooks (#165): fail-closed gates that run before a tool does.
 
 A hook is a program the person registered in the sidecar (never read from a
-workspace, so a repository cannot plant one). It is run with argv only (no
-shell), an environment rebuilt from the allowlist (`scrub_env`), the workspace
+workspace, so a repository cannot plant one). It is run through `sandbox.exec.run`
+with argv only (no shell), an environment rebuilt from the allowlist (`scrub_env`), the workspace
 as cwd, a short timeout, and a redacted JSON payload on stdin. Exit 0 allows.
 A non-zero exit, a timeout, a spawn failure or a corrupt registration blocks.
 `HOOK_RULES` is the one table for the validator and the UI.
 """
-import asyncio
 import json
 import os
 import re
@@ -15,11 +14,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-import anyio
-
-from adapters.cli_shared import _kill, scrub_env
-from .exec import _terminate
-from .process_tree import ProcessTree
+from .exec import run
 from .secrets import redact
 
 HOOK_RULES = {
@@ -100,34 +95,11 @@ async def run_hook(hook: Hook, payload: dict, cwd) -> HookDecision:
     if hook.invalid:
         return done(False, 'invalid_config')
     body = json.dumps({'hook_id': hook.id, **_redact_value(payload)}).encode()
-    options = {'creationflags': 0x08000000} if os.name == 'nt' else {'start_new_session': True}
-    tree, proc = ProcessTree(), None
     try:
-        # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-asyncio-create-exec-audit
-        # nosemgrep: python.lang.security.audit.dangerous-asyncio-create-exec-audit
-        proc = await asyncio.create_subprocess_exec(  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-asyncio-create-exec-audit
-            *hook.argv, cwd=str(Path(cwd)), env=scrub_env(),
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, **options)
-        tree.attach(proc.pid)
+        # The one reviewed spawn site (sandbox.exec.run): argv only, allowlisted environment, bounded, tree-killed.
+        result = await run(hook.argv, Path(cwd), hook.timeout_s, stdin_data=body, reap_descendants=True)
     except (OSError, ValueError):
-        with anyio.CancelScope(shield=True):
-            if proc is not None:
-                await _kill(proc)
-            tree.close()
         return done(False, 'spawn_error')
-    try:
-        try:
-            try:
-                await asyncio.wait_for(proc.communicate(body), hook.timeout_s)
-            except (BrokenPipeError, ConnectionResetError):
-                # stdin closed early: the same deadline still applies to the exit.
-                await asyncio.wait_for(proc.wait(), hook.timeout_s)
-        except asyncio.TimeoutError:
-            await _terminate(proc, tree)
-            return done(False, 'timeout')
-        return done(True, 'ok') if proc.returncode == 0 else done(False, 'exit_nonzero')
-    finally:
-        with anyio.CancelScope(shield=True):
-            # Always: a hook that exits 0 must not leave descendants running.
-            await _terminate(proc, tree)
-            tree.close()
+    if result['timed_out']:
+        return done(False, 'timeout')
+    return done(True, 'ok') if result['exit_code'] == 0 else done(False, 'exit_nonzero')
