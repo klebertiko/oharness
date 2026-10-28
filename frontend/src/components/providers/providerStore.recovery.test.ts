@@ -129,3 +129,30 @@ describe("seed endpoints (F12)", () => {
     expect(find("ollama-local").endpoint.endsWith("/v1")).toBe(true);
   });
 });
+
+describe("local Ollama model list (#88)", () => {
+  const probeAnswer = (models: string[]) =>
+    vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(String(url).endsWith("/probe")
+        ? ok({ ok: true, health: "live", detail: "Ollama is running.", latencyMs: 3, facts: [], models })
+        : ok()));
+
+  it("an empty answer from a live local Ollama is the endpoint's list, not a reason to keep the catalog", async () => {
+    vi.stubGlobal("fetch", probeAnswer([]));
+    await useProviderStore.getState().probe("ollama-local");
+    expect(find("ollama-local").models).toEqual([]);
+    expect(find("ollama-local").modelsFromEndpoint).toBe(true);
+  });
+
+  it("choosing a model the list does not have re-probes before calling it unpulled", async () => {
+    const fetchMock = probeAnswer(["gemma4:26b", "qwen3:8b"]);
+    vi.stubGlobal("fetch", fetchMock);
+    useProviderStore.setState({
+      connections: useProviderStore.getState().connections.map((c) =>
+        c.id === "ollama-local" ? { ...c, enabled: true, health: "live", models: [{ id: "gemma4:26b", ctx: 0 }], modelsFromEndpoint: true } : c),
+    });
+    await useProviderStore.getState().setDefaultModel("ollama-local", "qwen3:8b");
+    await vi.waitFor(() => expect(callsTo(fetchMock, "/probe", "POST")).toHaveLength(1));
+    await vi.waitFor(() => expect(find("ollama-local").models.map((m) => m.id)).toContain("qwen3:8b"));
+  });
+});
