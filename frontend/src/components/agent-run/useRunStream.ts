@@ -136,7 +136,8 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
 
       // A slash-menu Tool is an explicit direct broker action. It must not be
       // swallowed by the currently enabled harness graph.
-      if (harnessEnabledRef.current && !tools?.preset) {
+      // In Plan mode the turn is answered directly and ends in a plan: the harness graph runs after approval.
+      if (harnessEnabledRef.current && !tools?.preset && tools?.permission_mode !== "plan") {
         abortRef.current = startRun(
           { graph_json: graphRef.current, mode, step, instruction, cwd },
           onEvent,

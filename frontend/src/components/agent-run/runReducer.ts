@@ -467,6 +467,12 @@ export function runReducer(state: RunState, action: Action): RunState {
         notices: [...state.notices, String(action.data.error ?? "Stream error")],
       };
 
+    case "plan_proposed": {
+      const planId = typeof d.plan_id === "string" ? d.plan_id : "";
+      const text = typeof d.text === "string" ? d.text : "";
+      return planId && text ? { ...state, proposedPlan: { planId, text } } : state;
+    }
+
     default:
       return state;
   }

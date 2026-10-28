@@ -163,6 +163,8 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
+  proposedPlan?: { planId: string; text: string };
 }
 
 export interface RunEvent {

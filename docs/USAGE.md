@@ -19,7 +19,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | --- | --- |
 | Ask (default) | Every `/exec` waits for your approval. |
 | Auto | A fixed allowlist runs without asking (read-only `git`, `ls`, `pwd`); in a workspace you marked trusted, also `npm`/`pnpm` test and run scripts and `pytest`. Anything else still asks. |
-| Plan | `/exec` is refused; reading still works. |
+| Plan | `/exec` is refused; reading still works. The turn ends in a plan card (Approve plan, Discard plan). Nothing runs until you approve; approving moves the chat to Ask and sends the plan as the next turn. The chat cannot leave Plan while a plan waits. With a harness on, Plan mode answers directly and the harness runs after approval. |
 | Read-only | Listings and read-only `git` run on their own. Any command that could write is refused, and the chat shows the command and the reason. |
 | Workspace write | `mkdir`, `touch`, `cp` and `mv` run without asking when every path stays inside the workspace. A path outside it, or any command Nilo cannot check, asks. |
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |

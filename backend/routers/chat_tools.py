@@ -14,6 +14,7 @@ from providers.resolution import ADAPTER_BY_PROVIDER
 from routers.execution import _validated_project_cwd
 from sandbox.capabilities import capabilities as tool_capabilities
 from sandbox.discover import discover as discover_workspace
+from sandbox.plan_store import APPROVAL_MODES, DEFAULT_APPROVAL_MODE, PlanError, approve_plan, discard_plan, waiting_plan
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted, set_thread_mode, set_workspace_trust
 from sandbox.read import READ_MAX_BYTES, ReadFailure, read_text
 from sandbox.schemas import THREAD_ID_PATTERN, PermissionMode
@@ -85,7 +86,51 @@ async def put_permission(request: Request, db: AsyncSession = Depends(get_db)):
         body = PermissionUpdate.model_validate(await request.json())
     except (ValueError, ValidationError):
         return JSONResponse({"error": "invalid_argument"}, status_code=400)
+    # A plan that waits for approval keeps the conversation in Plan mode: leaving it is what approving does.
+    if body.mode != "plan" and await get_thread_mode(db, body.thread_id) == "plan" and await waiting_plan(db, body.thread_id):
+        return JSONResponse({"error": "plan_not_approved"}, status_code=409)
     return {"thread_id": body.thread_id, "mode": await set_thread_mode(db, body.thread_id, body.mode)}
+
+
+class PlanAction(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    thread_id: str = Field(pattern=THREAD_ID_PATTERN)
+    plan_id: str = Field(min_length=1, max_length=64)
+
+
+class PlanApproval(PlanAction):
+    mode: str = DEFAULT_APPROVAL_MODE
+
+
+@router.get("/plan")
+async def get_plan(thread_id: str = Query(pattern=THREAD_ID_PATTERN), db: AsyncSession = Depends(get_db)):
+    """The plan waiting for approval in this conversation, if any (restores the card after a reload)."""
+    return {"thread_id": thread_id, "plan": await waiting_plan(db, thread_id)}
+
+
+async def _plan_action(request: Request, model, action):
+    try:
+        body = model.model_validate(await request.json())
+        if isinstance(body, PlanApproval) and body.mode not in APPROVAL_MODES:
+            raise ValueError("mode")
+    except (ValueError, ValidationError):
+        return JSONResponse({"error": "invalid_argument"}, status_code=400)
+    try:
+        return await action(body)
+    except PlanError as exc:
+        return JSONResponse({"error": exc.code}, status_code=exc.status)
+
+
+@router.post("/plan/approve")
+async def approve(request: Request, db: AsyncSession = Depends(get_db)):
+    """Approve the waiting plan: the conversation leaves Plan mode for Ask (or the stricter-than-Full mode named).
+    Only the authenticated client can do this; a model's tool call cannot reach it."""
+    return await _plan_action(request, PlanApproval, lambda b: approve_plan(db, b.thread_id, b.plan_id, b.mode))
+
+
+@router.post("/plan/discard")
+async def discard(request: Request, db: AsyncSession = Depends(get_db)):
+    return await _plan_action(request, PlanAction, lambda b: discard_plan(db, b.thread_id, b.plan_id))
 
 
 class TrustUpdate(BaseModel):

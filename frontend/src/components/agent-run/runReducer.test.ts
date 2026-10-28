@@ -447,3 +447,20 @@ it("tool_result without a duration records none rather than 0ms", () => {
   const block = missing.plan[0].blocks.find((b) => b.kind === "tool");
   expect(block && block.kind === "tool" ? block.call.durationMs : "no-block").toBeUndefined();
 });
+
+describe("runReducer plan_proposed", () => {
+  it("keeps the plan artifact a Plan-mode run ended in, waiting for approval", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { node_id: "direct", plan_id: "p1", thread_id: "t1", text: "1. Do it", status: "proposed" } });
+    expect(state.proposedPlan).toEqual({ planId: "p1", text: "1. Do it" });
+  });
+
+  it("ignores a plan event without an id or text", () => {
+    expect(runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { text: "x" } }).proposedPlan).toBeUndefined();
+    expect(runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { plan_id: "p" } }).proposedPlan).toBeUndefined();
+  });
+
+  it("a new run starts with no plan", () => {
+    const withPlan = runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { plan_id: "p1", text: "t" } });
+    expect(runReducer(withPlan, { type: "reset", mode: "live", step: false }).proposedPlan).toBeUndefined();
+  });
+});
