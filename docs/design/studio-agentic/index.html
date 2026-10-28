@@ -27,6 +27,8 @@ textarea{width:100%;background:var(--sub-200);color:var(--ink);border:1px solid 
 <button id="step" aria-label="Next step">Next step ▸</button><span id="stage"></span></div>
 <main id="root"></main>
 <p class="note" id="note"></p>
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: html.security.audit.insecure-document-method, opengrep-rules.html.security.audit.insecure-document-method -->
 <script>
 const nodes=[["Researcher","Agent","40px","60px"],["tdd","Skill","40px","170px"],["Brief check","Gate","260px","60px"],["Merge approval","HITL","480px","60px"]];
 const ghost=[["Reviewer","Agent","480px","170px"]];
