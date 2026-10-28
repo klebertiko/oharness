@@ -102,6 +102,8 @@ export interface DirectRunPayload {
     enabled?: boolean;
     preset?: ToolPresetPayload;
     summarize?: boolean;
+    /** Let the model hand tasks to cancellable subagents (#166). */
+    subagents?: boolean;
     /** Conversation key. The sidecar looks up this thread's stored permission mode. */
     thread_id?: string;
     /** What the screen shows; the sidecar uses the stricter of this and the stored mode. */

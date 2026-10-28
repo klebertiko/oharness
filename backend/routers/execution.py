@@ -629,7 +629,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
-                        if broker and (kind.startswith('tool_') or kind == 'capabilities'):
+                        if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})
                         elif kind == "phase":
                             control.phase = ev.get("phase", "")

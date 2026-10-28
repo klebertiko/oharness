@@ -15,6 +15,7 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  subagents: [],
 };
 
 type Action =
@@ -434,6 +435,43 @@ export function runReducer(state: RunState, action: Action): RunState {
           { text: String(action.data.text ?? ""), atNode: String(action.data.at_node ?? "") },
         ],
       };
+
+    case "subagent_start":
+      return {
+        ...state,
+        subagents: [
+          ...state.subagents,
+          {
+            id: String(action.data.child_id ?? ""),
+            parentCallId: String(action.data.parent_call_id ?? ""),
+            task: String(action.data.task ?? ""),
+            state: "running",
+            chars: 0,
+            tokens: 0,
+          },
+        ],
+      };
+
+    case "subagent_progress":
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id ? { ...c, chars: Number(action.data.chars ?? c.chars) } : c
+        ),
+      };
+
+    case "subagent_done": {
+      const next = action.data.state;
+      const finalState = next === "cancelled" || next === "error" ? next : "done";
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id
+            ? { ...c, state: finalState, chars: Number(action.data.chars ?? c.chars), tokens: Number(action.data.tokens ?? 0) }
+            : c
+        ),
+      };
+    }
 
     case "run_stopped":
       return { ...state, status: "stopped" };

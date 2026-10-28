@@ -44,6 +44,8 @@ class ToolsRequest(StrictModel):
     permission_mode: PermissionMode | None = None
     preset: Annotated[Read | Exec | Discover, Field(discriminator='name')] | None = None
     summarize: bool = True
+    # Let the model hand tasks to cancellable subagents (#166). Off unless asked for.
+    subagents: bool = False
 
 
 def validate_call(name: str, args: dict):

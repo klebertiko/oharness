@@ -119,6 +119,15 @@ export interface Segment {
   endedAt?: number;
 }
 
+export interface Subagent {
+  id: string;
+  parentCallId: string;
+  task: string;
+  state: "running" | "done" | "cancelled" | "error";
+  chars: number;
+  tokens: number;
+}
+
 export type RunStatus =
   | "idle"
   | "starting"
@@ -163,6 +172,8 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** Children this run started (`subagent_*` events), in start order. */
+  subagents: Subagent[];
 }
 
 export interface RunEvent {
