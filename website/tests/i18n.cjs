@@ -57,7 +57,7 @@ const base = (process.env.WEBSITE_URL || 'http://127.0.0.1:4174').replace(/\/$/,
     await page.goto(base + 'en/index.html');
     await page.locator('[data-piece="skill"]').click();
     assert.match(await page.locator('#piece-description').innerText(), /^A skill/);
-    for (const name of ['studio','chats']) {
+    for (const name of ['chats','studio','canvas','run','providers']) {
       await page.locator(`[data-tour="${name}"]`).click();
       const img = page.locator(`[data-product-image="${name}"]`);
       await img.scrollIntoViewIfNeeded();

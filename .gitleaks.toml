@@ -19,15 +19,3 @@ paths = [
   '''backend/tests/test_sandbox_secrets\.py''',
   '''backend/sandbox/secrets\.py''',
 ]
-
-# Placeholder keychain labels in backend tests, e.g. "secretRef": "oharness/anthropic".
-# They name an entry in the secret store; they are not values, and the
-# generic-api-key rule reads the key name "secretRef" as a credential. Only a
-# secret that is exactly oharness/<provider> is exempted. (The legacy
-# [allowlist] table is used because [[allowlists]] is not applied to
-# extended rules in gitleaks 8.24.)
-[allowlist]
-description = "Placeholder secretRef labels (oharness/<provider>)"
-regexes = [
-  '''^oharness/[a-z0-9_.-]+$''',
-]

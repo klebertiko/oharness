@@ -61,6 +61,10 @@ export interface CredentialSpec {
   where: string;
   /** Environment variable the vendor's own tooling reads, for the CLI handoff. */
   env?: string;
+  /** `cli` only: the command that signs the vendor's CLI in. */
+  login?: string;
+  /** `cli` only: the vendor's page for installing that CLI. */
+  installUrl?: string;
 }
 
 export interface ProviderSpec {
@@ -80,6 +84,8 @@ export interface ProviderSpec {
   /** A constraint the user will otherwise discover the hard way. */
   caveat?: string;
   docs: string;
+  /** Where to add credit when a prepaid balance runs out (`billing: "credits"`). */
+  billingUrl?: string;
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
@@ -94,6 +100,8 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     credential: {
       kind: "cli",
       where: "Run `claude login` (or open Claude Code once and sign in).",
+      login: "claude login",
+      installUrl: "https://code.claude.com/docs/en/setup",
     },
     endpoint: { default: "https://api.anthropic.com", editable: false },
     summary:
@@ -114,6 +122,8 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     credential: {
       kind: "cli",
       where: "Run `cursor-agent login` (or sign in once from the Cursor desktop app).",
+      login: "cursor-agent login",
+      installUrl: "https://cursor.com/docs/cli/overview",
     },
     endpoint: { default: "https://api.cursor.com", editable: false },
     summary:
@@ -134,6 +144,8 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     credential: {
       kind: "cli",
       where: "Run `codex login` (or open the Codex app once and sign in).",
+      login: "codex login",
+      installUrl: "https://github.com/openai/codex",
     },
     endpoint: { default: "https://api.openai.com/v1", editable: true },
     summary:
@@ -183,6 +195,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     caveat:
       "Prices and availability are set by the upstream vendor and move without notice.",
     docs: "https://openrouter.ai/docs",
+    billingUrl: "https://openrouter.ai/credits",
   },
 };
 
