@@ -114,13 +114,17 @@ function mergeLibrary(
   return [defaultEntry, ...imported];
 }
 
+/** One fetch at a time: the chat stage and the picker both ask on mount. */
+let inflight: Promise<void> | null = null;
+
 export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => ({
   entries: [],
   hydrated: false,
   failed: false,
 
-  hydrate: async () => {
-    try {
+  hydrate: () => {
+    inflight ??= (async () => {
+      try {
       const res = await fetch(apiUrl("/bundles/default"), { cache: "no-store" });
       if (!res.ok) {
         throw new Error(`Failed to load default harness: ${res.status}`);
@@ -137,6 +141,10 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
       set({ failed: true });
       throw err;
     }
+    })().finally(() => {
+      inflight = null;
+    });
+    return inflight;
   },
 
   importBundle: (bundle) => {

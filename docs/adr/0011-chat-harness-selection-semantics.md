@@ -24,7 +24,7 @@ Como cada turno envia só a instrução (o app já diz "earlier messages are not
 7. **Vocabulário para não especialistas:** rótulo "Harness"; "No harness" = "Direct conversation with the model"; avisos em frases curtas, sem "bundle", "manifest" ou ids.
 
 ## Sessão e conversa
-A sessão (`harnessSessionStore`) continua sendo o que o motor lê. Uma única instância (`useChatHarness(true)`, no palco do chat) a mantém alinhada: abrir uma conversa aplica o harness dela; uma escolha feita fora (paleta de comandos, "Use in chat" do Studio) com uma conversa aberta vira o harness *dessa* conversa (com a linha de troca). O `hydrate` da sessão não sobrescreve um harness posto em uso enquanto o padrão carregava.
+A sessão (`harnessSessionStore`) continua sendo o que o motor lê. Uma única instância (`useChatHarness(true)`, no palco do chat) a mantém alinhada: abrir uma conversa aplica o harness dela; uma escolha feita fora (paleta de comandos, "Use in chat" do Studio) com uma conversa aberta vira o harness *dessa* conversa (com a linha de troca). A sincronização espera a sessão carregar e o turno em andamento terminar; o estado do último acerto vive fora do componente, para uma escolha feita no Studio (com o palco desmontado) ser lida como escolha quando a conversa volta. Várias trocas antes da próxima mensagem viram uma linha só (ou nenhuma, se a conversa volta ao ponto de partida). O `hydrate` da sessão não sobrescreve um harness posto em uso enquanto o padrão carregava.
 
 ## Modelo de dados mínimo
 `ThreadHarness = {kind:"none"} | {kind:"harness", id, name}` em `Thread.harness?` e `ThreadMessage.harness?` (aditivo; conversas antigas não têm campo e seguem a sessão até a primeira escolha).

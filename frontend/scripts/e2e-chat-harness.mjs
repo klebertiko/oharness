@@ -96,7 +96,7 @@ for (const theme of ["dark", "light"]) {
     // 2. Switching after messages: a marker, applied from the next message.
     await trigger().click();
     await page.getByRole("option", { name: /^Demo Harness/ }).click();
-    await page.getByRole("separator", { name: /Harness changed to Demo Harness/ }).waitFor();
+    await page.getByText(/Harness changed to Demo Harness/).waitFor();
     assert.equal(await page.getByText("Answer run-1").count(), 1, "earlier reply untouched");
     await send("Now with the demo harness");
     await page.getByText("Answer run-2").waitFor();
