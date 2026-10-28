@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Studio agentic model · throwaway prototype (#71)</title>
+<style>
+:root{--sub-000:oklch(.17 .006 72);--sub-100:oklch(.205 .007 72);--sub-200:oklch(.245 .008 72);--sub-300:oklch(.295 .009 72);--line:oklch(.35 .01 72);--ink:oklch(.945 .006 82);--dim:oklch(.82 .007 82);--mute:oklch(.7 .007 82);--signal:oklch(.7 .105 190);--warn:oklch(.67 .12 80)}
+:root[data-theme=ivory]{--sub-000:oklch(.965 .008 82);--sub-100:oklch(.985 .005 82);--sub-200:oklch(.94 .009 82);--sub-300:oklch(.905 .01 82);--line:oklch(.81 .011 82);--ink:oklch(.235 .012 75);--dim:oklch(.35 .012 75);--mute:oklch(.45 .012 75);--signal:oklch(.45 .1 190)}
+*{box-sizing:border-box}body{margin:0;background:var(--sub-000);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.proto{padding:8px 16px;border-bottom:1px dashed var(--warn);color:var(--warn);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{font:inherit;color:var(--ink);background:var(--sub-300);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--signal)}button[aria-pressed=true]{box-shadow:inset 0 -2px var(--signal)}
+.app{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 48px);min-height:420px}
+.app.b{grid-template-columns:1fr}
+.canvas{position:relative;background:radial-gradient(var(--line) 1px,transparent 1px) 0 0/22px 22px;overflow:hidden}
+.node{position:absolute;border:1px solid var(--line);background:var(--sub-200);border-radius:8px;padding:8px 10px;width:150px}
+.node small{color:var(--mute);display:block}.node.ghost{border:1px dashed var(--signal);background:color-mix(in oklch,var(--signal) 14%,transparent)}
+.side{border-left:1px solid var(--line);background:var(--sub-100);display:flex;flex-direction:column;padding:10px;gap:8px}
+.bubble{background:var(--sub-300);border-radius:8px;padding:6px 10px;align-self:flex-end}
+.card{border:1px solid var(--line);border-radius:8px;background:var(--sub-200);padding:8px}
+.overlay{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(520px,90%);border:1px solid var(--line);border-radius:10px;background:var(--sub-100);padding:10px}
+textarea{width:100%;background:var(--sub-200);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px;font:inherit}
+.note{padding:8px 16px;color:var(--mute);border-top:1px solid var(--line)}
+</style></head><body>
+<div class="proto"><strong>PROTOTYPE · throwaway</strong>
+<button id="ta" aria-pressed="true">A · Describe first + side-panel conversation</button>
+<button id="tb" aria-pressed="false">B · Canvas-first overlay</button>
+<button id="th">Theme: Graphite</button>
+<button id="step" aria-label="Next step">Next step ▸</button><span id="stage"></span></div>
+<main id="root"></main>
+<p class="note" id="note"></p>
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: html.security.audit.insecure-document-method, opengrep-rules.html.security.audit.insecure-document-method -->
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: opengrep-rules.html.security.audit.insecure-document-method -->
+<script>
+const nodes=[["Researcher","Agent","40px","60px"],["tdd","Skill","40px","170px"],["Brief check","Gate","260px","60px"],["Merge approval","HITL","480px","60px"]];
+const ghost=[["Reviewer","Agent","480px","170px"]];
+let alt="A",stage=0;const stages=["Describe","Nilo is drafting","Review proposal","Applied · Keep / Undo"];
+function canvas(){let h=nodes.map(n=>`<div class="node" style="left:${n[2]};top:${n[3]}" tabindex="0"><b>${n[0]}</b><small>${n[1]}</small></div>`).join("");
+ if(stage>=2)h+=ghost.map(n=>`<div class="node ${stage==2?"ghost":""}" style="left:${n[2]};top:${n[3]}" aria-label="${stage==2?"Proposed: ":""}${n[1]} ${n[0]}" tabindex="0"><b>${n[0]}</b><small>${stage==2?"proposed · "+n[1]:n[1]}</small></div>`).join("");
+ return `<div class="canvas">${h}${alt=="B"?overlay():""}</div>`}
+function review(){return `<div class="card" role="region" aria-label="Proposed changes"><b>Proposed changes · 2</b><br><label><input type="checkbox" checked> + Agent “Reviewer”</label><br><label><input type="checkbox" checked> → Brief check pass → Reviewer</label><div style="margin-top:6px;display:flex;gap:6px"><button>Apply 2 changes</button><button>Discard</button><button>Refine…</button></div></div>`}
+function applied(){return `<div class="card"><b>Applied 2 changes</b><div style="margin-top:6px;display:flex;gap:6px"><button>Keep</button><button>Undo</button></div></div>`}
+function body(){return stage==0?`<textarea rows=2 aria-label="Describe a change" placeholder="Describe the change…"></textarea>`:
+ `<div class="bubble">Add a reviewer after the brief check</div>`+(stage==1?`<p style="color:var(--mute)">Nilo is drafting · 4s <button>Cancel</button></p>`:stage==2?review():applied())}
+function overlay(){return `<div class="overlay" role="dialog" aria-label="Nilo">${stage==0?`<textarea rows=2 aria-label="Describe a change"></textarea>`:stage==1?`<p>Nilo is drafting · 4s <button>Cancel</button></p>`:stage==2?review():applied()}<small style="color:var(--mute)">Hides the nodes under it; no history on screen.</small></div>`}
+function paint(){document.getElementById("root").innerHTML=`<div class="app ${alt=="B"?"b":""}">${canvas()}${alt=="A"?`<aside class="side" aria-label="Nilo"><b>Nilo</b>${body()}</aside>`:""}</div>`;
+ document.getElementById("stage").textContent="Stage: "+stages[stage];
+ document.getElementById("note").textContent=alt=="A"?"A keeps canvas and conversation both visible; history, refine and Keep/Undo live in one column. Cost: 320 px of canvas (collapsible).":"B keeps the whole canvas but the overlay covers nodes at the moment of review and has no place for history or multi-turn refinement."}
+ta.onclick=()=>{alt="A";ta.setAttribute("aria-pressed",true);tb.setAttribute("aria-pressed",false);paint()}
+tb.onclick=()=>{alt="B";tb.setAttribute("aria-pressed",true);ta.setAttribute("aria-pressed",false);paint()}
+step.onclick=()=>{stage=(stage+1)%4;paint()}
+th.onclick=()=>{const i=document.documentElement.dataset.theme=="ivory";document.documentElement.dataset.theme=i?"graphite":"ivory";th.textContent="Theme: "+(i?"Graphite":"Ivory")}
+paint();
+</script></body></html>
