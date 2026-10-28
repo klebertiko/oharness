@@ -127,3 +127,10 @@ def test_a_selection_holding_a_lone_surrogate_is_dropped(tmp_path):
     path = tmp_path / "state.json"
     path.write_text(json.dumps({"version": 1, "workspaces": {}, "selected": {"repo": "\ud800", "repo_key": "r", "id": WS_A}}), encoding="utf-8")
     assert StateStore(path).read()["selected"] is None
+
+
+def test_a_group_filed_under_a_lone_surrogate_key_is_quarantined(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"version": 1, "workspaces": {"\ud800": {}}, "selected": None}), encoding="utf-8")
+    state = StateStore(path).read()
+    assert state["workspaces"] == {} and state["quarantine"]

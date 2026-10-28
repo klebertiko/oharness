@@ -175,7 +175,7 @@ def _reconfirm(top: str, inspected: os.stat_result) -> None:
     try:
         now = os.lstat(top)
     except FileNotFoundError:
-        raise _turned_into_a_link(top) from None
+        raise WorkspaceError("unsafe_destination", f"{os.path.basename(top)!r} disappeared while it was being removed", 409) from None
     if link_kind(top, now) or not stat.S_ISDIR(now.st_mode) or not _same_directory(inspected, now):
         raise _turned_into_a_link(top)
 

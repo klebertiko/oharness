@@ -69,7 +69,7 @@ def _sanitize(state: dict[str, Any]) -> dict[str, Any]:
     """
     quarantined: list[dict[str, Any]] = []
     for key, group in list(state["workspaces"].items()):
-        if not isinstance(group, dict):
+        if not isinstance(group, dict) or not _encodable(key):
             quarantined.append({"repo_key": key, "group": group})
             del state["workspaces"][key]
             continue
