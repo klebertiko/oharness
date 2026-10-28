@@ -41,15 +41,25 @@ def _well_formed(state: Any) -> bool:
     return isinstance(state, dict) and state.get("version") == VERSION and isinstance(state.get("workspaces"), dict)
 
 
+def _encodable(text: str) -> bool:
+    """False for a lone surrogate: valid JSON, but it cannot be written as UTF-8 anywhere downstream (a 500 on every read)."""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _valid_record(ident: object, rec: object) -> bool:
     """A registry record is trusted only with this exact shape: the generated id it is filed under, an absolute path, text-or-null extras."""
     return (isinstance(rec, dict) and isinstance(ident, str) and rec.get("id") == ident and valid_workspace_id(ident)
             and isinstance(rec.get("path"), str) and bool(rec["path"]) and chr(0) not in rec["path"] and os.path.isabs(rec["path"])
-            and all(rec.get(key) is None or isinstance(rec.get(key), str) for key in _OPTIONAL_TEXT))
+            and _encodable(rec["path"])
+            and all(rec.get(key) is None or (isinstance(rec.get(key), str) and _encodable(rec[key])) for key in _OPTIONAL_TEXT))
 
 
 def _valid_selection(chosen: object) -> bool:
-    return isinstance(chosen, dict) and all(isinstance(chosen.get(key), str) and chosen[key] for key in ("repo", "repo_key", "id"))
+    return isinstance(chosen, dict) and all(isinstance(chosen.get(key), str) and chosen[key] and _encodable(chosen[key]) for key in ("repo", "repo_key", "id"))
 
 
 def _sanitize(state: dict[str, Any]) -> dict[str, Any]:
@@ -84,12 +94,12 @@ class StateStore:
 
     def _load(self) -> dict[str, Any]:
         try:
-            raw = self.path.read_text(encoding="utf-8")
+            raw = self.path.read_bytes()
         except FileNotFoundError:
             return _empty()
         try:
-            state = json.loads(raw)
-        except ValueError:
+            state = json.loads(raw.decode("utf-8"))
+        except (ValueError, RecursionError):  # UnicodeDecodeError is a ValueError; a file nested past the interpreter's stack is not a state
             state = None
         if not _well_formed(state):
             self._set_aside()
