@@ -13,3 +13,7 @@ backend/oharness/fixtures/*.legacy.json -text
 tests/fixtures/ohm/**/*.yaml -text
 tests/fixtures/ohm/*.ohm -text
 tests/fixtures/ohm/*.json -text
+
+# The permission mode table is shipped twice and a test compares the bytes; keep LF on every checkout.
+backend/sandbox/permission_modes.json text eol=lf
+frontend/src/lib/permissionModes.json text eol=lf

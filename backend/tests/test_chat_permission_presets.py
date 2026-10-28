@@ -264,3 +264,58 @@ def test_full_does_not_wrap_a_non_read_only_git_in_the_read_only_hardening(tmp_p
 def test_a_mode_refusal_names_the_mode_that_refused(tmp_path):
     denied = run_exec(tmp_path, 'read_only', ['touch', 'a'])[-1]
     assert denied['mode'] == 'read_only'
+
+
+# -- review round 2 -------------------------------------------------------------
+def test_a_write_through_a_symlink_inside_a_destination_directory_is_not_proven_inside(tmp_path):
+    import os
+    if not hasattr(os, 'symlink'):
+        pytest.skip('no symlinks')
+    outside = tmp_path / 'outside.txt'
+    outside.write_text('x', encoding='utf-8')
+    root = tmp_path / 'ws'
+    (root / 'linkdir').mkdir(parents=True)
+    (root / 'payload.txt').write_text('p', encoding='utf-8')
+    try:
+        os.symlink(outside, root / 'linkdir' / 'payload.txt')
+    except OSError:
+        pytest.skip('symlinks need privileges here')
+    assert permission.exec_class(call(['cp', 'payload.txt', 'linkdir/']), root) == 'exec_other'
+    assert permission.exec_class(call(['mv', 'payload.txt', 'linkdir']), root) == 'exec_other'
+    (root / 'plain').mkdir()
+    assert permission.exec_class(call(['cp', 'payload.txt', 'plain/']), root) == 'exec_write_inside'
+
+
+@pytest.mark.parametrize('argv', [['git', '-C', '.', 'push', '--force'], ['git', 'push', 'origin', '+main'], ['rm', '-r', 'dir'],
+                                  ['env', 'ls'], ['sh', '-c', 'ls'], ['bash', '-c', 'ls'], ['xargs', 'ls'], ['nice', 'ls'], ['powershell', '-Command', 'ls'],
+                                  ['cmd', '/c', 'dir'], ['nohup', 'ls']])
+def test_full_also_asks_for_wrapped_and_spelled_differently_risky_commands(argv):
+    assert permission.needs_confirmation_even_when_allowed(argv)
+
+
+def test_the_read_only_note_does_not_promise_what_it_cannot_deliver():
+    note = permission.DENY_NOTES['read_only'].lower()
+    assert 'read-only' in note and 'cannot be checked' in note and 'ask' in note
+
+
+def test_the_sidecar_build_ships_the_mode_table():
+    text = (Path(permission.__file__).parents[2] / 'scripts' / 'build-sidecar.mjs').read_text(encoding='utf-8')
+    assert 'permission_modes.json' in text
+
+
+def test_a_mode_without_a_rule_for_every_class_fails_the_import_even_under_python_O():
+    import subprocess
+    import textwrap
+    code = textwrap.dedent('''
+        import json, pathlib, sys
+        import sandbox.permission as p
+        bad = json.loads(pathlib.Path(p.__file__).with_name("permission_modes.json").read_text())
+        del bad["modes"][0]["rules"]["exec_other"]
+        try:
+            p.validate_table(bad)
+        except ValueError:
+            sys.exit(0)
+        sys.exit(1)
+    ''')
+    done = subprocess.run([sys.executable, '-O', '-c', code], cwd=Path(permission.__file__).parents[1], capture_output=True, check=False)
+    assert done.returncode == 0, done.stderr.decode()

@@ -165,11 +165,11 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
           <Button autoFocus onClick={() => setConfirmingFull(false)}>Cancel</Button>
         </div>
       </div>}
-      {permissionMode === "auto_workspace" && workspaceTrust && <div className="w-full text-body text-ink-mute">
+      {(permissionMode === "auto_workspace" || permissionMode === "workspace_write") && workspaceTrust && <div className="w-full text-body text-ink-mute">
         {workspaceTrust.trusted
-          ? <p className="flex flex-wrap items-center gap-2"><span>Trusted workspace: Auto runs the project&apos;s scripts (npm, pytest) without asking.</span>
+          ? <p className="flex flex-wrap items-center gap-2"><span>Trusted workspace: {PERMISSION_LABEL[permissionMode]} runs the project&apos;s scripts (npm, pytest) without asking.</span>
               <Button size="sm" disabled={live} onClick={() => workspaceTrust.onChange(false)}>Revoke trust</Button></p>
-          : <p className="flex flex-wrap items-center gap-2"><span>Auto: only read-only git runs on its own; the project&apos;s scripts still ask for approval.</span>
+          : <p className="flex flex-wrap items-center gap-2"><span>{PERMISSION_LABEL[permissionMode]}: {permissionMode === "workspace_write" ? "file commands inside the workspace and read-only git run on their own" : "only read-only git runs on its own"}; the project&apos;s scripts still ask for approval.</span>
               <Button size="sm" disabled={live} onClick={() => setConfirmingTrust(true)}>Trust this workspace…</Button></p>}
         {confirmingTrust && !workspaceTrust.trusted && <div role="alertdialog" aria-label="Trust this workspace" className="mt-2 rounded-control border border-warn p-3 text-ink">
           <p>Trust <strong>{workspaceTrust.workspaceName}</strong>? In a trusted workspace, the project&apos;s scripts (package.json, conftest.py) run and can execute code without asking for approval.
