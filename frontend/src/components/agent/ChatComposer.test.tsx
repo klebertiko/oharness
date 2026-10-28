@@ -70,15 +70,18 @@ it("keeps commands unavailable during a running turn", () => {
   fireEvent.keyDown(input, { key: "Enter" });
   expect(input.value).toBe("/new"); expect(send).not.toHaveBeenCalled();
 });
-it("disables the composer while a run is live — Ctrl+Enter must not silently no-op", () => {
-  // Surfaced live: a person typed a new message during a run, pressed
-  // Ctrl+Enter, and nothing happened with no explanation — onSend() (bound
-  // to a canStart-gated handler upstream) already refused to start a second
-  // run, but gave no feedback. The composer itself must make this obvious.
+it("keeps accepting text while a run is live, and send hands it to onSend (the stage queues it)", () => {
   render(<Composer live />);
   const input = screen.getByRole("textbox", { name: "Message OHarness" }) as HTMLTextAreaElement;
-  expect(input.disabled).toBe(true);
-  expect(input.placeholder).toMatch(/waiting|stop/i);
+  expect(input.disabled).toBe(false);
+  expect(input.placeholder).toMatch(/queue/i);
+  fireEvent.change(input, { target: { value: "next thing" } });
+  fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+  expect(send).toHaveBeenCalledTimes(1);
+});
+it("a slash command typed during a live run is not sent or queued", () => {
+  render(<Composer live />);
+  const input = type("/exec ls");
   fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
   expect(send).not.toHaveBeenCalled();
 });
