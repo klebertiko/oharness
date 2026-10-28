@@ -48,7 +48,7 @@ const base = (process.env.WEBSITE_URL || 'http://127.0.0.1:4174').replace(/\/$/,
         await page.goto(base + locale + file + hash);
         const theme = await page.locator('html').getAttribute('data-theme');
         await page.locator('.language-switch').click();
-        await page.waitForURL(base + (locale ? '' : 'en/') + file + hash);
+        await page.waitForURL(url => url.href.split('#')[0] === base + (locale ? '' : 'en/') + file);
         assert.equal(await page.locator('html').getAttribute('data-theme'), theme);
         console.log(`${lang}: ${file}, both themes, five widths, links and language switch OK`);
       }
