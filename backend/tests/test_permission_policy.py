@@ -480,3 +480,19 @@ def test_decide_never_stats_lists_or_opens_a_path_outside_the_workspace(ws, tmp_
         auto(call, ws, trusted=True)
     escaped = [(name, path) for name, path in touched if not (path == root or path.startswith(root + os.sep))]
     assert escaped == []
+
+
+RESERVED = ['CON', 'con', 'NUL', 'nul.txt', 'PRN', 'AUX.log', 'COM1', 'com9.txt', 'LPT1', 'lpt9.tar.gz', 'CONIN$', 'CONOUT$', 'COM¹', 'sub/NUL', 'sub\\aux.txt',
+            'NUL.', 'NUL ', 'con.txt.']
+
+
+@pytest.mark.parametrize('name', RESERVED)
+@pytest.mark.parametrize('argv', [('ls',), ('git', 'status', '--'), ('git', 'diff', '--'), ('git', 'log', '--'), ('git', 'ls-files')])
+def test_auto_asks_for_a_windows_reserved_device_name_as_operand(argv, name, ws):
+    """CON/NUL/COM1... (with or without an extension) open a device on Windows and can hang the command until its timeout."""
+    assert auto(ex(*argv, name), ws) == 'ask'
+
+
+@pytest.mark.parametrize('name', ['console', 'nullable.txt', 'com10', 'lpt0', 'comm', 'sub/connect', 'aux_file', 'notes.txt'])
+def test_auto_still_allows_names_that_only_start_like_a_device(name, ws):
+    assert auto(ex('ls', name), ws) == 'allow'
