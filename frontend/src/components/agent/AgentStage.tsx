@@ -11,7 +11,9 @@ import { useChatTools } from "@/components/agent/useChatTools";
 import { usePermissionMode } from "@/components/agent/usePermissionMode";
 import { useWorkspaceTrust } from "@/components/agent/useWorkspaceTrust";
 import { policyRefusals } from "@/components/agent/policyRefusals";
-import { PERMISSION_LABEL, isPermissionMode } from "@/lib/permissionMode";
+import { PlanArtifactCard } from "@/components/agent/PlanArtifactCard";
+import { usePlanArtifact } from "@/components/agent/usePlanArtifact";
+import { PERMISSION_LABEL, isPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
@@ -139,6 +141,7 @@ export function AgentStage() {
   });
   const ownerThreadId = runOwner.current?.threadId ?? activeThreadId;
   const runInCurrentChat = ownerThreadId === activeThreadId;
+  const planArtifact = usePlanArtifact(activeThreadId, permission.mode === "plan", runInCurrentChat ? run.proposedPlan : undefined);
   const liveAnswer = run.plan.flatMap((segment) => segment.blocks
     .filter((block) => block.kind === "text")
     .map((block) => block.text)).join("\n\n");
@@ -253,18 +256,27 @@ export function AgentStage() {
   const onStart = () => {
     if (!canStart || !provider) return;
     if (slashPreset && "preset" in slashPreset) { void onPreset(slashPreset.preset); return; }
-    const text = instruction.trim();
+    send(instruction.trim());
+  };
+
+  /** Send one turn. `shown` is what the chat records when it differs from what the provider receives. */
+  const send = (text: string, shown = text, modeOverride?: PermissionMode) => {
+    if (!provider) return;
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
     setFollowing(true);
-    const threadId = activeThreadId ?? createThread(text.slice(0, 60), chatHarness.binding);
+    const threadId = activeThreadId ?? createThread(shown.slice(0, 60), chatHarness.binding);
     // A chat from before the setting existed takes the harness it is about to run with.
     if (activeThreadId) useThreadStore.getState().bindThreadHarness(activeThreadId, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
-    appendMessage(threadId, { role: "user", content: text });
-    runOwner.current = { threadId, instruction: text, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
+    appendMessage(threadId, { role: "user", content: shown });
+    runOwner.current = { threadId, instruction: shown, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
     setInstruction("");
     savedRunFor.current = null;
+    // In Plan mode the turn names its thread and mode, so the sidecar can end it in a plan that waits for approval.
+    const mode = modeOverride ?? permission.mode;
+    // Subagents are a harness-off feature; a Plan-mode turn answers directly, so it never starts children.
+    const subagentRun = useSubagentStore.getState().enabled && !enabled && mode !== "plan";
     // Chat is never mock: it runs against the connected provider. `provider.id`
     // is also the fallback carried into the graph above — one connection,
     // decided once here, never re-derived by the backend. useRunStream also
@@ -276,11 +288,18 @@ export function AgentStage() {
       step: false,
       cwd: workspace?.rootPath || undefined,
       providerId: provider.id,
-      model: !enabled ? selectedModel || undefined : undefined,
-      tools: useSubagentStore.getState().enabled && !enabled
-        ? { subagents: true, thread_id: threadId, permission_mode: permission.mode }
-        : undefined,
+      model: !enabled || mode === "plan" ? selectedModel || undefined : undefined,
+      tools: subagentRun
+        ? { subagents: true, thread_id: threadId, permission_mode: mode }
+        : mode === "plan" || modeOverride ? { enabled: false, thread_id: threadId, permission_mode: mode } : undefined,
     });
+  };
+
+  const approvePlan = async () => {
+    if (!provider) return; // approving consumes the plan: only do it when the approved turn can actually be sent
+    const text = await planArtifact.approve();
+    if (text === null) return;
+    send(`Carry out this approved plan:\n\n${text}`, "Plan approved. Carry it out.", "ask");
   };
 
   const gateSeg = run.plan?.find((s) => s.state === "gate" && s.gate);
@@ -420,6 +439,11 @@ export function AgentStage() {
                 <p className="mt-1 wrap-anywhere">{refusal.note} Preset: {isPermissionMode(refusal.mode) ? PERMISSION_LABEL[refusal.mode] : refusal.mode}.</p>
               </Notice>
             ))}
+
+            {planArtifact.plan && !live && (
+              <PlanArtifactCard text={planArtifact.plan.text} busy={planArtifact.busy} error={planArtifact.error}
+                onApprove={() => void approvePlan()} onDiscard={() => void planArtifact.discard()} />
+            )}
 
             {runInCurrentChat && (run.status === "error" || run.status === "stopped") && (
               <Notice

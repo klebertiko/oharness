@@ -32,6 +32,7 @@ from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
+from sandbox.plan_store import propose_plan
 from sandbox.schemas import ToolsRequest
 
 router = APIRouter(prefix="/execute", tags=["execution"])
@@ -772,6 +773,12 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
                         )
+                        if broker and stored == "plan" and broker.permission_mode == "plan" and tool_options.preset is None and tool_options.thread_id and output.strip():
+                            # Plan mode ends in a plan artifact; nothing executes until a person approves it. Only a plain turn in a conversation
+                            # stored in Plan: the approval barrier and the card follow the stored mode, and a `/read` or `/exec` is not a plan.
+                            async with SessionLocal() as plan_session:
+                                plan = await propose_plan(plan_session, tool_options.thread_id, output)
+                            yield emit("plan_proposed", {"node_id": node_id, **plan})
                 except Exception as exc:  # noqa: BLE001
                     status = STATUS_ERROR
                     total_tokens = node_tokens
