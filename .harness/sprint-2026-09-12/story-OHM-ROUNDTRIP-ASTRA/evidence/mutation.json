@@ -1,6 +1,6 @@
 {
   "scope": "12 targeted semantic mutants; not an exhaustive mutation score",
-  "sandbox": "C:\\Users\\klebe\\AppData\\Local\\Temp\\oharness-ohm-mutation-q9A9hq",
+  "sandbox": "C:\\Users\\<user>\\AppData\\Local\\Temp\\oharness-ohm-mutation-q9A9hq",
   "baseline": "passed",
   "results": [
     {

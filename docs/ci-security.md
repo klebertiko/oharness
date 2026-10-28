@@ -55,7 +55,7 @@ Windows ships NSIS only. WiX needs a numeric MSI version (`major.minor.patch.bui
 
 Linux builds on the oldest supported Ubuntu runner, so they need glibc 2.35 or newer. macOS ships two native DMGs instead of a universal one: a PyInstaller `--onefile` sidecar can only be universal2 if Python and every native wheel are universal2, and a onefile binary cannot be merged with `lipo`.
 
-The last job adds `SHA256SUMS` and the CycloneDX SBOM `OHarness-sbom.cdx.json` (from the source lockfiles), attests build provenance for every asset and the SBOM for every installer, and creates a **draft** GitHub Release. A tag with a SemVer pre-release suffix (a hyphen, e.g. `v0.0.1-alpha`) makes it a GitHub **pre-release**. A maintainer reviews the draft and publishes it. Asset names never contain the version, so `https://github.com/klebertiko/OHarness/releases/latest/download/<asset>` points at the newest published *stable* release. GitHub never serves a pre-release from `releases/latest`, so while only pre-releases exist, link the tag instead: `https://github.com/klebertiko/OHarness/releases/tag/v0.0.1-alpha` or `https://github.com/klebertiko/OHarness/releases/download/v0.0.1-alpha/<asset>`.
+The last job adds `SHA256SUMS` and the CycloneDX SBOM `OHarness-sbom.cdx.json` (from the source lockfiles), attests build provenance for every asset and the SBOM for every installer, and creates a **draft** GitHub Release. A tag with a SemVer pre-release suffix (a hyphen, e.g. `v0.0.1-alpha`) makes it a GitHub **pre-release**. A maintainer reviews the draft and publishes it. Asset names never contain the version, so `https://github.com/klebertiko/oharness/releases/latest/download/<asset>` points at the newest published *stable* release. GitHub never serves a pre-release from `releases/latest`, so while only pre-releases exist, link the tag instead: `https://github.com/klebertiko/oharness/releases/tag/v0.0.1-alpha` or `https://github.com/klebertiko/oharness/releases/download/v0.0.1-alpha/<asset>`.
 
 Pull requests that touch the desktop build (`src-tauri/**`, the release workflow, sidecar scripts, root `package*.json`) run the same matrix as a build-only check: no signing, no attestations, no release. `workflow_dispatch` is a dry run that uploads workflow artifacts only; its `sign` input also runs signing through the `release` environment, so a new certificate can be tested before tagging.
 
@@ -63,7 +63,7 @@ Verify a download:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify OHarness-windows-x64-setup.exe --repo klebertiko/OHarness
+gh attestation verify OHarness-windows-x64-setup.exe --repo klebertiko/oharness
 ```
 
 ### Code signing
@@ -74,7 +74,7 @@ Create these as **environment secrets of `release`**, not as repository secrets,
 
 | Platform | Secret / variable | Value |
 | --- | --- | --- |
-| Windows | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (secrets) | App registration with a federated credential for subject `repo:klebertiko/OHarness:environment:release` and the *Certificate Profile Signer* role on the signing account |
+| Windows | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (secrets) | App registration with a federated credential for subject `repo:klebertiko/oharness:environment:release` and the *Certificate Profile Signer* role on the signing account |
 | Windows | `AZURE_TRUSTED_SIGNING_ENDPOINT`, `AZURE_TRUSTED_SIGNING_ACCOUNT`, `AZURE_TRUSTED_SIGNING_PROFILE` (variables) | Endpoint URL, Artifact Signing (Trusted Signing) account name, certificate profile name |
 | macOS | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` | Base64 of the exported *Developer ID Application* `.p12`, and its password |
 | macOS | `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Name (TEAMID)` |
@@ -100,7 +100,7 @@ Promotion beyond shadow mode requires a versioned, human-labelled PT/EN corpus w
 
 ## Website deploy (GitHub Pages)
 
-`.github/workflows/pages.yml` publishes `website/` to https://klebertiko.github.io/OHarness/ with the official Actions flow: `configure-pages` → `npm run build:pages` → `upload-pages-artifact` → `deploy-pages`. It runs on pushes to `main` that touch `website/**` or the workflow itself, and on `workflow_dispatch`. The build installs no npm dependencies (`build-pages.mjs` uses Node built-ins), so Safe Chain is not needed there. The build job has `contents: read` + `pages: read`; only the deploy job gets `pages: write` + `id-token: write`, inside the `github-pages` environment (deployment branches: `main`, `gh-pages`). `concurrency: pages` never cancels a running deploy.
+`.github/workflows/pages.yml` publishes `website/` to https://klebertiko.github.io/oharness/ with the official Actions flow: `configure-pages` → `npm run build:pages` → `upload-pages-artifact` → `deploy-pages`. It runs on pushes to `main` that touch `website/**` or the workflow itself, and on `workflow_dispatch`. The build installs no npm dependencies (`build-pages.mjs` uses Node built-ins), so Safe Chain is not needed there. The build job has `contents: read` + `pages: read`; only the deploy job gets `pages: write` + `id-token: write`, inside the `github-pages` environment (deployment branches: `main`, `gh-pages`). `concurrency: pages` never cancels a running deploy.
 
 PRs cannot break the site silently: the Quality `website` job already runs `npm run build:pages`, `test:publication`, `test:i18n` and `test:security` on every PR.
 

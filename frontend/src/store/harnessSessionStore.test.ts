@@ -70,6 +70,17 @@ describe("harnessSessionStore", () => {
     expect(useHarnessSessionStore.getState().hydrated).toBe(true);
   });
 
+  it("hydrate does not overwrite a harness put in use while the default was loading", async () => {
+    let release: (v: unknown) => void = () => undefined;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { release = resolve; })));
+    const pending = useHarnessSessionStore.getState().hydrate();
+    useHarnessSessionStore.getState().replaceBundle({ manifest: { id: "chosen", name: "Chosen" } });
+    release({ ok: true, json: async () => defaultBundle });
+    await pending;
+    expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("chosen");
+    expect(useHarnessSessionStore.getState().hydrated).toBe(true);
+  });
+
   it("hydrate restores enabled from localStorage", async () => {
     localStorage.setItem(
       HARNESS_SESSION_KEY,

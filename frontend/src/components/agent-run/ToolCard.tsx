@@ -1,4 +1,5 @@
 "use client";
+import { PERMISSION_LABEL, isPermissionMode } from "@/lib/permissionMode";
 import { useEffect, useState } from "react";
 import { sendControl } from "./runClient";
 import type { ToolCall } from "./types";
@@ -14,7 +15,7 @@ import { readDisclosure, useReadDisclosureStore, type DisclosureConnection } fro
 type Decision = "approve" | "reject";
 
 function stateOf(call: ToolCall): { label: string; tone: "signal" | "ok" | "fault" | "warn" | "mute" } {
-  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejected", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "no answer" : "blocked", tone: "fault" };
+  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejected", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "no answer" : call.denied.reason === "hook" ? "blocked by hook" : "blocked", tone: "fault" };
   if (call.simulated) return { label: "simulated", tone: "mute" };
   if (call.timedOut) return { label: "timeout", tone: "fault" };
   if (call.ok === false) return { label: "failed", tone: "fault" };
@@ -28,6 +29,12 @@ function stateOf(call: ToolCall): { label: string; tone: "signal" | "ok" | "faul
 const TONE: Record<string, string> = {
   signal: "var(--signal-text)", ok: "var(--ink-mute)", fault: "var(--fault-text)", warn: "var(--warn-text)", mute: "var(--ink-mute)",
 };
+
+/** Which mode let a command run unasked: the original Auto keeps its wording, a preset is named. */
+function autoApprovedBy(mode: string): string {
+  if (mode === "auto_workspace") return "workspace mode";
+  return isPermissionMode(mode) ? `${PERMISSION_LABEL[mode]} preset` : "permission mode";
+}
 
 export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: string | null; connection?: DisclosureConnection | null }) {
   const [sent, setSent] = useState<Decision | null>(null);
@@ -66,7 +73,7 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
       <div className="flex items-center gap-2">
         <span className="t-meta text-ink">{title}</span>
         {call.origin && <span className="t-meta text-ink-mute">· {call.origin === "model" ? "requested by the model" : "requested by you"}</span>}
-        {call.autoApproved && <span data-auto-approved className="rounded-control bg-sub-300 px-1.5 py-0.5 text-meta text-ink-mute">auto-approved: workspace mode</span>}
+        {call.autoApproved && <span data-auto-approved className="rounded-control bg-sub-300 px-1.5 py-0.5 text-meta text-ink-mute">auto-approved: {autoApprovedBy(call.autoApproved.mode)}</span>}
         {high && <span className="rounded-control px-1.5 py-0.5 text-meta font-semibold uppercase" style={{ background: "var(--fault)", color: "var(--signal-ink)" }}>high risk</span>}
         <span className="flex-1" />
         <span className="t-meta" style={{ color: TONE[state.tone] }}>{state.label}</span>
@@ -105,6 +112,11 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
       )}
 
       {call.approval?.decision && call.approval.note ? <p className="mt-1 text-meta text-ink-mute">note: {call.approval.note}</p> : null}
+      {call.hooks?.map((h) => (
+        <p key={h.hookId} className="mt-1 text-meta text-ink-mute" data-hook-decision>
+          hook {h.hookId}: {h.decision === "allow" ? "allowed" : `blocked (${h.reason.replace("_", " ")})`}
+        </p>
+      ))}
       {call.denied?.note ? <p className="mt-1 text-meta text-ink-mute">{call.denied.note}</p> : null}
       {claimedDisclosure && disclosure ? (
         <p className="mt-1.5 text-body text-ink-mute" data-read-disclosure>{disclosure}</p>

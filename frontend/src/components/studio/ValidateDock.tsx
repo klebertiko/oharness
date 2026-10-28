@@ -47,7 +47,9 @@ export function ValidateDock() {
   function begin(label: string) {
     const ticket = ++requestId.current, stamp = draftKey();
     setImported(false); setResultFor(stamp); setStatus("working"); setMessage(label); setErrors([]); setSteps([]);
-    return () => ticket === requestId.current && stamp === draftKey();
+    // An import replaces the whole draft, so only a newer dock action may supersede it; the canvas
+    // settling while the file is validated (autosave, view sync) must not silently drop the import.
+    return (draftBound = true) => ticket === requestId.current && (!draftBound || stamp === draftKey());
   }
   function fail(error: unknown) { setStatus("error"); setMessage(error instanceof Error ? error.message : "Operation failed"); }
   async function inspect(kind: "validate" | "mock") {
@@ -81,7 +83,7 @@ export function ValidateDock() {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const result = await validateBundle(parsed);
-      if (!current() || useCanvasStore.getState().isRunning) return;
+      if (!current(false) || useCanvasStore.getState().isRunning) return;
       if (!result.ok) { setStatus("error"); setMessage("Import failed validation"); setErrors(result.errors ?? []); return; }
       if (!isOHarnessBundle(parsed)) { setStatus("error"); setMessage("Not a recognizable .ohm bundle"); return; }
       openStudioBundle(parsed as unknown as HarnessBundle);
