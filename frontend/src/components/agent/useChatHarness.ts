@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { harnessFromSession, resolveHarness, type ThreadHarness } from "@/lib/chatHarness";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
+import { useHarnessRecentStore } from "@/store/harnessRecentStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useThreadStore } from "@/store/threadStore";
 
@@ -79,6 +80,7 @@ export function useChatHarness(sync = false) {
     else if (next.id === activeId) setEnabled(true);
     else if (entries.some((e) => e.id === next.id)) activate(next.id);
     else return;
+    if (next.kind === "harness") useHarnessRecentStore.getState().push(next.id);
     if (thread) setThreadHarness(thread.id, next, binding);
   };
 

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harness selector · throwaway prototype (#74)</title>
+<style>
+:root{--sub-000:oklch(.17 .006 72);--sub-100:oklch(.205 .007 72);--sub-200:oklch(.245 .008 72);--sub-300:oklch(.295 .009 72);--line:oklch(.35 .01 72);--ink:oklch(.945 .006 82);--dim:oklch(.82 .007 82);--mute:oklch(.7 .007 82);--signal:oklch(.7 .105 190);--warn:oklch(.67 .12 80)}
+:root[data-theme=ivory]{--sub-000:oklch(.965 .008 82);--sub-100:oklch(.985 .005 82);--sub-200:oklch(.94 .009 82);--sub-300:oklch(.905 .01 82);--line:oklch(.81 .011 82);--ink:oklch(.235 .012 75);--dim:oklch(.35 .012 75);--mute:oklch(.45 .012 75);--signal:oklch(.45 .1 190)}
+*{box-sizing:border-box}body{margin:0;background:var(--sub-000);color:var(--ink);font:14px/1.45 system-ui,sans-serif;padding:0 16px 32px}
+.proto{padding:8px 0;border-bottom:1px dashed var(--warn);color:var(--warn);display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+button{font:inherit;color:var(--ink);background:var(--sub-300);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+button:focus-visible,[role=option]:focus-visible,[role=radio]:focus-visible,input:focus-visible{outline:2px solid var(--signal)}
+.composer{max-width:560px;border:1px solid var(--line);border-radius:12px;background:var(--sub-100);padding:10px}
+.bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.pop{margin-top:6px;width:300px;border:1px solid var(--line);border-radius:8px;background:var(--sub-200);padding:4px}
+.pop h4{margin:6px 8px 2px;font-size:12px;color:var(--mute);font-weight:500}
+[role=option]{padding:6px 8px;border-radius:6px;cursor:pointer}[role=option][aria-selected=true]{background:var(--sub-300)}
+[role=option] small{display:block;color:var(--mute)}[aria-disabled=true]{opacity:.6}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips [role=radio][aria-checked=true]{box-shadow:inset 0 -2px var(--signal)}
+.note{color:var(--mute);max-width:560px}
+</style></head><body>
+<div class="proto"><strong>PROTOTYPE · throwaway</strong>
+<button id="ta" aria-pressed="true">A · Popover list (chosen)</button>
+<button id="tb" aria-pressed="false">B · Inline chips</button>
+<button id="ts">Many harnesses: off</button>
+<button id="th">Theme: Graphite</button></div>
+<div class="composer"><textarea rows="2" aria-label="Message OHarness" style="width:100%;background:var(--sub-200);color:var(--ink);border:1px solid var(--line);border-radius:6px"></textarea>
+<div class="bar" id="bar"></div><div id="out"></div></div>
+<p class="note" id="note"></p>
+<script>
+let alt="A",many=false,sel="Agile Harness",open=false,cur=0;
+const few=[["No harness","Talk to the model directly"],["My Triage","Sort inbound requests."],["Agile Harness","Plan, build and review in small loops."]];
+const lots=[...few,...Array.from({length:7},(_,i)=>["Team Harness "+(i+1),"Purpose number "+(i+1)+"."])];
+const rows=()=>many?lots:few;
+function paint(){
+ const bar=document.getElementById("bar"),out=document.getElementById("out");out.innerHTML="";
+ if(alt==="A"){bar.innerHTML=`<button id="trg" aria-haspopup="listbox" aria-expanded="${open}" aria-label="Harness: ${sel}">${sel} ▾</button><button>Provider ▾</button><button>Workspace ▾</button>`;
+  trg.onclick=()=>{open=!open;paint()};
+  trg.onkeydown=e=>{if(e.key==="ArrowDown"){open=true;paint()}};
+  if(open){const r=rows();let h=`<div class="pop" role="region" aria-label="Harness picker">`;
+   if(many)h+=`<input aria-label="Filter Harness" placeholder="Find a harness" style="width:calc(100% - 8px);margin:4px;background:var(--sub-100);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px">`;
+   h+=`<div role="listbox" aria-label="Harness" tabindex="0" id="lb">`;
+   r.forEach((x,i)=>{if(i===1)h+=`<h4>Your harnesses</h4>`;if(i===2)h+=`<h4>Bundled harnesses</h4>`;
+    h+=`<div role="option" aria-selected="${x[0]===sel}" data-i="${i}" tabindex="-1"${i===cur?' style="outline:1px solid var(--line)"':''}>${x[0]}<small>${x[1]}</small></div>`});
+   h+=`</div><button style="width:100%;margin-top:4px">Edit in Studio</button></div>`;out.innerHTML=h;
+   document.querySelectorAll("[role=option]").forEach(o=>o.onclick=()=>{sel=o.firstChild.textContent;open=false;paint();trg.focus()});
+   lb.onkeydown=e=>{if(e.key==="ArrowDown"){cur=Math.min(cur+1,r.length-1);paint();lb.focus()}if(e.key==="ArrowUp"){cur=Math.max(cur-1,0);paint();lb.focus()}if(e.key==="Enter"){sel=r[cur][0];open=false;paint();trg.focus()}if(e.key==="Escape"){open=false;paint();trg.focus()}};
+   (document.querySelector("input")||lb).focus();}}
+ else{const r=rows().slice(0,many?4:3);bar.innerHTML=`<div class="chips" role="radiogroup" aria-label="Harness">${r.map(x=>`<button role="radio" aria-checked="${x[0]===sel}" tabindex="${x[0]===sel?0:-1}">${x[0]}</button>`).join("")}${many?'<button>+6 more…</button>':''}</div><button>Provider ▾</button><button>Workspace ▾</button>`;
+  document.querySelectorAll("[role=radio]").forEach(b=>{b.onclick=()=>{sel=b.textContent;paint()};b.onkeydown=e=>{const bs=[...document.querySelectorAll("[role=radio]")],i=bs.indexOf(b);if(e.key==="ArrowRight"||e.key==="ArrowDown"){bs[(i+1)%bs.length].focus();bs[(i+1)%bs.length].click();document.querySelector("[role=radio][aria-checked=true]").focus()}}})}
+ document.getElementById("note").textContent=alt==="A"?"A scales to any number of harnesses, groups by meaning, filters from 8 options, keeps one Studio route and the same keyboard contract as the provider and model pickers. Cost: one extra click to see the options.":"B shows every option at once for 2-3 harnesses but wraps and crowds the toolbar at 5+, has no room for purpose text, and cannot host search, recents or an unavailable state without becoming A.";
+}
+ta.onclick=()=>{alt="A";ta.setAttribute("aria-pressed",true);tb.setAttribute("aria-pressed",false);paint()};
+tb.onclick=()=>{alt="B";tb.setAttribute("aria-pressed",true);ta.setAttribute("aria-pressed",false);open=false;paint()};
+ts.onclick=()=>{many=!many;ts.textContent="Many harnesses: "+(many?"on":"off");paint()};
+th.onclick=()=>{const i=document.documentElement.dataset.theme=="ivory";document.documentElement.dataset.theme=i?"graphite":"ivory";th.textContent="Theme: "+(i?"Graphite":"Ivory")};
+paint();
+</script></body></html>
