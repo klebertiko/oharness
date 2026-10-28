@@ -45,7 +45,8 @@ def test_the_schema_is_a_valid_json_schema():
 
 
 def test_a_completed_run_prints_only_schema_valid_events_and_exits_zero(tmp_path, capsys):
-    assert main(["run", str(write(tmp_path, without_hitl)), "--json"]) == 0
+    code = main(["run", str(write(tmp_path, without_hitl)), "--json"])
+    assert code == 0
     events = lines(capsys.readouterr().out)
     validator = Draft202012Validator(SCHEMA)
     assert events and [e["event"] for e in events][0] == "run_start" and events[-1]["event"] == "harness_done"
@@ -62,7 +63,8 @@ def test_an_event_that_breaks_the_schema_is_caught_by_it():
 
 
 def test_a_run_that_stops_at_a_human_checkpoint_exits_non_zero(tmp_path, capsys):
-    assert main(["run", str(write(tmp_path, keep("PO", "HITL"))), "--json"]) == 1  # HITL needs a person; headless never approves for them
+    code = main(["run", str(write(tmp_path, keep("PO", "HITL"))), "--json"])  # HITL needs a person; headless never approves for them
+    assert code == 1
     events = lines(capsys.readouterr().out)
     assert any(e["event"] == "hitl_pause" for e in events) and events[-1]["data"]["status"] == "stopped"
 
@@ -71,24 +73,28 @@ def test_a_run_whose_graph_has_a_cycle_fails_with_non_zero(tmp_path, capsys):
     def cycle(data):
         without_hitl(data)
         data["graph"]["edges"].append({"id": "back", "source": "SM", "target": "PO"})
-    assert main(["run", str(write(tmp_path, cycle)), "--json"]) == 1
+    code = main(["run", str(write(tmp_path, cycle)), "--json"])
+    assert code == 1
     assert lines(capsys.readouterr().out)[-1]["data"]["status"] == "error"
 
 
 def test_an_invalid_bundle_exits_2_and_prints_no_event(tmp_path, capsys):
     path = tmp_path / "broken.ohm"
     path.write_text("{}", encoding="utf-8")
-    assert main(["run", str(path), "--json"]) == 2
+    code = main(["run", str(path), "--json"])
+    assert code == 2
     captured = capsys.readouterr()
     assert captured.out == "" and "invalid" in captured.err.lower()
 
 
 def test_a_missing_file_exits_2(tmp_path, capsys):
-    assert main(["run", str(tmp_path / "nope.ohm"), "--json"]) == 2
+    code = main(["run", str(tmp_path / "nope.ohm"), "--json"])
+    assert code == 2
 
 
 def test_without_json_the_run_prints_a_human_summary(tmp_path, capsys):
-    assert main(["run", str(write(tmp_path, without_hitl))]) == 0
+    code = main(["run", str(write(tmp_path, without_hitl))])
+    assert code == 0
     out = capsys.readouterr().out
     assert "complete" in out and not out.lstrip().startswith("{")
 
@@ -100,7 +106,8 @@ def test_an_event_the_schema_rejects_is_never_printed_and_fails_the_run(tmp_path
         yield 'event: node_done\ndata: {"node_id": "PO"}\n\n'  # `output` and `tokens` missing
 
     monkeypatch.setattr(engine, "execute_harness", drifting)
-    assert main(["run", str(write(tmp_path, without_hitl)), "--json"]) == 1
+    code = main(["run", str(write(tmp_path, without_hitl)), "--json"])
+    assert code == 1
     captured = capsys.readouterr()
     assert captured.out == "" and "node_done" in captured.err and "output" in captured.err
 
@@ -113,17 +120,16 @@ def test_a_crash_in_the_engine_is_a_one_line_failure_not_a_traceback(tmp_path, c
         yield
 
     monkeypatch.setattr(engine, "execute_harness", boom)
-    assert main(["run", str(write(tmp_path, without_hitl)), "--json"]) == 1
+    code = main(["run", str(write(tmp_path, without_hitl)), "--json"])
+    assert code == 1
     assert "run crashed: KeyError" in capsys.readouterr().err
 
 
-def test_it_runs_from_any_directory(tmp_path):
-    import subprocess
+def test_it_runs_when_the_backend_directory_is_not_on_the_import_path(tmp_path, monkeypatch):
     import sys
 
-    backend = Path(__file__).resolve().parent.parent
-    bundle = write(tmp_path, keep("PO"), name="one.ohm")
-    done = subprocess.run([sys.executable, "-m", "oharness", "run", str(bundle), "--json"], cwd=tmp_path, capture_output=True, text=True,
-                          env={**__import__("os").environ, "PYTHONPATH": str(backend)}, timeout=60)
-    assert done.returncode == 0, done.stderr
-    assert lines(done.stdout)[-1]["event"] == "harness_done"
+    backend = str(Path(__file__).resolve().parent.parent)
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != backend])
+    monkeypatch.delitem(sys.modules, "engine", raising=False)
+    code = main(["run", str(write(tmp_path, keep("PO"))), "--json"])
+    assert code == 0
