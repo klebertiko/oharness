@@ -98,7 +98,8 @@ export function nextStep(c: Connection): NextStep | null {
     case "model":
       return { kind: "model", label: "Choose a model", hint: "choose model" };
     case "model-not-pulled": {
-      const id = modelNotPulled(c) ?? "";
+      const id = modelNotPulled(c);
+      if (!id) return null;
       return {
         kind: "copy",
         label: `Copy \`ollama pull ${id}\``,

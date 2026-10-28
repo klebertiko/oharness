@@ -1,5 +1,8 @@
 import { specOf, type Connection } from "@/components/providers/providerStore";
 import { requiresModel } from "@/components/providers/catalog";
+import { modelNotPulled } from "@/components/providers/modelPull";
+
+export { modelNotPulled };
 
 /** Can this connection answer a chat turn at all? Agent-only connections
     (Cursor) have no chat adapter in the sidecar — offering them in a chat
@@ -15,21 +18,6 @@ export function isChatCapable(c: Connection): boolean {
 export function needsModel(c: Connection): boolean {
   const spec = specOf(c);
   return Boolean(spec) && requiresModel(spec) && !c.defaultModel;
-}
-
-/** Ollama names a model without a tag as `:latest`; compare on that basis. */
-const withTag = (id: string) => (id.includes(":") ? id : `${id}:latest`);
-
-/** The default model of a local Ollama whose own model list does not contain
-    it: a run on this connection would fail on a model nobody pulled. Only the
-    endpoint's list counts as evidence (`modelsFromEndpoint`), never the static
-    catalog, and only while a probe has actually answered. Returns the id to
-    pull, or null when there is nothing to pull. */
-export function modelNotPulled(c: Connection): string | null {
-  if (c.provider !== "ollama" || c.residence !== "local" || !c.modelsFromEndpoint) return null;
-  if (!c.defaultModel || c.health === "fault" || c.health === "probing") return null;
-  const wanted = withTag(c.defaultModel);
-  return c.models.some((m) => withTag(m.id) === wanted) ? null : c.defaultModel;
 }
 
 export type ChatProvider = {
@@ -196,7 +184,7 @@ export function chatProviderStatus(connection: Connection): string {
 }
 
 /** The row-level leading word. `chatProviderStatus` above stays untouched
-    (piece 1's trigger chip already pins its 5 return strings) — this adds
+    (piece 1's trigger chip pins its return strings) — this adds
     the one new distinction the dropdown needs: a real fault always outranks
     "not enabled" as more specific evidence (a credential WAS tried and
     rejected, not merely left off), so only a non-fault, disabled connection
@@ -245,8 +233,9 @@ export function missingProviderAction(
   if (providerReadiness(target).missing === "model") {
     return { text: `Choose a model for ${target.label} to send`, id: target.id };
   }
-  const unpulled = modelNotPulled(target);
-  if (unpulled) return { text: `Pull ${unpulled} to send`, id: target.id };
+  if (providerReadiness(target).missing === "model-not-pulled") {
+    return { text: `Pull ${modelNotPulled(target)} to send`, id: target.id };
+  }
   const spec = specOf(target);
   const article = /^[aeiou]/i.test(spec.vendor) ? "an" : "a";
   const verb =
