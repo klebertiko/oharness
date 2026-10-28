@@ -45,8 +45,8 @@ def link_dir_or_skip(link, target):
 
 
 # -- modes other than auto_workspace ----------------------------------------
-def test_modes_are_exactly_the_three_and_there_is_no_bypass():
-    assert MODES == ('plan', 'ask', 'auto_workspace')
+def test_modes_are_exactly_the_table_and_there_is_no_bypass():
+    assert MODES == ('plan', 'read_only', 'ask', 'auto_workspace', 'workspace_write', 'full')
 
 
 def test_ask_mode_asks_for_every_exec(ws):

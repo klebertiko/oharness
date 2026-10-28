@@ -31,7 +31,8 @@ class Discover(StrictModel):
     name: Literal['discover'] = 'discover'
 
 
-PermissionMode = Literal['plan', 'ask', 'auto_workspace']
+# Must list exactly the ids of permission_modes.json in order (tests/test_chat_permission_presets.py checks it).
+PermissionMode = Literal['plan', 'read_only', 'ask', 'auto_workspace', 'workspace_write', 'full']
 # Opaque, client-chosen conversation key: short, no path or control characters.
 THREAD_ID_PATTERN = r'^[A-Za-z0-9_-]{1,64}$'
 
