@@ -6,7 +6,7 @@ Status: Aceito (conservador, sem decisão do usuário pendente) · 2026-10-28 ·
 O modo Plan (#102) já recusava todo `exec`. Faltava o fim da run: um artefato de plano, e uma barreira que impeça executar sem aprová-lo.
 
 ## Decisão
-1. **Artefato**: uma run direta em Plan (o pedido nomeia `thread_id` e o modo efetivo é `plan`) guarda a resposta final como `ChatPlan` (`proposed`) e emite `plan_proposed` depois de `node_done`. O evento entra no histórico da run.
+1. **Artefato**: um turno simples (sem preset `/read`, `/exec`) de uma conversa **guardada em Plan** (o pedido nomeia `thread_id`) guarda a resposta final como `ChatPlan` (`proposed`) e emite `plan_proposed` depois de `node_done`. O evento entra no histórico da run.
 2. **Barreira no sidecar**: com um plano `proposed`, `PUT /chat/tools/permission` para qualquer modo diferente de `plan` devolve 409 `plan_not_approved`. Sair do modo é o que aprovar faz: `POST /chat/tools/plan/approve` marca o plano e troca o modo num passo só. Só a API autenticada alcança essas rotas; uma chamada de ferramenta do modelo não.
 3. **Aprovar leva a Ask** (ou a `auto_workspace`, `read_only`, `workspace_write` se nomeados); nunca a `plan` nem a `full`, que continua sendo escolha confirmada no compositor. Comandos seguem pedindo aprovação.
 4. **Um plano por conversa**: um plano novo substitui o que esperava; aprovar o antigo dá 409 `plan_not_proposed`. Descartar mantém Plan e libera o seletor.

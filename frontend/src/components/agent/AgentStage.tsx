@@ -281,6 +281,7 @@ export function AgentStage() {
   };
 
   const approvePlan = async () => {
+    if (!provider) return; // approving consumes the plan: only do it when the approved turn can actually be sent
     const text = await planArtifact.approve();
     if (text === null) return;
     send(`Carry out this approved plan:\n\n${text}`, "Plan approved. Carry it out.", "ask");

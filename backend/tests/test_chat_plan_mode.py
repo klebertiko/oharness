@@ -70,9 +70,20 @@ def test_other_modes_produce_no_plan(client, tmp_path):
     assert current(client)['plan'] is None
 
 
-def test_a_run_that_names_plan_cannot_produce_a_plan_in_a_laxer_stored_mode_but_a_tighter_request_does(client, tmp_path):
+def test_only_a_conversation_stored_in_plan_gets_a_plan_even_if_a_request_tightens_to_plan(client, tmp_path):
+    # The barrier and the card both follow the stored mode, so a plan is only proposed where they can see it.
     set_mode(client, 'ask')
-    assert plan_event(run(client, tmp_path, tools={'permission_mode': 'plan'})) is not None
+    assert plan_event(run(client, tmp_path, tools={'permission_mode': 'plan'})) is None
+
+
+@pytest.mark.parametrize('preset', [{'name': 'read', 'path': 'README.md'}, {'name': 'discover'}, {'name': 'exec', 'argv': ['git', '--version']}])
+def test_a_slash_preset_turn_is_not_a_plan(client, tmp_path, preset):
+    (tmp_path / 'README.md').write_text('hi', encoding='utf-8')
+    set_mode(client, 'plan')
+    events = run(client, tmp_path, tools={'enabled': True, 'summarize': True, 'preset': preset})
+    assert plan_event(events) is None
+    assert current(client)['plan'] is None
+    assert set_mode(client, 'ask').status_code == 200  # nothing waits for approval
 
 
 def test_in_plan_mode_no_command_runs_and_the_refusal_says_so(client, tmp_path):

@@ -715,8 +715,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
                         )
-                        if broker and broker.permission_mode == "plan" and tool_options.thread_id and output.strip():
-                            # Plan mode ends in a plan artifact; nothing executes until a person approves it.
+                        if broker and stored == "plan" and broker.permission_mode == "plan" and tool_options.preset is None and tool_options.thread_id and output.strip():
+                            # Plan mode ends in a plan artifact; nothing executes until a person approves it. Only a plain turn in a conversation
+                            # stored in Plan: the approval barrier and the card follow the stored mode, and a `/read` or `/exec` is not a plan.
                             async with SessionLocal() as plan_session:
                                 plan = await propose_plan(plan_session, tool_options.thread_id, output)
                             yield emit("plan_proposed", {"node_id": node_id, **plan})
