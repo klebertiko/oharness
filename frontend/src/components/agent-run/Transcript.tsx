@@ -5,6 +5,8 @@ import { pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import css from "./agentRun.module.css";
+import { SubagentTree } from "./SubagentTree";
+import { TurnDiffPanel } from "./TurnDiffPanel";
 import { clock, latency as fmtLatency, paragraphs, tokens as fmtTokens } from "./format";
 import { groupActivity, segmentActivity, summarizeGroup } from "./activity";
 import { Gate } from "./Gate";
@@ -660,6 +662,7 @@ export function Transcript({
 
       <RunRollup run={run} elapsed={elapsed} />
       {run.routeDecision && <RouteDecisionProvenance decision={run.routeDecision} />}
+      <SubagentTree runId={run.runId} runLive={run.status === "running" || run.status === "starting"} status={run.status} subagents={run.subagents} />
       <NodeBreakdown segments={attributed} defaultConnectionId={defaultConnectionId} connections={connections} />
 
       {visible.map((s, i) => (
@@ -673,6 +676,7 @@ export function Transcript({
         />
       ))}
 
+      {run.turnDiff && <TurnDiffPanel runId={run.runId} turnDiff={run.turnDiff} />}
       {run.status === "complete" && (
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />

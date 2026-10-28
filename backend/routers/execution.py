@@ -26,6 +26,7 @@ from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
 from sandbox.approval import ApprovalConflict
+from sandbox.turn_diff_store import TurnTracker
 from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
@@ -616,7 +617,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         def emit(event: str, data: dict) -> str:
             return _sse(event, data)
 
+        tracker = TurnTracker(cwd, run_id) if cwd else None
         try:
+            if tracker:
+                await tracker.begin()
             if broker:
                 yield emit('capabilities', {'node_id': node_id, **broker.capabilities, 'permission_mode': broker.permission_mode, 'workspace_trusted': broker.workspace_trusted})
             if budget_status is not None and budget_status.state == "warning":
@@ -644,7 +648,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
-                        if broker and (kind.startswith('tool_') or kind == 'capabilities'):
+                        if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})
                         elif kind in ("budget_exceeded", "context_compacted"):
                             payload = {k: v for k, v in ev.items() if k != "kind"}
@@ -752,6 +756,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     })
 
             control.phase = "done"
+            turn_diff = await tracker.finish(SessionLocal) if tracker else None
+            if turn_diff:
+                yield emit("turn_diff", {"node_id": node_id, **turn_diff})
             yield emit(
                 "harness_done",
                 {
@@ -775,6 +782,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise
         except Exception as exc:  # noqa: BLE001
             status = STATUS_ERROR
+            # Edits made before the failure are still the person's to review and undo.
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None
+            if failed_diff:
+                yield emit("turn_diff", {"node_id": node_id, **failed_diff})
             yield emit("error", failure_details(exc))
         finally:
             RUNS.pop(run_id, None)
