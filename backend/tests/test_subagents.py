@@ -76,7 +76,7 @@ def test_children_run_concurrently_and_report_each_state(tmp_path):
         await asyncio.sleep(0.05)
         assert len(order) == 1
         gates['a'].set()
-        await task
+        await asyncio.wait_for(task, 5)
         return seen
     seen = asyncio.run(go())
     done = {e['child_id']: e for e in seen if e['kind'] == 'subagent_done'}
@@ -102,7 +102,7 @@ def test_cancelling_one_child_leaves_parent_and_siblings_running(tmp_path):
         await asyncio.sleep(0.05)
         assert not control.stop.is_set() and not task.done()  # parent run and sibling go on
         gates['b'].set()
-        await task
+        await asyncio.wait_for(task, 5)
         return events, results
     events, results = asyncio.run(go())
     states = {e['parent_call_id']: e['state'] for e in events if e['kind'] == 'subagent_done'}
