@@ -1,4 +1,4 @@
-# ADR 0009 — Presets de permissão por sessão
+# ADR 0021 — Presets de permissão por sessão
 
 Status: Aceito (conservador, sem decisão do usuário pendente) · 2026-10-28 · Issue #161 · Código: `backend/sandbox/permission.py`, `backend/sandbox/permission_modes.json`
 
