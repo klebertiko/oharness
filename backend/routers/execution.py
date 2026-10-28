@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import usage_tracking
 from database import SessionLocal, get_db
 from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
+from run_worktree import RunWorktree, require_workspace
 from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream
 from adapters import get_adapter, AdapterConfig
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
@@ -40,6 +41,7 @@ class ExecuteRequest(BaseModel):
     step: bool = False
     instruction: str | None = None
     cwd: str | None = None
+    worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
 
 
 class DirectRequest(BaseModel):
@@ -308,6 +310,8 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
     connections = getattr(request.app.state, "provider_connections", None)
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
+    require_workspace(body.worktree, cwd)
+    isolation = RunWorktree(cwd) if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
     # routing call just below (it already invokes a real adapter). "mock" is
@@ -392,7 +396,19 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         # store) so GET /execute/logs/{id} can replay them into the same
         # reducer client-side after a reload.
         events: list[dict] = []
+        run_cwd = cwd
         try:
+            if isolation is not None:
+                try:
+                    run_cwd = await isolation.open()
+                except RuntimeError as exc:  # the manager's own refusal, already scrubbed: shown as is rather than as a provider failure
+                    fail_evt = {"event": "error", "data": {"error": str(exc)}}
+                    events.append(fail_evt)
+                    yield _sse(fail_evt["event"], fail_evt["data"])
+                    return
+                ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
+                events.append(ready_evt)
+                yield _sse(ready_evt["event"], ready_evt["data"])
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
                 events.append(warn_evt)
@@ -415,7 +431,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     run_id=run_id,
                     connections=connections,
                     secrets_store=secrets_store,
-                    cwd=cwd,
+                    cwd=run_cwd,
                     enforce_budget=_enforce_node_budget,
                 ):
                     parsed = _parse_sse_chunk(chunk)
@@ -444,6 +460,8 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
             # A fresh session: the request-scoped one is torn down by its
             # dependency and cannot be relied on inside a streaming generator.
             await writer.finish(status)
+            if isolation is not None:
+                await isolation.close()
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
