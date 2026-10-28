@@ -81,3 +81,17 @@ def test_scrub_paths_stays_linear_on_hostile_input(name):
     elapsed = time.perf_counter() - started
     assert isinstance(result, str)
     assert elapsed < 0.5, f"{name}: {elapsed:.3f}s for {len(text)} characters"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("fatal: //server/share/x bad", "fatal: <path> bad"),
+    ("fatal: '//server/share/x' bad", "fatal: '<path>' bad"),
+    ("fatal: " + B + B + "server/share/x bad", "fatal: <path> bad"),
+    ("fatal: // double", "fatal: <path>/ double"),
+])
+def test_a_forward_slash_unc_path_hides_the_host_and_the_share(raw, expected):
+    assert scrub_paths(raw) == expected
+
+
+def test_three_leading_slashes_do_not_leak_the_host():
+    assert scrub_paths("fatal: ///server/share/x bad") == "fatal: <path> bad"
