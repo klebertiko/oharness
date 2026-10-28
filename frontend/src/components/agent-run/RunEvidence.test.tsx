@@ -29,3 +29,30 @@ it("labels legacy coverage without inventing completeness", () => {
   render(<RunEvidence detail={detail} />);
   expect(screen.getByText(/capture coverage is unknown/)).toBeTruthy();
 });
+
+it("offers to continue a resumable run as a new, linked run and says the saved events stay untouched", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "r2", continued_from: "r1", parent_sequence: 3, status: "pending" }) }));
+  const onContinued = vi.fn();
+  const detail: RunLogDetail = {
+    id: "r1", harnessId: "h", harnessName: "Harness", source: "harness", status: "interrupted",
+    startedAt: null, finishedAt: null, result: {}, coverage: "partial", lastSequence: 3, artifacts: [],
+    resumable: true, continuedFrom: null, parentSequence: null, continuations: [],
+  };
+  render(<RunEvidence detail={detail} onContinued={onContinued} />);
+  expect(screen.getByText(/saved events stay as they are/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Continue as a new run" }));
+  expect(await screen.findByText(/New run created from event 3/)).toBeTruthy();
+  expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/execute/logs/r1/continue", expect.objectContaining({ method: "POST" }));
+  expect(onContinued).toHaveBeenCalledWith("r2");
+});
+
+it("shows where a continued run came from and hides the button for a run that cannot be continued", () => {
+  const detail: RunLogDetail = {
+    id: "r2", harnessId: "h", harnessName: "Harness", source: "harness", status: "pending",
+    startedAt: null, finishedAt: null, result: {}, coverage: "partial", lastSequence: 1, artifacts: [],
+    resumable: false, continuedFrom: "r1", parentSequence: 3, continuations: [],
+  };
+  render(<RunEvidence detail={detail} />);
+  expect(screen.getByText(/Continues run r1 from event 3/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue as a new run" })).toBeNull();
+});
