@@ -26,7 +26,9 @@ export interface ToolCall {
   };
   /** The permission mode, not a person, let this command run without the approval gate. */
   autoApproved?: { mode: string; reason: string };
-  denied?: { reason: "rejected" | "approval_timeout" | "policy"; note: string };
+  denied?: { reason: "rejected" | "approval_timeout" | "policy" | "hook"; note: string; /** The permission mode that refused it (absent for a refusal that is not about the mode). */ mode?: string };
+  /** The pre-tool hook that decided, from `tool_hook_decision` (one entry per hook evaluated, in order). */
+  hooks?: { hookId: string; decision: "allow" | "block"; reason: string }[];
   truncated?: boolean;
   timedOut?: boolean;
   simulated?: boolean;
@@ -128,6 +130,24 @@ export interface Subagent {
   tokens: number;
 }
 
+export interface TurnDiffFile {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  added: number;
+  removed: number;
+  binary: boolean;
+  revertible: boolean;
+  diff: string;
+  diff_truncated: boolean;
+}
+
+export interface TurnDiff {
+  files: TurnDiffFile[];
+  omitted: number;
+  /** False when the workspace was too large to snapshot fully. */
+  complete: boolean;
+}
+
 export type RunStatus =
   | "idle"
   | "starting"
@@ -174,6 +194,12 @@ export interface RunState {
   routeDecision: RouteDecision | null;
   /** Children this run started (`subagent_*` events), in start order. */
   subagents: Subagent[];
+  /** Set when the run reached its token ceiling (`budget_exceeded`). */
+  budget: { maxTokens: number; usedTokens: number } | null;
+  /** One entry per context compaction, in order. */
+  compactions: { beforeTokens: number; afterTokens: number }[];
+  /** What the turn changed in the workspace (`turn_diff`), if anything. */
+  turnDiff: TurnDiff | null;
 }
 
 export interface RunEvent {

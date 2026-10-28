@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Workflow } from "lucide-react";
 
-import { harnessSubtitle, splitHarnessName } from "@/components/harnesses/harnessLabel";
-import { ComboAction, Combobox, type ComboOption } from "@/components/ui/Combobox";
-import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
-import { Button } from "@/components/ui/Button";
+import { splitHarnessName } from "@/components/harnesses/harnessLabel";
+import { ComboAction, Combobox } from "@/components/ui/Combobox";
 import { NO_HARNESS } from "@/lib/chatHarness";
+import { NONE_ID, buildHarnessOptions } from "@/lib/harnessOptions";
+import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
+import { useHarnessRecentStore } from "@/store/harnessRecentStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useChatHarness } from "./useChatHarness";
 
@@ -17,62 +18,54 @@ export type HarnessSwitchProps = {
   onOpenStudio?: () => void;
 };
 
-/** Option id for "No harness" — no harness id can be empty. */
-const NONE_ID = "";
-
 /**
- * One control for "which harness runs this conversation", in the composer
- * toolbar. "No harness" is the first option rather than a separate on/off
- * switch, so choosing and enabling are one gesture. Built on the shared
- * Combobox (portalled, viewport-clamped, keyboard-first).
+ * "Which harness runs this chat" (ADR 0012), in the composer toolbar: a
+ * compact trigger that names the harness, and a keyboard-first list that shows
+ * identity and purpose only. "No harness" leads; a filter appears when the list
+ * is long; recent choices lead a long list. The only way out is one Studio
+ * action. Providers are never mentioned here — they live in Providers.
  */
 export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
-  const activeBundle = useHarnessSessionStore((s) => s.activeBundle);
   const hydrated = useHarnessSessionStore((s) => s.hydrated);
+  const activeBundle = useHarnessSessionStore((s) => s.activeBundle);
   const hydrateSession = useHarnessSessionStore((s) => s.hydrate);
 
   const entries = useHarnessLibraryStore((s) => s.entries);
   const libraryHydrated = useHarnessLibraryStore((s) => s.hydrated);
+  const libraryFailed = useHarnessLibraryStore((s) => s.failed);
   const hydrateLibrary = useHarnessLibraryStore((s) => s.hydrate);
+
+  const recent = useHarnessRecentStore((s) => s.ids);
+  const loadRecent = useHarnessRecentStore((s) => s.load);
   const chat = useChatHarness();
 
-  const [error, setError] = useState("");
+  const [sessionError, setSessionError] = useState(false);
+  const failed = libraryFailed || sessionError;
   const retry = () => {
-    setError("");
-    void hydrateSession().catch((err: Error) => setError(err.message));
-    void hydrateLibrary().catch((err: Error) => setError(err.message));
+    setSessionError(false);
+    void hydrateSession().catch(() => setSessionError(true));
+    void hydrateLibrary().catch(() => undefined);
   };
 
   useEffect(() => {
-    if (!hydrated) void hydrateSession().catch((err: Error) => setError(err.message));
+    if (!hydrated) void hydrateSession().catch(() => setSessionError(true));
   }, [hydrated, hydrateSession]);
-
   useEffect(() => {
-    if (!libraryHydrated) void hydrateLibrary().catch((err: Error) => setError(err.message));
+    if (!libraryHydrated) void hydrateLibrary().catch(() => undefined);
   }, [libraryHydrated, hydrateLibrary]);
+  useEffect(() => loadRecent(), [loadRecent]);
 
-  const options = useMemo<ComboOption[]>(
-    () => [
-      { id: NONE_ID, label: "No harness", detail: "Direct conversation with the model" },
-      // The harness this chat points at is gone: say so, and keep it visible rather than swapping it.
-      ...(chat.status.state === "missing" ? [{ id: chat.status.id, label: splitHarnessName(chat.status.name).title, detail: "No longer available", disabled: true }] : []),
-      ...entries.map((e) => ({ id: e.id, label: splitHarnessName(e.name).title, detail: harnessSubtitle(e) })),
-      // A harness put in use from Studio (e.g. the sample) is not a library
-      // entry; keep it selectable so the picker shows what is really running.
-      ...(activeBundle?.manifest?.id && !entries.some((e) => e.id === activeBundle.manifest.id)
-        ? [{ id: activeBundle.manifest.id, label: splitHarnessName(activeBundle.manifest.name || activeBundle.manifest.id).title, detail: "From Studio" }]
-        : []),
-    ],
-    [entries, activeBundle, chat.status],
+  const studio = activeBundle?.manifest?.id ? { id: activeBundle.manifest.id, name: activeBundle.manifest.name || activeBundle.manifest.id } : null;
+  const { options, searchable, harnessCount } = useMemo(
+    () => buildHarnessOptions({ entries, status: chat.status, recent, studioActive: studio }),
+    [entries, chat.status, recent, studio],
   );
 
-  const activeId = chat.binding.kind === "none" ? NONE_ID : chat.binding.id;
-  const boundName = chat.binding.kind === "none" ? "" : splitHarnessName(chat.binding.name).title;
-  const label =
-    chat.binding.kind === "none"
-      ? hydrated || error ? "No harness" : "Loading…"
-      : chat.status.state === "missing" ? `${boundName} (unavailable)` : boundName;
-  const on = chat.binding.kind === "harness";
+  const bound = chat.binding.kind === "harness" ? chat.binding : null;
+  const title = bound ? splitHarnessName(bound.name).title : "";
+  const gone = chat.status.state === "missing";
+  const label = !bound ? "No harness" : gone ? `${title} (unavailable)` : title;
+  const status = libraryHydrated ? "ready" : failed ? "error" : "loading";
 
   const choose = (id: string) => {
     if (id === NONE_ID) return chat.choose(NO_HARNESS);
@@ -82,49 +75,42 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
   };
 
   return (
-    <>
-      <Combobox
-        label="Harness"
-        triggerLabel={`Harness: ${label}`}
-        value={activeId}
-        options={options}
-        onChange={choose}
-        status={libraryHydrated ? "ready" : error ? "error" : "loading"}
-        loadingText="Loading harnesses…"
-        errorText="Couldn't load harnesses."
-        triggerClassName="h-control-md max-w-[260px] px-2.5 text-body font-medium text-ink-dim hover:text-ink max-sm:h-control-lg"
-        trigger={
-          <>
-            <Workflow size={14} strokeWidth={1.8} className={on ? "flex-none text-signal-text" : "flex-none text-ink-mute"} aria-hidden />
-            <span className="min-w-0 truncate">{label}</span>
-            <ChevronDown size={13} strokeWidth={1.8} className="flex-none text-ink-mute" aria-hidden />
-          </>
-        }
-        footer={
-          onOpenStudio
-            ? ({ close }) => (
-                <>
-                  {onOpenStudio && (
-                    <ComboAction
-                      onClick={() => {
-                        close(false);
-                        onOpenStudio();
-                      }}
-                    >
-                      Edit in Studio
-                    </ComboAction>
-                  )}
-                </>
-              )
-            : undefined
-        }
-      />
-      {error && (
-        <span role="alert" className="flex items-center gap-1 text-meta text-fault-text" title={error}>
-          Couldn&apos;t load harnesses.
-          <Button size="sm" variant="ghost" onClick={retry}>Retry</Button>
-        </span>
+    <Combobox
+      label="Harness"
+      triggerLabel={`Harness: ${label}`}
+      value={bound?.id ?? NONE_ID}
+      options={options}
+      onChange={choose}
+      searchable={searchable}
+      searchPlaceholder="Find a harness"
+      status={status}
+      loadingText="Loading harnesses…"
+      errorText="Couldn't load harnesses."
+      emptyText="No harness matches that."
+      header={status === "ready" && harnessCount === 0 ? "No harnesses yet. Create one in Studio." : undefined}
+      triggerClassName="h-control-md max-w-[260px] px-2.5 text-body font-medium text-ink-dim hover:text-ink max-sm:h-control-lg"
+      trigger={
+        <>
+          <Workflow size={14} strokeWidth={1.8} className={gone ? "flex-none text-warn-text" : bound ? "flex-none text-signal-text" : "flex-none text-ink-mute"} aria-hidden />
+          <span className={`min-w-0 truncate ${gone ? "text-warn-text" : ""}`}>{status === "loading" && !bound ? "Loading…" : label}</span>
+          <ChevronDown size={13} strokeWidth={1.8} className="flex-none text-ink-mute" aria-hidden />
+        </>
+      }
+      footer={({ close }) => (
+        <>
+          {status === "error" && <ComboAction onClick={retry}>Try again</ComboAction>}
+          {onOpenStudio && (
+            <ComboAction
+              onClick={() => {
+                close(false);
+                onOpenStudio();
+              }}
+            >
+              {chat.status.state === "ready" ? "Edit in Studio" : "Open Studio"}
+            </ComboAction>
+          )}
+        </>
       )}
-    </>
+    />
   );
 }
