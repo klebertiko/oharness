@@ -5,6 +5,7 @@ import { useActiveRunStore } from "@/store/activeRunStore";
 import { useProviderStore } from "@/components/providers/providerStore";
 import { useUsageStore } from "@/components/providers/usageStore";
 import { emptyRun, runReducer } from "./runReducer";
+import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { sendControl, startDirectRun, startRun, type DirectRunPayload } from "./runClient";
 import type { RunState } from "./types";
 
@@ -31,6 +32,11 @@ export interface UseRunStreamOptions {
   graph: HarnessGraph;
   /** When false, start hits `/api/run/direct` instead of `/api/run`. */
   harnessEnabled: boolean;
+}
+
+function maxTokensPayload(): { max_tokens?: number } {
+  const maxTokens = useRunBudgetStore.getState().maxTokens;
+  return maxTokens ? { max_tokens: maxTokens } : {};
 }
 
 export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): RunController {
@@ -145,7 +151,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
         );
       } else {
         abortRef.current = startDirectRun(
-          { instruction, mode, step, cwd, connection_id: providerId, ...(model ? { model } : {}), ...(tools ? { tools } : {}) },
+          { instruction, mode, step, cwd, connection_id: providerId, ...(model ? { model } : {}), ...(tools ? { tools } : {}), ...maxTokensPayload() },
           onEvent,
           onClose
         );

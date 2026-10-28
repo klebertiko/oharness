@@ -1,7 +1,7 @@
 {
   "result": "passed",
-  "startedAt": "2026-10-28T16:54:14.239Z",
-  "finishedAt": "2026-10-28T16:54:16.501Z",
+  "startedAt": "2026-09-12T12:05:17.766Z",
+  "finishedAt": "2026-09-12T12:05:19.799Z",
   "scope": "Browser UI E2E with sidecar HTTP stubs",
   "imports": 2,
   "pageErrors": [],

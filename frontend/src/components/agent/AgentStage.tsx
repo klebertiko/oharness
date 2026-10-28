@@ -28,6 +28,10 @@ import { ThinkingStatus } from "@/components/brand/ThinkingStatus";
 import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
+import { SubagentToggle } from "@/components/agent/SubagentToggle";
+import { useSubagentStore } from "@/store/subagentStore";
+import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
+import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
 import { Gate } from "@/components/agent-run/Gate";
 import { bundleGraphToEngine } from "@/lib/bundleGraph";
@@ -36,6 +40,8 @@ import { useProviderStore } from "@/components/providers/providerStore";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
+import { NO_HARNESS, type ThreadHarness } from "@/lib/chatHarness";
+import { useChatHarness } from "./useChatHarness";
 import { useThreadStore } from "@/store/threadStore";
 import { Button, KbdChord, Notice } from "@/components/ui";
 import { chordCaps, useIsMac } from "@/components/shell/keys";
@@ -52,11 +58,11 @@ export function AgentStage() {
   const hydrated = useHarnessSessionStore((s) => s.hydrated);
   const hydrate = useHarnessSessionStore((s) => s.hydrate);
 
+  const chatHarness = useChatHarness(true);
   const activeThreadId = useThreadStore((s) => s.activeThreadId);
   const createThread = useThreadStore((s) => s.createThread);
   const appendMessage = useThreadStore((s) => s.appendMessage);
   const messagesByThread = useThreadStore((s) => s.messagesByThread);
-  const threadTitle = useThreadStore((s) => s.threads.find((thread) => thread.id === s.activeThreadId)?.title) || "Conversation";
 
   const setRunning = useCanvasStore((s) => s.setRunning);
   const connections = useProviderStore((s) => s.connections);
@@ -94,7 +100,7 @@ export function AgentStage() {
   const [modelChoices, setModelChoices] = useState<Record<string, string>>({});
   const selectedModel = provider ? modelChoices[provider.id] ?? "" : "";
   const connection = connections.find((c) => c.id === provider?.id) ?? null;
-  const runOwner = useRef<{ threadId: string; instruction: string; providerLabel?: string } | null>(null);
+  const runOwner = useRef<{ threadId: string; instruction: string; providerLabel?: string; harness: ThreadHarness } | null>(null);
   const [showRunDetail, setShowRunDetail] = useState(false);
   const savedRunFor = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -207,6 +213,7 @@ export function AgentStage() {
       // 404s there — HistoricalRunDetail handles that by simply not
       // offering the toggle rather than erroring.
       runId: run.runId ?? undefined,
+      harness: runOwner.current?.harness,
     });
   }, [ownerThreadId, appendMessage, live, run, provider, connections]);
 
@@ -217,6 +224,7 @@ export function AgentStage() {
   const slashPreset = presetFromSlashText(instruction);
   // A message can be composed (sent now, or queued behind the running turn) when there is a provider and text.
   const canCompose =
+    chatHarness.canSend &&
     !!provider &&
     instruction.trim().length > 0 &&
     !(slashPreset && "warning" in slashPreset) &&
@@ -234,9 +242,9 @@ export function AgentStage() {
     if (live || !provider) return;
     const label =
       preset.name === "exec" ? "/exec " + preset.argv.join(" ") : preset.name === "read" ? "/read " + preset.path : "/ls";
-    const threadId = activeThreadId ?? createThread(label.slice(0, 60));
+    const threadId = activeThreadId ?? createThread(label.slice(0, 60), chatHarness.binding);
     appendMessage(threadId, { role: "user", content: label });
-    runOwner.current = { threadId, instruction: label, providerLabel: provider.label };
+    runOwner.current = { threadId, instruction: label, providerLabel: provider.label, harness: NO_HARNESS };
     setInstruction("");
     savedRunFor.current = null;
     // A brand-new conversation hands its chosen mode to the sidecar before the
@@ -270,14 +278,18 @@ export function AgentStage() {
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
     setFollowing(true);
-    const threadId = activeThreadId ?? createThread(shown.slice(0, 60));
+    const threadId = activeThreadId ?? createThread(shown.slice(0, 60), chatHarness.binding);
+    // A chat from before the setting existed takes the harness it is about to run with.
+    if (activeThreadId) useThreadStore.getState().bindThreadHarness(activeThreadId, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: shown });
-    runOwner.current = { threadId, instruction: shown, providerLabel: !enabled ? provider.label : undefined };
+    runOwner.current = { threadId, instruction: shown, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
     if (!keepDraft) setInstruction("");
     savedRunFor.current = null;
     // In Plan mode the turn names its thread and mode, so the sidecar can end it in a plan that waits for approval.
     const mode = modeOverride ?? permission.mode;
+    // Subagents are a harness-off feature; a Plan-mode turn answers directly, so it never starts children.
+    const subagentRun = useSubagentStore.getState().enabled && !enabled && mode !== "plan";
     // Chat is never mock: it runs against the connected provider. `provider.id`
     // is also the fallback carried into the graph above — one connection,
     // decided once here, never re-derived by the backend. useRunStream also
@@ -290,7 +302,9 @@ export function AgentStage() {
       cwd: workspace?.rootPath || undefined,
       providerId: provider.id,
       model: !enabled || mode === "plan" ? selectedModel || undefined : undefined,
-      ...(mode === "plan" || modeOverride ? { tools: { enabled: false, thread_id: threadId, permission_mode: mode } } : {}),
+      tools: subagentRun
+        ? { subagents: true, thread_id: threadId, permission_mode: mode }
+        : mode === "plan" || modeOverride ? { enabled: false, thread_id: threadId, permission_mode: mode } : undefined,
     });
   };
 
@@ -397,9 +411,16 @@ export function AgentStage() {
             </p>
           </div>
         ) : (
+          <>
+          <h1 className="sr-only">Chat</h1>
           <div role="log" aria-label="Conversation" aria-busy={live || undefined} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-6 pt-3">
-            <h1 className="sr-only">{threadTitle}</h1>
-            {messages.map((m) => (
+            {messages.map((m) => m.role === "system" ? (
+              <p key={m.id} data-testid="harness-change" className="flex items-center gap-3 self-stretch text-meta text-ink-mute">
+                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+                <span className="max-w-[60ch] text-center">{m.content}</span>
+                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+              </p>
+            ) : (
               <div
                 key={m.id}
                 className={[
@@ -462,7 +483,7 @@ export function AgentStage() {
                 tone={run.status === "error" ? "fault" : "info"}
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
-                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
+                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready." : "The turn stopped. You can reuse your instruction when ready.")}</p>
                 {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
               </Notice>
             )}
@@ -477,12 +498,20 @@ export function AgentStage() {
 
             <div ref={bottomRef} />
           </div>
+          </>
         )}
       </div>
 
       <div className="flex-none px-3 pb-4 pt-2 sm:px-6">
         {!following && <div className="mb-2 text-center"><Button size="sm" onClick={() => setFollowing(true)}>Jump to latest</Button></div>}
         <div className="oh-agent-composer mx-auto max-w-[820px]">
+          {chatHarness.status.state === "missing" && (
+            <div className="px-3 pb-2">
+              <Notice tone="fault" action={<Button size="sm" onClick={() => chatHarness.choose(NO_HARNESS)}>Continue without a harness</Button>}>
+                {chatHarness.status.name} isn't available. It may have been deleted, or the list of harnesses couldn't load. Choose another harness, or continue without one.
+              </Notice>
+            </div>
+          )}
           <QueuedMessages items={queue} paused={queuePaused} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
             onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
           <ChatComposer
@@ -506,8 +535,11 @@ export function AgentStage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pb-2.5 pt-1">
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
+            <SubagentToggle />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
+            {!enabled && <RunBudgetField />}
+            <ToolHooksButton />
             {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
               <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
                 label="Model for next turn" inheritLabel="Connection default" inheritDetail={connection?.defaultModel || "The provider CLI chooses its model"} disabled={live}

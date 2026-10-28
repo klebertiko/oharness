@@ -97,11 +97,15 @@ export interface DirectRunPayload {
   adapter?: string;
   model?: string;
   cwd?: string;
+  /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
+  max_tokens?: number;
   /** Chat tools broker (contract v1.1 §2.4). Absent → the run behaves exactly as before. */
   tools?: {
     enabled?: boolean;
     preset?: ToolPresetPayload;
     summarize?: boolean;
+    /** Let the model hand tasks to cancellable subagents (#166). */
+    subagents?: boolean;
     /** Conversation key. The sidecar looks up this thread's stored permission mode. */
     thread_id?: string;
     /** What the screen shows; the sidecar uses the stricter of this and the stored mode. */

@@ -66,16 +66,17 @@ function ProviderRow({
   const costLabel = rowCostLabel(c, usage);
   const readiness = providerReadiness(c);
   const step = nextStep(c);
+  const status = step?.status ?? readiness.label;
   return (
     <ListRow
       title={c.label}
       subtitle={
         <>
-          <span>{readiness.label}</span>
+          <span>{status}</span>
           {step && <span className="text-ink-mute"> · {step.hint}</span>}
         </>
       }
-      hint={step ? `${readiness.label} — ${step.label}` : readiness.label}
+      hint={step ? `${status} — ${step.label}` : status}
       leading={<ToneDot tone={readiness.tone} />}
       selected={selected}
       onSelect={onSelect}

@@ -28,7 +28,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 608.046875,
+        "y": 639.25,
         "width": 242,
         "height": 64
       }
@@ -38,7 +38,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 648.046875,
+        "y": 695.1875,
         "width": 297,
         "height": 64
       }
@@ -48,7 +48,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 663.4375,
+        "y": 759.125,
         "width": 336,
         "height": 64
       }
@@ -57,9 +57,9 @@
       "width": 768,
       "overflow": false,
       "composer": {
-        "x": 241,
-        "y": 738.828125,
-        "width": 502,
+        "x": 242,
+        "y": 759.125,
+        "width": 501,
         "height": 64
       }
     },
@@ -67,8 +67,8 @@
       "width": 1440,
       "overflow": false,
       "composer": {
-        "x": 419,
-        "y": 809.609375,
+        "x": 419.5,
+        "y": 815.0625,
         "width": 818,
         "height": 64
       }
