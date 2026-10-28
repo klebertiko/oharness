@@ -594,10 +594,51 @@ _ALWAYS_ASK_PROGRAMS = frozenset({'sudo', 'su', 'doas', 'dd', 'mkfs', 'shutdown'
                                   'env', 'nice', 'nohup', 'xargs', 'time', 'timeout', 'command', 'exec', 'sh', 'bash', 'zsh', 'dash', 'fish', 'cmd', 'powershell', 'pwsh'})
 
 
+def _names_a_secret(arg: str) -> bool:
+    """A secret path as an argument, as a flag value (`--file=.env`, `-f.env`) or as an `@file` (curl)."""
+    for part in {arg, *arg.split('=')[1:], arg.split('=', 1)[-1]}:
+        candidate = part.lstrip('@')
+        if candidate.startswith('-'):
+            candidate = re.sub(r'^-{1,2}[A-Za-z0-9-]*?(?=[./\\~])', '', candidate)  # `-f.env`, `-o../x`
+        if candidate and not candidate.startswith('-') and requires_approval(Path(candidate)):
+            return True
+    return False
+
+
+def _git_words(args: list[str]) -> list[str]:
+    """The words of a git command line after git's global options (`-C dir`, `-c k=v`)."""
+    rest, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a in ('-C', '-c', '--git-dir', '--work-tree', '--namespace'):
+            skip = True
+        elif not a.startswith('-') or rest:
+            rest.append(a)
+    return rest
+
+
+def _git_is_destructive(rest: list[str]) -> bool:
+    sub, tail = (rest[:1] or [''])[0], rest[1:]
+    flags = {a for a in tail if a.startswith('-')}
+    short = {ch for a in tail if a.startswith('-') and not a.startswith('--') for ch in a[1:]}
+    if sub == 'push':
+        return bool(flags & {'-f', '--force', '--delete', '-d'} or any(a.startswith('--force-') for a in tail) or 'f' in short or 'd' in short
+                    or any(a.startswith('+') or a.startswith(':') or ':+' in a for a in tail if not a.startswith('-')))
+    if sub == 'reset':
+        return '--hard' in flags
+    if sub == 'clean':
+        return bool('f' in short or '--force' in flags)
+    if sub == 'checkout' and '--' in tail or sub in ('restore',) and flags & {'--worktree', '-W'}:
+        return True
+    return sub in ('gc', 'filter-branch', 'update-ref', 'branch') and bool(flags & {'-D', '--delete', '--prune', '-f', '--force'} or 'D' in short)
+
+
 def needs_confirmation_even_when_allowed(argv: list[str]) -> bool:
-    """Commands that ask even in a mode that otherwise lets them run (Full): privilege escalation, raw disk writes,
-    recursive-force deletes however the flags are spelled, forced git pushes, recursive chmod/chown, and any argument that
-    names a secret path (`.env`, keys, credentials): the secret gate of `read` also covers a command that would print one."""
+    """Commands that ask even in a mode that otherwise lets them run (Full): privilege escalation, raw disk writes, wrappers and
+    shells (they hide the real command), recursive deletes, `find -delete`, recursive chmod/chown, destructive git (forced or
+    deleting pushes, `reset --hard`, `clean -f`, `checkout --`), and any argument that names a secret path (`.env`, keys,
+    credentials), also as a flag value or an `@file`: the secret gate of `read` covers a command that would print one too."""
     if not argv:
         return False
     program = _normalize_program(argv[0].replace('\\', '/').rsplit('/', 1)[-1])
@@ -610,19 +651,11 @@ def needs_confirmation_even_when_allowed(argv: list[str]) -> bool:
         return True
     if program in ('chmod', 'chown', 'chgrp') and ({'R'} & short or '--recursive' in args):
         return True
-    if program == 'git':
-        # git's global options (`-C dir`, `-c k=v`) come before the subcommand
-        rest, skip = [], False
-        for a in args:
-            if skip:
-                skip = False
-            elif a in ('-C', '-c', '--git-dir', '--work-tree', '--namespace'):
-                skip = True
-            elif not a.startswith('-') or rest:
-                rest.append(a)
-        if rest[:1] == ['push'] and any(a in ('-f', '--force') or a.startswith('--force-') or (a.startswith('-') and not a.startswith('--') and 'f' in a) or a.startswith('+') or ':+' in a for a in rest[1:]):
-            return True
-    return any(requires_approval(Path(arg)) for arg in args if arg and not arg.startswith('-'))
+    if program == 'find' and any(a in ('-delete', '-exec', '-execdir', '-ok') for a in args):
+        return True
+    if program == 'git' and _git_is_destructive(_git_words(args)):
+        return True
+    return any(_names_a_secret(arg) for arg in args if arg)
 
 
 def hardened_git(argv: list[str], root) -> tuple[list[str], dict[str, str]]:
