@@ -23,3 +23,22 @@ dd4e1864fcd50cd81f3b0d193535d08406cd9ffb:.harness/sprint-2026-09-18/story-CHAT-T
 # Same synthetic apiKey fixture as b87f20e above, as it appears in the squash commit of #125.
 # Test data only; it never leaves the in-memory test graph.
 0c89756c1d020a4be748e8523f478a3ce2e2b100:frontend/src/components/sidebar/FieldAssist.test.tsx:generic-api-key:71
+
+# The scheduled full-history scan reads every remote branch. These 13 findings are in commits that only
+# survive on already-merged (squashed) PR branches: the first version of the OHarness rebrand (#144), whose
+# "secretRef": "oharness/<provider>" fixture lines sit a hair above the generic-api-key entropy threshold
+# (3.503 vs 3.5) and carried no inline marker yet, and a commit of #140 that touched the synthetic FieldAssist
+# apiKey fixture. They are pointer names and test data, never credentials. main itself is clean.
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_engine_budget_enforcement.py:generic-api-key:79
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_engine_provider_resolution.py:generic-api-key:60
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_engine_stop_responsiveness.py:generic-api-key:74
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_engine_token_limits.py:generic-api-key:72
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_execution_budget_enforcement.py:generic-api-key:60
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_execution_cwd.py:generic-api-key:57
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_execution_provider_resolution.py:generic-api-key:51
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_provider_resolution.py:generic-api-key:38
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_live_api.py:generic-api-key:120
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_live_api.py:generic-api-key:310
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_live_api.py:generic-api-key:52
+50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_llm.py:generic-api-key:51
+dbb2cd65d9c80c916dc1aa48b11b5cf254a79ac5:frontend/src/components/sidebar/FieldAssist.test.tsx:generic-api-key:71
