@@ -126,3 +126,21 @@ it("a connection that only lacks a model still offers Test next to Choose a mode
   expect(screen.getByRole("button", { name: "Choose a model" })).toBeTruthy();
   expect(screen.getByRole("button", { name: /^test$/i })).toBeTruthy();
 });
+
+it("a stopped local Ollama offers one primary action - copy `ollama serve` - and a Test again beside it", async () => {
+  const user = userEvent.setup();
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  show(connection({ health: "fault", detail: "Could not reach http://127.0.0.1:11434." }));
+  expect(screen.getAllByText("Unreachable").length).toBeGreaterThan(0);
+  await user.click(screen.getByRole("button", { name: "Copy `ollama serve`" }));
+  expect(writeText).toHaveBeenCalledWith("ollama serve");
+  expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Test again" })).toBeTruthy();
+});
+
+it("a rejected key says so and points at the key field", () => {
+  show(connection({ provider: "openrouter", label: "OpenRouter", residence: "cloud", health: "fault", detail: "401 unauthorized — the key was rejected or has been revoked." }));
+  expect(screen.getAllByText("Key rejected").length).toBeGreaterThan(0);
+  expect(screen.getByRole("button", { name: "Replace key" })).toBeTruthy();
+});

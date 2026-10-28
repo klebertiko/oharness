@@ -364,10 +364,12 @@ export function Combobox({
     open &&
     pos &&
     createPortal(
-      // biome-ignore lint/a11y/noStaticElementInteractions: delegates keydown/blur from the focusable controls inside (input, trigger, options) to close and trap focus; the container itself is not a control
       <div
         ref={popRef}
         data-combobox-popover=""
+        // A landmark, so the portalled list is not "content outside any region" for assistive tech.
+        role="region"
+        aria-label={`${label} picker`}
         onKeyDown={onPopKeyDown}
         onBlur={(e) => {
           const next = e.relatedTarget as Node | null;

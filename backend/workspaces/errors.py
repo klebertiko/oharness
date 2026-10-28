@@ -11,7 +11,7 @@ import string
 # pattern that can backtrack badly. The walk reads each character a bounded number of times, so hostile text costs time proportional to its
 # length. The regexes left are single character runs with no nested quantifier.
 _QUOTED = re.compile(r"""(['"])(?:[A-Za-z]:[\\/]|[\\/])[^'"\r\n]*\1""")
-_UNC = re.compile(r"\\\\[^\s'\"]+")
+_UNC = re.compile(r"\\\\[^\s'\"]+|(?<![\w./:-])//+(?=[^\s/'\"])[^\s'\"]+")
 _COMPONENT_RUN = re.compile(r"""[^\s'"\\/]*""")  # the characters of one path component: no whitespace, quote or separator
 _SEPARATORS = "\\/"
 _DRIVE_LETTERS = frozenset(string.ascii_letters)

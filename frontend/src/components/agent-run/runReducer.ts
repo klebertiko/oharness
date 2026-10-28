@@ -312,6 +312,7 @@ export function runReducer(state: RunState, action: Action): RunState {
                 ? action.data.reason
                 : "rejected",
             note: String(action.data.note ?? ""),
+            ...(typeof action.data.mode === "string" ? { mode: action.data.mode } : {}),
           },
         })),
         status: state.status === "gate" ? "running" : state.status,

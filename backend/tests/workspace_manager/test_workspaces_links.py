@@ -278,3 +278,28 @@ def test_remove_tree_aborts_when_a_directory_turns_into_a_link_before_it_is_list
         links_module.remove_tree(top)
     assert caught.value.code == "unsafe_destination"
     outside.assert_intact()
+
+
+def test_remove_tree_rechecks_the_parent_before_every_entry(tmp_path, outside, monkeypatch):
+    """A directory swapped for a link AFTER the first child was deleted must stop the walk: the next name is not deleted through it."""
+    from workspaces import links as links_module
+
+    top = tmp_path / "doomed"
+    top.mkdir()
+    for name in ("secret.txt", "victim.txt"):  # the same names as the outside directory's files
+        (top / name).write_text("mine\n", encoding="utf-8")
+    real_unlink, swapped = os.unlink, []
+
+    def swap_after_first(path, *args, **kw):
+        real_unlink(path, *args, **kw)
+        if not swapped:
+            swapped.append(True)
+            parked = tmp_path / "parked"
+            os.rename(top, parked)
+            make_dir_link(top, outside.path)  # the listing is stale: its names now resolve inside the outside directory
+
+    monkeypatch.setattr(links_module.os, "unlink", swap_after_first)
+    with pytest.raises(WorkspaceError) as caught:
+        links_module.remove_tree(top)
+    assert caught.value.code == "unsafe_destination"
+    outside.assert_intact()
