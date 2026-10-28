@@ -19,6 +19,7 @@ from database import SessionLocal, get_db
 from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
 from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream
 from adapters import get_adapter, AdapterConfig
+from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
@@ -54,6 +55,8 @@ class DirectRequest(BaseModel):
     step: bool = False
     cwd: str | None = None
     tools: Any = None
+    # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
+    max_tokens: Any = None
 
 
 async def _validated_project_cwd(db: AsyncSession, requested: str | None) -> str | None:
@@ -515,6 +518,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         tool_options = ToolsRequest.model_validate(body.tools) if body.tools is not None else None
     except ValidationError:
         return JSONResponse({'error': 'invalid_argument'}, status_code=400)
+    try:
+        run_budget = RunBudget(validate_max_tokens(body.max_tokens))
+    except ValueError:
+        return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     preset_only = tool_options is not None and tool_options.preset is not None and not tool_options.summarize
     if not prompt and not (tool_options and tool_options.preset):
         raise HTTPException(400, "instruction is required")
@@ -577,7 +584,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         stored = await get_thread_mode(db, tool_options.thread_id)
         permission_mode = effective_mode(stored, tool_options.permission_mode)
         workspace_trusted = await is_workspace_trusted(db, cwd)
-    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted) if tool_options else None
+    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted, run_budget=run_budget) if tool_options else None
     node_view = {
         "node_id": node_id,
         "type": "llm",
@@ -598,6 +605,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         collected: list[str] = []
         nodes_run = 0
         started = time.time()
+        budget_hit = None
 
         def emit(event: str, data: dict) -> str:
             return _sse(event, data)
@@ -632,6 +640,11 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                         kind = ev.get("kind")
                         if broker and (kind.startswith('tool_') or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})
+                        elif kind in ("budget_exceeded", "context_compacted"):
+                            payload = {k: v for k, v in ev.items() if k != "kind"}
+                            if kind == "budget_exceeded":
+                                budget_hit = payload
+                            yield emit(kind, {"node_id": node_id, **payload})
                         elif kind == "phase":
                             control.phase = ev.get("phase", "")
                             yield emit(
@@ -653,6 +666,13 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "node_stream",
                                 {"node_id": node_id, "chunk": ev.get("text", "")},
                             )
+                            if not broker and run_budget.exceeded((len(prompt) + sum(map(len, collected))) // 4):
+                                # A single turn has no tool loop to stop between turns:
+                                # stop the stream itself once the estimate crosses the ceiling.
+                                used = (len(prompt) + sum(map(len, collected))) // 4
+                                budget_hit = {"max_tokens": run_budget.max_tokens, "used_tokens": used}
+                                yield emit("budget_exceeded", {"node_id": node_id, **budget_hit})
+                                break
                         elif kind == "tool_call":
                             yield emit(
                                 "tool_call",
@@ -703,6 +723,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                         yield emit("run_stopped", {"at_node": node_id})
                     else:
                         status = STATUS_COMPLETE
+                        if budget_hit is not None:
+                            status = STATUS_BUDGET_EXCEEDED
                         yield emit(
                             "node_done",
                             {

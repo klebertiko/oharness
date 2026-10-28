@@ -165,6 +165,10 @@ export interface RunState {
   routeDecision: RouteDecision | null;
   /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
   proposedPlan?: { planId: string; text: string };
+  /** Set when the run reached its token ceiling (`budget_exceeded`). */
+  budget: { maxTokens: number; usedTokens: number } | null;
+  /** One entry per context compaction, in order. */
+  compactions: { beforeTokens: number; afterTokens: number }[];
 }
 
 export interface RunEvent {
