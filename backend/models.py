@@ -202,4 +202,5 @@ class TurnChange(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     before: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     after_sha: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    mode: Mapped[int] = mapped_column(Integer, default=0o644)
     reverted: Mapped[bool] = mapped_column(Boolean, default=False)

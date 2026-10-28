@@ -35,9 +35,9 @@ class TurnTracker:
             if not changes and complete:
                 return None
             async with session_factory() as db:
-                for c in changes:
+                for c in changes[:TURN_DIFF_RULES['max_listed_files']]:  # only what the person can see and revert
                     db.add(TurnChange(run_id=self.run_id, path=c.path, root_path=self.root, status=c.status,
-                                      before=c.before, after_sha=c.after_sha))
+                                      before=c.before, after_sha=c.after_sha, mode=c.before_mode, reverted=False))
                 await db.commit()
         except Exception:  # noqa: BLE001
             log.warning('turn diff: could not compute the diff', exc_info=True)
@@ -57,7 +57,7 @@ async def revert_change(db: AsyncSession, run_id: str, path) -> str:
         raise KeyError(path)
     if row.reverted:
         raise RevertRefused('already_reverted')
-    await asyncio.to_thread(revert_file, row.root_path, row.path, row.status, row.before, row.after_sha)
+    await asyncio.to_thread(revert_file, row.root_path, row.path, row.status, row.before, row.after_sha, row.mode or 0o644)
     row.reverted = True
     await db.commit()
     return 'reverted'

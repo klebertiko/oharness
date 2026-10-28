@@ -20,3 +20,10 @@ Snapshots, not tool hooks, because edits come from commands (`exec`) and from a 
 - Changes made by the person or another tool while the turn runs are attributed to the turn.
 - Revert is one-shot per file; there is no "revert all".
 - A harness-graph run (`/execute/`) is not covered yet.
+
+## Notes from review
+- Earlier bytes of listed text files are stored as they are on disk, unredacted: revert must be byte-exact. They sit in the same local database as the run journal; only the journaled and streamed diff is redacted. Rows are kept only for the (at most 100) files the person can see.
+- When a snapshot hit a limit, "added" and "deleted" are unreliable, so they are not offered for revert.
+- Names containing `:`, `\` or control characters are not tracked (revert could not address them safely).
+- The executable bit of a restored file is kept.
+- Cost: two bounded passes over the workspace per turn (up to 5000 files of 256 KiB).

@@ -71,9 +71,9 @@ export function TurnDiffPanel({ runId, turnDiff }: { runId: string | null; turnD
                     </Button>
                   ) : null}
                 </div>
-                {file.binary && <p className="t-meta text-ink-mute">binary — no diff, cannot be reverted</p>}
+                {file.binary && <p className="t-meta text-ink-mute">{file.revertible ? "binary — no diff" : "binary — no diff, cannot be reverted"}</p>}
                 {!file.binary && !file.revertible && st.phase !== "reverted" && (
-                  <p className="t-meta text-ink-mute">too large to keep — cannot be reverted</p>
+                  <p className="t-meta text-ink-mute">earlier content not kept — cannot be reverted</p>
                 )}
                 {st.error && <p role="alert" className="t-meta text-fault-text">{st.error}</p>}
                 {expanded && (

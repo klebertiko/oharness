@@ -753,6 +753,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise
         except Exception as exc:  # noqa: BLE001
             status = STATUS_ERROR
+            # Edits made before the failure are still the person's to review and undo.
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None
+            if failed_diff:
+                yield emit("turn_diff", {"node_id": node_id, **failed_diff})
             yield emit("error", failure_details(exc))
         finally:
             RUNS.pop(run_id, None)

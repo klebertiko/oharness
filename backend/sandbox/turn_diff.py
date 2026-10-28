@@ -37,6 +37,7 @@ class Entry:
     kind: str  # text | binary | large
     sha: str
     data: bytes | None = None  # kept only for text
+    mode: int = 0o644
 
 
 @dataclass
@@ -56,6 +57,7 @@ class Change:
     diff_truncated: bool = False
     revertible: bool = False
     before: bytes | None = None
+    before_mode: int = 0o644
     after_sha: str | None = None
 
 
@@ -104,6 +106,8 @@ def snapshot(root) -> Snapshot:
                 rel = os.path.relpath(child.path, base).replace(os.sep, '/')
                 if requires_approval(Path(rel)):
                     continue
+                if any(ch in rel.replace('/', '') for ch in ':\\') or any(ord(ch) < 32 for ch in rel):
+                    continue  # names revert cannot address safely are not tracked
                 scanned += 1
                 if scanned > TURN_DIFF_RULES['max_files_scanned']:
                     snap.complete = False
@@ -116,7 +120,7 @@ def snapshot(root) -> Snapshot:
                         snap.complete = False
                         data = None
                         kind = 'large'
-                snap.entries[rel] = Entry(kind, sha, data)
+                snap.entries[rel] = Entry(kind, sha, data, stat.st_mode & 0o7777)
             except OSError:
                 continue
     return snap
@@ -126,8 +130,9 @@ def _diff(old: bytes | None, new: bytes | None):
     a = (old or b'').decode('utf-8', 'replace').splitlines(keepends=True)
     b = (new or b'').decode('utf-8', 'replace').splitlines(keepends=True)
     lines = list(difflib.unified_diff(a, b, 'before', 'after', n=2))
-    added = sum(1 for l in lines if l.startswith('+') and not l.startswith('+++'))
-    removed = sum(1 for l in lines if l.startswith('-') and not l.startswith('---'))
+    body = lines[2:]  # the two header lines come first; a content line may itself start with '++' or '--'
+    added = sum(1 for l in body if l.startswith('+'))
+    removed = sum(1 for l in body if l.startswith('-'))
     text = ''.join(l if l.endswith('\n') else l + '\n' for l in lines)
     limit = TURN_DIFF_RULES['max_diff_chars']
     return added, removed, text[:limit], len(text) > limit
@@ -145,7 +150,10 @@ def compute_changes(before: Snapshot, after: Snapshot) -> list:
         if not change.binary:
             change.added, change.removed, change.diff, change.diff_truncated = _diff(old and old.data, new and new.data)
         change.before = old.data if old and old.kind == 'text' else None
-        change.revertible = status == 'added' or change.before is not None
+        change.before_mode = old.mode if old else 0o644
+        # Past a scan limit "added"/"deleted" may just mean "outside the window": never offer a delete then.
+        reliable = before.complete and after.complete
+        change.revertible = (status == 'added' and reliable) or (change.before is not None and (status == 'modified' or reliable))
         out.append(change)
     return out
 
@@ -163,7 +171,7 @@ def _split(rel) -> list:
     return parts
 
 
-def revert_file(root, rel, status, before, after_sha) -> None:
+def revert_file(root, rel, status, before, after_sha, mode=0o644) -> None:
     """Restore one file to its pre-turn state. Never touches another path.
 
     Refuses: paths that leave the workspace, any symlink/junction on the way,
@@ -206,8 +214,7 @@ def revert_file(root, rel, status, before, after_sha) -> None:
     try:
         with open(temp, 'xb') as handle:
             handle.write(before)
-        if exists:
-            os.chmod(temp, target.stat().st_mode & 0o7777)
+        os.chmod(temp, (target.stat().st_mode if exists else mode) & 0o7777)
         os.replace(temp, target)
     finally:
         if os.path.lexists(temp):

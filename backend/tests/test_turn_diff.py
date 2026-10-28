@@ -242,3 +242,50 @@ def test_revert_rejects_unknown_paths_and_unknown_runs(env):
     assert client.post(f'/execute/{run_id}/turn-diff/revert', json={'path': '../x'}).status_code == 404
     assert client.post('/execute/missing-run/turn-diff/revert', json={'path': 'a.txt'}).status_code == 404
     assert client.post(f'/execute/{run_id}/turn-diff/revert', json={}).status_code == 400
+
+
+# -- review follow-ups ---------------------------------------------------------
+def test_counts_include_lines_that_start_with_plus_or_dash(tmp_path):
+    write(tmp_path, 'a.txt', 'x\n')
+    c = changes(tmp_path, lambda: write(tmp_path, 'a.txt', 'x\n++i;\n-- sql comment\n'))['a.txt']
+    assert (c.added, c.removed) == (2, 0)
+
+
+def test_added_is_not_revertible_when_a_snapshot_was_cut_short(tmp_path, monkeypatch):
+    write(tmp_path, 'keep.txt', 'k')
+    monkeypatch.setitem(TURN_DIFF_RULES, 'max_files_scanned', 1)
+    before = snapshot(tmp_path)
+    write(tmp_path, 'zzz.txt', 'new')
+    after = snapshot(tmp_path)
+    assert not before.complete or not after.complete
+    assert all(not c.revertible for c in compute_changes(before, after) if c.status in ('added', 'deleted'))
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX modes')
+def test_restoring_a_deleted_script_keeps_its_exec_bit(tmp_path):
+    script_file = write(tmp_path, 'run.sh', '#!/bin/sh\n')
+    script_file.chmod(0o755)
+    c = changes(tmp_path, script_file.unlink)['run.sh']
+    revert_file(tmp_path, c.path, c.status, c.before, c.after_sha, c.before_mode)
+    assert (tmp_path / 'run.sh').stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='colon and backslash are not valid names on Windows')
+def test_names_revert_cannot_address_are_not_tracked(tmp_path):
+    assert changes(tmp_path, lambda: write(tmp_path, 'notes:v2.txt', 'x') and write(tmp_path, 'a\\b.txt', 'y')) == {}
+
+
+def test_a_failed_turn_still_lists_its_edits(env, monkeypatch):
+    client, root = env
+
+    class Failing(_Editor):
+        async def stream_events(self, prompt, config):
+            write(self.root, 'a.txt', 'A1\n')
+            raise RuntimeError('provider fell over')
+            yield  # pragma: no cover
+    adapter = Failing()
+    adapter.root = root
+    monkeypatch.setattr('providers.resolution.get_adapter', lambda name: adapter)
+    monkeypatch.setattr('routers.execution.get_adapter', lambda name: adapter)
+    _, events = run_turn(client, root)
+    assert [f['path'] for f in events['turn_diff']['files']] == ['a.txt']
