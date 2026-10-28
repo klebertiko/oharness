@@ -6,7 +6,7 @@ import { apiUrl } from "@/lib/apiBase";
 
 /** `failed` = the sidecar persisted a classified provider failure (DIRECT-HISTORY AC#4);
     `error` = the engine itself errored. Both are failures to a reader, kept apart for the log. */
-export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "budget_exceeded" | "unknown";
+export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "budget_exceeded" | "pending" | "unknown";
 export type RunSource = "direct" | "harness";
 
 export interface RunLog {
