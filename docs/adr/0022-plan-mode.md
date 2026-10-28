@@ -1,4 +1,4 @@
-# ADR 0010 — Modo plano: a run termina num plano que precisa de aprovação
+# ADR 0022 — Modo plano: a run termina num plano que precisa de aprovação
 
 Status: Aceito (conservador, sem decisão do usuário pendente) · 2026-10-28 · Issue #162 · Código: `backend/sandbox/plan_store.py`, `backend/routers/chat_tools.py`, `backend/routers/execution.py`
 
