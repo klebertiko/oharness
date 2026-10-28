@@ -18,8 +18,8 @@ vi.mock("@/lib/chatToolsApi", () => ({
 }));
 vi.mock("@/components/agent/chatProvider", () => ({
   pickChatProvider: () => ({ id: "ollama", label: "Ollama", mode: "local", chosen: true }),
-  missingProviderAction: () => null,
 }));
+vi.mock("@/components/providers/composerAction", () => ({ missingProviderAction: () => null, performInPlace: vi.fn() }));
 vi.mock("@/components/agent/useChatTools", () => ({
   useChatTools: () => ({ workspace: { root: "D:\w", name: "w" }, items: [], error: null, loading: false, readSkill: vi.fn(), capabilities: null }),
 }));

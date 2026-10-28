@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { missingProviderAction } from "@/components/agent/chatProvider";
+import { missingProviderAction } from "@/components/providers/composerAction";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useChatProviderStore } from "@/store/chatProviderStore";

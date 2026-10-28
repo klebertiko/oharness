@@ -18,7 +18,8 @@ import { PERMISSION_LABEL, isPermissionMode, type PermissionMode } from "@/lib/p
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
-import { missingProviderAction, pickChatProvider } from "@/components/agent/chatProvider";
+import { pickChatProvider } from "@/components/agent/chatProvider";
+import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
@@ -550,7 +551,7 @@ export function AgentStage() {
             </fieldset>
             <span className="flex-1" />
             {missing ? (
-              <Button variant="ghost" size="sm" onClick={() => requestProviderSetup(missing.id)} title={missing.text} className="min-w-0 max-w-[240px] text-signal-text max-sm:hidden">
+              <Button variant="ghost" size="sm" onClick={() => { performInPlace(missing.step); requestProviderSetup(missing.id); }} title={missing.id ? `${missing.text}. Opens Providers.` : missing.text} className="min-w-0 max-w-[240px] text-signal-text max-sm:hidden">
                 <span className="truncate">{missing.text}</span>
               </Button>
             ) : (

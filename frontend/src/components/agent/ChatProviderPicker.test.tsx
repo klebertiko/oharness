@@ -49,23 +49,58 @@ const open = async (user: ReturnType<typeof userEvent.setup>) => {
   return screen.getByRole("listbox", { name: "Chat provider" });
 };
 
-it("lists Auto and only the providers that can answer right now", async () => {
+it("lists Auto, the providers that can answer, and a Needs action group for the rest", async () => {
   const user = userEvent.setup();
   render(<ChatProviderPicker onConnect={vi.fn()} />);
   const list = await open(user);
 
   const names = within(list).getAllByRole("option").map((o) => o.textContent ?? "");
-  expect(names).toHaveLength(3);
+  expect(names).toHaveLength(4);
   expect(names[0]).toMatch(/^Auto/);
   // A connection with no model list is one row; one with models lists them under its name.
   expect(names[1]).toMatch(/^Anthropic/);
   expect(names[2]).toMatch(/^llama3/);
   expect(within(list).getByRole("group", { name: "Ollama local" })).toBeTruthy();
-  // Nothing to configure inside the picker: no setup rows, no key field.
-  expect(screen.queryByText("Set up")).toBeNull();
-  expect(screen.queryByText("Needs setup")).toBeNull();
-  expect(screen.queryByText(/OpenAI/)).toBeNull();
+  // What cannot answer yet is offered with its one action, not as a choice and not as a form.
+  const needs = within(within(list).getByRole("group", { name: "Needs action" })).getAllByRole("option");
+  expect(needs).toHaveLength(1);
+  expect(needs[0].textContent).toMatch(/^OpenAI.*Not connected · Turn on/);
   expect(document.querySelector("input[type=password]")).toBeNull();
+});
+
+it("a Needs action row opens that connection in Providers instead of selecting it", async () => {
+  const user = userEvent.setup();
+  const onConnect = vi.fn();
+  render(<ChatProviderPicker onConnect={onConnect} />);
+  const list = await open(user);
+  await user.click(within(list).getByRole("option", { name: /^OpenAI/ }));
+  expect(useProviderStore.getState().selectedId).toBe("oa");
+  expect(useChatProviderStore.getState().chosenId).toBe("an");
+  expect(onConnect).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("listbox")).toBeNull();
+});
+
+it("Needs action lists three connections nearest to ready first, and counts the rest", async () => {
+  const user = userEvent.setup();
+  const off = (id: string, label: string, over: Partial<Connection> = {}) =>
+    connection({ id, provider: "openrouter", label, enabled: false, health: "setup", ...over });
+  useChatProviderStore.setState({ chosenId: null });
+  useProviderStore.setState({
+    connections: [
+      off("k1", "No key one"),
+      off("k2", "No key two"),
+      off("rej", "Rejected", { health: "fault", enabled: true, detail: "401 unauthorized — the key was rejected or has been revoked." }),
+      off("sw", "Switched off", { secret: { service: "oharness/sw", prefix: "", tail: "····", length: 0, vault: "backend", savedAt: "" } }),
+    ],
+  });
+  render(<ChatProviderPicker onConnect={vi.fn()} />);
+  const list = await open(user);
+  const needs = within(within(list).getByRole("group", { name: "Needs action" })).getAllByRole("option").map((o) => o.textContent ?? "");
+  expect(needs).toHaveLength(4);
+  expect(needs[0]).toMatch(/^Switched off.*Turn on/);
+  expect(needs[1]).toMatch(/^Rejected.*Key rejected · Replace key/);
+  expect(needs[2]).toMatch(/^No key one.*Paste an OpenRouter key/);
+  expect(needs[3]).toBe("1 more need setup. Open Manage providers.");
 });
 
 it("choosing a ready provider sets the chat default and closes", async () => {
@@ -314,4 +349,34 @@ it("pins of chats that no longer exist are dropped, the pre-chat pin stays", () 
   useChatModelStore.setState({ overrides: { gone: { an: "x" }, new: { an: "y" } } });
   render(<ChatProviderPicker onConnect={vi.fn()} />);
   expect(useChatModelStore.getState().overrides).toEqual({ new: { an: "y" } });
+});
+
+it("the composer's call to action uses the same words as the Needs action row", async () => {
+  const user = userEvent.setup();
+  useChatProviderStore.setState({ chosenId: null });
+  useProviderStore.setState({
+    connections: [connection({ id: "sw", provider: "anthropic", label: "Anthropic", enabled: false, health: "setup" })],
+  });
+  const { missingProviderAction } = await import("@/components/providers/composerAction");
+  const cta = missingProviderAction(useProviderStore.getState().connections, null);
+  render(<ChatProviderPicker onConnect={vi.fn()} />);
+  const list = await open(user);
+  const row = within(list).getByRole("option", { name: /^Anthropic/ });
+  expect(cta?.text).toBe("Turn on · Anthropic");
+  expect(row.textContent).toContain("Turn on");
+});
+
+it("more than three connections that need action: three rows and a count of the rest", async () => {
+  const user = userEvent.setup();
+  useChatProviderStore.setState({ chosenId: null });
+  useProviderStore.setState({
+    connections: ["a", "b", "c", "d", "e"].map((id) => connection({ id, provider: "openrouter", label: `Router ${id}`, enabled: false, health: "setup" })),
+  });
+  render(<ChatProviderPicker onConnect={vi.fn()} />);
+  const list = await open(user);
+  const group = within(list).getByRole("group", { name: "Needs action" });
+  expect(within(group).getAllByRole("option").map((o) => o.textContent)).toEqual([
+    expect.stringMatching(/^Router a/), expect.stringMatching(/^Router b/), expect.stringMatching(/^Router c/),
+    "2 more need setup. Open Manage providers.",
+  ]);
 });

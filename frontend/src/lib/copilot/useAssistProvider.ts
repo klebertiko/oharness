@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useMemo } from "react";
-import { missingProviderAction, pickChatProvider, type ChatProvider } from "@/components/agent/chatProvider";
+import { pickChatProvider, type ChatProvider } from "@/components/agent/chatProvider";
+import { missingProviderAction } from "@/components/providers/composerAction";
 import { useProviderStore } from "@/components/providers/providerStore";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useChatProviderStore } from "@/store/chatProviderStore";

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { missingProviderAction, modelNotPulled, providerReadiness, rowStatus, rowTone } from "./chatProvider";
+import { modelNotPulled, providerReadiness, rowStatus, rowTone } from "./chatProvider";
+import { missingProviderAction } from "@/components/providers/composerAction";
 import { nextStep } from "../providers/nextStep";
 import type { Connection } from "../providers/providerStore";
 
@@ -26,7 +27,7 @@ describe("Model not pulled (local Ollama)", () => {
   });
 
   it("the composer names the model to pull", () => {
-    expect(missingProviderAction([ollama()], "ollama-local")).toEqual({ text: "Pull qwen3:8b to send", id: "ollama-local" });
+    expect(missingProviderAction([ollama()], "ollama-local")).toMatchObject({ text: "Copy `ollama pull qwen3:8b`", id: "ollama-local" });
   });
 
   it("a fresh Ollama with nothing pulled (empty list) is flagged, not read as ready", () => {
@@ -46,7 +47,7 @@ describe("Model not pulled (local Ollama)", () => {
   it("a turned-off connection still asks for the switch first, in the composer too", () => {
     const off = ollama({ enabled: false });
     expect(providerReadiness(off).missing).toBe("turn-on");
-    expect(missingProviderAction([off], "ollama-local")?.text).toBe("Turn on Ollama local to send");
+    expect(missingProviderAction([off], "ollama-local")?.text).toBe("Turn on · Ollama local");
   });
 
   it.each([

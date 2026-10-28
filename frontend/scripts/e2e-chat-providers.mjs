@@ -68,7 +68,14 @@ try {
     const found = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] })).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`));
     assert.deepEqual(found, [], `axe with the model combo open (${theme})`);
   }
-  checks.push('Model combo open: axe clean in both themes');
+  const needs = page.getByRole('group', { name: 'Needs action' });
+  await needs.waitFor();
+  const needsText = await needs.textContent();
+  // The seeded connections that are not set up each show the one action they need; the rest are counted.
+  assert.match(needsText, /Not connected · Turn on/);
+  assert.match(needsText, /Paste an Ollama key/);
+  assert.match(needsText, /\d+ more need setup/);
+  checks.push('Model combo open with a Needs action group: axe clean in both themes');
   await page.getByRole('combobox').fill('qa-model');
   // Shift+Enter applies the typed model to this chat only; the connection default stays qa-default.
   await page.getByRole('combobox').press('Shift+Enter');
