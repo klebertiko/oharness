@@ -625,7 +625,7 @@ def decide_with_class(mode, call, workspace, trusted: bool = False) -> tuple[Dec
     """The verdict for one validated tool call and, for `exec`, the class it was judged as (classified once)."""
     if getattr(call, 'name', None) != 'exec':
         return 'allow', None
-    rules = _RULES.get(mode) or _RULES[DEFAULT_MODE]  # unknown mode: the default one
+    rules = _RULES[mode] if isinstance(mode, str) and mode in _RULES else _RULES[DEFAULT_MODE]  # unknown mode: the default one
     cls = exec_class(call, workspace)
     rule = rules[cls]
     if rule == 'allow_if_trusted':

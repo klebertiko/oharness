@@ -56,8 +56,7 @@ def validate_call(name: str, args: dict):
 
 RUN_COMMAND_DESCRIPTION = ('Run a program locally. No shell: argv only. A command needs the user approval unless the conversation permission mode '
     'runs it automatically (Auto: read-only git and listings in any workspace; project scripts such as npm test or pytest only in a workspace '
-    'the user trusted). Read-only and Plan refuse any command that could write, with the reason shown to the user; Workspace write runs file commands whose '
-    'paths stay inside the workspace and asks for anything else.')
+    'the user trusted). In Plan mode (read-only) every command is refused.')
 
 TOOL_SCHEMAS = [
     {'type': 'function', 'function': {'name': 'read_file', 'description': 'Read a UTF-8 text file inside the workspace.',
