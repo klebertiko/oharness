@@ -25,6 +25,8 @@ button:focus-visible,[role=option]:focus-visible,[role=radio]:focus-visible,inpu
 <div class="composer"><textarea rows="2" aria-label="Message OHarness" style="width:100%;background:var(--sub-200);color:var(--ink);border:1px solid var(--line);border-radius:6px"></textarea>
 <div class="bar" id="bar"></div><div id="out"></div></div>
 <p class="note" id="note"></p>
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: html.security.audit.insecure-document-method, opengrep-rules.html.security.audit.insecure-document-method -->
 <script>
 let alt="A",many=false,sel="Agile Harness",open=false,cur=0;
 const few=[["No harness","Talk to the model directly"],["My Triage","Sort inbound requests."],["Agile Harness","Plan, build and review in small loops."]];
