@@ -83,6 +83,7 @@ export function Dossier() {
   // read) changes only on a confirmed save — blur, Enter, or before a Test.
   const [draft, setDraft] = useState<{ id: string; value: string } | null>(null);
   const [endpointSave, setEndpointSave] = useState<{ id: string; state: "saving" | "saved" | "failed" } | null>(null);
+  const [copied, setCopied] = useState<{ id: string; text: string } | null>(null);
   const hydrateUsage = useUsageStore((s) => s.hydrate);
   const usageByConnection = useUsageStore((s) => s.summary?.byConnection);
   useEffect(() => {
@@ -108,6 +109,7 @@ export function Dossier() {
   const readiness = providerReadiness(c);
   const ready = readiness.ready;
   const step = nextStep(c);
+  const statusWord = step?.status ?? readiness.label;
   // The store's detail often opens by restating the status word ("Not
   // connected. Add a key…"); the status line above already says it.
   const detail = c.detail.startsWith(`${readiness.label}.`)
@@ -146,10 +148,21 @@ export function Dossier() {
 
   const runStep = () => {
     if (!step) return;
-    if (step.kind === "paste") {
+    if (step.kind === "paste" || step.kind === "replaceKey") {
       const field = document.getElementById(CRED_INPUT_ID);
       field?.scrollIntoView({ block: "center", behavior: "smooth" });
       field?.focus({ preventScroll: true });
+    } else if (step.kind === "checkEndpoint") {
+      const field = document.querySelector<HTMLElement>(`[aria-label="${c.label} endpoint"]`);
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+      field?.focus({ preventScroll: true });
+    } else if (step.kind === "copy" && step.copy) {
+      void navigator.clipboard?.writeText(step.copy).then(
+        () => setCopied({ id: c.id, text: step.copy ?? "" }),
+        () => setCopied(null),
+      );
+    } else if (step.kind === "link" && step.href) {
+      window.open(step.href, "_blank", "noopener,noreferrer");
     } else if (step.kind === "turnOn") {
       turnOnThenTest();
     } else if (step.kind === "model") {
@@ -182,7 +195,7 @@ export function Dossier() {
               <h1 className="t-display text-display text-ink wrap-anywhere">{c.label}</h1>
               <p className="t-body mt-1 flex items-center gap-1.5" aria-live="polite">
                 <ToneDot tone={readiness.tone} />
-                <span className={`font-medium ${TONE_TEXT[readiness.tone]}`}>{readiness.label}</span>
+                <span className={`font-medium ${TONE_TEXT[readiness.tone]}`}>{statusWord}</span>
               </p>
               {detail && <p className="t-body mt-1 max-w-[68ch] text-ink-dim">{detail}</p>}
             </div>
@@ -192,13 +205,19 @@ export function Dossier() {
             {step && (
               <Btn primary onClick={runStep} disabled={probing}>
                 {step.kind === "retest" && <Activity size={12} strokeWidth={1.7} aria-hidden />}
-                {step.kind === "retest" && probing ? "Testing…" : step.label}
+                {step.kind === "retest" && probing ? "Testing…" : step.kind === "copy" && copied?.id === c.id && copied.text === step.copy ? "Copied" : step.label}
               </Btn>
             )}
             {(!step || step.kind === "model") && (
               <Btn onClick={() => void test()} disabled={probing}>
                 <Activity size={12} strokeWidth={1.7} aria-hidden />
                 {probing ? "Testing…" : "Test"}
+              </Btn>
+            )}
+            {step?.thenRetest && (
+              <Btn onClick={() => void test()} disabled={probing}>
+                <Activity size={12} strokeWidth={1.7} aria-hidden />
+                {probing ? "Testing…" : "Test again"}
               </Btn>
             )}
             {c.enabled && <Btn onClick={() => void toggleEnabled(c.id)}>Turn off</Btn>}

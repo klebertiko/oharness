@@ -305,3 +305,18 @@ def test_the_runner_unions_the_configuration_of_other_worktrees(runner, svc, rep
     runner.run(repo.path, ["worktree", "remove", "--", str(path)], filters=True, filter_dirs=[path])
     assert marker_bench.ran() == [] and not path.exists()
 
+
+
+def test_a_configuration_that_changed_while_git_ran_discards_the_result(repo, runner, monkeypatch):
+    """The drivers are read before git runs; if they differ afterwards the filter set that was blanked was not the one in force."""
+    from workspaces.errors import WorkspaceError
+
+    seen = iter([{"first"}, {"first", "planted"}])
+    monkeypatch.setattr(runner, "_filter_neutralisers", lambda cwd: next(seen))
+    with pytest.raises(WorkspaceError) as caught:
+        runner.run(repo.path, ["status", "--porcelain"], filters=True)
+    assert caught.value.code == "config_changed" and caught.value.status == 409
+
+
+def test_an_unchanged_configuration_keeps_the_result(repo, runner):
+    assert runner.run(repo.path, ["status", "--porcelain"], filters=True).returncode == 0
