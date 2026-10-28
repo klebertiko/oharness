@@ -201,3 +201,18 @@ class BudgetConfig(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default="global")
     limit_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ToolHook(Base):
+    """A pre-tool hook (`sandbox.hooks`): a program that must exit 0 before a tool runs.
+
+    Registered through the sidecar only; never read from a workspace or a run
+    request. `argv_json` / `tools_json` are validated on write and again on
+    load: a row that no longer validates blocks (fail-closed), it is not skipped."""
+    __tablename__ = "tool_hooks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    argv_json: Mapped[str] = mapped_column(Text, nullable=False)
+    tools_json: Mapped[str] = mapped_column(Text, nullable=False)
+    timeout_s: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

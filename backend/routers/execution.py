@@ -26,6 +26,7 @@ from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
 from sandbox.approval import ApprovalConflict
+from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
@@ -57,6 +58,11 @@ class DirectRequest(BaseModel):
     tools: Any = None
     # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
     max_tokens: Any = None
+
+
+async def _load_hooks_now():
+    async with SessionLocal() as session:
+        return await load_hooks(session)
 
 
 async def _validated_project_cwd(db: AsyncSession, requested: str | None) -> str | None:
@@ -584,7 +590,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         stored = await get_thread_mode(db, tool_options.thread_id)
         permission_mode = effective_mode(stored, tool_options.permission_mode)
         workspace_trusted = await is_workspace_trusted(db, cwd)
-    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted, run_budget=run_budget) if tool_options else None
+    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted,
+                        run_budget=run_budget, hooks_loader=_load_hooks_now) if tool_options else None
     node_view = {
         "node_id": node_id,
         "type": "llm",

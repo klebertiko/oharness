@@ -63,7 +63,8 @@ async def _terminate(proc, tree):
     await _kill(proc)
 
 
-async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, str] | None = None) -> dict:
+async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, str] | None = None, *,
+              stdin_data: bytes | None = None, reap_descendants: bool = False) -> dict:
     started = time.monotonic()
     options = {'creationflags': 0x08000000} if os.name == 'nt' else {'start_new_session': True}
     tree = ProcessTree()
@@ -73,7 +74,7 @@ async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, 
         # nosemgrep: python.lang.security.audit.dangerous-asyncio-create-exec-audit
         proc = await asyncio.create_subprocess_exec(  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-asyncio-create-exec-audit
             *_argv(argv), cwd=str(cwd), env=scrub_env(env),
-            stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, **options)
+            stdin=asyncio.subprocess.DEVNULL if stdin_data is None else asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, **options)
         tree.attach(proc.pid)
     except BaseException:
         with anyio.CancelScope(shield=True):
@@ -81,6 +82,13 @@ async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, 
                 await _kill(proc)
             tree.close()
         raise
+    if stdin_data is not None:
+        try:
+            proc.stdin.write(stdin_data)
+            await proc.stdin.drain()
+            proc.stdin.close()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # the program chose not to read its input
     stdout, stderr = asyncio.create_task(_capture(proc.stdout)), asyncio.create_task(_capture(proc.stderr))
     completion = asyncio.gather(proc.wait(), stdout, stderr)
     timed_out = False
@@ -93,7 +101,7 @@ async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, 
         out, err = await asyncio.gather(stdout, stderr)
     finally:
         with anyio.CancelScope(shield=True):
-            if not completion.done():
+            if not completion.done() or reap_descendants:
                 await _terminate(proc, tree)
             # Never wait forever on a pipe retained by a detached descendant.
             try:
