@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import ChatPlan
 from .permission_store import set_thread_mode
 
-PLAN_MAX_CHARS = 20000
+PLAN_MAX_CHARS = 200000  # far above any answer; text is stored whole, never cut, so what is approved is what was shown
 # Where an approved plan may continue. Never `plan` (that is not leaving it) and never `full` (a deliberate, confirmed choice made in the composer).
 APPROVAL_MODES = ('ask', 'auto_workspace', 'read_only', 'workspace_write')
 DEFAULT_APPROVAL_MODE = 'ask'
