@@ -99,6 +99,14 @@ export const useHarnessSessionStore = create<HarnessSessionState>((set, get) => 
       throw new Error("Default harness missing manifest.id");
     }
 
+    // Someone put a harness in use while the default was loading: theirs wins.
+    const chosen = get().activeBundle;
+    if (chosen?.manifest?.id) {
+      set({ enabled, hydrated: true });
+      writePersisted(enabled, chosen.manifest.id);
+      return;
+    }
+
     set({
       enabled,
       activeBundle: bundle,

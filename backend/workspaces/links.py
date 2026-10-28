@@ -167,6 +167,19 @@ def _turned_into_a_link(top: str) -> WorkspaceError:
     return WorkspaceError("unsafe_destination", f"{os.path.basename(top)!r} turned into a link while it was being removed; nothing below it was touched", 409)
 
 
+def _reconfirm(top: str, inspected: os.stat_result) -> None:
+    """The directory whose listing is being worked through is still the one that was inspected (checked again before every entry).
+
+    The check runs on the full path, so a link planted on any ancestor shows up as a different directory too.
+    """
+    try:
+        now = os.lstat(top)
+    except FileNotFoundError:
+        raise WorkspaceError("unsafe_destination", f"{os.path.basename(top)!r} disappeared while it was being removed", 409) from None
+    if link_kind(top, now) or not stat.S_ISDIR(now.st_mode) or not _same_directory(inspected, now):
+        raise _turned_into_a_link(top)
+
+
 def remove_tree(path: str | Path) -> None:
     """Delete ``path`` bottom-up, undoing every link as a link and descending only into real directories.
 
@@ -189,7 +202,9 @@ def remove_tree(path: str | Path) -> None:
         return
     if link_kind(top, again) or not stat.S_ISDIR(again.st_mode) or not _same_directory(st, again):
         raise _turned_into_a_link(top)
+    first = again
     for entry in entries:
+        _reconfirm(top, first)
         st = entry.stat(follow_symlinks=False)
         if link_kind(entry.path, st):
             _unlink_entry(entry.path, st)
@@ -201,4 +216,5 @@ def remove_tree(path: str | Path) -> None:
             except PermissionError:
                 os.chmod(entry.path, stat.S_IWRITE)  # a read-only file (git objects, for one) blocks delete on Windows
                 os.unlink(entry.path)
+    _reconfirm(top, first)
     os.rmdir(top)
