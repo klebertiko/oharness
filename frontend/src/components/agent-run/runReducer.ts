@@ -15,6 +15,8 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  budget: null,
+  compactions: [],
 };
 
 type Action =
@@ -299,6 +301,19 @@ export function runReducer(state: RunState, action: Action): RunState {
         autoApproved: { mode: String(action.data.mode ?? ""), reason: String(action.data.reason ?? "") },
       }));
 
+    case "tool_hook_decision":
+      return patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
+        ...call,
+        hooks: [
+          ...(call.hooks ?? []),
+          {
+            hookId: String(action.data.hook_id ?? ""),
+            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            reason: String(action.data.reason ?? ""),
+          },
+        ],
+      }));
+
     case "tool_denied":
       return {
         ...patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
@@ -306,10 +321,11 @@ export function runReducer(state: RunState, action: Action): RunState {
           ok: false,
           denied: {
             reason:
-              action.data.reason === "approval_timeout" || action.data.reason === "policy"
+              action.data.reason === "approval_timeout" || action.data.reason === "policy" || action.data.reason === "hook"
                 ? action.data.reason
                 : "rejected",
             note: String(action.data.note ?? ""),
+            ...(typeof action.data.mode === "string" ? { mode: action.data.mode } : {}),
           },
         })),
         status: state.status === "gate" ? "running" : state.status,
@@ -435,6 +451,21 @@ export function runReducer(state: RunState, action: Action): RunState {
         ],
       };
 
+    case "budget_exceeded":
+      return {
+        ...state,
+        budget: { maxTokens: Number(action.data.max_tokens ?? 0), usedTokens: Number(action.data.used_tokens ?? 0) },
+      };
+
+    case "context_compacted":
+      return {
+        ...state,
+        compactions: [
+          ...state.compactions,
+          { beforeTokens: Number(action.data.before_tokens ?? 0), afterTokens: Number(action.data.after_tokens ?? 0) },
+        ],
+      };
+
     case "run_stopped":
       return { ...state, status: "stopped" };
 
@@ -443,7 +474,7 @@ export function runReducer(state: RunState, action: Action): RunState {
       return {
         ...state,
         status:
-          status === "complete" ? "complete" : status === "stopped" ? "stopped" : "error",
+          status === "complete" ? "complete" : status === "stopped" || status === "budget_exceeded" ? "stopped" : "error",
         endedAt: Date.now(),
         awaitingStep: null,
         totals: {

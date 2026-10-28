@@ -52,5 +52,6 @@ run([
   "--add-data", `${join(root, "backend", "oharness", "fixtures", "mattpocock-skills.ohm")}${separator}oharness/fixtures`,
   "--add-data", `${join(root, "backend", "oharness", "schema", "oharness.schema.json")}${separator}oharness/schema`,
   "--add-data", `${join(root, "backend", "studio_copilot", "catalog.json")}${separator}studio_copilot`,
+  "--add-data", `${join(root, "backend", "sandbox", "permission_modes.json")}${separator}sandbox`,
   join(root, "backend", "sidecar_entry.py"),
 ]);

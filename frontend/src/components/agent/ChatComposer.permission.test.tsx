@@ -20,13 +20,13 @@ const checked = () => screen.getAllByRole("radio").find((r) => r.getAttribute("a
 beforeEach(() => { vi.clearAllMocks(); HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterEach(cleanup);
 
-it("always shows the three modes and which one is current", () => {
+it("always shows every mode and which one is current", () => {
   render(<Composer initial="plan" />);
   const group = screen.getByRole("radiogroup", { name: "Permission mode" });
   expect(group).toBeTruthy();
-  expect(screen.getAllByRole("radio").map((r) => r.textContent)).toEqual(["Ask", "Auto", "Plan"]);
+  expect(screen.getAllByRole("radio").map((r) => r.textContent)).toEqual(["Plan", "Read-only", "Ask", "Auto", "Workspace write", "Full"]);
   expect(checked()).toBe("Plan");
-  expect(PERMISSION_MODES).toHaveLength(3);
+  expect(PERMISSION_MODES).toHaveLength(6);
 });
 
 it("clicking a mode selects it", () => {
@@ -141,4 +141,71 @@ it("shows no trust controls outside Auto, and reports a refused change", () => {
   expect(screen.queryByRole("button", { name: "Trust this workspace…" })).toBeNull();
   rerender(<TrustComposer trusted={false} error="Não foi possível salvar a confiança" />);
   expect(screen.getByRole("alert").textContent).toContain("Não foi possível salvar a confiança");
+});
+
+it("the current preset stays visible as text, not only as a selected radio", () => {
+  render(<Composer initial="read_only" />);
+  expect(screen.getByText(/only read-only commands run; writes are refused/)).toBeTruthy();
+  expect(checked()).toBe("Read-only");
+});
+
+it("choosing a preset below Full applies it at once", () => {
+  render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Workspace write/ }));
+  expect(changed).toHaveBeenCalledWith("workspace_write");
+});
+
+it("Full needs a confirmation that names what it does; Cancel is the default focus and changes nothing", () => {
+  render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  const dialog = screen.getByRole("alertdialog", { name: "Switch to Full" });
+  expect(dialog.textContent).toMatch(/without asking/);
+  expect(changed).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  expect(checked()).toBe("Ask");
+});
+
+it("confirming Full applies it", () => {
+  render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Use Full" }));
+  expect(changed).toHaveBeenCalledWith("full");
+  expect(checked()).toBe("Full");
+});
+
+it("leaving Full needs no confirmation", () => {
+  render(<Composer initial="full" />);
+  fireEvent.click(screen.getByRole("radio", { name: /Read-only/ }));
+  expect(changed).toHaveBeenCalledWith("read_only");
+});
+
+it("an open Full confirmation closes when the mode changes by another route", () => {
+  render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  expect(screen.getByRole("alertdialog", { name: "Switch to Full" })).toBeTruthy();
+  fireEvent.keyDown(textbox(), { key: "Tab", shiftKey: true });
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+it("an open Full confirmation closes when a run goes live", () => {
+  const { rerender } = render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  rerender(<Composer live />);
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+it("Workspace write also depends on trust for project scripts, so it offers the same trust control", () => {
+  render(<TrustComposer trusted={false} mode="workspace_write" />);
+  expect(screen.getByRole("button", { name: "Trust this workspace…" })).toBeTruthy();
+  expect(screen.getByText(/Workspace write: .*project's scripts still ask/i)).toBeTruthy();
+});
+
+it("Read-only, Ask, Plan and Full show no trust control", () => {
+  for (const mode of ["read_only", "ask", "plan", "full"] as const) {
+    const view = render(<TrustComposer trusted={false} mode={mode} />);
+    expect(screen.queryByRole("button", { name: "Trust this workspace…" })).toBeNull();
+    view.unmount();
+  }
 });

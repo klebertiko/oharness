@@ -14,6 +14,8 @@ from providers.resolution import ADAPTER_BY_PROVIDER
 from routers.execution import _validated_project_cwd
 from sandbox.capabilities import capabilities as tool_capabilities
 from sandbox.discover import discover as discover_workspace
+from sandbox.hook_store import delete_hook, load_hooks, put_hook
+from sandbox.hooks import HOOK_RULES
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted, set_thread_mode, set_workspace_trust
 from sandbox.read import READ_MAX_BYTES, ReadFailure, read_text
 from sandbox.schemas import THREAD_ID_PATTERN, PermissionMode
@@ -115,3 +117,26 @@ async def put_trust(request: Request, db: AsyncSession = Depends(get_db)):
     if root is None:
         return JSONResponse({"error": "no-workspace"}, status_code=400)
     return {"cwd": root, "trusted": await set_workspace_trust(db, root, body.trusted)}
+
+
+# -- pre-tool hooks (#165) ----------------------------------------------------
+def _hook_view(hook) -> dict:
+    return {'id': hook.id, 'argv': hook.argv, 'timeout_s': hook.timeout_s, 'tools': list(hook.tools), 'invalid': hook.invalid}
+
+
+@router.get('/hooks')
+async def list_hooks(db: AsyncSession = Depends(get_db)):
+    return {'hooks': [_hook_view(h) for h in await load_hooks(db)], 'rules': HOOK_RULES}
+
+
+@router.put('/hooks/{hook_id}')
+async def put_tool_hook(hook_id: str, body: dict, db: AsyncSession = Depends(get_db)):
+    try:
+        return _hook_view(await put_hook(db, hook_id, body))
+    except ValueError:
+        return JSONResponse({'error': 'invalid_hook'}, status_code=400)
+
+
+@router.delete('/hooks/{hook_id}')
+async def delete_tool_hook(hook_id: str, db: AsyncSession = Depends(get_db)):
+    return {'deleted': await delete_hook(db, hook_id)}
