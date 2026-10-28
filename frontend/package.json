@@ -26,11 +26,11 @@
     "@tauri-apps/plugin-fs": "~2.7.1",
     "@xyflow/react": "^12.12.0",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.58.0",
+    "lucide-react": "^1.59.0",
     "next": "15.5.28",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "tailwind-merge": "3.6.0",
+    "tailwind-merge": "3.7.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
