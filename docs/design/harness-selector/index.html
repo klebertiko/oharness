@@ -35,24 +35,24 @@ const rows=()=>many?lots:few;
 function paint(){
  const bar=document.getElementById("bar"),out=document.getElementById("out");out.innerHTML="";
  if(alt==="A"){bar.innerHTML=`<button id="trg" aria-haspopup="listbox" aria-expanded="${open}" aria-label="Harness: ${sel}">${sel} ▾</button><button>Provider ▾</button><button>Workspace ▾</button>`;
-  trg.onclick=()=>{open=!open;paint()};
-  trg.onkeydown=e=>{if(e.key==="ArrowDown"){open=true;paint()}};
+  trg.onclick=()=>{open=!open;paint();};
+  trg.onkeydown=e=>{if(e.key==="ArrowDown"){open=true;paint();}};
   if(open){const r=rows();let h=`<div class="pop" role="region" aria-label="Harness picker">`;
    if(many)h+=`<input aria-label="Filter Harness" placeholder="Find a harness" style="width:calc(100% - 8px);margin:4px;background:var(--sub-100);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px">`;
    h+=`<div role="listbox" aria-label="Harness" tabindex="0" id="lb">`;
    r.forEach((x,i)=>{if(i===1)h+=`<h4>Your harnesses</h4>`;if(i===2)h+=`<h4>Bundled harnesses</h4>`;
     h+=`<div role="option" aria-selected="${x[0]===sel}" data-i="${i}" tabindex="-1"${i===cur?' style="outline:1px solid var(--line)"':''}>${x[0]}<small>${x[1]}</small></div>`});
    h+=`</div><button style="width:100%;margin-top:4px">Edit in Studio</button></div>`;out.innerHTML=h;
-   document.querySelectorAll("[role=option]").forEach(o=>o.onclick=()=>{sel=r[Number(o.dataset.i)][0];open=false;paint();trg.focus()});
-   lb.onkeydown=e=>{if(e.key==="ArrowDown"){cur=Math.min(cur+1,r.length-1);paint();lb.focus()}if(e.key==="ArrowUp"){cur=Math.max(cur-1,0);paint();lb.focus()}if(e.key==="Enter"){sel=r[cur][0];open=false;paint();trg.focus()}if(e.key==="Escape"){open=false;paint();trg.focus()}};
+   document.querySelectorAll("[role=option]").forEach(o=>o.onclick=()=>{sel=r[Number(o.dataset.i)][0];open=false;paint();trg.focus();});
+   lb.onkeydown=e=>{if(e.key==="ArrowDown"){cur=Math.min(cur+1,r.length-1);paint();lb.focus();}if(e.key==="ArrowUp"){cur=Math.max(cur-1,0);paint();lb.focus();}if(e.key==="Enter"){sel=r[cur][0];open=false;paint();trg.focus();}if(e.key==="Escape"){open=false;paint();trg.focus();}};
    (document.querySelector("input")||lb).focus();}}
  else{const r=rows().slice(0,many?4:3);bar.innerHTML=`<div class="chips" role="radiogroup" aria-label="Harness">${r.map(x=>`<button role="radio" aria-checked="${x[0]===sel}" tabindex="${x[0]===sel?0:-1}">${x[0]}</button>`).join("")}${many?'<button>+6 more…</button>':''}</div><button>Provider ▾</button><button>Workspace ▾</button>`;
-  document.querySelectorAll("[role=radio]").forEach(b=>{b.onclick=()=>{sel=r[[...document.querySelectorAll("[role=radio]")].indexOf(b)][0];paint()};b.onkeydown=e=>{const bs=[...document.querySelectorAll("[role=radio]")],i=bs.indexOf(b);if(e.key==="ArrowRight"||e.key==="ArrowDown"){bs[(i+1)%bs.length].focus();bs[(i+1)%bs.length].click();document.querySelector("[role=radio][aria-checked=true]").focus()}}})}
+  document.querySelectorAll("[role=radio]").forEach(b=>{b.onclick=()=>{sel=r[[...document.querySelectorAll("[role=radio]")].indexOf(b)][0];paint();};b.onkeydown=e=>{const bs=[...document.querySelectorAll("[role=radio]")],i=bs.indexOf(b);if(e.key==="ArrowRight"||e.key==="ArrowDown"){bs[(i+1)%bs.length].focus();bs[(i+1)%bs.length].click();document.querySelector("[role=radio][aria-checked=true]").focus();}}})}
  document.getElementById("note").textContent=alt==="A"?"A scales to any number of harnesses, groups by meaning, filters from 8 options, keeps one Studio route and the same keyboard contract as the provider and model pickers. Cost: one extra click to see the options.":"B shows every option at once for 2-3 harnesses but wraps and crowds the toolbar at 5+, has no room for purpose text, and cannot host search, recents or an unavailable state without becoming A.";
 }
-ta.onclick=()=>{alt="A";ta.setAttribute("aria-pressed",true);tb.setAttribute("aria-pressed",false);paint()};
-tb.onclick=()=>{alt="B";tb.setAttribute("aria-pressed",true);ta.setAttribute("aria-pressed",false);open=false;paint()};
-ts.onclick=()=>{many=!many;ts.textContent="Many harnesses: "+(many?"on":"off");paint()};
+ta.onclick=()=>{alt="A";ta.setAttribute("aria-pressed",true);tb.setAttribute("aria-pressed",false);paint();};
+tb.onclick=()=>{alt="B";tb.setAttribute("aria-pressed",true);ta.setAttribute("aria-pressed",false);open=false;paint();};
+ts.onclick=()=>{many=!many;ts.textContent="Many harnesses: "+(many?"on":"off");paint();};
 th.onclick=()=>{const i=document.documentElement.dataset.theme=="ivory";document.documentElement.dataset.theme=i?"graphite":"ivory";th.textContent="Theme: "+(i?"Graphite":"Ivory")};
 paint();
 </script></body></html>
