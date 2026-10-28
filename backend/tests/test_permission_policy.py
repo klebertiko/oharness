@@ -496,3 +496,14 @@ def test_auto_asks_for_a_windows_reserved_device_name_as_operand(argv, name, ws)
 @pytest.mark.parametrize('name', ['console', 'nullable.txt', 'com10', 'lpt0', 'comm', 'sub/connect', 'aux_file', 'notes.txt'])
 def test_auto_still_allows_names_that_only_start_like_a_device(name, ws):
     assert auto(ex('ls', name), ws) == 'allow'
+
+
+@pytest.mark.parametrize('name', ['nul:', 'CON:x', 'nul::$DATA', 'aux:s.txt'])
+@pytest.mark.parametrize('argv', [('git', 'diff', '--'), ('git', 'log', '--')])
+def test_auto_asks_for_a_device_name_written_with_a_stream_suffix(argv, name, ws):
+    assert auto(ex(*argv, name), ws) == 'ask'
+
+
+@pytest.mark.parametrize('name', ['nul', 'COM1.txt', 'tests/con.py', 'nul:x'])
+def test_a_trusted_pytest_still_asks_for_a_device_name(name, ws):
+    assert auto(ex('pytest', name), ws, trusted=True) == 'ask'
