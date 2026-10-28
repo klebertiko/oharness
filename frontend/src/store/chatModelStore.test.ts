@@ -37,3 +37,18 @@ describe("chatModelStore - the model for this conversation only", () => {
     expect(Object.keys(useChatModelStore.getState().overrides)).toEqual(["t2"]);
   });
 });
+
+describe("adopt - the model chosen before the first message", () => {
+  it("moves the new-chat choice onto the thread the first message creates", () => {
+    const { setOverride, adopt } = useChatModelStore.getState();
+    setOverride("new", "ollama-local", "qwen3:8b");
+    adopt("new", "t9");
+    const { overrides } = useChatModelStore.getState();
+    expect(overrides).toEqual({ t9: { "ollama-local": "qwen3:8b" } });
+  });
+
+  it("does nothing when there was no choice", () => {
+    useChatModelStore.getState().adopt("new", "t9");
+    expect(useChatModelStore.getState().overrides).toEqual({});
+  });
+});

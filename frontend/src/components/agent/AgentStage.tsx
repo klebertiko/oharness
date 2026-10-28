@@ -6,7 +6,6 @@ import { ArrowUp, Code2, ListChecks, Search, Square } from "lucide-react";
 import { HarnessBar } from "@/components/agent/HarnessBar";
 import { ChatComposer, presetFromSlashText } from "@/components/agent/ChatComposer";
 import { MessageActions } from "./MessageActions";
-import { ModelPicker } from "@/components/providers/ModelPicker";
 import { useChatTools } from "@/components/agent/useChatTools";
 import { usePermissionMode } from "@/components/agent/usePermissionMode";
 import { useWorkspaceTrust } from "@/components/agent/useWorkspaceTrust";
@@ -21,6 +20,7 @@ import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
 import { missingProviderAction, pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
+import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { chosenWorkspace, useWorkspaceStore } from "@/store/workspaceStore";
 import { Nilo } from "@/components/brand/Nilo";
@@ -52,6 +52,12 @@ import { chordCaps, useIsMac } from "@/components/shell/keys";
  * Chats home — Cursor/Claude-like: messages for the active thread + composer.
  * The harness picker sits in the composer toolbar. Run ladder is optional.
  */
+/** The first message of a new chat creates its thread; the model picked before that follows it. */
+function adoptNewChat(threadId: string): string {
+  useChatModelStore.getState().adopt(NEW_CHAT_KEY, threadId);
+  return threadId;
+}
+
 export function AgentStage() {
   const enabled = useHarnessSessionStore((s) => s.enabled);
   const activeBundle = useHarnessSessionStore((s) => s.activeBundle);
@@ -97,8 +103,9 @@ export function AgentStage() {
   const draftKey = activeThreadId ?? "new";
   const instruction = drafts[draftKey] ?? "";
   const setInstruction = (value: string) => setDrafts((current) => ({ ...current, [draftKey]: value }));
-  const [modelChoices, setModelChoices] = useState<Record<string, string>>({});
-  const selectedModel = provider ? modelChoices[provider.id] ?? "" : "";
+  // The model comes from the chat combo: this chat's own pick, else the connection default (empty).
+  const modelPins = useChatModelStore((s) => s.overrides);
+  const selectedModel = provider ? modelOverride(modelPins, activeThreadId ?? NEW_CHAT_KEY, provider.id) : "";
   const connection = connections.find((c) => c.id === provider?.id) ?? null;
   const runOwner = useRef<{ threadId: string; instruction: string; providerLabel?: string; harness: ThreadHarness } | null>(null);
   const [showRunDetail, setShowRunDetail] = useState(false);
@@ -242,7 +249,7 @@ export function AgentStage() {
     if (live || !provider) return;
     const label =
       preset.name === "exec" ? "/exec " + preset.argv.join(" ") : preset.name === "read" ? "/read " + preset.path : "/ls";
-    const threadId = activeThreadId ?? createThread(label.slice(0, 60), chatHarness.binding);
+    const threadId = activeThreadId ?? adoptNewChat(createThread(label.slice(0, 60), chatHarness.binding));
     appendMessage(threadId, { role: "user", content: label });
     runOwner.current = { threadId, instruction: label, providerLabel: provider.label, harness: NO_HARNESS };
     setInstruction("");
@@ -278,7 +285,7 @@ export function AgentStage() {
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
     setFollowing(true);
-    const threadId = activeThreadId ?? createThread(shown.slice(0, 60), chatHarness.binding);
+    const threadId = activeThreadId ?? adoptNewChat(createThread(shown.slice(0, 60), chatHarness.binding));
     // A chat from before the setting existed takes the harness it is about to run with.
     if (activeThreadId) useThreadStore.getState().bindThreadHarness(activeThreadId, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
@@ -536,15 +543,10 @@ export function AgentStage() {
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
             <SubagentToggle />
-            <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
+            <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {!enabled && <RunBudgetField />}
             <ToolHooksButton />
-            {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
-              <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
-                label="Model for next turn" inheritLabel="Connection default" inheritDetail={connection?.defaultModel || "The provider CLI chooses its model"} disabled={live}
-                triggerClassName="h-control-md max-w-full px-2 text-body text-ink-dim max-sm:h-control-lg" />
-            </div>}
             </fieldset>
             <span className="flex-1" />
             {missing ? (

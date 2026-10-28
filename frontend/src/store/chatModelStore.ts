@@ -20,6 +20,8 @@ export interface ChatModelState {
   clearThread: (threadId: string) => void;
   /** Drop overrides of threads that no longer exist. */
   prune: (liveThreadIds: string[]) => void;
+  /** Move what was chosen before a chat existed (key "new") onto the chat just created. */
+  adopt: (fromKey: string, threadId: string) => void;
 }
 
 export const CHAT_MODEL_STORAGE_KEY = "oh.chat.model.v1";
@@ -45,6 +47,14 @@ export const useChatModelStore = create<ChatModelState>()(
           delete next[threadId];
           return { overrides: next };
         }),
+      adopt: (fromKey, threadId) =>
+        set((s) => {
+          const mine = s.overrides[fromKey];
+          if (!mine || fromKey === threadId) return s;
+          const next = { ...s.overrides, [threadId]: { ...(s.overrides[threadId] ?? {}), ...mine } };
+          delete next[fromKey];
+          return { overrides: next };
+        }),
       prune: (live) =>
         set((s) => {
           const keep = new Set(live);
@@ -55,6 +65,9 @@ export const useChatModelStore = create<ChatModelState>()(
     { name: CHAT_MODEL_STORAGE_KEY, storage: createJSONStorage(() => localStorage) },
   ),
 );
+
+/** Key for a conversation that has no thread yet (its first message creates one). */
+export const NEW_CHAT_KEY = "new";
 
 /** The model this thread runs on a connection, or "" when it follows the connection's default. */
 export function modelOverride(overrides: ChatModelState["overrides"], threadId: string | null, connectionId: string): string {

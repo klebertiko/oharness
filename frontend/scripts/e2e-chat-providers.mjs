@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const output = resolve(import.meta.dirname, '../../.harness/sprint-2026-10-21/story-CHAT-PROVIDERS/evidence');
 mkdirSync(output, { recursive: true });
 const fixture = JSON.parse(readFileSync('src/lib/fixtures/ohm-roundtrip.json', 'utf8'));
@@ -59,9 +60,19 @@ const composer = () => page.getByRole('textbox', { name: 'Message OHarness' });
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
   step = 'explicit model and completion';
-  await button('Model for next turn: Connection default').click();
+  await page.getByRole('button', { name: /^Chat provider: Auto → QA local/ }).click();
+  // The open combo is axe-clean in both themes, with a group of models and the scope toggle showing.
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await page.addScriptTag({ content: axeSource });
+    const found = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] })).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`));
+    assert.deepEqual(found, [], `axe with the model combo open (${theme})`);
+  }
+  checks.push('Model combo open: axe clean in both themes');
   await page.getByRole('combobox').fill('qa-model');
-  await page.getByRole('combobox').press('Enter');
+  // Shift+Enter applies the typed model to this chat only; the connection default stays qa-default.
+  await page.getByRole('combobox').press('Shift+Enter');
+  await page.getByRole('button', { name: /^Chat provider: QA local · qa-model.*this conversation only/ }).waitFor();
   await composer().fill('Synthetic QA prompt');
   await button('Send message').click();
   await page.getByText('Synthetic completed answer', { exact: true }).waitFor();
