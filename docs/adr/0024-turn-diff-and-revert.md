@@ -1,4 +1,4 @@
-# ADR 0011 — Turn diff and per-file revert
+# ADR 0024 — Turn diff and per-file revert
 
 Status: accepted (#163)
 
