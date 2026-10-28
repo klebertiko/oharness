@@ -14,7 +14,8 @@ applies in every mode. Only ``exec`` is shaped by the mode.
 listed below asks, however harmless it looks.
 
 * read-only ``git`` (a short subcommand/flag list, run through `hardened_git`),
-  ``ls`` and ``pwd`` run without asking in any workspace;
+  ``ls`` and ``pwd`` run without asking in any workspace; an operand with a path component named like a
+  Windows device (``NUL``, ``com1.txt``, ``aux:stream``) always asks, on every platform;
 * anything that executes code the repository defines (``npm|pnpm|yarn`` in ANY form, even
   ``--version``, and ``pytest``) runs without asking ONLY when the workspace is *trusted* (an explicit,
   stored, per-workspace user decision), and only with no flags or extra arguments.
@@ -59,6 +60,9 @@ _GIT_FLAGS = frozenset({
 })
 _GIT_COUNT_FLAG = re.compile(r'^(-\d{1,4}|-n\d{1,4}|--max-count=\d{1,4})\Z')
 _GIT_OPERAND = re.compile(r'^[A-Za-z0-9_@{}^~:./+\\-]+\Z')
+# Windows opens a device, not a file, for these names in any directory, with or without an extension (and a trailing dot or space).
+_RESERVED_DEVICE_NAMES = frozenset({'con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
+                                    *(f'com{n}' for n in '123456789\u00b9\u00b2\u00b3'), *(f'lpt{n}' for n in '123456789\u00b9\u00b2\u00b3')})
 _DIFFY_SUBCOMMANDS = frozenset({'diff', 'log', 'show'})
 _SUBMODULE_SCANNERS = frozenset({'status', 'diff'})
 
@@ -189,6 +193,14 @@ def _real_inside(root: str, path: str) -> str | None:
     return _inside(root, os.path.realpath(path))
 
 
+def _names_a_device(arg: str) -> bool:
+    """True when any component of the operand is a reserved Windows device name (`NUL`, `com1.txt`, `aux.`): opening it can hang the command."""
+    for part in re.split(r'[\\/]', arg):
+        if part.split(':', 1)[0].rstrip(' .').split('.', 1)[0].rstrip(' ').lower() in _RESERVED_DEVICE_NAMES:  # `nul:` and `nul::$DATA` are the device too
+            return True
+    return False
+
+
 def _operand_stays_in_root(base: str, arg: str) -> bool:
     """An operand that happens to name an existing path must resolve inside the base (symlinks)."""
     full = _join_inside(base, arg)
@@ -200,7 +212,7 @@ def _operand_stays_in_root(base: str, arg: str) -> bool:
 
 def _operand_ok(base: str, arg: str, pattern: re.Pattern) -> bool:
     return (not arg.startswith('-') and pattern.match(arg) is not None and not _looks_like_path_escape(arg)
-            and _operand_stays_in_root(base, arg))
+            and not _names_a_device(arg) and _operand_stays_in_root(base, arg))
 
 
 def _entries(root: str, directory: str) -> list[str] | None:
