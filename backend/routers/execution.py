@@ -26,6 +26,8 @@ from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
 from sandbox.approval import ApprovalConflict
+from sandbox.turn_diff_store import TurnTracker
+from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
@@ -56,6 +58,11 @@ class DirectRequest(BaseModel):
     tools: Any = None
     # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
     max_tokens: Any = None
+
+
+async def _load_hooks_now():
+    async with SessionLocal() as session:
+        return await load_hooks(session)
 
 
 async def _validated_project_cwd(db: AsyncSession, requested: str | None) -> str | None:
@@ -583,7 +590,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         stored = await get_thread_mode(db, tool_options.thread_id)
         permission_mode = effective_mode(stored, tool_options.permission_mode)
         workspace_trusted = await is_workspace_trusted(db, cwd)
-    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted, run_budget=run_budget) if tool_options else None
+    broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted,
+                        run_budget=run_budget, hooks_loader=_load_hooks_now) if tool_options else None
     node_view = {
         "node_id": node_id,
         "type": "llm",
@@ -609,7 +617,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         def emit(event: str, data: dict) -> str:
             return _sse(event, data)
 
+        tracker = TurnTracker(cwd, run_id) if cwd else None
         try:
+            if tracker:
+                await tracker.begin()
             if broker:
                 yield emit('capabilities', {'node_id': node_id, **broker.capabilities, 'permission_mode': broker.permission_mode, 'workspace_trusted': broker.workspace_trusted})
             if budget_status is not None and budget_status.state == "warning":
@@ -637,7 +648,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
-                        if broker and (kind.startswith('tool_') or kind == 'capabilities'):
+                        if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})
                         elif kind in ("budget_exceeded", "context_compacted"):
                             payload = {k: v for k, v in ev.items() if k != "kind"}
@@ -745,6 +756,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     })
 
             control.phase = "done"
+            turn_diff = await tracker.finish(SessionLocal) if tracker else None
+            if turn_diff:
+                yield emit("turn_diff", {"node_id": node_id, **turn_diff})
             yield emit(
                 "harness_done",
                 {
@@ -768,6 +782,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise
         except Exception as exc:  # noqa: BLE001
             status = STATUS_ERROR
+            # Edits made before the failure are still the person's to review and undo.
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None
+            if failed_diff:
+                yield emit("turn_diff", {"node_id": node_id, **failed_diff})
             yield emit("error", failure_details(exc))
         finally:
             RUNS.pop(run_id, None)
