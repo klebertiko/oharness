@@ -1,4 +1,5 @@
 "use client";
+import { useProposalGhosts } from "./useProposalGhosts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
@@ -133,10 +134,33 @@ export function HarnessCanvas({ onNodeClick }: Props) {
   /* Selection is owned by the store — the inspector, the command palette and
      the audit strip all set it — so it is mirrored onto the flow rather than
      read from it. One source of truth, no two-way sync to get wrong. */
+  const ghosts = useProposalGhosts();
   const flowNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, selected: n.id === selectedNodeId })),
-    [nodes, selectedNodeId]
+    () => [...nodes.map((n) => ({ ...n, selected: n.id === selectedNodeId })), ...ghosts.nodes],
+    [nodes, selectedNodeId, ghosts.nodes]
   );
+  const flowEdges = useMemo(() => (ghosts.edges.length ? [...edges, ...ghosts.edges] : edges), [edges, ghosts.edges]);
+
+  /* A proposal the person cannot see is a proposal they cannot judge: frame the
+     ghosts when a new set arrives (not on every toggle of the same ones). */
+  const ghostKey = ghosts.nodes.map((n) => n.id).join("|");
+  const framed = useRef(false);
+  useEffect(() => {
+    if (ghostKey === "") {
+      framed.current = false;
+      return;
+    }
+    if (framed.current) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Marked as framed only once the frame runs, so a re-run before then still owes it.
+    const timers = [0, 160].map((ms) =>
+      window.setTimeout(() => {
+        framed.current = true;
+        fitView({ padding: 0.2, duration: reduce ? 0 : 280 });
+      }, ms),
+    );
+    return () => timers.forEach(window.clearTimeout);
+  }, [ghostKey, fitView]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
@@ -184,7 +208,7 @@ export function HarnessCanvas({ onNodeClick }: Props) {
       <WireTips />
       <ReactFlow
         nodes={flowNodes}
-        edges={edges}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
