@@ -12,6 +12,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 
 - Pick the provider with the composer chip. **Auto** uses the first eligible connection, cloud before on-device. Setup stays on Providers.
 - Pick the **workspace** with the other chip: the folder the chat's tools read and run commands in. With no folder, tools use a scratch directory.
+- **Queue**: type while a turn is running and press `Mod+Enter` (or Queue): the message waits in a visible list above the composer and runs after the current turn, one at a time, in order. Remove one with its button. If the turn stops or fails the queue pauses; Send next or Clear queue decides. Commands (`/exec`, `/read`) wait for the turn to finish.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
 - **Permission mode** (the preset) is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
 

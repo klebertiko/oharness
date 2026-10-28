@@ -96,7 +96,8 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
     inputRef.current?.focus();
   };
   const submit = () => {
-    if (live) return;
+    // While a run is live a plain message goes to the stage, which queues it; commands wait for the run to finish.
+    if (live && slashPreset) return;
     if (slashPreset && "preset" in slashPreset) { onPreset?.(slashPreset.preset); onChange(""); return; }
     if (slashPreset && "warning" in slashPreset) return;
     onSend();
@@ -124,7 +125,7 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
     {slashPreset && "warning" in slashPreset && <Notice tone="warn" className="mx-3 mt-3">{slashPreset.warning}</Notice>}
     {loading && <p role="status" className="px-4 pt-2 text-body text-ink-mute">Reading the workspace skill…</p>}
     {loadError && <Notice tone="fault" className="mx-3 mt-3">{loadError}</Notice>}
-    <textarea ref={inputRef} value={value} rows={2} aria-label="Message OHarness" disabled={live}
+    <textarea ref={inputRef} value={value} rows={2} aria-label="Message OHarness"
       aria-autocomplete="list" aria-haspopup="listbox" aria-controls={open ? id + "-commands" : undefined}
       aria-activedescendant={open && options.length ? optionId(selected) : undefined}
       onChange={event => { loadGeneration.current++; setLoading(null); setLoadError(null); onChange(event.target.value); setCursor(0); setDismissed(null); }}
@@ -149,10 +150,10 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
         } else if (query !== null && event.key === "ArrowDown") {
           event.preventDefault(); setDismissed(null); return;
         }
-        if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !live) { event.preventDefault(); submit(); }
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); submit(); }
       }}
-      placeholder={live ? "Waiting on this run. Stop it to send something new." : tools?.workspace ? `Ask OHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OHarness… Type / for commands and skills"}
-      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-hidden placeholder:text-ink-mute disabled:cursor-not-allowed disabled:opacity-60" />
+      placeholder={live ? "A turn is running. Send queues your message to run after it." : tools?.workspace ? `Ask OHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OHarness… Type / for commands and skills"}
+      className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-hidden placeholder:text-ink-mute" />
     {permissionMode && onPermissionModeChange && <div className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
       <Segmented label="Permission mode" value={permissionMode} onChange={choosePermission}
         options={PERMISSION_MODES.map(mode => ({ value: mode, label: PERMISSION_LABEL[mode], hint: PERMISSION_HINT[mode], disabled: live }))} />
