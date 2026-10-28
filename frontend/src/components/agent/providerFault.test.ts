@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { providerFault } from "./chatProvider";
 
 /* The strings below are the ones the adapters emit (backend/adapters/*.py);
-   docs/adr/0009-probe-detail-classification.md has the full table. */
+   docs/adr/0013-probe-detail-classification.md has the full table. */
 const fault = (detail: string) => providerFault({ health: "fault", detail });
 const setup = (detail: string) => providerFault({ health: "setup", detail });
 

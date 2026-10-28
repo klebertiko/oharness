@@ -96,7 +96,7 @@ export function providerReadiness(c: Connection): ProviderReadiness {
 
 /** Why a probe failed, as far as the probe's own text lets us say. The table of
     every `detail` the adapters emit, and why each maps where it does, lives in
-    docs/adr/0009-probe-detail-classification.md and is locked on the backend by
+    docs/adr/0013-probe-detail-classification.md and is locked on the backend by
     tests/test_probe_detail_contract.py; these rules must stay in step with it. */
 export type ProviderFaultClass =
   | "key-rejected"
