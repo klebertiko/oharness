@@ -25,6 +25,7 @@ from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
 from sandbox.approval import ApprovalConflict
+from sandbox.turn_diff_store import TurnTracker
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
@@ -601,7 +602,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         def emit(event: str, data: dict) -> str:
             return _sse(event, data)
 
+        tracker = TurnTracker(cwd, run_id) if cwd else None
         try:
+            if tracker:
+                await tracker.begin()
             if broker:
                 yield emit('capabilities', {'node_id': node_id, **broker.capabilities, 'permission_mode': broker.permission_mode, 'workspace_trusted': broker.workspace_trusted})
             if budget_status is not None and budget_status.state == "warning":
@@ -723,6 +727,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     })
 
             control.phase = "done"
+            turn_diff = await tracker.finish(SessionLocal) if tracker else None
+            if turn_diff:
+                yield emit("turn_diff", {"node_id": node_id, **turn_diff})
             yield emit(
                 "harness_done",
                 {

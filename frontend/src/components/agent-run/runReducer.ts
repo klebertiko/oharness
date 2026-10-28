@@ -15,6 +15,7 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  turnDiff: null,
 };
 
 type Action =
@@ -433,6 +434,16 @@ export function runReducer(state: RunState, action: Action): RunState {
           ...state.steers,
           { text: String(action.data.text ?? ""), atNode: String(action.data.at_node ?? "") },
         ],
+      };
+
+    case "turn_diff":
+      return {
+        ...state,
+        turnDiff: {
+          files: Array.isArray(action.data.files) ? (action.data.files as never) : [],
+          omitted: Number(action.data.omitted ?? 0),
+          complete: action.data.complete !== false,
+        },
       };
 
     case "run_stopped":
