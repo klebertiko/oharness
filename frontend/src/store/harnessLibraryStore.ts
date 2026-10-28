@@ -33,6 +33,8 @@ interface LibraryPersisted {
 export interface HarnessLibraryState {
   entries: LibraryEntry[];
   hydrated: boolean;
+  /** The last hydrate failed; callers stop waiting and offer a retry. */
+  failed: boolean;
   hydrate: () => Promise<void>;
   /** Add or replace a non-default entry. Default id is ignored (stays fetched). */
   importBundle: (bundle: HarnessBundle) => void;
@@ -112,23 +114,37 @@ function mergeLibrary(
   return [defaultEntry, ...imported];
 }
 
+/** One fetch at a time: the chat stage and the picker both ask on mount. */
+let inflight: Promise<void> | null = null;
+
 export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => ({
   entries: [],
   hydrated: false,
+  failed: false,
 
-  hydrate: async () => {
-    const res = await fetch(apiUrl("/bundles/default"), { cache: "no-store" });
-    if (!res.ok) {
-      throw new Error(`Failed to load default harness: ${res.status}`);
-    }
-    const bundle = (await res.json()) as HarnessBundle;
-    if (!bundle?.manifest?.id) {
-      throw new Error("Default harness missing manifest.id");
-    }
+  hydrate: () => {
+    inflight ??= (async () => {
+      try {
+      const res = await fetch(apiUrl("/bundles/default"), { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`Failed to load default harness: ${res.status}`);
+      }
+      const bundle = (await res.json()) as HarnessBundle;
+      if (!bundle?.manifest?.id) {
+        throw new Error("Default harness missing manifest.id");
+      }
 
-    const entries = mergeLibrary(bundle, readPersistedImports());
-    set({ entries, hydrated: true });
-    writePersisted(entries);
+      const entries = mergeLibrary(bundle, readPersistedImports());
+      set({ entries, hydrated: true, failed: false });
+      writePersisted(entries);
+    } catch (err) {
+      set({ failed: true });
+      throw err;
+    }
+    })().finally(() => {
+      inflight = null;
+    });
+    return inflight;
   },
 
   importBundle: (bundle) => {
