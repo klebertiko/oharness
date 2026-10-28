@@ -13,13 +13,16 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 - Pick the provider with the composer chip. **Auto** uses the first eligible connection, cloud before on-device. Setup stays on Providers.
 - Pick the **workspace** with the other chip: the folder the chat's tools read and run commands in. With no folder, tools use a scratch directory.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
-- **Permission mode** is per conversation and `Shift+Tab` cycles it:
+- **Permission mode** (the preset) is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
 
 | Mode | Behaviour |
 | --- | --- |
 | Ask (default) | Every `/exec` waits for your approval. |
 | Auto | A fixed allowlist runs without asking (read-only `git`, `ls`, `pwd`); in a workspace you marked trusted, also `npm`/`pnpm` test and run scripts and `pytest`. Anything else still asks. |
 | Plan | `/exec` is refused; reading still works. |
+| Read-only | Listings and read-only `git` run on their own. Any command that could write is refused, and the chat shows the command and the reason. |
+| Workspace write | `mkdir`, `touch`, `cp` and `mv` run without asking when every path stays inside the workspace. A path outside it, or any command Nilo cannot check, asks. |
+| Full | Commands run without asking, inside and outside the workspace. High-risk commands and secret files still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)).

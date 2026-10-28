@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "default": "ask",
+  "modes": [
+    {
+      "id": "plan",
+      "label": "Plan",
+      "summary": "read-only",
+      "hint": "Plan: read-only. Commands are refused; files can still be read",
+      "denyNote": "Plan mode (read-only): commands are not run. Switch the conversation to Ask or Auto to execute.",
+      "rules": {"exec_read": "deny", "exec_project": "deny", "exec_write_inside": "deny", "exec_write_outside": "deny", "exec_other": "deny"}
+    },
+    {
+      "id": "read_only",
+      "label": "Read-only",
+      "summary": "only read-only commands run; writes are refused",
+      "hint": "Read-only: listings and read-only git run on their own. Any command that could write is refused, with the reason shown",
+      "denyNote": "Read-only preset: this command could change files, so it was not run. Switch to Workspace write to allow it.",
+      "rules": {"exec_read": "allow", "exec_project": "deny", "exec_write_inside": "deny", "exec_write_outside": "deny", "exec_other": "deny"}
+    },
+    {
+      "id": "ask",
+      "label": "Ask",
+      "summary": "asks before every command",
+      "hint": "Ask: every command waits for your approval",
+      "denyNote": "Not allowed by the permission mode.",
+      "rules": {"exec_read": "ask", "exec_project": "ask", "exec_write_inside": "ask", "exec_write_outside": "ask", "exec_other": "ask"}
+    },
+    {
+      "id": "auto_workspace",
+      "label": "Auto",
+      "summary": "read-only commands run on their own",
+      "hint": "Auto: read-only git and listings run without asking. In a trusted workspace it also runs the project's own scripts (npm, pytest) without asking. Everything else asks",
+      "denyNote": "Not allowed by the permission mode.",
+      "rules": {"exec_read": "allow", "exec_project": "allow_if_trusted", "exec_write_inside": "ask", "exec_write_outside": "ask", "exec_other": "ask"}
+    },
+    {
+      "id": "workspace_write",
+      "label": "Workspace write",
+      "summary": "writes inside the workspace run on their own; anything else asks",
+      "hint": "Workspace write: file commands whose paths all stay inside the workspace run without asking. A write outside the workspace, or any command Nilo cannot check, asks for your approval",
+      "denyNote": "Not allowed by the permission mode.",
+      "rules": {"exec_read": "allow", "exec_project": "allow_if_trusted", "exec_write_inside": "allow", "exec_write_outside": "ask", "exec_other": "ask"}
+    },
+    {
+      "id": "full",
+      "label": "Full",
+      "summary": "every command runs without asking, except high-risk ones",
+      "hint": "Full: commands run without asking, inside and outside the workspace. High-risk commands and secret files still ask. Choose it only for work you are watching",
+      "denyNote": "Not allowed by the permission mode.",
+      "rules": {"exec_read": "allow", "exec_project": "allow", "exec_write_inside": "allow", "exec_write_outside": "allow", "exec_other": "allow"}
+    }
+  ]
+}

@@ -10,6 +10,8 @@ import { ModelPicker } from "@/components/providers/ModelPicker";
 import { useChatTools } from "@/components/agent/useChatTools";
 import { usePermissionMode } from "@/components/agent/usePermissionMode";
 import { useWorkspaceTrust } from "@/components/agent/useWorkspaceTrust";
+import { policyRefusals } from "@/components/agent/policyRefusals";
+import { PERMISSION_LABEL } from "@/lib/permissionMode";
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
@@ -389,6 +391,13 @@ export function AgentStage() {
                 )}
               </div>
             )}
+
+            {runInCurrentChat && policyRefusals(run).map((refusal) => (
+              <Notice key={refusal.callId} tone="warn">
+                <p><strong>Not run:</strong> <code className="t-code wrap-anywhere">{refusal.command}</code></p>
+                <p className="mt-1 wrap-anywhere">{refusal.note} Current preset: {PERMISSION_LABEL[permission.mode]}.</p>
+              </Notice>
+            ))}
 
             {runInCurrentChat && (run.status === "error" || run.status === "stopped") && (
               <Notice

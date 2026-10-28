@@ -23,6 +23,7 @@ There is deliberately no "bypass" mode, and an unknown mode is ``"ask"``. The mo
 is stored per conversation by the sidecar; a run request can only tighten it
 (`effective_mode`), never loosen it.
 """
+import json
 import os
 import re
 import shutil
@@ -34,9 +35,19 @@ from typing import Literal, NamedTuple
 from .paths import PathViolation, resolve_in_root
 
 Decision = Literal['ask', 'allow', 'deny']
-# Ordered strictest -> laxest. The index is the "strictness rank".
-MODES = ('plan', 'ask', 'auto_workspace')
-DEFAULT_MODE = 'ask'
+
+# The ONE table of modes (permission_modes.json): ids, copy, and what each mode does with each class of exec call.
+# The UI ships a byte-identical copy (frontend/src/lib/permissionModes.json, guarded by a parity test), so a mode cannot be
+# shown without a rule here, nor ruled on without being shown. Ordered strictest -> laxest; the index is the strictness rank.
+MODE_TABLE = json.loads((Path(__file__).with_name('permission_modes.json')).read_text(encoding='utf-8'))
+MODES = tuple(mode['id'] for mode in MODE_TABLE['modes'])
+DEFAULT_MODE = MODE_TABLE['default']
+_RULES = {mode['id']: mode['rules'] for mode in MODE_TABLE['modes']}
+DENY_NOTES = {mode['id']: mode['denyNote'] for mode in MODE_TABLE['modes']}
+# What an exec call can be: provably read-only; a project script (needs trust); a file command whose paths all stay in the
+# workspace; the same with a path outside it; anything else (cannot be checked).
+EXEC_CLASSES = ('exec_read', 'exec_project', 'exec_write_inside', 'exec_write_outside', 'exec_other')
+assert DEFAULT_MODE in MODES and all(set(rules) == set(EXEC_CLASSES) for rules in _RULES.values())
 
 _SUFFIXES = ('.exe', '.cmd', '.bat', '.com', '.ps1', '.vbs', '.msc', '.sh')
 # What shutil.which() / PATHEXT may pick up from the current directory on Windows.
@@ -50,6 +61,11 @@ _DOTDOT_AT_END = re.compile(r'(^|[\\/=:,]|^-[A-Za-z])\.\.$')
 
 PROGRAM_ALLOWLIST = frozenset({'git', 'ls', 'pwd', 'npm', 'pnpm', 'yarn', 'pytest'})
 _PACKAGE_MANAGERS = frozenset({'npm', 'pnpm', 'yarn'})
+
+# File commands whose every operand can be checked lexically. `rm`, shells and interpreters are deliberately absent.
+_WRITE_PROGRAMS = frozenset({'mkdir', 'touch', 'cp', 'mv'})
+_WRITE_FLAG = re.compile(r'^-[A-Za-z]{1,4}\Z')
+_WRITE_OPERAND = re.compile(r'^[\w./ +@-]+\Z')
 
 _GIT_SUBCOMMANDS = frozenset({'status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'describe'})
 _GIT_FLAGS = frozenset({
@@ -456,33 +472,41 @@ def _ls_ok(args: list[str], cwd: str) -> bool:
     return all(_LS_FLAGS.match(arg) or _operand_ok(cwd, arg, _LS_OPERAND) for arg in args)
 
 
-def _allowed_exec(call, workspace, trusted: bool) -> bool:
+def _exec_context(call, workspace):
+    """(root, program, cwd, args) for a call that starts a program inside an existing workspace, else None."""
     if workspace is None:
-        return False
+        return None
     try:
         root = os.path.realpath(str(workspace))
     except (OSError, RuntimeError, ValueError):
-        return False
+        return None
     if not os.path.isdir(root):
-        return False
+        return None
     argv = list(call.argv)
     program_raw = argv[0]
     if any(sep in program_raw for sep in ('/', '\\')) or _DRIVE.match(program_raw) or program_raw.startswith('~'):
-        return False
+        return None
     program = _normalize_program(program_raw)
-    if program not in PROGRAM_ALLOWLIST:
-        return False
     if PureWindowsPath(call.cwd).drive or Path(call.cwd).is_absolute() or call.cwd.startswith(('/', '\\')):
-        return False
+        return None
     try:
         # Lexical, reserved-name and symlink checks first; the contained real path is then re-verified below.
         resolved = resolve_in_root(Path(root), call.cwd)
     except (PathViolation, OSError, ValueError):
-        return False
+        return None
     cwd = _real_inside(root, str(resolved))
     if cwd is None or not os.path.isdir(cwd) or _shadowed(program, root, root, cwd):
+        return None
+    return root, program, cwd, argv[1:]
+
+
+def _allowed_exec(call, workspace, trusted: bool) -> bool:
+    context = _exec_context(call, workspace)
+    if context is None:
         return False
-    args = argv[1:]
+    root, program, cwd, args = context
+    if program not in PROGRAM_ALLOWLIST:
+        return False
     if program == 'git':
         return _git_ok(args, root, cwd)
     if program in _PACKAGE_MANAGERS:
@@ -495,6 +519,38 @@ def _allowed_exec(call, workspace, trusted: bool) -> bool:
     if program == 'ls':
         return _ls_ok(args, cwd)
     return not args  # pwd
+
+
+def _touches_git_dir(arg: str) -> bool:
+    return any(part.lower() == '.git' for part in re.split(r'[\\/]', arg))
+
+
+def _write_class(call, workspace) -> str:
+    """`exec_write_inside` when the program is a listed file command and every operand is a plain relative path that stays in
+    the workspace (and is not inside `.git`); `exec_write_outside` for a listed command with an operand that escapes it."""
+    context = _exec_context(call, workspace)
+    if context is None:
+        return 'exec_other'
+    root, program, cwd, args = context
+    if program not in _WRITE_PROGRAMS:
+        return 'exec_other'
+    operands = [arg for arg in args if not _WRITE_FLAG.match(arg)]
+    if not operands or any(arg.startswith('-') or _touches_git_dir(arg) for arg in operands):
+        return 'exec_other'
+    if any(_looks_like_path_escape(arg) for arg in operands):
+        return 'exec_write_outside'
+    if all(_operand_ok(cwd, arg, _WRITE_OPERAND) for arg in operands):
+        return 'exec_write_inside'
+    return 'exec_other'
+
+
+def exec_class(call, workspace) -> str:
+    """Which of `EXEC_CLASSES` this validated exec call is. Anything that cannot be proven is `exec_other`."""
+    if _allowed_exec(call, workspace, False):
+        return 'exec_read'
+    if _allowed_exec(call, workspace, True):
+        return 'exec_project'
+    return _write_class(call, workspace)
 
 
 def hardened_git(argv: list[str], root) -> tuple[list[str], dict[str, str]]:
@@ -537,11 +593,13 @@ def decide(mode, call, workspace, trusted: bool = False) -> Decision:
     """Policy verdict for one validated tool call (`Exec`, `Read`, `Discover`)."""
     if getattr(call, 'name', None) != 'exec':
         return 'allow'
-    if mode == 'plan':
-        return 'deny'
-    if mode == 'auto_workspace' and _allowed_exec(call, workspace, bool(trusted)):
-        return 'allow'
-    return 'ask'
+    rules = _RULES.get(mode)
+    if rules is None:  # unknown mode: the default one
+        rules = _RULES[DEFAULT_MODE]
+    rule = rules[exec_class(call, workspace)]
+    if rule == 'allow_if_trusted':
+        return 'allow' if trusted else 'ask'
+    return rule
 
 
 def _rank(mode) -> int:

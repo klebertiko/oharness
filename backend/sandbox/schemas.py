@@ -31,7 +31,8 @@ class Discover(StrictModel):
     name: Literal['discover'] = 'discover'
 
 
-PermissionMode = Literal['plan', 'ask', 'auto_workspace']
+# Must list exactly the ids of permission_modes.json in order (tests/test_chat_permission_presets.py checks it).
+PermissionMode = Literal['plan', 'read_only', 'ask', 'auto_workspace', 'workspace_write', 'full']
 # Opaque, client-chosen conversation key: short, no path or control characters.
 THREAD_ID_PATTERN = r'^[A-Za-z0-9_-]{1,64}$'
 
@@ -55,7 +56,8 @@ def validate_call(name: str, args: dict):
 
 RUN_COMMAND_DESCRIPTION = ('Run a program locally. No shell: argv only. A command needs the user approval unless the conversation permission mode '
     'runs it automatically (Auto: read-only git and listings in any workspace; project scripts such as npm test or pytest only in a workspace '
-    'the user trusted). In Plan mode (read-only) every command is refused.')
+    'the user trusted). Read-only and Plan refuse any command that could write, with the reason shown to the user; Workspace write runs file commands whose '
+    'paths stay inside the workspace and asks for anything else.')
 
 TOOL_SCHEMAS = [
     {'type': 'function', 'function': {'name': 'read_file', 'description': 'Read a UTF-8 text file inside the workspace.',
