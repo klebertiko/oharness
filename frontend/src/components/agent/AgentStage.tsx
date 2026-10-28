@@ -24,6 +24,7 @@ import { ThinkingStatus } from "@/components/brand/ThinkingStatus";
 import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
+import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
 import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
 import { Gate } from "@/components/agent-run/Gate";
@@ -473,6 +474,7 @@ export function AgentStage() {
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {!enabled && <RunBudgetField />}
+            <ToolHooksButton />
             {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
               <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
                 label="Model for next turn" inheritLabel="Connection default" inheritDetail={connection?.defaultModel || "The provider CLI chooses its model"} disabled={live}
