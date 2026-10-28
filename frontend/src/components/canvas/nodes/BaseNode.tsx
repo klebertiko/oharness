@@ -9,6 +9,7 @@ import { useHarnessActions } from "@/lib/actions";
 import styles from "../canvas.module.css";
 import { PORTS, portRows } from "@/lib/ports";
 import { ROLE_CODE, ROLE_ICON, ROLE_VAR } from "@/lib/roles";
+import type { Mark } from "@/lib/copilot/preview";
 import type { NodeData, NodeType } from "@/lib/types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -46,14 +47,16 @@ const STATE_BORDER: Record<string, string> = {
   paused: "var(--warn)",
 };
 
+const MARK_TEXT: Record<Mark, string> = { added: "+ new", changed: "~ edited", proposed: "proposed", removed: "− removal" };
+
 /** The mono slot in the header, when there is something machine-true to say. */
-export function StateSlot({ data, type, mark }: { data: NodeData; type: NodeType; mark?: "added" | "changed" }) {
+export function StateSlot({ data, type, mark }: { data: NodeData; type: NodeType; mark?: Mark }) {
   const status = (data.status as string) ?? "idle";
   if (status === "running") return <span className="t-meta text-signal-text">running</span>;
   if (status === "error") return <span className="t-meta text-fault-text">error</span>;
   if (status === "paused") return <span className="t-meta text-warn-text">held</span>;
   // A pending Copilot proposal is live state: it wins over a stale "done".
-  if (mark) return <span className="t-meta text-signal-text">{mark === "added" ? "+ new" : "~ edited"}</span>;
+  if (mark) return <span className="t-meta text-signal-text">{MARK_TEXT[mark]}</span>;
   if (status === "complete")
     return (
       <span className="t-meta text-ink-dim">
@@ -108,6 +111,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
   const removeNode = useCanvasStore((s) => s.removeNode);
   const awaitingHuman = useCanvasStore((s) => s.awaitingHuman);
   const mark = useCopilotStore((s) => s.marks[id]);
+  const ghost = mark === "proposed";
   const { resolveHitl } = useHarnessActions();
 
   const Icon = ROLE_ICON[type];
@@ -148,7 +152,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <NodeToolbar isVisible={hover || selected} position={Position.Top} offset={9}>
+      <NodeToolbar isVisible={!ghost && (hover || selected)} position={Position.Top} offset={9}>
         <div className="oh-float flex overflow-hidden">
           <ToolbarButton icon={Copy} label="Duplicate node" onClick={() => duplicateNode(id)} />
           <ToolbarButton icon={Unlink} label="Detach all wires" onClick={() => detachNode(id)} />
@@ -161,9 +165,12 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
       <div
         className="oh-plate relative rounded-panel transition-colors"
         style={{
-          background: selected ? "var(--sub-200)" : "var(--sub-100)",
-          border: `1px solid ${
-            status === "idle" && (selected || hover)
+          background: ghost ? "color-mix(in oklab, var(--signal) 14%, var(--sub-100))" : selected ? "var(--sub-200)" : "var(--sub-100)",
+          opacity: mark === "removed" ? 0.55 : undefined,
+          border: `1px ${ghost ? "dashed" : "solid"} ${
+            ghost
+              ? "var(--signal)"
+              : status === "idle" && (selected || hover)
               ? selected
                 ? "var(--signal)"
                 : "var(--ink-faint)"

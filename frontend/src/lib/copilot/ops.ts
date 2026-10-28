@@ -8,6 +8,7 @@
 import { edgeForConnection, sameWire } from "../edges";
 import { PORTS, findPort } from "../ports";
 import { NODE_TEMPLATES } from "../templates";
+import { NILO_FORBIDDEN_FIELDS, OP_RULES } from "./rules";
 import type { HarnessEdge, HarnessNode, NodeData, NodeType } from "../types";
 import { EDITABLE, LIMITS, catalogPorts, isCatalogType, type CatalogType } from "./catalog";
 import type { CopilotConfig, CopilotErrorCode, CopilotGraph, CopilotNode, Op, ValidationResult } from "./contract";
@@ -18,14 +19,7 @@ const len = (s: string) => Array.from(s).length;
 const REF_RE = /^n[0-9]{1,3}$/;
 const ID_FIELD_RE = /^[A-Za-z0-9_.-]{0,40}$/;
 
-type Shape = { required: string[]; optional: string[]; types: Record<string, "string" | "object"> };
-const SHAPES: Record<string, Shape> = {
-  addNode: { required: ["op", "ref", "type", "label"], optional: ["config", "near"], types: { ref: "string", type: "string", label: "string", config: "object", near: "string" } },
-  updateNode: { required: ["op", "id"], optional: ["label", "config"], types: { id: "string", label: "string", config: "object" } },
-  removeNode: { required: ["op", "id"], optional: [], types: { id: "string" } },
-  connect: { required: ["op", "from", "to"], optional: ["fromPort", "toPort"], types: { from: "string", to: "string", fromPort: "string", toPort: "string" } },
-  disconnect: { required: ["op", "from", "to"], optional: ["fromPort", "toPort"], types: { from: "string", to: "string", fromPort: "string", toPort: "string" } },
-};
+const SHAPES = Object.fromEntries(Object.entries(OP_RULES).map(([name, rule]) => [name, rule.shape]));
 
 class Fail extends Error {
   constructor(
@@ -89,7 +83,7 @@ function checkLabel(label: string): string {
 function checkConfig(type: string, config: Record<string, unknown>) {
   const editable = isCatalogType(type) ? EDITABLE[type] : [];
   for (const key of Object.keys(config)) {
-    if (!editable.includes(key)) throw new Fail("field_not_editable", `"${key}" cannot be set on a ${type}`);
+    if ((NILO_FORBIDDEN_FIELDS as readonly string[]).includes(key) || !editable.includes(key)) throw new Fail("field_not_editable", `"${key}" cannot be set on a ${type}`);
   }
   for (const [key, value] of Object.entries(config)) {
     if (key === "roleId" || key === "skillId" || key === "gateId") {
@@ -343,16 +337,16 @@ export function describeOps(ops: Op[], graph: CopilotGraph): OpLine[] {
   for (const op of ops) {
     if (op.op === "addNode") {
       known.set(op.ref, { label: op.label.trim(), type: op.type });
-      lines.push({ glyph: "+", text: `${typeLabel(op.type)} "${op.label.trim()}"` });
+      lines.push({ glyph: OP_RULES.addNode.glyph, text: `${typeLabel(op.type)} "${op.label.trim()}"` });
     } else if (op.op === "updateNode") {
       const parts = [...(op.label !== undefined ? [`renamed "${op.label.trim()}"`] : []), ...Object.keys(op.config ?? {})];
-      lines.push({ glyph: "~", text: `${label(op.id)} · ${parts.join(", ")}`, nodeId: graph.nodes.some((n) => n.id === op.id) ? op.id : undefined });
+      lines.push({ glyph: OP_RULES.updateNode.glyph, text: `${label(op.id)} · ${parts.join(", ")}`, nodeId: graph.nodes.some((n) => n.id === op.id) ? op.id : undefined });
     } else if (op.op === "removeNode") {
-      lines.push({ glyph: "−", text: `${typeLabel(known.get(op.id)?.type ?? "")} "${label(op.id)}"` });
+      lines.push({ glyph: OP_RULES.removeNode.glyph, text: `${typeLabel(known.get(op.id)?.type ?? "")} "${label(op.id)}"` });
     } else if (op.op === "connect") {
-      lines.push({ glyph: "→", text: wire(op.from, op.fromPort, op.to) });
+      lines.push({ glyph: OP_RULES.connect.glyph, text: wire(op.from, op.fromPort, op.to) });
     } else {
-      lines.push({ glyph: "×", text: wire(op.from, op.fromPort, op.to) });
+      lines.push({ glyph: OP_RULES.disconnect.glyph, text: wire(op.from, op.fromPort, op.to) });
     }
   }
   return lines;
