@@ -121,6 +121,15 @@ export interface Segment {
   endedAt?: number;
 }
 
+export interface Subagent {
+  id: string;
+  parentCallId: string;
+  task: string;
+  state: "running" | "done" | "cancelled" | "error";
+  chars: number;
+  tokens: number;
+}
+
 export interface TurnDiffFile {
   path: string;
   status: "added" | "modified" | "deleted";
@@ -185,6 +194,8 @@ export interface RunState {
   routeDecision: RouteDecision | null;
   /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
   proposedPlan?: { planId: string; text: string };
+  /** Children this run started (`subagent_*` events), in start order. */
+  subagents: Subagent[];
   /** Set when the run reached its token ceiling (`budget_exceeded`). */
   budget: { maxTokens: number; usedTokens: number } | null;
   /** One entry per context compaction, in order. */

@@ -26,6 +26,8 @@ import { ThinkingStatus } from "@/components/brand/ThinkingStatus";
 import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
+import { SubagentToggle } from "@/components/agent/SubagentToggle";
+import { useSubagentStore } from "@/store/subagentStore";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
 import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
@@ -273,6 +275,8 @@ export function AgentStage() {
     savedRunFor.current = null;
     // In Plan mode the turn names its thread and mode, so the sidecar can end it in a plan that waits for approval.
     const mode = modeOverride ?? permission.mode;
+    // Subagents are a harness-off feature; a Plan-mode turn answers directly, so it never starts children.
+    const subagentRun = useSubagentStore.getState().enabled && !enabled && mode !== "plan";
     // Chat is never mock: it runs against the connected provider. `provider.id`
     // is also the fallback carried into the graph above — one connection,
     // decided once here, never re-derived by the backend. useRunStream also
@@ -285,7 +289,9 @@ export function AgentStage() {
       cwd: workspace?.rootPath || undefined,
       providerId: provider.id,
       model: !enabled || mode === "plan" ? selectedModel || undefined : undefined,
-      ...(mode === "plan" || modeOverride ? { tools: { enabled: false, thread_id: threadId, permission_mode: mode } } : {}),
+      tools: subagentRun
+        ? { subagents: true, thread_id: threadId, permission_mode: mode }
+        : mode === "plan" || modeOverride ? { enabled: false, thread_id: threadId, permission_mode: mode } : undefined,
     });
   };
 
@@ -494,6 +500,7 @@ export function AgentStage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pb-2.5 pt-1">
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
+            <SubagentToggle />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {!enabled && <RunBudgetField />}
