@@ -14,7 +14,7 @@ import { readDisclosure, useReadDisclosureStore, type DisclosureConnection } fro
 type Decision = "approve" | "reject";
 
 function stateOf(call: ToolCall): { label: string; tone: "signal" | "ok" | "fault" | "warn" | "mute" } {
-  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejected", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "no answer" : "blocked", tone: "fault" };
+  if (call.denied) return call.denied.reason === "rejected" ? { label: "rejected", tone: "fault" } : { label: call.denied.reason === "approval_timeout" ? "no answer" : call.denied.reason === "hook" ? "blocked by hook" : "blocked", tone: "fault" };
   if (call.simulated) return { label: "simulated", tone: "mute" };
   if (call.timedOut) return { label: "timeout", tone: "fault" };
   if (call.ok === false) return { label: "failed", tone: "fault" };
@@ -105,6 +105,11 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
       )}
 
       {call.approval?.decision && call.approval.note ? <p className="mt-1 text-meta text-ink-mute">note: {call.approval.note}</p> : null}
+      {call.hook ? (
+        <p className="mt-1 text-meta text-ink-mute" data-hook-decision>
+          hook {call.hook.hookId}: {call.hook.decision === "allow" ? "allowed" : `blocked (${call.hook.reason.replace("_", " ")})`}
+        </p>
+      ) : null}
       {call.denied?.note ? <p className="mt-1 text-meta text-ink-mute">{call.denied.note}</p> : null}
       {claimedDisclosure && disclosure ? (
         <p className="mt-1.5 text-body text-ink-mute" data-read-disclosure>{disclosure}</p>

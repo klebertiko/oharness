@@ -12,6 +12,8 @@ import httpx
 from .capabilities import capabilities
 from .discover import discover
 from .exec import run, risk_hints
+from .hooks import run_hook
+from .hooks import run_hook
 from .paths import PathViolation, resolve_in_root
 from .permission import decide, effective_mode, hardened_git
 from .read import ReadFailure, read_text
@@ -37,13 +39,14 @@ def redact_value(value):
 
 
 class ToolBroker:
-    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False):
+    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False, hooks=()):
         self.root = Path(root) if root else None
         # Already resolved by the caller (stored mode clamped by the request); unknown -> ask.
         self.permission_mode = effective_mode(permission_mode)
         # Stored by the sidecar per workspace; never taken from a run request.
         self.workspace_trusted = bool(workspace_trusted)
         self.control, self.options = control, options
+        self.hooks = tuple(hooks)
         self.capabilities = capabilities(root, adapter_name)
         self.mock = adapter_name == 'mock'
         self.calls_used = self.reads_used = 0
@@ -93,6 +96,17 @@ class ToolBroker:
                 target = resolve_in_root(self.root, action.path)
                 if requires_approval(target) or requires_approval(self.root / action.path):
                     approval_reason = 'secret_pattern'
+            for hook in self.hooks:
+                if name not in hook.tools:
+                    continue
+                verdict = await run_hook(hook, {'call_id': call_id, 'tool': name, 'args': args}, self.root)
+                yield {'kind': 'tool_hook_decision', 'call_id': call_id, 'hook_id': hook.id,
+                       'decision': 'allow' if verdict.allowed else 'block', 'reason': verdict.reason,
+                       'duration_ms': verdict.duration_ms}
+                if not verdict.allowed:
+                    self.last_result = f'blocked by hook {hook.id}'
+                    yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'hook', 'note': self.last_result}
+                    return
             if approval_reason:
                 self.control.tool_approval.begin(call_id)
                 try:

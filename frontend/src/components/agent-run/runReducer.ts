@@ -299,6 +299,16 @@ export function runReducer(state: RunState, action: Action): RunState {
         autoApproved: { mode: String(action.data.mode ?? ""), reason: String(action.data.reason ?? "") },
       }));
 
+    case "tool_hook_decision":
+      return patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
+        ...call,
+        hook: {
+          hookId: String(action.data.hook_id ?? ""),
+          decision: action.data.decision === "allow" ? "allow" : "block",
+          reason: String(action.data.reason ?? ""),
+        },
+      }));
+
     case "tool_denied":
       return {
         ...patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
@@ -306,7 +316,7 @@ export function runReducer(state: RunState, action: Action): RunState {
           ok: false,
           denied: {
             reason:
-              action.data.reason === "approval_timeout" || action.data.reason === "policy"
+              action.data.reason === "approval_timeout" || action.data.reason === "policy" || action.data.reason === "hook"
                 ? action.data.reason
                 : "rejected",
             note: String(action.data.note ?? ""),
