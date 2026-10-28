@@ -1,5 +1,5 @@
 import type { NodeType } from "@/lib/types";
-import type { Block, FailoverAttempt, RunState, Segment, ToolCall } from "./types";
+import type { Block, FailoverAttempt, RunState, Segment, Subagent, ToolCall } from "./types";
 
 export const emptyRun: RunState = {
   runId: null,
@@ -15,6 +15,10 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  subagents: [],
+  turnDiff: null,
+  budget: null,
+  compactions: [],
 };
 
 type Action =
@@ -116,6 +120,11 @@ function parseToolArgs(raw: unknown): { argv?: string[]; path?: string } {
   if (Array.isArray(o.argv)) out.argv = o.argv.map(String);
   if (typeof o.path === "string") out.path = o.path;
   return out;
+}
+
+/** A run that ends leaves no child running: whatever did not report is shown as cancelled. */
+function settleSubagents(children: Subagent[]): Subagent[] {
+  return children.map((c) => (c.state === "running" ? { ...c, state: "cancelled" } : c));
 }
 
 function patchTool(state: RunState, nodeId: string, callId: string, fn: (call: ToolCall) => ToolCall): RunState {
@@ -299,6 +308,19 @@ export function runReducer(state: RunState, action: Action): RunState {
         autoApproved: { mode: String(action.data.mode ?? ""), reason: String(action.data.reason ?? "") },
       }));
 
+    case "tool_hook_decision":
+      return patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
+        ...call,
+        hooks: [
+          ...(call.hooks ?? []),
+          {
+            hookId: String(action.data.hook_id ?? ""),
+            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            reason: String(action.data.reason ?? ""),
+          },
+        ],
+      }));
+
     case "tool_denied":
       return {
         ...patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
@@ -306,10 +328,11 @@ export function runReducer(state: RunState, action: Action): RunState {
           ok: false,
           denied: {
             reason:
-              action.data.reason === "approval_timeout" || action.data.reason === "policy"
+              action.data.reason === "approval_timeout" || action.data.reason === "policy" || action.data.reason === "hook"
                 ? action.data.reason
                 : "rejected",
             note: String(action.data.note ?? ""),
+            ...(typeof action.data.mode === "string" ? { mode: action.data.mode } : {}),
           },
         })),
         status: state.status === "gate" ? "running" : state.status,
@@ -435,15 +458,78 @@ export function runReducer(state: RunState, action: Action): RunState {
         ],
       };
 
+    case "subagent_start":
+      return {
+        ...state,
+        subagents: [
+          ...state.subagents,
+          {
+            id: String(action.data.child_id ?? ""),
+            parentCallId: String(action.data.parent_call_id ?? ""),
+            task: String(action.data.task ?? ""),
+            state: "running",
+            chars: 0,
+            tokens: 0,
+          },
+        ],
+      };
+
+    case "subagent_progress":
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id ? { ...c, chars: Number(action.data.chars ?? c.chars) } : c
+        ),
+      };
+
+    case "subagent_done": {
+      const next = action.data.state;
+      const finalState = next === "cancelled" || next === "error" ? next : "done";
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id
+            ? { ...c, state: finalState, chars: Number(action.data.chars ?? c.chars), tokens: Number(action.data.tokens ?? 0) }
+            : c
+        ),
+      };
+    }
+
+    case "turn_diff":
+      return {
+        ...state,
+        turnDiff: {
+          files: Array.isArray(action.data.files) ? (action.data.files as never) : [],
+          omitted: Number(action.data.omitted ?? 0),
+          complete: action.data.complete !== false,
+        },
+      };
+
+    case "budget_exceeded":
+      return {
+        ...state,
+        budget: { maxTokens: Number(action.data.max_tokens ?? 0), usedTokens: Number(action.data.used_tokens ?? 0) },
+      };
+
+    case "context_compacted":
+      return {
+        ...state,
+        compactions: [
+          ...state.compactions,
+          { beforeTokens: Number(action.data.before_tokens ?? 0), afterTokens: Number(action.data.after_tokens ?? 0) },
+        ],
+      };
+
     case "run_stopped":
-      return { ...state, status: "stopped" };
+      return { ...state, status: "stopped", subagents: settleSubagents(state.subagents) };
 
     case "harness_done": {
       const status = String(action.data.status ?? "complete");
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status:
-          status === "complete" ? "complete" : status === "stopped" ? "stopped" : "error",
+          status === "complete" ? "complete" : status === "stopped" || status === "budget_exceeded" ? "stopped" : "error",
         endedAt: Date.now(),
         awaitingStep: null,
         totals: {
@@ -461,6 +547,7 @@ export function runReducer(state: RunState, action: Action): RunState {
     case "error":
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status: "error",
         endedAt: Date.now(),
         notices: [...state.notices, String(action.data.error ?? "Stream error")],

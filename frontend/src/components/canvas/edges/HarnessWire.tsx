@@ -128,6 +128,7 @@ export function HarnessWire({
         style={{
           stroke: active && !live ? "var(--ink)" : colour,
           strokeWidth: width,
+          strokeDasharray: d.ghost ? "6 4" : undefined,
           opacity: feedback && !active && !live ? 0.82 : 1,
         }}
       />

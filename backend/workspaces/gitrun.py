@@ -115,6 +115,13 @@ class GitRunner:
             drivers.add(name)
         return drivers
 
+    def _drivers(self, cwd: Path, filter_dirs: Sequence[Path | str]) -> set[str]:
+        drivers = self._filter_neutralisers(cwd)
+        for other in filter_dirs:
+            if os.path.isdir(other):
+                drivers |= self._filter_neutralisers(Path(other))
+        return drivers
+
     @staticmethod
     def _overrides(drivers: set[str]) -> list[str]:
         args: list[str] = []
@@ -192,15 +199,15 @@ class GitRunner:
         """
         cwd = Path(cwd)
         pre: list[str] = []
+        drivers: set[str] = set()
         if filters:
-            drivers = self._filter_neutralisers(cwd)
-            for other in filter_dirs:
-                if os.path.isdir(other):
-                    drivers |= self._filter_neutralisers(Path(other))
+            drivers = self._drivers(cwd, filter_dirs)
             pre = self._overrides(drivers)
         if pre:
             args = [*pre, *args]
         done = self._execute(list(args), cwd, timeout, input, env)
+        if filters and not self._drivers(cwd, filter_dirs) <= drivers:  # read again: a driver git was not told to blank appeared while it ran (one that went away, with a removed worktree, is harmless)
+            raise WorkspaceError("config_changed", "the repository's configuration changed while git was running; the result was discarded", 409)
         if check and done.returncode != 0:
             raise GitFailure(list(args), done.returncode, done.stderr)
         return done

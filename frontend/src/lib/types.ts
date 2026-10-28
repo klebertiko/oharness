@@ -116,6 +116,8 @@ export interface EdgeData {
   label?: string;
   /** Typed exit-state Signal, e.g. "Ready for QA". */
   signal?: string;
+  /** A wire Nilo proposed that is not committed yet (drawn dashed, inert). */
+  ghost?: boolean;
   [key: string]: unknown;
 }
 
