@@ -54,6 +54,11 @@ const base = (process.env.WEBSITE_URL || 'http://127.0.0.1:4174').replace(/\/$/,
       }
     }
     await page.setViewportSize({width:1280,height:900});
+    await page.goto(base + 'en/index.html#baixar');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('.language-switch').click();
+    await page.waitForURL(url => url.pathname.endsWith('/index.html') && !url.pathname.includes('/en/'));
+    assert.equal(new URL(page.url()).hash, '', 'stale #baixar must not carry over to the other language');
     await page.goto(base + 'en/index.html');
     await page.locator('[data-piece="skill"]').click();
     assert.match(await page.locator('#piece-description').innerText(), /^A skill/);
