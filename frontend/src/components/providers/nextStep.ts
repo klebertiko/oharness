@@ -1,4 +1,4 @@
-import { providerFault, providerReadiness } from "@/components/agent/chatProvider";
+import { modelNotPulled, providerFault, providerReadiness } from "@/components/agent/chatProvider";
 import { specOf, type Connection } from "./providerStore";
 
 /**
@@ -97,6 +97,18 @@ export function nextStep(c: Connection): NextStep | null {
       return { kind: "turnOn", label: "Turn on", hint: "turn on" };
     case "model":
       return { kind: "model", label: "Choose a model", hint: "choose model" };
+    case "model-not-pulled": {
+      const id = modelNotPulled(c);
+      if (!id) return null;
+      return {
+        kind: "copy",
+        label: `Copy \`ollama pull ${id}\``,
+        hint: "pull model",
+        status: "Model not pulled",
+        copy: `ollama pull ${id}`,
+        thenRetest: true,
+      };
+    }
     case "fix-failure":
       return { kind: "retest", label: "Test again", hint: "retest" };
     default:

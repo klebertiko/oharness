@@ -12,6 +12,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 
 - Pick the provider with the composer chip. **Auto** uses the first eligible connection, cloud before on-device. Setup stays on Providers.
 - Pick the **workspace** with the other chip: the folder the chat's tools read and run commands in. With no folder, tools use a scratch directory.
+- **Queue**: type while a turn is running and press `Mod+Enter` (or Queue): the message waits in a visible list above the composer and runs after the current turn, one at a time, in order. Remove one with its button. If the turn stops or fails the queue pauses; Send next or Clear queue decides. Commands (`/exec`, `/read`) wait for the turn to finish.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
 - **Permission mode** (the preset) is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
 
@@ -19,7 +20,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | --- | --- |
 | Ask (default) | Every `/exec` waits for your approval. |
 | Auto | A fixed allowlist runs without asking (read-only `git`, `ls`, `pwd`); in a workspace you marked trusted, also `npm`/`pnpm` test and run scripts and `pytest`. Anything else still asks. |
-| Plan | `/exec` is refused; reading still works. |
+| Plan | `/exec` is refused; reading still works. The turn ends in a plan card (Approve plan, Discard plan). Nothing runs until you approve; approving moves the chat to Ask and sends the plan as the next turn. The chat cannot leave Plan while a plan waits. With a harness on, Plan mode answers directly and the harness runs after approval. |
 | Read-only | Listings and read-only `git` run on their own. Any command that could write is refused, and the chat shows the command and the reason. |
 | Workspace write | `mkdir`, `touch`, `cp` and `mv` run without asking when every path stays inside the workspace. A path outside it, or any command Nilo cannot check, asks. |
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
