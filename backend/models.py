@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import LargeBinary, String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -36,6 +36,15 @@ class RunRecord(Base):
     coverage: Mapped[str] = mapped_column(String(24), default="partial")
     last_sequence: Mapped[int] = mapped_column(Integer, default=0)
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class RunLink(Base):
+    """A run that continues (or forks) another: points at the parent and the last sequence it had. Never touches the parent's journal."""
+    __tablename__ = "run_links"
+    child_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), primary_key=True)
+    parent_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), index=True, nullable=False)
+    parent_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class RunEvent(Base):
