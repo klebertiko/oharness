@@ -42,6 +42,14 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
   const loadGeneration = useRef(0);
   useEffect(() => () => { loadGeneration.current++; }, []);
   const [confirmingTrust, setConfirmingTrust] = useState(false);
+  const [confirmingFull, setConfirmingFull] = useState(false);
+  // Full runs commands unasked: it is chosen on purpose (a confirmation), never by cycling or by accident.
+  useEffect(() => { setConfirmingFull(false); }, [permissionMode, live]);
+  const choosePermission = (next: PermissionMode) => {
+    if (next === "full" && permissionMode !== "full") { setConfirmingFull(true); return; }
+    setConfirmingFull(false);
+    onPermissionModeChange?.(next);
+  };
   const query = /^\/([^\s/]*)$/.exec(value)?.[1] ?? null;
   const commands = useMemo(() => chatCommands(skills, tools), [skills, tools]);
   const options = useMemo(() => commands.filter(command =>
@@ -146,15 +154,22 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
       placeholder={live ? "Waiting on this run. Stop it to send something new." : tools?.workspace ? `Ask OHarness… Type / for commands, skills and tools in ${tools.workspace.name}` : "Ask OHarness… Type / for commands and skills"}
       className="block min-h-[64px] w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-hidden placeholder:text-ink-mute disabled:cursor-not-allowed disabled:opacity-60" />
     {permissionMode && onPermissionModeChange && <div className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
-      <Segmented label="Permission mode" value={permissionMode} onChange={onPermissionModeChange}
+      <Segmented label="Permission mode" value={permissionMode} onChange={choosePermission}
         options={PERMISSION_MODES.map(mode => ({ value: mode, label: PERMISSION_LABEL[mode], hint: PERMISSION_HINT[mode], disabled: live }))} />
       <span className="text-meta text-ink-mute">{PERMISSION_SUMMARY[permissionMode]} · Shift+Tab cycles the mode</span>
       {permissionNotice && <Notice tone="fault" className="w-full">{permissionNotice}</Notice>}
-      {permissionMode === "auto_workspace" && workspaceTrust && <div className="w-full text-body text-ink-mute">
+      {confirmingFull && <div role="alertdialog" aria-label="Switch to Full" className="w-full rounded-control border border-warn p-3 text-body text-ink">
+        <p>Full runs commands <strong>without asking</strong>, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Use it only for work you are watching.</p>
+        <div className="mt-2 flex gap-2">
+          <Button variant="primary" onClick={() => { setConfirmingFull(false); onPermissionModeChange?.("full"); }}>Use Full</Button>
+          <Button autoFocus onClick={() => setConfirmingFull(false)}>Cancel</Button>
+        </div>
+      </div>}
+      {(permissionMode === "auto_workspace" || permissionMode === "workspace_write") && workspaceTrust && <div className="w-full text-body text-ink-mute">
         {workspaceTrust.trusted
-          ? <p className="flex flex-wrap items-center gap-2"><span>Trusted workspace: Auto runs the project&apos;s scripts (npm, pytest) without asking.</span>
+          ? <p className="flex flex-wrap items-center gap-2"><span>Trusted workspace: {PERMISSION_LABEL[permissionMode]} runs the project&apos;s scripts (npm, pytest) without asking.</span>
               <Button size="sm" disabled={live} onClick={() => workspaceTrust.onChange(false)}>Revoke trust</Button></p>
-          : <p className="flex flex-wrap items-center gap-2"><span>Auto: only read-only git runs on its own; the project&apos;s scripts still ask for approval.</span>
+          : <p className="flex flex-wrap items-center gap-2"><span>{PERMISSION_LABEL[permissionMode]}: {permissionMode === "workspace_write" ? "file commands inside the workspace and read-only git run on their own" : "only read-only git runs on its own"}; the project&apos;s scripts still ask for approval.</span>
               <Button size="sm" disabled={live} onClick={() => setConfirmingTrust(true)}>Trust this workspace…</Button></p>}
         {confirmingTrust && !workspaceTrust.trusted && <div role="alertdialog" aria-label="Trust this workspace" className="mt-2 rounded-control border border-warn p-3 text-ink">
           <p>Trust <strong>{workspaceTrust.workspaceName}</strong>? In a trusted workspace, the project&apos;s scripts (package.json, conftest.py) run and can execute code without asking for approval.

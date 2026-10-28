@@ -69,7 +69,7 @@ The app has three destinations, reachable with `Alt+1` to `Alt+3`.
 
 | Surface | Intent |
 | --- | --- |
-| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar. Each chat has a permission mode (Ask, Auto, Plan): in Ask, `/exec` waits for your approval; Auto runs only an explicit allowlist without asking; Plan refuses `/exec`. Run history is saved and survives a restart ([`docs/product/durable-run-history.md`](docs/product/durable-run-history.md)). Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). |
+| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar. Each chat has a permission mode (Plan, Read-only, Ask, Auto, Workspace write, Full): in Ask, `/exec` waits for your approval; Auto runs only an explicit allowlist without asking; Plan refuses every command and Read-only refuses any that could write, with the reason shown; Workspace write asks before a path outside the workspace; Full is a confirmed choice. There is no bypass mode. Run history is saved and survives a restart ([`docs/product/durable-run-history.md`](docs/product/durable-run-history.md)). Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). |
 | **Studio** (`Alt+2`) | Visual harness authoring, validation, mock/live modes. Describe a flow to Nilo or open a bundled harness. |
 | **Providers** (`Alt+3`) | The roster of connections — cloud, local, CLI. See [Providers](#providers). |
 

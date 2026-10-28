@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
+from sqlalchemy import LargeBinary, String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -196,3 +196,35 @@ class BudgetConfig(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default="global")
     limit_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ToolHook(Base):
+    """A pre-tool hook (`sandbox.hooks`): a program that must exit 0 before a tool runs.
+
+    Registered through the sidecar only; never read from a workspace or a run
+    request. `argv_json` / `tools_json` are validated on write and again on
+    load: a row that no longer validates blocks (fail-closed), it is not skipped."""
+    __tablename__ = "tool_hooks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    argv_json: Mapped[str] = mapped_column(Text, nullable=False)
+    tools_json: Mapped[str] = mapped_column(Text, nullable=False)
+    timeout_s: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class TurnChange(Base):
+    """One file a turn changed (#163), with its pre-turn bytes so one file can be reverted.
+
+    Text files only keep `before`; secret-named files are never recorded. `reverted`
+    makes a revert one-shot. Rows stay with the run."""
+    __tablename__ = "turn_changes"
+
+    run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    root_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    before: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    after_sha: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    mode: Mapped[int] = mapped_column(Integer, default=0o644)
+    reverted: Mapped[bool] = mapped_column(Boolean, default=False)

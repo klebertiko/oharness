@@ -6,7 +6,7 @@ import { apiUrl } from "@/lib/apiBase";
 
 /** `failed` = the sidecar persisted a classified provider failure (DIRECT-HISTORY AC#4);
     `error` = the engine itself errored. Both are failures to a reader, kept apart for the log. */
-export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "pending" | "unknown";
+export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "budget_exceeded" | "unknown";
 export type RunSource = "direct" | "harness";
 
 export interface RunLog {
@@ -69,7 +69,7 @@ function normalize(raw: RawLog): RunLogDetail {
     id: raw.id,
     harnessId: raw.harness_id,
     harnessName: raw.harness_name,
-    status: (["running", "complete", "error", "failed", "stopped", "interrupted", "pending"].includes(raw.status)
+    status: (["running", "complete", "error", "failed", "stopped", "interrupted", "budget_exceeded", "pending"].includes(raw.status)
       ? raw.status
       : "unknown") as RunStatus,
     source: raw.source === "direct" ? "direct" : "harness",

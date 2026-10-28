@@ -174,6 +174,7 @@ export function CopilotPanel() {
             rows={1}
             value={draft}
             disabled={blocked}
+            id="nilo-composer"
             aria-label="Ask Nilo"
             placeholder="Describe the change…"
             onChange={(e) => setDraft(e.target.value.slice(0, MAX_PROMPT))}

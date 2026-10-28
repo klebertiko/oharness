@@ -24,6 +24,7 @@ const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
   stopped: { label: "Stopped", tone: "warn" },
   interrupted: { label: "Interrupted", tone: "warn" },
   pending: { label: "Not started", tone: "warn" },
+  budget_exceeded: { label: "Budget exceeded", tone: "warn" },
   unknown: { label: "Unknown", tone: "warn" },
 };
 

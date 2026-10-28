@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { nextPermissionMode, PERMISSION_MODES } from "@/lib/permissionMode";
+import { nextPermissionMode, PERMISSION_CYCLE, PERMISSION_MODES } from "@/lib/permissionMode";
 import { PERMISSION_STORAGE_KEY, usePermissionStore } from "./permissionStore";
 
 beforeEach(() => {
@@ -9,7 +9,8 @@ beforeEach(() => {
 
 describe("permission mode cycle", () => {
   it("cycles ask -> auto_workspace -> plan -> ask and has no bypass mode", () => {
-    expect(PERMISSION_MODES).toEqual(["ask", "auto_workspace", "plan"]);
+    expect(PERMISSION_CYCLE).toEqual(["ask", "auto_workspace", "plan"]);
+    expect(PERMISSION_MODES).not.toContain("bypass");
     expect(nextPermissionMode("ask")).toBe("auto_workspace");
     expect(nextPermissionMode("auto_workspace")).toBe("plan");
     expect(nextPermissionMode("plan")).toBe("ask");

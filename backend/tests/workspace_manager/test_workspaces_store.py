@@ -107,3 +107,30 @@ def test_a_selection_of_the_wrong_type_drops_only_the_selection(tmp_path, select
     state = StateStore(path).read()
     assert state["selected"] is None and state["workspaces"] == {"k": kept} and state["quarantine"] == [{"selected": selected}]
     assert not list(tmp_path.glob("state.json.corrupt-*")) and path.exists()
+
+
+@pytest.mark.parametrize("payload", [
+    pytest.param(b'{"version": 1, "workspaces": {}, "selected": null, "x": "\xff\xfe"}', id="invalid-utf8"),
+    pytest.param(b'{"version": 1, "workspaces": {}, "x": ' + b"[" * 100000 + b"]" * 100000 + b"}", id="nested-100000"),
+])
+def test_a_poisoned_file_is_set_aside_and_reads_as_empty(tmp_path, payload):
+    path = tmp_path / "state.json"
+    path.write_bytes(payload)
+    store = StateStore(path)
+    assert store.read() == {"version": 1, "workspaces": {}, "selected": None}
+    assert list(tmp_path.glob("state.json.corrupt-*"))
+    store.mutate(lambda s: s.update(selected=SELECTED))  # and the store is usable again
+    assert store.read()["selected"] == SELECTED
+
+
+def test_a_selection_holding_a_lone_surrogate_is_dropped(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"version": 1, "workspaces": {}, "selected": {"repo": "\ud800", "repo_key": "r", "id": WS_A}}), encoding="utf-8")
+    assert StateStore(path).read()["selected"] is None
+
+
+def test_a_group_filed_under_a_lone_surrogate_key_is_quarantined(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"version": 1, "workspaces": {"\ud800": {}}, "selected": None}), encoding="utf-8")
+    state = StateStore(path).read()
+    assert state["workspaces"] == {} and state["quarantine"]

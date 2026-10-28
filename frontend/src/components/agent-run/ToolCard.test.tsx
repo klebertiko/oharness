@@ -233,3 +233,10 @@ it("a command approved by a person carries no auto-approved label", () => {
   render(<ToolCard call={{ ...pending, approval: { ...pending.approval!, decision: "approve" }, ok: true }} runId="r1" />);
   expect(screen.queryByText(/auto-approved/)).toBeNull();
 });
+
+it("a command that ran under another preset names that preset, not the workspace mode", () => {
+  const auto: ToolCall = { callId: "c3", name: "exec", args: "{}", argv: ["touch", "a"], origin: "model", ok: true, exitCode: 0, result: "",
+    autoApproved: { mode: "full", reason: "workspace" } };
+  render(<ToolCard call={auto} runId="r1" />);
+  expect(screen.getByText("auto-approved: Full preset")).toBeTruthy();
+});
