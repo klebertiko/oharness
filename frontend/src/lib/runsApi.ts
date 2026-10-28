@@ -6,7 +6,7 @@ import { apiUrl } from "@/lib/apiBase";
 
 /** `failed` = the sidecar persisted a classified provider failure (DIRECT-HISTORY AC#4);
     `error` = the engine itself errored. Both are failures to a reader, kept apart for the log. */
-export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "unknown";
+export type RunStatus = "running" | "complete" | "error" | "failed" | "stopped" | "interrupted" | "pending" | "unknown";
 export type RunSource = "direct" | "harness";
 
 export interface RunLog {
@@ -36,6 +36,12 @@ export interface RunLogDetail extends RunLog {
   coverage: RunCoverage;
   lastSequence: number | null;
   artifacts: RunArtifact[];
+  /** The server's one rule for "can be continued"; the UI only reads it. */
+  resumable?: boolean;
+  /** The run this one continues, and the last event it had saved. */
+  continuedFrom?: string | null;
+  parentSequence?: number | null;
+  continuations?: string[];
   /** Whatever the engine persisted for the run: node outputs, gate notes, etc. */
   result: Record<string, unknown>;
 }
@@ -52,6 +58,10 @@ type RawLog = {
   coverage?: RunCoverage;
   last_sequence?: number;
   artifacts?: RunArtifact[];
+  resumable?: boolean;
+  continued_from?: string | null;
+  parent_sequence?: number | null;
+  continuations?: string[];
 };
 
 function normalize(raw: RawLog): RunLogDetail {
@@ -59,7 +69,7 @@ function normalize(raw: RawLog): RunLogDetail {
     id: raw.id,
     harnessId: raw.harness_id,
     harnessName: raw.harness_name,
-    status: (["running", "complete", "error", "failed", "stopped", "interrupted"].includes(raw.status)
+    status: (["running", "complete", "error", "failed", "stopped", "interrupted", "pending"].includes(raw.status)
       ? raw.status
       : "unknown") as RunStatus,
     source: raw.source === "direct" ? "direct" : "harness",
@@ -69,6 +79,10 @@ function normalize(raw: RawLog): RunLogDetail {
     coverage: raw.coverage ?? "legacy_unknown",
     lastSequence: raw.last_sequence ?? null,
     artifacts: raw.artifacts ?? [],
+    resumable: raw.resumable ?? false,
+    continuedFrom: raw.continued_from ?? null,
+    parentSequence: raw.parent_sequence ?? null,
+    continuations: raw.continuations ?? [],
   };
 }
 
@@ -78,7 +92,20 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface ContinuedRun {
+  id: string;
+  continuedFrom: string;
+  parentSequence: number;
+}
+
 export const runsApi = {
+  /** A new run linked to this one; the saved events of this run are not changed. */
+  continueRun: async (id: string): Promise<ContinuedRun> => {
+    const res = await fetch(apiUrl(`/execute/logs/${encodeURIComponent(id)}/continue`), { method: "POST", cache: "no-store" });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const raw = (await res.json()) as { id: string; continued_from: string; parent_sequence: number };
+    return { id: raw.id, continuedFrom: raw.continued_from, parentSequence: raw.parent_sequence };
+  },
   artifact: (runId: string, artifactId: string): Promise<RunArtifact & { content: unknown }> =>
     getJson(`/execute/logs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`),
   list: async (): Promise<RunLog[]> => (await getJson<RawLog[]>("/execute/logs")).map(normalize),

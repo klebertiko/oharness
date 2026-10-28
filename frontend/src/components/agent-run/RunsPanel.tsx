@@ -23,6 +23,7 @@ const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "fault" },
   stopped: { label: "Stopped", tone: "warn" },
   interrupted: { label: "Interrupted", tone: "warn" },
+  pending: { label: "Not started", tone: "warn" },
   unknown: { label: "Unknown", tone: "warn" },
 };
 

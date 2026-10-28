@@ -9,7 +9,7 @@ import anyio
 from sqlalchemy import select, func
 
 from database import SessionLocal
-from models import ExecutionLog, RunRecord, RunEvent, RunArtifact
+from models import ExecutionLog, RunRecord, RunEvent, RunArtifact, RunLink
 from studio_copilot.redaction import redact
 
 
@@ -26,6 +26,42 @@ def redact_value(value):
     if isinstance(value, list):
         return [redact_value(item) for item in value]
     return value
+
+
+# The one rule for "can this run be continued": the journal exists (a RunRecord), it is not complete, and nothing is still writing to it.
+# The API computes `resumable` from it and the UI only reads that flag.
+RESUMABLE_STATUSES = frozenset({'interrupted', 'stopped', 'failed', 'error'})
+
+
+def is_resumable(log, record):
+    return record is not None and record.coverage != 'complete' and log.status in RESUMABLE_STATUSES
+
+
+async def lineage(db, run_id):
+    """`continued_from` / `parent_sequence` of a run and the ids of the runs that continue it."""
+    link = await db.get(RunLink, run_id)
+    children = (await db.scalars(select(RunLink.child_id).where(RunLink.parent_id == run_id)
+                                 .order_by(RunLink.created_at, RunLink.child_id))).all()
+    return {'continued_from': link.parent_id if link else None,
+            'parent_sequence': link.parent_sequence if link else None,
+            'continuations': list(children)}
+
+
+async def continue_run(db, parent_id):
+    """Create a run linked to ``parent_id`` and journal why. The parent's events are only read. None: not resumable."""
+    log = await db.get(ExecutionLog, parent_id)
+    record = await db.get(RunRecord, parent_id)
+    if log is None or not is_resumable(log, record):
+        return None
+    child_id = str(uuid.uuid4())
+    db.add(ExecutionLog(id=child_id, harness_id=log.harness_id, harness_name=log.harness_name, status='pending'))
+    db.add(RunRecord(id=child_id, source=record.source))
+    await db.flush()
+    db.add(RunLink(child_id=child_id, parent_id=parent_id, parent_sequence=record.last_sequence))
+    await db.commit()
+    await RunWriter(child_id).append({'event': 'run_continued',
+                                      'data': {'from_run_id': parent_id, 'from_sequence': record.last_sequence}})
+    return {'id': child_id, 'continued_from': parent_id, 'parent_sequence': record.last_sequence, 'status': 'pending'}
 
 
 def now():

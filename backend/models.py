@@ -38,6 +38,15 @@ class RunRecord(Base):
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class RunLink(Base):
+    """A run that continues (or forks) another: points at the parent and the last sequence it had. Never touches the parent's journal."""
+    __tablename__ = "run_links"
+    child_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), primary_key=True)
+    parent_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), index=True, nullable=False)
+    parent_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class RunEvent(Base):
     """Append-only, ordered within a run; schema_version describes the envelope."""
     __tablename__ = "run_events"
