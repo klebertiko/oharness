@@ -97,6 +97,8 @@ export interface DirectRunPayload {
   adapter?: string;
   model?: string;
   cwd?: string;
+  /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
+  max_tokens?: number;
   /** Chat tools broker (contract v1.1 §2.4). Absent → the run behaves exactly as before. */
   tools?: {
     enabled?: boolean;

@@ -682,7 +682,23 @@ export function Transcript({
           </div>
         </div>
       )}
-      {run.status === "stopped" && (
+      {run.compactions.map((c, i) => (
+        <div key={`compaction-${i}`} className="grid grid-cols-[24px_minmax(0,1fr)] pb-1">
+          <div />
+          <p className="t-meta text-ink-mute">
+            context compacted — {fmtTokens(c.beforeTokens)} → {fmtTokens(c.afterTokens)} tok
+          </p>
+        </div>
+      ))}
+      {run.budget && (
+        <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
+          <div />
+          <p role="status" className="t-meta" style={{ color: "var(--warn-text)" }}>
+            budget_exceeded — stopped at {fmtTokens(run.budget.usedTokens)} of {fmtTokens(run.budget.maxTokens)} tok
+          </p>
+        </div>
+      )}
+      {run.status === "stopped" && !run.budget && (
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />
           <div className="t-meta flex items-baseline gap-2" style={{ color: "var(--ink-mute)" }}>

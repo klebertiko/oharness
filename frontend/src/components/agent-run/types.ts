@@ -163,6 +163,10 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** Set when the run reached its token ceiling (`budget_exceeded`). */
+  budget: { maxTokens: number; usedTokens: number } | null;
+  /** One entry per context compaction, in order. */
+  compactions: { beforeTokens: number; afterTokens: number }[];
 }
 
 export interface RunEvent {
