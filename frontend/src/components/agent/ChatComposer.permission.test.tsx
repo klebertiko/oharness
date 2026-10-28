@@ -195,3 +195,17 @@ it("an open Full confirmation closes when a run goes live", () => {
   rerender(<Composer live />);
   expect(screen.queryByRole("alertdialog")).toBeNull();
 });
+
+it("Workspace write also depends on trust for project scripts, so it offers the same trust control", () => {
+  render(<TrustComposer trusted={false} mode="workspace_write" />);
+  expect(screen.getByRole("button", { name: "Trust this workspace…" })).toBeTruthy();
+  expect(screen.getByText(/Workspace write: .*project's scripts still ask/i)).toBeTruthy();
+});
+
+it("Read-only, Ask, Plan and Full show no trust control", () => {
+  for (const mode of ["read_only", "ask", "plan", "full"] as const) {
+    const view = render(<TrustComposer trusted={false} mode={mode} />);
+    expect(screen.queryByRole("button", { name: "Trust this workspace…" })).toBeNull();
+    view.unmount();
+  }
+});

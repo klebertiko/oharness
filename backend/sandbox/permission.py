@@ -48,7 +48,19 @@ DENY_NOTES = {mode['id']: mode['denyNote'] for mode in MODE_TABLE['modes']}
 # What an exec call can be: provably read-only; a project script (needs trust); a file command whose paths all stay in the
 # workspace; the same with a path outside it; anything else (cannot be checked).
 EXEC_CLASSES = ('exec_read', 'exec_project', 'exec_write_inside', 'exec_write_outside', 'exec_other')
-assert DEFAULT_MODE in MODES and all(set(rules) == set(EXEC_CLASSES) for rules in _RULES.values())
+
+
+def validate_table(table: dict) -> None:
+    """A mode without a rule for every class of exec call (or with an unknown rule) must not load: explicit raises, not `assert`."""
+    ids = [mode['id'] for mode in table['modes']]
+    if table['default'] not in ids or len(set(ids)) != len(ids):
+        raise ValueError('permission_modes.json: bad default or duplicate id')
+    for mode in table['modes']:
+        if set(mode['rules']) != set(EXEC_CLASSES) or not set(mode['rules'].values()) <= {'allow', 'ask', 'deny', 'allow_if_trusted'}:
+            raise ValueError(f"permission_modes.json: mode {mode['id']!r} needs one valid rule per exec class")
+
+
+validate_table(MODE_TABLE)
 
 _SUFFIXES = ('.exe', '.cmd', '.bat', '.com', '.ps1', '.vbs', '.msc', '.sh')
 # What shutil.which() / PATHEXT may pick up from the current directory on Windows.
@@ -530,11 +542,27 @@ def _touches_git_dir(arg: str) -> bool:
     return any(_GIT_DIR_COMPONENT.match(part) for part in re.split(r'[\\/]', arg))
 
 
+def _destination_ok(program: str, root: str, cwd: str, operands: list[str], flags_used: list[str]) -> bool:
+    """`cp`/`mv` into an existing directory write `dir/<name of each source>`: that path (an existing symlink there is written through)
+    must also resolve inside the workspace, and a recursive copy into an existing tree is not proven (links may sit deeper)."""
+    if program not in ('cp', 'mv') or len(operands) < 2:
+        return True
+    dest = os.path.join(cwd, operands[-1])
+    if not os.path.isdir(dest):
+        return True
+    recursive = any(flag in ('-r', '-R') for flag in flags_used)
+    for source in operands[:-1]:
+        target = os.path.join(dest, os.path.basename(source.rstrip('/\\')))
+        if _inside(root, os.path.realpath(target)) is None or (recursive and os.path.lexists(target)):
+            return False
+    return True
+
+
 def _write_class(context) -> str:
     """`exec_write_inside` when the program is a listed file command with only its listed flags and every operand is a plain
     relative path that stays in the workspace, is not inside `.git` and does not name a secret; `exec_write_outside` for a
     listed command with an operand that escapes the workspace."""
-    _root, program, cwd, args = context
+    root, program, cwd, args = context
     flags = _WRITE_PROGRAMS.get(program)
     if flags is None:
         return 'exec_other'
@@ -543,7 +571,7 @@ def _write_class(context) -> str:
         return 'exec_other'
     if any(_looks_like_path_escape(arg) for arg in operands):
         return 'exec_write_outside'
-    if all(_operand_ok(cwd, arg, _WRITE_OPERAND) for arg in operands):
+    if all(_operand_ok(cwd, arg, _WRITE_OPERAND) for arg in operands) and _destination_ok(program, root, cwd, operands, flags_used=[a for a in args if a in flags]):
         return 'exec_write_inside'
     return 'exec_other'
 
@@ -561,7 +589,9 @@ def exec_class(call, workspace) -> str:
 
 
 _RM_LONG_FLAGS = {'--recursive': 'r', '--force': 'f'}
-_ALWAYS_ASK_PROGRAMS = frozenset({'sudo', 'su', 'doas', 'dd', 'mkfs', 'shutdown', 'reboot', 'halt', 'poweroff'})
+_ALWAYS_ASK_PROGRAMS = frozenset({'sudo', 'su', 'doas', 'dd', 'mkfs', 'shutdown', 'reboot', 'halt', 'poweroff',
+                                  # wrappers and shells hide the real command from this check
+                                  'env', 'nice', 'nohup', 'xargs', 'time', 'timeout', 'command', 'exec', 'sh', 'bash', 'zsh', 'dash', 'fish', 'cmd', 'powershell', 'pwsh'})
 
 
 def needs_confirmation_even_when_allowed(argv: list[str]) -> bool:
@@ -576,12 +606,22 @@ def needs_confirmation_even_when_allowed(argv: list[str]) -> bool:
         return True
     short = {ch for arg in args if arg.startswith('-') and not arg.startswith('--') for ch in arg[1:]}
     long_ = {_RM_LONG_FLAGS[arg] for arg in args if arg in _RM_LONG_FLAGS}
-    if program == 'rm' and {'r', 'R'} & (short | long_) and 'f' in (short | long_):
+    if program == 'rm' and {'r', 'R'} & (short | long_):  # a recursive delete asks, with or without -f
         return True
     if program in ('chmod', 'chown', 'chgrp') and ({'R'} & short or '--recursive' in args):
         return True
-    if program == 'git' and args[:1] == ['push'] and any(a in ('-f', '--force') or a.startswith('--force-') or (a.startswith('-') and not a.startswith('--') and 'f' in a) for a in args[1:]):
-        return True
+    if program == 'git':
+        # git's global options (`-C dir`, `-c k=v`) come before the subcommand
+        rest, skip = [], False
+        for a in args:
+            if skip:
+                skip = False
+            elif a in ('-C', '-c', '--git-dir', '--work-tree', '--namespace'):
+                skip = True
+            elif not a.startswith('-') or rest:
+                rest.append(a)
+        if rest[:1] == ['push'] and any(a in ('-f', '--force') or a.startswith('--force-') or (a.startswith('-') and not a.startswith('--') and 'f' in a) or a.startswith('+') or ':+' in a for a in rest[1:]):
+            return True
     return any(requires_approval(Path(arg)) for arg in args if arg and not arg.startswith('-'))
 
 

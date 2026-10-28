@@ -81,8 +81,8 @@ export function AgentStage() {
 
   // Permission mode of this conversation: selected here, enforced by the sidecar.
   const permission = usePermissionMode(activeThreadId);
-  // Workspace trust (stored by the sidecar) only matters under Auto.
-  const trust = useWorkspaceTrust(chatTools.workspace?.root ?? null, permission.mode === "auto_workspace");
+  // Workspace trust (stored by the sidecar) only matters under Auto and Workspace write.
+  const trust = useWorkspaceTrust(chatTools.workspace?.root ?? null, permission.mode === "auto_workspace" || permission.mode === "workspace_write");
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const draftKey = activeThreadId ?? "new";

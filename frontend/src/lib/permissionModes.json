@@ -15,7 +15,7 @@
       "label": "Read-only",
       "summary": "only read-only commands run; writes are refused",
       "hint": "Read-only: listings and read-only git run on their own. Any command that could write is refused, with the reason shown",
-      "denyNote": "Read-only preset: this command could change files, so it was not run. Switch to Workspace write to allow it.",
+      "denyNote": "Read-only preset: only read-only commands run. This one could change files or cannot be checked, so it was not run. Switch to Ask or Workspace write to approve it yourself.",
       "rules": {"exec_read": "allow", "exec_project": "deny", "exec_write_inside": "deny", "exec_write_outside": "deny", "exec_other": "deny"}
     },
     {
