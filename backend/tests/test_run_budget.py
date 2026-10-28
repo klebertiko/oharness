@@ -4,7 +4,6 @@ import json
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from adapters.base import AdapterConfig
 from adapters.openai_compatible import OpenAICompatibleAdapter
