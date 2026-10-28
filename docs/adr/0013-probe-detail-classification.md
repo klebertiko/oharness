@@ -1,4 +1,4 @@
-# ADR 0009 — Classificar falhas de probe pelo `detail`: contrato aceito
+# ADR 0013 — Classificar falhas de probe pelo `detail`: contrato aceito
 
 Status: Aceito · 2026-10-28 · Issue #84 (mapa #82) · Teste: `backend/tests/test_probe_detail_contract.py`
 
