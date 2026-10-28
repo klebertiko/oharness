@@ -32,6 +32,8 @@ import { useProviderStore } from "@/components/providers/providerStore";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
+import { NO_HARNESS, type ThreadHarness } from "@/lib/chatHarness";
+import { useChatHarness } from "./useChatHarness";
 import { useThreadStore } from "@/store/threadStore";
 import { Button, KbdChord, Notice } from "@/components/ui";
 import { chordCaps, useIsMac } from "@/components/shell/keys";
@@ -48,6 +50,7 @@ export function AgentStage() {
   const hydrated = useHarnessSessionStore((s) => s.hydrated);
   const hydrate = useHarnessSessionStore((s) => s.hydrate);
 
+  const chatHarness = useChatHarness(true);
   const activeThreadId = useThreadStore((s) => s.activeThreadId);
   const createThread = useThreadStore((s) => s.createThread);
   const appendMessage = useThreadStore((s) => s.appendMessage);
@@ -89,7 +92,7 @@ export function AgentStage() {
   const [modelChoices, setModelChoices] = useState<Record<string, string>>({});
   const selectedModel = provider ? modelChoices[provider.id] ?? "" : "";
   const connection = connections.find((c) => c.id === provider?.id) ?? null;
-  const runOwner = useRef<{ threadId: string; instruction: string; providerLabel?: string } | null>(null);
+  const runOwner = useRef<{ threadId: string; instruction: string; providerLabel?: string; harness: ThreadHarness } | null>(null);
   const [showRunDetail, setShowRunDetail] = useState(false);
   const savedRunFor = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -201,6 +204,7 @@ export function AgentStage() {
       // 404s there — HistoricalRunDetail handles that by simply not
       // offering the toggle rather than erroring.
       runId: run.runId ?? undefined,
+      harness: runOwner.current?.harness,
     });
   }, [ownerThreadId, appendMessage, live, run, provider, connections]);
 
@@ -211,6 +215,7 @@ export function AgentStage() {
   const slashPreset = presetFromSlashText(instruction);
   const canStart =
     !live &&
+    chatHarness.canSend &&
     !!provider &&
     instruction.trim().length > 0 &&
     !(slashPreset && "warning" in slashPreset) &&
@@ -222,9 +227,9 @@ export function AgentStage() {
     if (live || !provider) return;
     const label =
       preset.name === "exec" ? "/exec " + preset.argv.join(" ") : preset.name === "read" ? "/read " + preset.path : "/ls";
-    const threadId = activeThreadId ?? createThread(label.slice(0, 60));
+    const threadId = activeThreadId ?? createThread(label.slice(0, 60), chatHarness.binding);
     appendMessage(threadId, { role: "user", content: label });
-    runOwner.current = { threadId, instruction: label, providerLabel: provider.label };
+    runOwner.current = { threadId, instruction: label, providerLabel: provider.label, harness: NO_HARNESS };
     setInstruction("");
     savedRunFor.current = null;
     // A brand-new conversation hands its chosen mode to the sidecar before the
@@ -248,10 +253,12 @@ export function AgentStage() {
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
     setFollowing(true);
-    const threadId = activeThreadId ?? createThread(text.slice(0, 60));
+    const threadId = activeThreadId ?? createThread(text.slice(0, 60), chatHarness.binding);
+    // A chat from before the setting existed takes the harness it is about to run with.
+    if (activeThreadId) useThreadStore.getState().bindThreadHarness(activeThreadId, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: text });
-    runOwner.current = { threadId, instruction: text, providerLabel: !enabled ? provider.label : undefined };
+    runOwner.current = { threadId, instruction: text, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
     setInstruction("");
     savedRunFor.current = null;
     // Chat is never mock: it runs against the connected provider. `provider.id`
@@ -348,8 +355,16 @@ export function AgentStage() {
             </p>
           </div>
         ) : (
+          <>
+          <h1 className="sr-only">Chat</h1>
           <div role="log" aria-label="Conversation" aria-busy={live || undefined} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-6 pt-3">
-            {messages.map((m) => (
+            {messages.map((m) => m.role === "system" ? (
+              <p key={m.id} data-testid="harness-change" className="flex items-center gap-3 self-stretch text-meta text-ink-mute">
+                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+                <span className="max-w-[60ch] text-center">{m.content}</span>
+                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+              </p>
+            ) : (
               <div
                 key={m.id}
                 className={[
@@ -415,12 +430,20 @@ export function AgentStage() {
 
             <div ref={bottomRef} />
           </div>
+          </>
         )}
       </div>
 
       <div className="flex-none px-3 pb-4 pt-2 sm:px-6">
         {!following && <div className="mb-2 text-center"><Button size="sm" onClick={() => setFollowing(true)}>Jump to latest</Button></div>}
         <div className="oh-agent-composer mx-auto max-w-[820px]">
+          {chatHarness.status.state === "missing" && (
+            <div className="px-3 pb-2">
+              <Notice tone="fault" action={<Button size="sm" onClick={() => chatHarness.choose(NO_HARNESS)}>Continue without a harness</Button>}>
+                {chatHarness.status.name} isn't available. It may have been deleted, or the list of harnesses couldn't load. Choose another harness, or continue without one.
+              </Notice>
+            </div>
+          )}
           <ChatComposer
             key={activeThreadId ?? "no-thread"}
             inputRef={composerRef}

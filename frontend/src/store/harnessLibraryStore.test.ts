@@ -41,6 +41,15 @@ describe("harnessLibraryStore", () => {
     vi.restoreAllMocks();
   });
 
+  it("a failed hydrate is recorded so callers can stop waiting, and a retry clears it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await expect(useHarnessLibraryStore.getState().hydrate()).rejects.toThrow();
+    expect(useHarnessLibraryStore.getState()).toMatchObject({ failed: true, hydrated: false });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ manifest: { id: "oharness.default.agile", name: "Agile" } }) }));
+    await useHarnessLibraryStore.getState().hydrate();
+    expect(useHarnessLibraryStore.getState()).toMatchObject({ failed: false, hydrated: true });
+  });
+
   it("hydrate always includes default from /bundles/default", async () => {
     vi.stubGlobal(
       "fetch",
