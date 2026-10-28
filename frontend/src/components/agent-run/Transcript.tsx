@@ -5,6 +5,7 @@ import { pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import css from "./agentRun.module.css";
+import { SubagentTree } from "./SubagentTree";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { clock, latency as fmtLatency, paragraphs, tokens as fmtTokens } from "./format";
 import { groupActivity, segmentActivity, summarizeGroup } from "./activity";
@@ -661,6 +662,7 @@ export function Transcript({
 
       <RunRollup run={run} elapsed={elapsed} />
       {run.routeDecision && <RouteDecisionProvenance decision={run.routeDecision} />}
+      <SubagentTree runId={run.runId} runLive={run.status === "running" || run.status === "starting"} status={run.status} subagents={run.subagents} />
       <NodeBreakdown segments={attributed} defaultConnectionId={defaultConnectionId} connections={connections} />
 
       {visible.map((s, i) => (

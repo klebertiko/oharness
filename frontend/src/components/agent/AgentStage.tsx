@@ -24,6 +24,8 @@ import { ThinkingStatus } from "@/components/brand/ThinkingStatus";
 import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
+import { SubagentToggle } from "@/components/agent/SubagentToggle";
+import { useSubagentStore } from "@/store/subagentStore";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
 import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
@@ -275,6 +277,9 @@ export function AgentStage() {
       cwd: workspace?.rootPath || undefined,
       providerId: provider.id,
       model: !enabled ? selectedModel || undefined : undefined,
+      tools: useSubagentStore.getState().enabled && !enabled
+        ? { subagents: true, thread_id: threadId, permission_mode: permission.mode }
+        : undefined,
     });
   };
 
@@ -471,6 +476,7 @@ export function AgentStage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pb-2.5 pt-1">
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
+            <SubagentToggle />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {!enabled && <RunBudgetField />}
