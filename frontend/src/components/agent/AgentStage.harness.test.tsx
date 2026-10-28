@@ -75,8 +75,9 @@ it("shows the harness change as a quiet line in the transcript", () => {
   useThreadStore.getState().appendMessage(id, { role: "assistant", content: "hello", harness: NO_HARNESS });
   useThreadStore.getState().setThreadHarness(id, { kind: "harness", id: "agile", name: "Agile Harness" });
   render(<AgentStage />);
-  const note = screen.getByRole("separator", { name: /Harness changed to Agile Harness/ });
-  expect(note).toBeTruthy();
+  const note = screen.getByTestId("harness-change");
+  expect(note.textContent).toMatch(/Harness changed to Agile Harness/);
+  expect(screen.getByRole("log", { name: "Conversation" }).contains(screen.getByRole("heading", { level: 1 }))).toBe(false);
   expect(vi.mocked(startDirectRun)).not.toHaveBeenCalled();
 });
 

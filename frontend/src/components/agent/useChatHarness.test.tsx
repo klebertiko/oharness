@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { NO_HARNESS } from "@/lib/chatHarness";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useThreadStore } from "@/store/threadStore";
-import { useChatHarness } from "./useChatHarness";
+import { useCanvasStore } from "@/store/canvasStore";
+import { resetChatHarnessSync, useChatHarness } from "./useChatHarness";
 
 const useSynced = () => useChatHarness(true);
 
@@ -16,6 +17,8 @@ const entries = [
 ];
 
 beforeEach(() => {
+  resetChatHarnessSync();
+  useCanvasStore.setState({ isRunning: false });
   localStorage.clear();
   useThreadStore.setState({ threads: [], activeThreadId: null, messagesByThread: {} });
   useHarnessLibraryStore.setState({ entries: entries as never, hydrated: true, failed: false } as never);
@@ -117,5 +120,53 @@ describe("harness and provider stay separate", () => {
     act(() => result.current.choose({ kind: "harness", id: "demo", name: "Demo" }));
     act(() => result.current.choose({ kind: "none" }));
     expect(useChatProviderStore.getState().chosenId).toBe("pinned-by-me");
+  });
+});
+
+describe("when the stage is not mounted or the session is not ready", () => {
+  it("a pick made while the stage was unmounted (Studio's Use in chat) becomes the open chat's harness", () => {
+    const id = useThreadStore.getState().createThread("Plan", { kind: "harness", id: "agile", name: "Agile Harness" });
+    useThreadStore.getState().appendMessage(id, { role: "user", content: "hi" });
+    const first = renderHook(() => useSynced());
+    first.unmount();
+    act(() => useHarnessSessionStore.getState().replaceBundle(demo as never));
+    renderHook(() => useSynced());
+    expect(useThreadStore.getState().threads[0].harness).toMatchObject({ id: "demo" });
+    expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("demo");
+  });
+
+  it("never reads the session before it has loaded: no rebinding and no overwrite of the saved choice", () => {
+    useHarnessSessionStore.setState({ hydrated: false, enabled: true, activeBundle: null });
+    const id = useThreadStore.getState().createThread("Plan", { kind: "none" });
+    useThreadStore.getState().appendMessage(id, { role: "user", content: "hi" });
+    const { result } = renderHook(() => useSynced());
+    expect(useHarnessSessionStore.getState().enabled).toBe(true);
+    expect(result.current.canSend).toBe(false);
+    act(() => useHarnessSessionStore.setState({ hydrated: true, activeBundle: agile as never }));
+    expect(useThreadStore.getState().threads[0].harness).toEqual(NO_HARNESS);
+    expect(useThreadStore.getState().messagesFor(id)).toHaveLength(1);
+    expect(useHarnessSessionStore.getState().enabled).toBe(false);
+    expect(result.current.canSend).toBe(true);
+  });
+
+  it("does not swap the session's harness under a run that is still streaming", () => {
+    const a = useThreadStore.getState().createThread("A", { kind: "harness", id: "agile", name: "Agile Harness" });
+    const b = useThreadStore.getState().createThread("B", { kind: "harness", id: "demo", name: "Demo" });
+    useThreadStore.getState().selectThread(a);
+    const { rerender } = renderHook(() => useSynced());
+    expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("agile");
+    act(() => useCanvasStore.setState({ isRunning: true }));
+    act(() => useThreadStore.getState().selectThread(b));
+    rerender();
+    expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("agile");
+    act(() => useCanvasStore.setState({ isRunning: false }));
+    expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("demo");
+  });
+
+  it("starts loading the library itself so Send is never left waiting on another component", () => {
+    const hydrate = vi.fn(async () => undefined);
+    useHarnessLibraryStore.setState({ entries: [], hydrated: false, failed: false, hydrate } as never);
+    renderHook(() => useSynced());
+    expect(hydrate).toHaveBeenCalled();
   });
 });

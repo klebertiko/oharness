@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 
 import { harnessFromSession, resolveHarness, type ThreadHarness } from "@/lib/chatHarness";
+import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
 import { useHarnessRecentStore } from "@/store/harnessRecentStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
@@ -11,22 +12,37 @@ import { useThreadStore } from "@/store/threadStore";
 const keyOf = (h: ThreadHarness) => (h.kind === "none" ? "none" : h.id);
 
 /**
+ * What the sync last settled on. Module-level on purpose: the chat stage is
+ * unmounted while Studio is open, and a pick made there ("Use in chat") has to
+ * be seen as a pick when the stage comes back, not mistaken for a fresh start.
+ */
+const settled = { syncId: "", key: "" };
+export function resetChatHarnessSync() {
+  settled.syncId = "";
+  settled.key = "";
+}
+
+/**
  * The harness of the chat on screen (ADR 0011). A chat that has one keeps it;
  * a chat that has none yet (the blank "new chat") follows the session choice,
  * which is also what the next chat starts with. The session store stays what
  * the run engine reads, so one instance (`sync`, in the chat stage) keeps it in
  * step: opening a chat applies that chat's harness, and a pick made elsewhere
  * (command palette, Studio "Use in chat") while a chat is open becomes the
- * chat's harness. Other instances only read.
+ * chat's harness. It waits for the session to load and for a running turn to
+ * end before touching the session. Other instances only read.
  */
 export function useChatHarness(sync = false) {
   const enabled = useHarnessSessionStore((s) => s.enabled);
   const activeBundle = useHarnessSessionStore((s) => s.activeBundle);
+  const sessionReady = useHarnessSessionStore((s) => s.hydrated);
   const setEnabled = useHarnessSessionStore((s) => s.setEnabled);
   const entries = useHarnessLibraryStore((s) => s.entries);
   const libraryHydrated = useHarnessLibraryStore((s) => s.hydrated);
   const libraryFailed = useHarnessLibraryStore((s) => s.failed);
   const activate = useHarnessLibraryStore((s) => s.activate);
+  const hydrateLibrary = useHarnessLibraryStore((s) => s.hydrate);
+  const running = useCanvasStore((s) => s.isRunning);
   const thread = useThreadStore((s) => s.threads.find((t) => t.id === s.activeThreadId));
   const setThreadHarness = useThreadStore((s) => s.setThreadHarness);
 
@@ -43,37 +59,40 @@ export function useChatHarness(sync = false) {
   }, [entries, activeBundle]);
   const status = resolveHarness(binding, available, libraryHydrated || libraryFailed);
 
+  // The stage must not depend on another component to start the library.
+  useEffect(() => {
+    if (sync && !libraryHydrated && !libraryFailed) void hydrateLibrary().catch(() => undefined);
+  }, [sync, libraryHydrated, libraryFailed, hydrateLibrary]);
+
   const bound = thread?.harness;
-  const synced = useRef("");
-  const lastKey = useRef("");
   const sessionKey = keyOf(sessionBinding);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reconcile on chat/binding/session changes only
   useEffect(() => {
-    if (!sync) return;
+    if (!sync || !sessionReady || running) return;
     const syncId = `${thread?.id ?? ""}|${bound ? keyOf(bound) : ""}`;
-    if (synced.current !== syncId) {
+    if (settled.syncId !== syncId) {
       if (!bound) {
         // A chat with no harness of its own follows the session.
-        synced.current = syncId;
-        lastKey.current = sessionKey;
+        settled.syncId = syncId;
+        settled.key = sessionKey;
       } else if (bound.kind === "none") {
         if (enabled) setEnabled(false);
-        synced.current = syncId;
-        lastKey.current = "none";
+        settled.syncId = syncId;
+        settled.key = "none";
       } else if (status.state === "ready") {
         if (activeId !== bound.id) activate(bound.id);
         else if (!enabled) setEnabled(true);
-        synced.current = syncId;
-        lastKey.current = bound.id;
+        settled.syncId = syncId;
+        settled.key = bound.id;
       }
       return;
     }
-    if (sessionKey !== lastKey.current) {
+    if (sessionKey !== settled.key) {
       // The session moved under an open chat: that is the person's pick.
-      lastKey.current = sessionKey;
+      settled.key = sessionKey;
       if (thread) setThreadHarness(thread.id, sessionBinding, binding);
     }
-  }, [sync, thread?.id, bound && keyOf(bound), sessionKey, status.state]);
+  }, [sync, sessionReady, running, thread?.id, bound && keyOf(bound), sessionKey, status.state]);
 
   const choose = (next: ThreadHarness) => {
     if (next.kind === "none") setEnabled(false);
@@ -84,5 +103,5 @@ export function useChatHarness(sync = false) {
     if (thread) setThreadHarness(thread.id, next, binding);
   };
 
-  return { binding, status, choose, canSend: status.state === "none" || status.state === "ready" };
+  return { binding, status, choose, canSend: sessionReady && (status.state === "none" || status.state === "ready") };
 }

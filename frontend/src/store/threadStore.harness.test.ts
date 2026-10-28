@@ -59,3 +59,36 @@ describe("a chat from before the field existed", () => {
     expect(s().messagesFor(id)).toHaveLength(1);
   });
 });
+
+describe("harness change markers", () => {
+  it("flipping back and forth before the next message leaves one marker, not a stack", () => {
+    const id = s().createThread("Plan", NO_HARNESS);
+    s().appendMessage(id, { role: "user", content: "hi" });
+    s().setThreadHarness(id, agile);
+    s().setThreadHarness(id, { kind: "harness", id: "other", name: "Other Harness" });
+    expect(s().messagesFor(id).filter((m) => m.role === "system")).toHaveLength(1);
+    expect(s().messagesFor(id).at(-1)?.content).toContain("Other Harness");
+    expect(s().threads[0].harness).toMatchObject({ id: "other" });
+  });
+
+  it("a marker is dropped when the chat ends up back where it started", () => {
+    const id = s().createThread("Plan", NO_HARNESS);
+    s().appendMessage(id, { role: "user", content: "hi" });
+    s().appendMessage(id, { role: "assistant", content: "hello", harness: NO_HARNESS });
+    s().setThreadHarness(id, agile);
+    s().setThreadHarness(id, NO_HARNESS);
+    expect(s().messagesFor(id).map((m) => m.role)).toEqual(["user", "assistant"]);
+  });
+});
+
+describe("bindThreadHarness", () => {
+  it("gives a chat from before the setting its harness without a marker, and never overrides one", () => {
+    const id = s().createThread("Old");
+    s().appendMessage(id, { role: "user", content: "hi" });
+    s().bindThreadHarness(id, agile);
+    expect(s().threads[0].harness).toEqual(agile);
+    s().bindThreadHarness(id, NO_HARNESS);
+    expect(s().threads[0].harness).toEqual(agile);
+    expect(s().messagesFor(id)).toHaveLength(1);
+  });
+});

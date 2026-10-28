@@ -253,7 +253,7 @@ export function AgentStage() {
     setFollowing(true);
     const threadId = activeThreadId ?? createThread(text.slice(0, 60), chatHarness.binding);
     // A chat from before the setting existed takes the harness it is about to run with.
-    if (activeThreadId) useThreadStore.getState().setThreadHarness(activeThreadId, chatHarness.binding, chatHarness.binding);
+    if (activeThreadId) useThreadStore.getState().bindThreadHarness(activeThreadId, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: text });
     runOwner.current = { threadId, instruction: text, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
@@ -350,14 +350,15 @@ export function AgentStage() {
             </p>
           </div>
         ) : (
+          <>
+          <h1 className="sr-only">Chat</h1>
           <div role="log" aria-label="Conversation" aria-busy={live || undefined} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-6 pt-3">
-            <h1 className="sr-only">Chat</h1>
             {messages.map((m) => m.role === "system" ? (
-              <div key={m.id} role="separator" aria-label={m.content} className="flex items-center gap-3 self-stretch text-meta text-ink-mute">
+              <p key={m.id} data-testid="harness-change" className="flex items-center gap-3 self-stretch text-meta text-ink-mute">
                 <span aria-hidden className="h-px flex-1 bg-line-soft" />
                 <span className="max-w-[60ch] text-center">{m.content}</span>
                 <span aria-hidden className="h-px flex-1 bg-line-soft" />
-              </div>
+              </p>
             ) : (
               <div
                 key={m.id}
@@ -424,6 +425,7 @@ export function AgentStage() {
 
             <div ref={bottomRef} />
           </div>
+          </>
         )}
       </div>
 

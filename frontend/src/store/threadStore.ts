@@ -33,6 +33,8 @@ export type ThreadMessage = {
   runId?: string;
   /** The harness that produced this reply (or, on a `system` marker, the one chosen). */
   harness?: ThreadHarness;
+  /** On a `system` marker: the harness the chat was running before the change. */
+  from?: ThreadHarness;
 };
 
 export const THREADS_STORAGE_KEY = "oh.threads.v1";
@@ -46,6 +48,8 @@ export interface ThreadState {
   createThread: (title?: string, harness?: ThreadHarness) => string;
   /** Change the harness of the next turns. After messages exist it leaves a marker in the transcript. */
   setThreadHarness: (threadId: string, harness: ThreadHarness, from?: ThreadHarness) => void;
+  /** Give a chat from before the setting the harness it is running with. Never overrides one, never leaves a marker. */
+  bindThreadHarness: (threadId: string, harness: ThreadHarness) => void;
   selectThread: (id: string) => void;
   /** Blank slate: no thread is created until the first message is sent. */
   startNewChat: () => void;
@@ -101,14 +105,26 @@ export const useThreadStore = create<ThreadState>()(
           return;
         }
         const now = Date.now();
-        const hasMessages = (get().messagesByThread[threadId] ?? []).length > 0;
-        const marker: ThreadMessage[] = hasMessages
-          ? [{ id: crypto.randomUUID(), role: "system", content: switchNotice(harness), createdAt: now, harness }]
-          : [];
+        const messages = get().messagesByThread[threadId] ?? [];
+        const last = messages.at(-1);
+        // Several picks before the next message are one change: fold them into a single marker, or none if the chat ends up where it started.
+        const open = last?.role === "system" && last.harness && last.from ? last : undefined;
+        const origin = open?.from ?? previous;
+        const kept = open ? messages.slice(0, -1) : messages;
+        const back = !!origin && sameHarness(origin, harness);
+        const marker: ThreadMessage[] =
+          messages.length > 0 && !back
+            ? [{ id: crypto.randomUUID(), role: "system", content: switchNotice(harness), createdAt: now, harness, ...(origin ? { from: origin } : {}) }]
+            : [];
         set({
-          threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness, updatedAt: hasMessages ? now : t.updatedAt } : t)),
-          messagesByThread: { ...get().messagesByThread, [threadId]: [...(get().messagesByThread[threadId] ?? []), ...marker] },
+          threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness, updatedAt: messages.length > 0 ? now : t.updatedAt } : t)),
+          messagesByThread: { ...get().messagesByThread, [threadId]: [...kept, ...marker] },
         });
+      },
+
+      bindThreadHarness: (threadId, harness) => {
+        if (get().threads.find((t) => t.id === threadId)?.harness) return;
+        set({ threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness } : t)) });
       },
 
       selectThread: (id) => {
