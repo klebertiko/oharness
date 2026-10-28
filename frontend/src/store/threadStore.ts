@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { sameHarness, switchNotice, type ThreadHarness } from "@/lib/chatHarness";
 import { usePermissionStore } from "./permissionStore";
 
 export type Thread = {
@@ -11,6 +12,8 @@ export type Thread = {
   updatedAt: number;
   /** Hidden from the main list, kept under "Archived" until restored or deleted. */
   archived?: boolean;
+  /** The harness this chat runs its next turns with. Absent on chats from before the field existed. */
+  harness?: ThreadHarness;
 };
 
 export type ThreadMessage = {
@@ -28,7 +31,12 @@ export type ThreadMessage = {
       "Show run detail" after a reload — the live run state itself is
       in-memory only and does not survive one. */
   runId?: string;
+  /** The harness that produced this reply (or, on a `system` marker, the one chosen). */
+  harness?: ThreadHarness;
 };
+
+const sameBinding = (a: ThreadHarness | undefined, b: ThreadHarness) =>
+  !!a && a.kind === b.kind && (a.kind === "none" || (b.kind === "harness" && a.id === b.id && a.name === b.name));
 
 export const THREADS_STORAGE_KEY = "oh.threads.v1";
 
@@ -38,7 +46,9 @@ export interface ThreadState {
   threads: Thread[];
   activeThreadId: string | null;
   messagesByThread: Record<string, ThreadMessage[]>;
-  createThread: (title?: string) => string;
+  createThread: (title?: string, harness?: ThreadHarness) => string;
+  /** Change the harness of the next turns. After messages exist it leaves a marker in the transcript. */
+  setThreadHarness: (threadId: string, harness: ThreadHarness, from?: ThreadHarness) => void;
   selectThread: (id: string) => void;
   /** Blank slate: no thread is created until the first message is sent. */
   startNewChat: () => void;
@@ -61,7 +71,7 @@ export const useThreadStore = create<ThreadState>()(
       activeThreadId: null,
       messagesByThread: {},
 
-      createThread: (title) => {
+      createThread: (title, harness) => {
         const now = Date.now();
         const id = crypto.randomUUID();
         const thread: Thread = {
@@ -70,6 +80,7 @@ export const useThreadStore = create<ThreadState>()(
           createdAt: now,
           updatedAt: now,
           archived: false,
+          ...(harness ? { harness } : {}),
         };
         set({
           threads: [thread, ...get().threads],
@@ -77,6 +88,29 @@ export const useThreadStore = create<ThreadState>()(
           messagesByThread: { ...get().messagesByThread, [id]: [] },
         });
         return id;
+      },
+
+      setThreadHarness: (threadId, harness, from) => {
+        const thread = get().threads.find((t) => t.id === threadId);
+        if (!thread) return;
+        // `from` is what the chat was effectively running (a chat from before the field has no binding yet).
+        const previous = from ?? thread.harness;
+        if (previous && sameHarness(previous, harness)) {
+          // Same harness: bind the chat (and refresh a renamed one) without saying anything.
+          if (!sameBinding(thread.harness, harness)) {
+            set({ threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness } : t)) });
+          }
+          return;
+        }
+        const now = Date.now();
+        const hasMessages = (get().messagesByThread[threadId] ?? []).length > 0;
+        const marker: ThreadMessage[] = hasMessages
+          ? [{ id: crypto.randomUUID(), role: "system", content: switchNotice(previous, harness), createdAt: now, harness }]
+          : [];
+        set({
+          threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness, updatedAt: hasMessages ? now : t.updatedAt } : t)),
+          messagesByThread: { ...get().messagesByThread, [threadId]: [...(get().messagesByThread[threadId] ?? []), ...marker] },
+        });
       },
 
       selectThread: (id) => {
@@ -145,6 +179,7 @@ export const useThreadStore = create<ThreadState>()(
           createdAt: message.createdAt ?? now,
           providerLabel: message.providerLabel,
           runId: message.runId,
+          ...(message.harness ? { harness: message.harness } : {}),
         };
         const prev = get().messagesByThread[threadId] ?? [];
         set({
