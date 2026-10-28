@@ -14,12 +14,12 @@ const COVERAGE = {
 export function RunEvidence({ detail, onContinued }: { detail: RunLogDetail; onContinued?: (runId: string) => void }) {
   const [contents, setContents] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
-  const [continued, setContinued] = useState<{ id: string; at: number } | null>(null);
+  const [continued, setContinued] = useState<{ from: string; id: string; at: number } | null>(null);
   const continueRun = async () => {
     setError("");
     try {
       const next = await runsApi.continueRun(detail.id);
-      setContinued({ id: next.id, at: next.parentSequence });
+      setContinued({ from: detail.id, id: next.id, at: next.parentSequence });
       onContinued?.(next.id);
     } catch {
       setError("Couldn't continue this run. Try again.");
@@ -41,7 +41,7 @@ export function RunEvidence({ detail, onContinued }: { detail: RunLogDetail; onC
       <p>{COVERAGE[detail.coverage ?? "legacy_unknown"]}{detail.lastSequence != null ? ` · ${detail.lastSequence} events saved` : ""}</p>
       {detail.status === "interrupted" && <p>Interrupted — execution did not resume.</p>}
       {detail.continuedFrom && <p>Continues run {detail.continuedFrom} from event {detail.parentSequence}.</p>}
-      {detail.resumable && !continued && (
+      {detail.resumable && (
         <div className="space-y-1">
           <p>Continue this harness run as a new run; its saved events stay as they are.</p>
           <Button size="sm" variant="ghost" className="-ml-2" onClick={() => void continueRun()}>
@@ -49,7 +49,7 @@ export function RunEvidence({ detail, onContinued }: { detail: RunLogDetail; onC
           </Button>
         </div>
       )}
-      {continued && <p role="status">New run created from event {continued.at} ({continued.id}).</p>}
+      {continued?.from === detail.id && <p role="status">New run created from event {continued.at} ({continued.id}).</p>}
       {artifacts.length > 0 && <p className="font-medium text-ink">Saved outputs</p>}
       {artifacts.map((artifact) => (
         <div key={artifact.id}>

@@ -93,3 +93,11 @@ def test_a_legacy_log_without_a_journal_cannot_be_continued():
         legacy = anyio.run(seed)
         assert client.get(f'/execute/logs/{legacy}').json()['resumable'] is False
         assert client.post(f'/execute/logs/{legacy}/continue').status_code == 409
+
+
+def test_a_continued_direct_run_keeps_its_source_and_has_its_first_event_atomically():
+    run_id = partial_run()  # a direct run
+    with TestClient(app) as client:
+        child = client.post(f'/execute/logs/{run_id}/continue').json()['id']
+        assert client.get(f'/execute/logs/{child}').json()['source'] == 'direct'
+        assert client.get(f'/execute/logs/{child}').json()['last_sequence'] == 1

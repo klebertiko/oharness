@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -44,7 +44,7 @@ class RunLink(Base):
     child_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), primary_key=True)
     parent_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), index=True, nullable=False)
     parent_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class RunEvent(Base):

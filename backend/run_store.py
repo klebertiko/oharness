@@ -54,13 +54,15 @@ async def continue_run(db, parent_id):
     if log is None or not is_resumable(log, record):
         return None
     child_id = str(uuid.uuid4())
-    db.add(ExecutionLog(id=child_id, harness_id=log.harness_id, harness_name=log.harness_name, status='pending'))
-    db.add(RunRecord(id=child_id, source=record.source))
+    # One transaction: the run, its link and its first journal event exist together or not at all.
+    db.add(ExecutionLog(id=child_id, harness_id=log.harness_id, harness_name=log.harness_name, status='pending',
+                        result_json=json.dumps({'source': record.source, 'events': []}) if record.source == 'direct' else '{}'))
+    db.add(RunRecord(id=child_id, source=record.source, last_sequence=1))
     await db.flush()
     db.add(RunLink(child_id=child_id, parent_id=parent_id, parent_sequence=record.last_sequence))
+    db.add(RunEvent(run_id=child_id, sequence=1, event_type='run_continued',
+                    data_json=json.dumps({'from_run_id': parent_id, 'from_sequence': record.last_sequence})))
     await db.commit()
-    await RunWriter(child_id).append({'event': 'run_continued',
-                                      'data': {'from_run_id': parent_id, 'from_sequence': record.last_sequence}})
     return {'id': child_id, 'continued_from': parent_id, 'parent_sequence': record.last_sequence, 'status': 'pending'}
 
 
