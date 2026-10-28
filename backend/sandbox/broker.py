@@ -13,7 +13,7 @@ from .capabilities import capabilities
 from .discover import discover
 from .exec import run, risk_hints
 from .paths import PathViolation, resolve_in_root
-from .permission import DENY_NOTES, decide, effective_mode, hardened_git
+from .permission import DENY_NOTES, decide_with_class, effective_mode, hardened_git, needs_confirmation_even_when_allowed
 from .read import ReadFailure, read_text
 from .schemas import validate_call, TOOL_SCHEMAS
 from .secrets import redact, requires_approval
@@ -66,13 +66,13 @@ class ToolBroker:
             approval_reason = None
             auto_approved = False
             if name == 'exec':
-                verdict = decide(self.permission_mode, action, self.root, trusted=self.workspace_trusted)
-                if verdict == 'allow' and risk_hints(action.argv):
-                    verdict = 'ask'  # no mode runs a high-risk command unasked
+                verdict, cls = decide_with_class(self.permission_mode, action, self.root, trusted=self.workspace_trusted)
+                if verdict == 'allow' and self.permission_mode == 'full' and (needs_confirmation_even_when_allowed(action.argv) or risk_hints(action.argv)):
+                    verdict = 'ask'  # Full runs commands unasked, except high-risk ones and ones naming a secret
                 if verdict == 'deny':
                     note = DENY_NOTES[self.permission_mode]
                     self.last_result = note
-                    yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': note}
+                    yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': note, 'mode': self.permission_mode}
                     return
                 if self.mock:
                     self.last_result = redact('[mock] would run: ' + json.dumps(action.argv))[0]
@@ -120,7 +120,8 @@ class ToolBroker:
             if name == 'exec':
                 # Recheck cwd after the potentially long approval pause.
                 cwd = resolve_in_root(self.root, action.cwd)
-                argv, env = hardened_git(action.argv, self.root) if auto_approved else (action.argv, {})
+                # The git hardening was written for the read-only allowlist; a mode that runs other git commands must not inherit it.
+                argv, env = hardened_git(action.argv, self.root) if auto_approved and cls == 'exec_read' else (action.argv, {})
                 result = await run(argv, cwd, action.timeout_s, env=env or None)
             elif name == 'read':
                 value = await asyncio.to_thread(read_text, self.root, action.path, action.max_bytes, action.truncate,

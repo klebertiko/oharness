@@ -33,6 +33,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Literal, NamedTuple
 
 from .paths import PathViolation, resolve_in_root
+from .secrets import requires_approval
 
 Decision = Literal['ask', 'allow', 'deny']
 
@@ -63,8 +64,10 @@ PROGRAM_ALLOWLIST = frozenset({'git', 'ls', 'pwd', 'npm', 'pnpm', 'yarn', 'pytes
 _PACKAGE_MANAGERS = frozenset({'npm', 'pnpm', 'yarn'})
 
 # File commands whose every operand can be checked lexically. `rm`, shells and interpreters are deliberately absent.
-_WRITE_PROGRAMS = frozenset({'mkdir', 'touch', 'cp', 'mv'})
-_WRITE_FLAG = re.compile(r'^-[A-Za-z]{1,4}\Z')
+# Flags are exact tokens per program: nothing that follows symlinks (`-L`, `-H`), names a target elsewhere (`-t`, `-r FILE`) or
+# rewrites paths (`--parents`) is listed.
+_WRITE_PROGRAMS = {'mkdir': frozenset({'-p', '-v'}), 'touch': frozenset({'-c'}), 'cp': frozenset({'-r', '-R', '-n', '-v'}), 'mv': frozenset({'-n', '-v'})}
+_GIT_DIR_COMPONENT = re.compile(r'^(?:\.git[. ]*|git~\d+)\Z', re.IGNORECASE)  # `.git.`/`.git ` are `.git` on Windows; `GIT~1` is its short name
 _WRITE_OPERAND = re.compile(r'^[\w./ +@-]+\Z')
 
 _GIT_SUBCOMMANDS = frozenset({'status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'describe'})
@@ -500,10 +503,7 @@ def _exec_context(call, workspace):
     return root, program, cwd, argv[1:]
 
 
-def _allowed_exec(call, workspace, trusted: bool) -> bool:
-    context = _exec_context(call, workspace)
-    if context is None:
-        return False
+def _allowed_in_context(context, trusted: bool) -> bool:
     root, program, cwd, args = context
     if program not in PROGRAM_ALLOWLIST:
         return False
@@ -521,21 +521,25 @@ def _allowed_exec(call, workspace, trusted: bool) -> bool:
     return not args  # pwd
 
 
-def _touches_git_dir(arg: str) -> bool:
-    return any(part.lower() == '.git' for part in re.split(r'[\\/]', arg))
-
-
-def _write_class(call, workspace) -> str:
-    """`exec_write_inside` when the program is a listed file command and every operand is a plain relative path that stays in
-    the workspace (and is not inside `.git`); `exec_write_outside` for a listed command with an operand that escapes it."""
+def _allowed_exec(call, workspace, trusted: bool) -> bool:
     context = _exec_context(call, workspace)
-    if context is None:
+    return context is not None and _allowed_in_context(context, trusted)
+
+
+def _touches_git_dir(arg: str) -> bool:
+    return any(_GIT_DIR_COMPONENT.match(part) for part in re.split(r'[\\/]', arg))
+
+
+def _write_class(context) -> str:
+    """`exec_write_inside` when the program is a listed file command with only its listed flags and every operand is a plain
+    relative path that stays in the workspace, is not inside `.git` and does not name a secret; `exec_write_outside` for a
+    listed command with an operand that escapes the workspace."""
+    _root, program, cwd, args = context
+    flags = _WRITE_PROGRAMS.get(program)
+    if flags is None:
         return 'exec_other'
-    root, program, cwd, args = context
-    if program not in _WRITE_PROGRAMS:
-        return 'exec_other'
-    operands = [arg for arg in args if not _WRITE_FLAG.match(arg)]
-    if not operands or any(arg.startswith('-') or _touches_git_dir(arg) for arg in operands):
+    operands = [arg for arg in args if arg not in flags]
+    if not operands or any(arg.startswith('-') or _touches_git_dir(arg) or requires_approval(Path(arg)) for arg in operands):
         return 'exec_other'
     if any(_looks_like_path_escape(arg) for arg in operands):
         return 'exec_write_outside'
@@ -546,11 +550,39 @@ def _write_class(call, workspace) -> str:
 
 def exec_class(call, workspace) -> str:
     """Which of `EXEC_CLASSES` this validated exec call is. Anything that cannot be proven is `exec_other`."""
-    if _allowed_exec(call, workspace, False):
+    context = _exec_context(call, workspace)
+    if context is None:
+        return 'exec_other'
+    if _allowed_in_context(context, False):
         return 'exec_read'
-    if _allowed_exec(call, workspace, True):
+    if context[1] in _PACKAGE_MANAGERS | {'pytest'} and _allowed_in_context(context, True):
         return 'exec_project'
-    return _write_class(call, workspace)
+    return _write_class(context)
+
+
+_RM_LONG_FLAGS = {'--recursive': 'r', '--force': 'f'}
+_ALWAYS_ASK_PROGRAMS = frozenset({'sudo', 'su', 'doas', 'dd', 'mkfs', 'shutdown', 'reboot', 'halt', 'poweroff'})
+
+
+def needs_confirmation_even_when_allowed(argv: list[str]) -> bool:
+    """Commands that ask even in a mode that otherwise lets them run (Full): privilege escalation, raw disk writes,
+    recursive-force deletes however the flags are spelled, forced git pushes, recursive chmod/chown, and any argument that
+    names a secret path (`.env`, keys, credentials): the secret gate of `read` also covers a command that would print one."""
+    if not argv:
+        return False
+    program = _normalize_program(argv[0].replace('\\', '/').rsplit('/', 1)[-1])
+    args = argv[1:]
+    if program in _ALWAYS_ASK_PROGRAMS or program.startswith('mkfs.'):
+        return True
+    short = {ch for arg in args if arg.startswith('-') and not arg.startswith('--') for ch in arg[1:]}
+    long_ = {_RM_LONG_FLAGS[arg] for arg in args if arg in _RM_LONG_FLAGS}
+    if program == 'rm' and {'r', 'R'} & (short | long_) and 'f' in (short | long_):
+        return True
+    if program in ('chmod', 'chown', 'chgrp') and ({'R'} & short or '--recursive' in args):
+        return True
+    if program == 'git' and args[:1] == ['push'] and any(a in ('-f', '--force') or a.startswith('--force-') or (a.startswith('-') and not a.startswith('--') and 'f' in a) for a in args[1:]):
+        return True
+    return any(requires_approval(Path(arg)) for arg in args if arg and not arg.startswith('-'))
 
 
 def hardened_git(argv: list[str], root) -> tuple[list[str], dict[str, str]]:
@@ -589,29 +621,38 @@ def hardened_git(argv: list[str], root) -> tuple[list[str], dict[str, str]]:
     return head + rest, env
 
 
+def decide_with_class(mode, call, workspace, trusted: bool = False) -> tuple[Decision, str | None]:
+    """The verdict for one validated tool call and, for `exec`, the class it was judged as (classified once)."""
+    if getattr(call, 'name', None) != 'exec':
+        return 'allow', None
+    rules = _RULES.get(mode) or _RULES[DEFAULT_MODE]  # unknown mode: the default one
+    cls = exec_class(call, workspace)
+    rule = rules[cls]
+    if rule == 'allow_if_trusted':
+        return ('allow' if trusted else 'ask'), cls
+    return rule, cls
+
+
 def decide(mode, call, workspace, trusted: bool = False) -> Decision:
     """Policy verdict for one validated tool call (`Exec`, `Read`, `Discover`)."""
-    if getattr(call, 'name', None) != 'exec':
-        return 'allow'
-    rules = _RULES.get(mode)
-    if rules is None:  # unknown mode: the default one
-        rules = _RULES[DEFAULT_MODE]
-    rule = rules[exec_class(call, workspace)]
-    if rule == 'allow_if_trusted':
-        return 'allow' if trusted else 'ask'
-    return rule
+    return decide_with_class(mode, call, workspace, trusted)[0]
 
 
-def _rank(mode) -> int:
-    return MODES.index(mode) if isinstance(mode, str) and mode in MODES else MODES.index(DEFAULT_MODE)
+_STRICTNESS = {'allow': 0, 'allow_if_trusted': 1, 'ask': 2, 'deny': 3}
+
+
+def _tighter_or_equal(candidate: str, base: str) -> bool:
+    """True when `candidate` is at least as strict as `base` for every class of exec call. The modes are not a total order
+    (Read-only auto-runs reads that Ask would gate, yet refuses writes that Ask would allow), so rank is not enough."""
+    return all(_STRICTNESS[_RULES[candidate][cls]] >= _STRICTNESS[_RULES[base][cls]] for cls in EXEC_CLASSES)
 
 
 def effective_mode(stored, requested=None) -> str:
-    """The stricter of the conversation's stored mode and the one a request names.
-
-    Unknown or missing values count as ``ask`` (a request naming a mode the
-    backend does not know is never laxer than the default).
-    """
+    """The conversation's stored mode, tightened by a request only when the requested mode is at least as strict for every
+    class of exec call. Anything else keeps the stored mode. Unknown or missing values count as ``ask`` (a request naming a
+    mode the backend does not know is never laxer than the default)."""
+    base = stored if isinstance(stored, str) and stored in _RULES else DEFAULT_MODE
     if requested is None:
-        return MODES[_rank(stored)]
-    return MODES[min(_rank(stored), _rank(requested))]
+        return base
+    candidate = requested if isinstance(requested, str) and requested in _RULES else DEFAULT_MODE
+    return candidate if _tighter_or_equal(candidate, base) else base

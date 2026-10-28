@@ -22,7 +22,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | Plan | `/exec` is refused; reading still works. |
 | Read-only | Listings and read-only `git` run on their own. Any command that could write is refused, and the chat shows the command and the reason. |
 | Workspace write | `mkdir`, `touch`, `cp` and `mv` run without asking when every path stays inside the workspace. A path outside it, or any command Nilo cannot check, asks. |
-| Full | Commands run without asking, inside and outside the workspace. High-risk commands and secret files still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
+| Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)).

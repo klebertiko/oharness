@@ -207,3 +207,60 @@ def test_a_workspace_write_session_does_not_gate_an_inside_write(client, tmp_pat
     events = direct(client, tmp_path, ['touch', 'made.txt'])
     assert not any(e['event'] in {'tool_denied', 'tool_approval_required'} for e in events)
     assert next(e['data'] for e in events if e['event'] == 'capabilities')['permission_mode'] == 'workspace_write'
+
+
+# -- review findings -----------------------------------------------------------
+@pytest.mark.parametrize('stored,requested,expected', [
+    ('ask', 'read_only', 'ask'),            # read_only auto-runs reads: not "stricter" than Ask
+    ('read_only', 'ask', 'read_only'),      # Ask would allow writes with approval: not stricter than Read-only
+    ('auto_workspace', 'read_only', 'read_only'), ('workspace_write', 'read_only', 'read_only'),
+    ('auto_workspace', 'ask', 'ask'), ('full', 'plan', 'plan'), ('read_only', 'plan', 'plan'),
+    ('bogus', 'read_only', 'ask'),
+])
+def test_effective_mode_never_loosens_any_exec_class(stored, requested, expected):
+    assert permission.effective_mode(stored, requested) == expected
+
+
+@pytest.mark.parametrize('argv', [
+    ['cp', '-rL', 'linkdir', 'copy'], ['cp', '-L', 'a', 'b'], ['mv', '-t', 'dir', 'a'], ['touch', '-r', 'ref', 'x'], ['cp', '--parents', 'a', 'b'],
+    ['cp', '.env', 'notes.txt'], ['mv', 'id_rsa', 'k'], ['cp', 'a', '.ssh/x'],
+    ['touch', '.git /hooks/x'], ['touch', '.git./config'], ['cp', 'a', 'GIT~1/config'],
+])
+def test_write_commands_that_cannot_be_proven_inside_are_other(tmp_path, argv):
+    assert permission.exec_class(call(argv), tmp_path) == 'exec_other'
+
+
+@pytest.mark.parametrize('argv', [['rm', '-fr', 'x'], ['rm', '-r', '-f', 'x'], ['rm', '--recursive', '--force', 'x'], ['sudo', 'ls'],
+                                  ['git', 'push', '-f'], ['git', 'push', '--force-with-lease'], ['chmod', '-R', '777', '.'],
+                                  ['dd', 'if=/dev/zero', 'of=x'], ['cat', '.env'], ['cat', 'config/credentials.json']])
+def test_full_asks_for_high_risk_commands_and_commands_naming_secrets(tmp_path, argv):
+    assert permission.needs_confirmation_even_when_allowed(argv)
+
+
+@pytest.mark.parametrize('argv', [['ls', 'src/formatters'], ['touch', 'format.txt'], ['git', 'log', '--encoding=utf-8']])
+def test_ordinary_commands_are_not_flagged(argv):
+    assert not permission.needs_confirmation_even_when_allowed(argv)
+
+
+def test_the_loose_risk_hints_do_not_downgrade_read_only_or_workspace_write(tmp_path):
+    (tmp_path / 'formatters').mkdir()
+    assert kinds(run_exec(tmp_path, 'read_only', ['ls', 'formatters'])) == ['tool_call', 'tool_auto_approved', 'tool_result']
+    assert kinds(run_exec(tmp_path, 'workspace_write', ['touch', 'format.txt'])) == ['tool_call', 'tool_auto_approved', 'tool_result']
+
+
+def test_full_asks_for_a_command_naming_a_secret_file(tmp_path):
+    events = run_exec(tmp_path, 'full', ['cat', '.env'], decision='reject')
+    assert events[1]['kind'] == 'tool_approval_required'
+
+
+def test_full_does_not_wrap_a_non_read_only_git_in_the_read_only_hardening(tmp_path, monkeypatch):
+    from sandbox import broker
+    seen = []
+    monkeypatch.setattr(broker, 'hardened_git', lambda argv, root: seen.append(argv) or (list(argv), {}))
+    run_exec(tmp_path, 'full', ['git', 'init', 'x'])
+    assert seen == []
+
+
+def test_a_mode_refusal_names_the_mode_that_refused(tmp_path):
+    denied = run_exec(tmp_path, 'read_only', ['touch', 'a'])[-1]
+    assert denied['mode'] == 'read_only'

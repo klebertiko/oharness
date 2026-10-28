@@ -44,6 +44,7 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
   const [confirmingTrust, setConfirmingTrust] = useState(false);
   const [confirmingFull, setConfirmingFull] = useState(false);
   // Full runs commands unasked: it is chosen on purpose (a confirmation), never by cycling or by accident.
+  useEffect(() => { setConfirmingFull(false); }, [permissionMode, live]);
   const choosePermission = (next: PermissionMode) => {
     if (next === "full" && permissionMode !== "full") { setConfirmingFull(true); return; }
     setConfirmingFull(false);
@@ -158,7 +159,7 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
       <span className="text-meta text-ink-mute">{PERMISSION_SUMMARY[permissionMode]} · Shift+Tab cycles the mode</span>
       {permissionNotice && <Notice tone="fault" className="w-full">{permissionNotice}</Notice>}
       {confirmingFull && <div role="alertdialog" aria-label="Switch to Full" className="w-full rounded-control border border-warn p-3 text-body text-ink">
-        <p>Full runs commands <strong>without asking</strong>, inside and outside the workspace. High-risk commands and secret files still ask. Use it only for work you are watching.</p>
+        <p>Full runs commands <strong>without asking</strong>, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Use it only for work you are watching.</p>
         <div className="mt-2 flex gap-2">
           <Button variant="primary" onClick={() => { setConfirmingFull(false); onPermissionModeChange?.("full"); }}>Use Full</Button>
           <Button autoFocus onClick={() => setConfirmingFull(false)}>Cancel</Button>

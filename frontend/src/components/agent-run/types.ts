@@ -26,7 +26,7 @@ export interface ToolCall {
   };
   /** The permission mode, not a person, let this command run without the approval gate. */
   autoApproved?: { mode: string; reason: string };
-  denied?: { reason: "rejected" | "approval_timeout" | "policy"; note: string };
+  denied?: { reason: "rejected" | "approval_timeout" | "policy"; note: string; /** The permission mode that refused it (absent for a refusal that is not about the mode). */ mode?: string };
   truncated?: boolean;
   timedOut?: boolean;
   simulated?: boolean;

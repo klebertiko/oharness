@@ -45,8 +45,8 @@
     {
       "id": "full",
       "label": "Full",
-      "summary": "every command runs without asking, except high-risk ones",
-      "hint": "Full: commands run without asking, inside and outside the workspace. High-risk commands and secret files still ask. Choose it only for work you are watching",
+      "summary": "commands run without asking, except high-risk ones",
+      "hint": "Full: commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choose it only for work you are watching",
       "denyNote": "Not allowed by the permission mode.",
       "rules": {"exec_read": "allow", "exec_project": "allow", "exec_write_inside": "allow", "exec_write_outside": "allow", "exec_other": "allow"}
     }

@@ -180,3 +180,18 @@ it("leaving Full needs no confirmation", () => {
   fireEvent.click(screen.getByRole("radio", { name: /Read-only/ }));
   expect(changed).toHaveBeenCalledWith("read_only");
 });
+
+it("an open Full confirmation closes when the mode changes by another route", () => {
+  render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  expect(screen.getByRole("alertdialog", { name: "Switch to Full" })).toBeTruthy();
+  fireEvent.keyDown(textbox(), { key: "Tab", shiftKey: true });
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+it("an open Full confirmation closes when a run goes live", () => {
+  const { rerender } = render(<Composer />);
+  fireEvent.click(screen.getByRole("radio", { name: /Full/ }));
+  rerender(<Composer live />);
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});
