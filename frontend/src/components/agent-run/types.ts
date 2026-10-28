@@ -121,6 +121,24 @@ export interface Segment {
   endedAt?: number;
 }
 
+export interface TurnDiffFile {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  added: number;
+  removed: number;
+  binary: boolean;
+  revertible: boolean;
+  diff: string;
+  diff_truncated: boolean;
+}
+
+export interface TurnDiff {
+  files: TurnDiffFile[];
+  omitted: number;
+  /** False when the workspace was too large to snapshot fully. */
+  complete: boolean;
+}
+
 export type RunStatus =
   | "idle"
   | "starting"
@@ -171,6 +189,8 @@ export interface RunState {
   budget: { maxTokens: number; usedTokens: number } | null;
   /** One entry per context compaction, in order. */
   compactions: { beforeTokens: number; afterTokens: number }[];
+  /** What the turn changed in the workspace (`turn_diff`), if anything. */
+  turnDiff: TurnDiff | null;
 }
 
 export interface RunEvent {
