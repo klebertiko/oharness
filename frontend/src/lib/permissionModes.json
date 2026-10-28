@@ -5,9 +5,9 @@
     {
       "id": "plan",
       "label": "Plan",
-      "summary": "read-only",
-      "hint": "Plan: read-only. Commands are refused; files can still be read",
-      "denyNote": "Plan mode (read-only): commands are not run. Switch the conversation to Ask or Auto to execute.",
+      "summary": "read-only; ends in a plan you approve",
+      "hint": "Plan: read-only. Commands are refused and files can still be read. The turn ends in a plan; nothing runs until you approve it",
+      "denyNote": "Plan mode (read-only): commands are not run. Approve the plan to start executing.",
       "rules": {"exec_read": "deny", "exec_project": "deny", "exec_write_inside": "deny", "exec_write_outside": "deny", "exec_other": "deny"}
     },
     {

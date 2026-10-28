@@ -41,7 +41,12 @@
   document.addEventListener('DOMContentLoaded', () => {
     apply();
     document.querySelectorAll('.language-switch').forEach(link => {
-      link.addEventListener('click', () => { link.hash = location.hash; });
+      link.addEventListener('click', () => {
+        // Carry the section over only while it is on screen; a stale hash (e.g. #baixar left by the download CTA) would jump the new page away from where the reader is.
+        const target = location.hash.length > 1 && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+        const box = target && target.getBoundingClientRect();
+        link.hash = box && box.bottom > 0 && box.top < window.innerHeight ? location.hash : '';
+      });
     });
     document.querySelectorAll('.theme-toggle').forEach(button => {
       button.addEventListener('click', () => {

@@ -154,7 +154,7 @@ describe("AgentStage provider gating", () => {
     render(<AgentStage />);
 
     // Anthropic's catalog credential is "cli" — a switch, not a key paste.
-    expect(screen.getAllByRole("button", { name: /turn on anthropic to send/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /turn on · anthropic/i }).length).toBeGreaterThan(0);
   });
 
   it("empty state shows the connected provider's label once one is live", () => {

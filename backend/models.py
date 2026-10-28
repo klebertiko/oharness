@@ -1,6 +1,6 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
+from datetime import datetime, timezone
+from sqlalchemy import LargeBinary, String, DateTime, Text, Boolean, Float, Integer, ForeignKey, ForeignKeyConstraint, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -36,6 +36,15 @@ class RunRecord(Base):
     coverage: Mapped[str] = mapped_column(String(24), default="partial")
     last_sequence: Mapped[int] = mapped_column(Integer, default=0)
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class RunLink(Base):
+    """A run that continues (or forks) another: points at the parent and the last sequence it had. Never touches the parent's journal."""
+    __tablename__ = "run_links"
+    child_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), primary_key=True)
+    parent_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), index=True, nullable=False)
+    parent_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class RunEvent(Base):
@@ -114,6 +123,20 @@ class ChatPermission(Base):
     thread_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     mode: Mapped[str] = mapped_column(String(32), nullable=False, default="ask")
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ChatPlan(Base):
+    """The plan artifact a Plan-mode run ends in (`proposed` | `approved` | `discarded`).
+
+    One conversation has at most one `proposed` plan; while it waits, the conversation cannot leave Plan mode
+    (`sandbox.plan_store`). Only an authenticated client can approve or discard; a model's tool call cannot."""
+    __tablename__ = "chat_plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    thread_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class WorkspaceTrust(Base):
@@ -202,3 +225,20 @@ class ToolHook(Base):
     tools_json: Mapped[str] = mapped_column(Text, nullable=False)
     timeout_s: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class TurnChange(Base):
+    """One file a turn changed (#163), with its pre-turn bytes so one file can be reverted.
+
+    Text files only keep `before`; secret-named files are never recorded. `reverted`
+    makes a revert one-shot. Rows stay with the run."""
+    __tablename__ = "turn_changes"
+
+    run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    root_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    before: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    after_sha: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    mode: Mapped[int] = mapped_column(Integer, default=0o644)
+    reverted: Mapped[bool] = mapped_column(Boolean, default=False)

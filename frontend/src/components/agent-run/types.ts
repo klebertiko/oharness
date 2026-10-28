@@ -121,6 +121,33 @@ export interface Segment {
   endedAt?: number;
 }
 
+export interface Subagent {
+  id: string;
+  parentCallId: string;
+  task: string;
+  state: "running" | "done" | "cancelled" | "error";
+  chars: number;
+  tokens: number;
+}
+
+export interface TurnDiffFile {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  added: number;
+  removed: number;
+  binary: boolean;
+  revertible: boolean;
+  diff: string;
+  diff_truncated: boolean;
+}
+
+export interface TurnDiff {
+  files: TurnDiffFile[];
+  omitted: number;
+  /** False when the workspace was too large to snapshot fully. */
+  complete: boolean;
+}
+
 export type RunStatus =
   | "idle"
   | "starting"
@@ -165,10 +192,16 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
+  proposedPlan?: { planId: string; text: string };
+  /** Children this run started (`subagent_*` events), in start order. */
+  subagents: Subagent[];
   /** Set when the run reached its token ceiling (`budget_exceeded`). */
   budget: { maxTokens: number; usedTokens: number } | null;
   /** One entry per context compaction, in order. */
   compactions: { beforeTokens: number; afterTokens: number }[];
+  /** What the turn changed in the workspace (`turn_diff`), if anything. */
+  turnDiff: TurnDiff | null;
 }
 
 export interface RunEvent {

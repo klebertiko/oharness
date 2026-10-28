@@ -1,5 +1,8 @@
 import { specOf, type Connection } from "@/components/providers/providerStore";
 import { requiresModel } from "@/components/providers/catalog";
+import { modelNotPulled } from "@/components/providers/modelPull";
+
+export { modelNotPulled };
 
 /** Can this connection answer a chat turn at all? Agent-only connections
     (Cursor) have no chat adapter in the sidecar — offering them in a chat
@@ -61,7 +64,7 @@ export type ProviderReadiness = {
   label: string;
   tone: ChatProviderTone;
   /** What the person still has to do, or null when nothing. */
-  missing: "credential" | "turn-on" | "fix-failure" | "model" | null;
+  missing: "credential" | "turn-on" | "fix-failure" | "model" | "model-not-pulled" | null;
 };
 
 export function providerReadiness(c: Connection): ProviderReadiness {
@@ -83,6 +86,9 @@ export function providerReadiness(c: Connection): ProviderReadiness {
   }
   if (needsModel(c)) {
     return { state: "needs-model", ready: false, verified: false, label, tone, missing: "model" };
+  }
+  if (modelNotPulled(c)) {
+    return { state: "needs-model", ready: false, verified: false, label, tone, missing: "model-not-pulled" };
   }
   return {
     state: "ready",
@@ -168,6 +174,7 @@ export function pickChatProvider(connections: Connection[], chosenId?: string | 
 export function chatProviderStatus(connection: Connection): string {
   if (!connection.enabled || connection.health === "fault") return "Unavailable";
   if (connection.health !== "probing" && needsModel(connection)) return "No model chosen";
+  if (modelNotPulled(connection)) return "Model not pulled";
   switch (connection.health) {
     case "live": return "Verified";
     case "probing": return "Checking connection";
@@ -177,7 +184,7 @@ export function chatProviderStatus(connection: Connection): string {
 }
 
 /** The row-level leading word. `chatProviderStatus` above stays untouched
-    (piece 1's trigger chip already pins its 5 return strings) — this adds
+    (piece 1's trigger chip pins its return strings) — this adds
     the one new distinction the dropdown needs: a real fault always outranks
     "not enabled" as more specific evidence (a credential WAS tried and
     rejected, not merely left off), so only a non-fault, disabled connection
@@ -194,43 +201,13 @@ export function rowStatus(connection: Connection): string {
 export function rowTone(connection: Connection): ChatProviderTone {
   if (connection.health === "fault") return "failing";
   if (!connection.enabled) return "unconfigured";
-  if (connection.health !== "probing" && needsModel(connection)) return "attention";
+  if (connection.health !== "probing" && (needsModel(connection) || modelNotPulled(connection))) return "attention";
   switch (connection.health) {
     case "live": return "verified";
     case "probing": return "checking";
     case "degraded": return "attention";
     case "setup": return "unverified";
   }
-}
-
-/** What the composer tells the person when `pickChatProvider` came back null —
-    never a bare "Unavailable" (design.md § Provider stance). Returns null
-    once a provider actually resolves, so a caller can render this in place
-    of the send affordance without a separate `!provider` check drifting out
-    of sync. Credential shape comes from the catalog (`specOf`), not a
-    hardcoded vendor list, so a future provider gets the right verb for free:
-    `api-key` → paste a key, anything else (`cli` session or `none`) → an
-    on/off switch, nothing to type. `id` is the connection this action would
-    expand inline setup for — null when there is nothing concrete to expand
-    (nothing chosen, or an explicit choice that no longer exists), in which
-    case the caller should just open the combo. */
-export function missingProviderAction(
-  connections: Connection[],
-  chosenId?: string | null,
-): { text: string; id: string | null } | null {
-  if (pickChatProvider(connections, chosenId)) return null;
-  const target = chosenId ? connections.find((c) => c.id === chosenId) : null;
-  if (!target || !isChatCapable(target)) {
-    return { text: chosenId ? "Pick a provider to send" : "Connect a provider to send", id: null };
-  }
-  if (providerReadiness(target).missing === "model") {
-    return { text: `Choose a model for ${target.label} to send`, id: target.id };
-  }
-  const spec = specOf(target);
-  const article = /^[aeiou]/i.test(spec.vendor) ? "an" : "a";
-  const verb =
-    spec.credential.kind === "api-key" ? `Paste ${article} ${spec.vendor} key` : `Turn on ${target.label}`;
-  return { text: `${verb} to send`, id: target.id };
 }
 
 /** Auto names its resolved connection; every other row states its own evidence. */
