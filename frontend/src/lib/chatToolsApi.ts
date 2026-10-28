@@ -65,6 +65,14 @@ export interface PermissionState {
   mode: PermissionMode;
 }
 
+/** The plan a Plan-mode run ended in (waiting for approval). */
+export interface PlanArtifact {
+  plan_id: string;
+  thread_id: string;
+  text: string;
+  status: "proposed";
+}
+
 /** Structured error body from the broker (contract §2.3). */
 export class ChatToolsError extends Error {
   constructor(public readonly status: number, public readonly code: string, public readonly path?: string) {
@@ -113,6 +121,20 @@ export const chatToolsApi = {
     request<TrustState>(`/chat/tools/trust?${new URLSearchParams({ cwd }).toString()}`),
   setTrust: (cwd: string, trusted: boolean) =>
     request<TrustState>("/chat/tools/trust", { method: "PUT", body: JSON.stringify({ cwd, trusted }) }),
+  /** The plan waiting for approval in this conversation, if any. */
+  getPlan: (threadId: string) =>
+    request<{ thread_id: string; plan: PlanArtifact | null }>(`/chat/tools/plan?${new URLSearchParams({ thread_id: threadId }).toString()}`),
+  /** Approving leaves Plan mode (for Ask unless named) in the same step; only this call can. */
+  approvePlan: (threadId: string, planId: string, mode?: PermissionMode) =>
+    request<{ thread_id: string; plan_id: string; status: "approved"; mode: PermissionMode }>("/chat/tools/plan/approve", {
+      method: "POST",
+      body: JSON.stringify({ thread_id: threadId, plan_id: planId, ...(mode ? { mode } : {}) }),
+    }),
+  discardPlan: (threadId: string, planId: string) =>
+    request<{ thread_id: string; plan_id: string; status: "discarded" }>("/chat/tools/plan/discard", {
+      method: "POST",
+      body: JSON.stringify({ thread_id: threadId, plan_id: planId }),
+    }),
   setPermission: (threadId: string, mode: PermissionMode) =>
     request<PermissionState>("/chat/tools/permission", {
       method: "PUT",
