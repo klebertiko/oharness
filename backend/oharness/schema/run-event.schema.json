@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oharness.dev/schema/run-event.schema.json",
+  "title": "OHarness run event",
+  "description": "One line of `oharness run <bundle> --json`: the engine's stream events (engine.execute_harness) with a 1-based sequence. The event table below is the single rule; the CLI validates every line against it before printing.",
+  "type": "object",
+  "required": [
+    "sequence",
+    "event",
+    "data"
+  ],
+  "properties": {
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event": {
+      "enum": [
+        "run_start",
+        "runtime_selected",
+        "awaiting_step",
+        "node_start",
+        "node_phase",
+        "node_reason",
+        "node_stream",
+        "tool_call",
+        "tool_result",
+        "node_done",
+        "node_error",
+        "node_token_warning",
+        "node_skipped",
+        "gate_retry",
+        "hitl_pause",
+        "hitl_resolved",
+        "user_message",
+        "run_stopped",
+        "harness_done"
+      ]
+    },
+    "data": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "event": {
+          "const": "run_start"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            },
+            "order": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "run_id",
+            "mode",
+            "order"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "runtime_selected"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "awaiting_step"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "next": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "next"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_start"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_phase"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "phase"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_reason"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "chunk": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "chunk"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_stream"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "chunk": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "chunk"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "tool_call"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "call_id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "call_id",
+            "name"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "tool_result"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "call_id": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "node_id",
+            "call_id",
+            "ok"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_done"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "output": {
+              "type": "string"
+            },
+            "tokens": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "node_id",
+            "output",
+            "tokens"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_error"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "error"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_token_warning"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "tokens": {
+              "type": "number"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "node_id",
+            "tokens",
+            "limit"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "node_skipped"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "reason"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "gate_retry"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "attempt": {
+              "type": "integer"
+            },
+            "cap": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "node_id",
+            "attempt",
+            "cap"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "hitl_pause"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "hitl_resolved"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string"
+            },
+            "decision": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node_id",
+            "decision"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "user_message"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "run_stopped"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "at_node": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "at_node"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "event": {
+          "const": "harness_done"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "complete",
+                "stopped",
+                "error"
+              ]
+            },
+            "total_tokens": {
+              "type": "number"
+            },
+            "tokens_estimated": {
+              "type": "boolean"
+            },
+            "elapsed_ms": {
+              "type": "number"
+            },
+            "nodes_run": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "status",
+            "total_tokens",
+            "tokens_estimated",
+            "elapsed_ms",
+            "nodes_run"
+          ]
+        }
+      }
+    }
+  ]
+}

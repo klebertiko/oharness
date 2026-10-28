@@ -1,8 +1,73 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .validate import validate_path
+
+RUN_EVENT_SCHEMA = Path(__file__).resolve().parent / "schema" / "run-event.schema.json"
+EXIT_OK, EXIT_RUN_FAILED, EXIT_INVALID = 0, 1, 2
+
+
+def _frames(chunk: str) -> tuple[str, dict]:
+    """One engine frame (`event: x` / `data: {...}`) as (event, data)."""
+    event, _, rest = chunk.partition("\n")
+    return event.removeprefix("event: ").strip(), json.loads(rest.removeprefix("data: ").strip())
+
+
+async def _stream(graph: dict):
+    """Run the harness in mock mode (no Provider, no network). A person-only checkpoint (HITL) stops the run: headless never approves for them."""
+    import uuid
+
+    from engine import RunControl, execute_harness
+
+    run_id = str(uuid.uuid4())
+    control = RunControl(run_id)
+    async for chunk in execute_harness(graph, "mock", control=control, run_id=run_id):
+        event, data = _frames(chunk)
+        yield event, data
+        if event == "hitl_pause":
+            control.stop.set()
+            control.release()
+
+
+def _run(path: Path, as_json: bool) -> int:
+    import asyncio
+
+    from jsonschema import Draft202012Validator
+
+    from . import codec
+
+    result = validate_path(path)
+    if not result.ok:
+        print("invalid harness: " + "; ".join(result.errors), file=sys.stderr)
+        return EXIT_INVALID
+    graph = codec.decode_bytes(path.read_bytes())["graph"]
+    validator = Draft202012Validator(json.loads(RUN_EVENT_SCHEMA.read_text(encoding="utf-8")))
+    status = "error"
+
+    async def drive() -> str:
+        final, sequence = "error", 0
+        async for event, data in _stream(graph):
+            sequence += 1
+            line = {"sequence": sequence, "event": event, "data": data}
+            problems = [e.message for e in validator.iter_errors(line)]
+            if problems:  # the engine and the published schema disagree: never print an event the schema rejects
+                raise RuntimeError(f"event {event!r} breaks the run-event schema: {problems[0]}")
+            if event == "harness_done":
+                final = data["status"]
+            if as_json:
+                print(json.dumps(line, ensure_ascii=False), flush=True)
+            elif event in ("node_start", "node_done", "node_error", "hitl_pause", "harness_done"):
+                print(f"{event}: {data.get('node_id') or data.get('status', '')}", flush=True)
+        return final
+
+    try:
+        status = asyncio.run(drive())
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_RUN_FAILED
+    return EXIT_OK if status == "complete" else EXIT_RUN_FAILED
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -11,9 +76,15 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser = sub.add_parser("validate")
     validate_parser.add_argument("path", type=Path)
 
+    run_parser = sub.add_parser("run", help="run a harness headless (mock mode) and stream its events")
+    run_parser.add_argument("path", type=Path)
+    run_parser.add_argument("--json", action="store_true", help="one schema-valid JSON event per line (schema/run-event.schema.json)")
+
     args = parser.parse_args(argv)
     if args.cmd == "validate":
         result = validate_path(args.path)
         print(json.dumps({"ok": result.ok, "errors": result.errors}, indent=2))
         return 0 if result.ok else 1
-    return 2
+    if args.cmd == "run":
+        return _run(args.path, args.json)
+    return EXIT_INVALID
