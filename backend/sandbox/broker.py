@@ -13,7 +13,6 @@ from .capabilities import capabilities
 from .discover import discover
 from .exec import run, risk_hints
 from .hooks import run_hook
-from .hooks import run_hook
 from .paths import PathViolation, resolve_in_root
 from .permission import decide, effective_mode, hardened_git
 from .read import ReadFailure, read_text
@@ -39,7 +38,7 @@ def redact_value(value):
 
 
 class ToolBroker:
-    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False, hooks=()):
+    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False, hooks=(), hooks_loader=None):
         self.root = Path(root) if root else None
         # Already resolved by the caller (stored mode clamped by the request); unknown -> ask.
         self.permission_mode = effective_mode(permission_mode)
@@ -47,6 +46,8 @@ class ToolBroker:
         self.workspace_trusted = bool(workspace_trusted)
         self.control, self.options = control, options
         self.hooks = tuple(hooks)
+        # Re-read per call so a hook added or removed mid-run applies at once.
+        self.hooks_loader = hooks_loader
         self.capabilities = capabilities(root, adapter_name)
         self.mock = adapter_name == 'mock'
         self.calls_used = self.reads_used = 0
@@ -96,7 +97,7 @@ class ToolBroker:
                 target = resolve_in_root(self.root, action.path)
                 if requires_approval(target) or requires_approval(self.root / action.path):
                     approval_reason = 'secret_pattern'
-            for hook in self.hooks:
+            for hook in (await self.hooks_loader() if self.hooks_loader else self.hooks):
                 if name not in hook.tools:
                     continue
                 verdict = await run_hook(hook, {'call_id': call_id, 'tool': name, 'args': args}, self.root)

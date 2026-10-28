@@ -15,6 +15,7 @@ export function ToolHooksButton() {
   const uid = useId();
 
   const load = useCallback(() => {
+    setError("");
     toolHooksApi.list().then(setRows).catch(() => setError("Hooks are unavailable right now."));
   }, []);
   useEffect(() => {

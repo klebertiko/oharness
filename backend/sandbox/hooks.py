@@ -66,6 +66,7 @@ def validate_hook(hook_id, body) -> Hook:
                 or not all(isinstance(a, str) and 0 < len(a) <= rules['argv_item_max_chars'] and '\0' not in a for a in argv)):
             raise ValueError
         # Absolute path only: no PATH lookup an attacker-writable directory could win.
+        # Refusing shells by name is a best-effort guard; the guarantee is argv-only exec.
         program = argv[0]
         name = (PureWindowsPath(program).name if '\\' in program else PurePosixPath(program).name).lower()
         if not _is_abs(program) or name in rules['denied_programs']:
@@ -116,15 +117,17 @@ async def run_hook(hook: Hook, payload: dict, cwd) -> HookDecision:
         return done(False, 'spawn_error')
     try:
         try:
-            await asyncio.wait_for(proc.communicate(body), hook.timeout_s)
+            try:
+                await asyncio.wait_for(proc.communicate(body), hook.timeout_s)
+            except (BrokenPipeError, ConnectionResetError):
+                # stdin closed early: the same deadline still applies to the exit.
+                await asyncio.wait_for(proc.wait(), hook.timeout_s)
         except asyncio.TimeoutError:
             await _terminate(proc, tree)
             return done(False, 'timeout')
-        except (BrokenPipeError, ConnectionResetError):
-            await proc.wait()
         return done(True, 'ok') if proc.returncode == 0 else done(False, 'exit_nonzero')
     finally:
         with anyio.CancelScope(shield=True):
-            if proc.returncode is None:
-                await _terminate(proc, tree)
+            # Always: a hook that exits 0 must not leave descendants running.
+            await _terminate(proc, tree)
             tree.close()

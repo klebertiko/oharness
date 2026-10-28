@@ -2,6 +2,7 @@
 import json
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import ToolHook
@@ -10,14 +11,21 @@ from .hooks import Hook, validate_hook
 
 async def put_hook(db: AsyncSession, hook_id: str, body: dict) -> Hook:
     hook = validate_hook(hook_id, body)
-    row = await db.get(ToolHook, hook.id)
     values = dict(argv_json=json.dumps(hook.argv), tools_json=json.dumps(list(hook.tools)), timeout_s=float(hook.timeout_s))
-    if row is None:
-        db.add(ToolHook(id=hook.id, **values))
-    else:
-        for key, value in values.items():
-            setattr(row, key, value)
-    await db.commit()
+    for attempt in range(2):
+        row = await db.get(ToolHook, hook.id)
+        if row is None:
+            db.add(ToolHook(id=hook.id, **values))
+        else:
+            for key, value in values.items():
+                setattr(row, key, value)
+        try:
+            await db.commit()
+            return hook
+        except IntegrityError:  # a concurrent PUT created the row first: update it instead
+            await db.rollback()
+            if attempt:
+                raise
     return hook
 
 

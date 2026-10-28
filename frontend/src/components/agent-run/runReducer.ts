@@ -302,11 +302,14 @@ export function runReducer(state: RunState, action: Action): RunState {
     case "tool_hook_decision":
       return patchTool(state, String(d.node_id), String(action.data.call_id ?? ""), (call) => ({
         ...call,
-        hook: {
-          hookId: String(action.data.hook_id ?? ""),
-          decision: action.data.decision === "allow" ? "allow" : "block",
-          reason: String(action.data.reason ?? ""),
-        },
+        hooks: [
+          ...(call.hooks ?? []),
+          {
+            hookId: String(action.data.hook_id ?? ""),
+            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            reason: String(action.data.reason ?? ""),
+          },
+        ],
       }));
 
     case "tool_denied":

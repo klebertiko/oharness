@@ -27,8 +27,8 @@ export interface ToolCall {
   /** The permission mode, not a person, let this command run without the approval gate. */
   autoApproved?: { mode: string; reason: string };
   denied?: { reason: "rejected" | "approval_timeout" | "policy" | "hook"; note: string };
-  /** The pre-tool hook that decided, from `tool_hook_decision` (the last hook evaluated). */
-  hook?: { hookId: string; decision: "allow" | "block"; reason: string };
+  /** The pre-tool hook that decided, from `tool_hook_decision` (one entry per hook evaluated, in order). */
+  hooks?: { hookId: string; decision: "allow" | "block"; reason: string }[];
   truncated?: boolean;
   timedOut?: boolean;
   simulated?: boolean;

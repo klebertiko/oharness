@@ -105,11 +105,11 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
       )}
 
       {call.approval?.decision && call.approval.note ? <p className="mt-1 text-meta text-ink-mute">note: {call.approval.note}</p> : null}
-      {call.hook ? (
-        <p className="mt-1 text-meta text-ink-mute" data-hook-decision>
-          hook {call.hook.hookId}: {call.hook.decision === "allow" ? "allowed" : `blocked (${call.hook.reason.replace("_", " ")})`}
+      {call.hooks?.map((h) => (
+        <p key={h.hookId} className="mt-1 text-meta text-ink-mute" data-hook-decision>
+          hook {h.hookId}: {h.decision === "allow" ? "allowed" : `blocked (${h.reason.replace("_", " ")})`}
         </p>
-      ) : null}
+      ))}
       {call.denied?.note ? <p className="mt-1 text-meta text-ink-mute">{call.denied.note}</p> : null}
       {claimedDisclosure && disclosure ? (
         <p className="mt-1.5 text-body text-ink-mute" data-read-disclosure>{disclosure}</p>

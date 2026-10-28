@@ -41,7 +41,7 @@ describe("hook decisions in the run", () => {
   };
 
   it("keeps the hook id and the reason on the tool call", () => {
-    expect(call().hook).toEqual({ hookId: "guard", decision: "block", reason: "timeout" });
+    expect(call().hooks).toEqual([{ hookId: "guard", decision: "block", reason: "timeout" }]);
     expect(call().denied?.reason).toBe("hook");
   });
 

@@ -174,3 +174,42 @@ def test_blocked_call_is_in_the_run_journal_with_the_hook_id(client, tmp_path):
         assert any(r['event'] == 'tool_hook_decision' and r['data']['hook_id'] == 'guard' for r in rows)
     finally:
         client.delete('/chat/tools/hooks/guard')
+
+
+def test_hook_added_mid_run_applies_to_the_next_call(tmp_path):
+    current = []
+
+    async def loader():
+        return list(current)
+    control = RunControl('hook-live')
+    broker = ToolBroker(str(tmp_path), 'ollama', control, ToolsRequest(enabled=True), permission_mode='auto_workspace', hooks_loader=loader)
+
+    async def go():
+        first = [e['kind'] async for e in broker.call('discover', {}, origin='model')]
+        current.append(hook(script(tmp_path, 'raise SystemExit(1)'), tools=('discover',)))
+        second = [e['kind'] async for e in broker.call('discover', {}, origin='model')]
+        return first, second
+    first, second = asyncio.run(go())
+    assert 'tool_hook_decision' not in first and second[-1] == 'tool_denied'
+
+
+def test_exiting_hook_leaves_no_descendant(tmp_path):
+    pidfile = tmp_path / 'pid'
+    argv = script(tmp_path, f"""
+        import subprocess, sys
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        open({str(pidfile)!r}, 'w').write(str(child.pid))
+    """)
+    assert decide(hook(argv), tmp_path).allowed
+    pid = int(pidfile.read_text())
+    import time
+    for _ in range(30):
+        try:
+            with open(f'/proc/{pid}/stat') as f:
+                if f.read().split(')')[1].split()[0] == 'Z':
+                    break
+        except FileNotFoundError:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError('descendant still running')
