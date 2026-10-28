@@ -317,7 +317,9 @@ def test_a_mode_without_a_rule_for_every_class_fails_the_import_even_under_pytho
             sys.exit(0)
         sys.exit(1)
     ''')
-    done = subprocess.run([sys.executable, '-O', '-c', code], cwd=Path(permission.__file__).parents[1], capture_output=True, check=False)
+    # Fixed test code and the current interpreter; no shell or external input. `-O` is the point: the check must not be an `assert`.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+    done = subprocess.run([sys.executable, '-O', '-c', code], cwd=Path(permission.__file__).parents[1], capture_output=True, check=False)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert done.returncode == 0, done.stderr.decode()
 
 
