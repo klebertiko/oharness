@@ -23,6 +23,7 @@ const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "fault" },
   stopped: { label: "Stopped", tone: "warn" },
   interrupted: { label: "Interrupted", tone: "warn" },
+  pending: { label: "Not started", tone: "warn" },
   budget_exceeded: { label: "Budget exceeded", tone: "warn" },
   unknown: { label: "Unknown", tone: "warn" },
 };
@@ -62,7 +63,7 @@ export function RunsPanel() {
       }
     >
       {openId ? (
-        <RunDetail id={openId} onBack={() => setOpenId(null)} />
+        <RunDetail id={openId} onBack={() => setOpenId(null)} onContinued={load} />
       ) : (
         <RunList runs={runs} error={error} onOpen={setOpenId} />
       )}
@@ -118,7 +119,7 @@ function RunList({
   );
 }
 
-function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
+function RunDetail({ id, onBack, onContinued }: { id: string; onBack: () => void; onContinued: () => void }) {
   const [run, setRun] = useState<RunLogDetail | null>(null);
   const [error, setError] = useState("");
 
@@ -164,7 +165,7 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <dd className="text-ink-dim">{durationText(run) || "—"}</dd>
           </dl>
 
-          <RunEvidence detail={run} />
+          <RunEvidence detail={run} onContinued={onContinued} />
           {text ? (
             <pre className="mt-3 whitespace-pre-wrap rounded-float bg-sub-200 p-2.5 font-mono text-meta leading-5 text-ink-dim">
               {text}

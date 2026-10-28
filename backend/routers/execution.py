@@ -18,7 +18,7 @@ import usage_tracking
 from database import SessionLocal, get_db
 from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
 from run_worktree import RunWorktree, require_workspace
-from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream
+from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run
 from adapters import get_adapter, AdapterConfig
 from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
@@ -933,6 +933,8 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         result = {"source": record.source, "events": [{"event": e.event_type, "data": json.loads(e.data_json)} for e in events]}
     return {
         **metadata(record),
+        **await lineage(db, log_id),
+        "resumable": is_resumable(lg, record),
         "id": lg.id,
         "harness_id": lg.harness_id,
         "harness_name": lg.harness_name,
@@ -943,6 +945,16 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         "result": result,
         "artifacts": await list_artifacts(log_id, db),
     }
+
+
+@router.post("/logs/{log_id}/continue", status_code=201)
+async def continue_log(log_id: str, db: AsyncSession = Depends(get_db)):
+    """A new run linked to this one, from its durable journal. The parent's events are left exactly as they are."""
+    await _require_log(db, log_id)
+    child = await continue_run(db, log_id)
+    if child is None:
+        raise HTTPException(409, {"code": "not_resumable", "message": "only a run that stopped before it finished, and has a saved journal, can be continued"})
+    return child
 
 
 async def _require_log(db, log_id):
