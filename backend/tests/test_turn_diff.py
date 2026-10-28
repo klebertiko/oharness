@@ -2,7 +2,6 @@
 import hashlib
 import json
 import os
-import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -68,7 +67,8 @@ def test_large_text_file_is_listed_but_not_revertible(tmp_path):
 
 def test_secret_named_files_are_never_tracked(tmp_path):
     write(tmp_path, '.env', 'A=1')
-    assert changes(tmp_path, lambda: write(tmp_path, '.env', 'A=2')) == {}
+    result = changes(tmp_path, lambda: write(tmp_path, '.env', 'A=2'))
+    assert result == {}
 
 
 def test_symlinks_are_not_followed_or_tracked(tmp_path):
@@ -79,7 +79,8 @@ def test_symlinks_are_not_followed_or_tracked(tmp_path):
     root.mkdir()
     os.symlink(outside, root / 'link')
     os.symlink(outside / 'f.txt', root / 'file-link')
-    assert changes(root, lambda: write(outside, 'f.txt', 'changed')) == {}
+    result = changes(root, lambda: write(outside, 'f.txt', 'changed'))
+    assert result == {}
 
 
 # -- revert -------------------------------------------------------------------
@@ -272,7 +273,11 @@ def test_restoring_a_deleted_script_keeps_its_exec_bit(tmp_path):
 
 @pytest.mark.skipif(os.name == 'nt', reason='colon and backslash are not valid names on Windows')
 def test_names_revert_cannot_address_are_not_tracked(tmp_path):
-    assert changes(tmp_path, lambda: write(tmp_path, 'notes:v2.txt', 'x') and write(tmp_path, 'a\\b.txt', 'y')) == {}
+    def mutate():
+        write(tmp_path, 'notes:v2.txt', 'x')
+        write(tmp_path, 'a\\b.txt', 'y')
+    result = changes(tmp_path, mutate)
+    assert result == {}
 
 
 def test_a_failed_turn_still_lists_its_edits(env, monkeypatch):
