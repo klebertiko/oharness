@@ -19,6 +19,12 @@ describe("subagent state in the run", () => {
     expect(s.subagents.map((c) => c.state)).toEqual(["running", "cancelled"]);
     expect(s.status).not.toBe("stopped");
   });
+
+  it("settles running children when the run stops, so none is left looking live", () => {
+    let s = sse(emptyRun, "subagent_start", { child_id: "c1", parent_call_id: "k0", task: "alpha", state: "running" });
+    s = sse(s, "run_stopped", {});
+    expect(s.subagents[0].state).toBe("cancelled");
+  });
 });
 
 describe("SubagentTree", () => {
@@ -51,12 +57,15 @@ describe("SubagentTree", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
-  it("says when a cancel did not go through", async () => {
+  it("says why a cancel did not go through", async () => {
     const user = userEvent.setup();
-    vi.spyOn(subagentApi, "cancel").mockResolvedValue({ ok: false });
+    const cancel = vi.spyOn(subagentApi, "cancel").mockResolvedValue({ ok: false, reason: "finished" });
     render(<SubagentTree runId="r1" runLive status="running" subagents={children} />);
     await user.click(screen.getByRole("button", { name: "Cancel subagent alpha" }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/already finished/);
+    cancel.mockResolvedValue({ ok: false, reason: "failed" });
+    await user.click(screen.getByRole("button", { name: "Cancel subagent alpha" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/did not go through/));
   });
 
   it("offers no cancel once the run is over, and has no axe violations", async () => {

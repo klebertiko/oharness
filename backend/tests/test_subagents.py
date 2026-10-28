@@ -221,3 +221,87 @@ def test_direct_run_streams_subagent_events_and_journals_them(client, tmp_path, 
     journal = client.get(f"/execute/logs/{resp.headers['X-Execution-Id']}/events").json()
     rows = journal['events'] if isinstance(journal, dict) else journal
     assert sum(r['event'] == 'subagent_done' for r in rows) == 2
+
+
+# -- review follow-ups ---------------------------------------------------------
+def test_reused_call_ids_across_turns_do_not_cross_results_or_double_count(tmp_path):
+    adapter = Scripted([{'calls': ['first']}, {'calls': ['second']}, {'text': 'end'}])
+    b, _ = broker(tmp_path, adapter)
+
+    async def go():
+        return [e async for e in b.stream('x', adapter, CONFIG)]
+    events = asyncio.run(go())
+    # both turns used the call id "k0": the second turn's usage adds only its own child
+    totals = [e['tokens'] for e in events if e['kind'] == 'usage']
+    assert totals == sorted(totals) and totals[-1] == 5 + 5 + 5 + 11 + 11
+
+
+def test_subagents_only_turn_offers_no_workspace_tool_and_runs_none(tmp_path):
+    (tmp_path / 'README.md').write_text('private')
+    seen = {}
+
+    class Greedy(Scripted):
+        async def stream_turn(self, messages, config, tools=None):
+            seen.setdefault('tools', [t['function']['name'] for t in tools or []])
+            if len(seen) == 1 and 'asked' not in seen:
+                seen['asked'] = True
+                yield {'kind': 'tool_calls', 'calls': [{'id': 'r', 'function': {'name': 'read_file', 'arguments': '{"path": "README.md"}'}}]}
+            else:
+                yield {'kind': 'text', 'text': 'ok'}
+    adapter = Greedy([])
+    control = RunControl('only')
+    b = ToolBroker(str(tmp_path), 'ollama', control, ToolsRequest(subagents=True))
+
+    async def go():
+        return [e async for e in b.stream('x', adapter, CONFIG)]
+    events = asyncio.run(go())
+    assert seen['tools'] == ['run_subagent']
+    assert not any(e['kind'] == 'tool_result' for e in events)  # the read never ran
+    assert any(e['kind'] == 'tool_denied' for e in events)
+
+
+def test_child_cancelled_before_its_first_step_still_ends_the_run(tmp_path):
+    async def go():
+        group = SubagentGroup(RunControl('r'))
+        events = []
+
+        async def drive():
+            async for ev in group.run([('k0', 'a')], Scripted([]), CONFIG):
+                events.append(ev)
+                if ev['kind'] == 'subagent_start':
+                    group.cancel(ev['child_id'])  # the task has not taken a step yet
+        await asyncio.wait_for(drive(), 2)
+        return events, group.results
+    events, results = asyncio.run(go())
+    assert [e['state'] for e in events if e['kind'] == 'subagent_done'] == ['cancelled']
+    assert 'cancelled' in results['k0']
+
+
+def test_secrets_in_task_and_child_output_are_redacted(tmp_path):
+    secret = 'sk-' + 'B' * 30  # gitleaks:allow
+
+    class Leaky(Scripted):
+        async def stream_events(self, prompt, config):
+            yield {'kind': 'text', 'text': f'token is {secret}'}
+    task = 'x' * 190 + secret
+
+    async def go():
+        group = SubagentGroup(RunControl('r'))
+        events = [e async for e in group.run([('k0', task)], Leaky([]), CONFIG)]
+        return events, group.results
+    events, results = asyncio.run(go())
+    assert secret[:6] not in events[0]['task'] or secret not in events[0]['task']
+    assert 'sk-BBBB' not in events[0]['task'] and secret not in results['k0']
+
+
+def test_invalid_tasks_do_not_use_up_child_slots():
+    async def go():
+        group = SubagentGroup(RunControl('r'))
+        calls = [(f'bad{i}', '') for i in range(6)] + [(f'ok{i}', f't{i}') for i in range(SUBAGENT_RULES['max_children'])]
+        return [e async for e in group.run(calls, Scripted([]), CONFIG)]
+    events = asyncio.run(go())
+    assert sum(e['kind'] == 'subagent_done' and e['state'] == 'done' for e in events) == SUBAGENT_RULES['max_children']
+
+
+def test_cancel_route_tells_missing_run_from_missing_child(client):
+    assert client.post('/execute/no-run/subagents/x/cancel').json() == {'error': 'run_not_found'}

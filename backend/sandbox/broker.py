@@ -156,7 +156,8 @@ class ToolBroker:
             preset_result = tool_data(preset.name, self.last_result)
         workspace = f'\nWorkspace root (path metadata): {self.root}' if self.root else '\nNo workspace is authorized.'
         config = replace(config, system_prompt=(config.system_prompt + '\n' + TOOL_DATA_RULE + workspace).strip())
-        if not self.options.enabled or not self.capabilities['tools']['read'] or not hasattr(adapter, 'stream_turn'):
+        self.workspace_tools = bool(self.options.enabled and self.capabilities['tools']['read'])
+        if not (self.workspace_tools or self.options.subagents) or not hasattr(adapter, 'stream_turn'):
             self.provider_called = True
             if preset_result:
                 prompt += '\n' + preset_result
@@ -169,7 +170,7 @@ class ToolBroker:
         total_tokens, unsupported = 0, False
         while True:
             calls, text, turn_tokens = [], [], 0
-            tools = ([*TOOL_SCHEMAS, *([subagent_schema()] if self.options.subagents else [])]
+            tools = ([*(TOOL_SCHEMAS if self.workspace_tools else []), *([subagent_schema()] if self.options.subagents else [])]
                      if self.calls_used < 8 and not unsupported else None)
             self.provider_called = True
             try:
@@ -200,8 +201,11 @@ class ToolBroker:
             children = []
             for call in calls:
                 function = call.get('function') or {}
-                name = {'read_file': 'read', 'list_workspace': 'discover', 'run_command': 'exec',
-                        'run_subagent': 'subagent' if self.options.subagents else 'unknown'}.get(function.get('name'), 'unknown')
+                name = {'read_file': 'read', 'list_workspace': 'discover', 'run_command': 'exec'}.get(function.get('name'), 'unknown')
+                if not self.workspace_tools and name != 'unknown':
+                    name = 'unknown'  # a subagents-only turn offers no workspace tool, so none runs
+                if function.get('name') == 'run_subagent' and self.options.subagents:
+                    name = 'subagent'
                 try:
                     args = json.loads(function.get('arguments') or '{}')
                 except ValueError:
@@ -217,12 +221,15 @@ class ToolBroker:
                     content += '\nbudget exhausted'
                 messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': tool_data(name, content)})
             if children:
-                self.calls_used += len(children)  # a model that only spawns still reaches the 8-call ceiling
+                self.calls_used = min(8, self.calls_used + len(children))  # a model that only spawns still reaches the ceiling
                 group = self.control.subagents
                 async for event in group.run(children, adapter, config):
                     yield event
                 for call_id, _ in children:
-                    messages.append({'role': 'tool', 'tool_call_id': call_id,
-                                     'content': tool_data('run_subagent', group.results.get(call_id, 'subagent did not run'))})
-                total_tokens += sum(c.tokens for c in group.children.values() if c.parent_call_id in {i for i, _ in children})
+                    content = group.results.get(call_id, 'subagent did not run')
+                    if self.calls_used >= 8:
+                        content += '\nbudget exhausted'
+                    messages.append({'role': 'tool', 'tool_call_id': call_id, 'content': tool_data('run_subagent', content)})
+                total_tokens += sum(c.tokens or c.chars // 4 for c in group.round)
                 yield {'kind': 'usage', 'tokens': total_tokens}
+                yield self.budget()

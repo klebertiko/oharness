@@ -24,7 +24,7 @@ export function SubagentTree({
   subagents: Subagent[];
 }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ id: string; reason: "finished" | "failed" } | null>(null);
   if (!subagents.length) return null;
 
   const cancel = async (child: Subagent) => {
@@ -33,7 +33,7 @@ export function SubagentTree({
     setFailed(null);
     const result = await subagentApi.cancel(runId, child.id);
     setBusy(null);
-    if (!result.ok) setFailed(child.id);
+    if (!result.ok) setFailed({ id: child.id, reason: result.reason ?? "failed" });
   };
 
   return (
@@ -55,9 +55,11 @@ export function SubagentTree({
                 Cancel
               </Button>
             )}
-            {failed === child.id && (
+            {failed?.id === child.id && child.state === "running" && (
               <span role="alert" className="t-meta text-fault-text">
-                This subagent already finished, so nothing was cancelled.
+                {failed.reason === "finished"
+                  ? "This subagent already finished, so nothing was cancelled."
+                  : "The cancel did not go through. Try again."}
               </span>
             )}
           </li>

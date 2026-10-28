@@ -42,6 +42,7 @@ class Child:
     chars: int = 0
     tokens: int = 0
     cancel_requested: bool = False
+    error: str | None = None
     task_handle: asyncio.Task | None = field(default=None, repr=False)
 
 
@@ -50,6 +51,7 @@ class SubagentGroup:
         self.control = control
         self.children: dict[str, Child] = {}
         self.results: dict[str, str] = {}
+        self.round: list = []
 
     def register(self, parent_call_id: str, task: str) -> Child:
         child = Child(id=str(uuid.uuid4()), parent_call_id=parent_call_id, task=task)
@@ -75,23 +77,30 @@ class SubagentGroup:
             self.cancel(child_id)
 
     async def run(self, calls, adapter, config):
-        """Start one child per `(parent_call_id, task)` and yield events until every child is over."""
+        """Start one child per `(parent_call_id, task)` and yield events until every child is over.
+
+        `self.results` (call id -> text for the model) and `self.round` (the children of this call)
+        describe this call only, so a provider that reuses call ids across turns cannot cross them.
+        """
+        self.results, self.round = {}, []
         queue: asyncio.Queue = asyncio.Queue()
         pending = 0
         for call_id, task in calls:
-            if len(self.children) >= SUBAGENT_RULES['max_children']:
+            if sum(1 for c in self.children.values() if c.task_handle is not None) >= SUBAGENT_RULES['max_children']:
                 self.results[call_id] = 'subagent limit reached for this run'
                 continue
             child = self.register(call_id, task if isinstance(task, str) else '')
+            self.round.append(child)
             yield {'kind': 'subagent_start', 'child_id': child.id, 'parent_call_id': call_id,
-                   'task': redact(child.task[:200])[0], 'state': RUNNING}
+                   'task': redact(child.task)[0][:200], 'state': RUNNING}
             if not isinstance(task, str) or not task.strip() or len(task) > SUBAGENT_RULES['task_max_chars']:
                 child.state = ERROR
                 self.results[call_id] = 'subagent task is empty or too long'
-                yield {'kind': 'subagent_done', 'child_id': child.id, 'parent_call_id': call_id,
-                       'state': ERROR, 'chars': 0, 'tokens': 0, 'error': 'invalid_task'}
+                yield self._done_event(child, 'invalid_task')
                 continue
             child.task_handle = asyncio.create_task(self._child(child, adapter, config, queue))
+            # The callback fires even when the task is cancelled before its body ever ran.
+            child.task_handle.add_done_callback(lambda _t, c=child: queue.put_nowait({'kind': '_over', 'child': c}))
             pending += 1
         stopper = asyncio.ensure_future(self.control.stop.wait())
         stopping = False
@@ -108,27 +117,44 @@ class SubagentGroup:
                         self._cancel_all()
                         continue
                     event = getter.result()
-                yield event
-                if event['kind'] == 'subagent_done':
-                    pending -= 1
+                if event['kind'] != '_over':
+                    yield event
+                    continue
+                pending -= 1
+                child = event['child']
+                if child.state == RUNNING or (child.state == CANCELLED and child.parent_call_id not in self.results):
+                    child.state = CANCELLED
+                    self.results[child.parent_call_id] = 'subagent cancelled by the user'
+                yield self._done_event(child, child.error)
         finally:
             stopper.cancel()
-            handles = [c.task_handle for c in self.children.values() if c.task_handle is not None]
+            handles = [c.task_handle for c in self.round if c.task_handle is not None]
             for handle in handles:
                 handle.cancel()
             await asyncio.gather(*handles, return_exceptions=True)
 
+    @staticmethod
+    def _done_event(child, error=None):
+        done = {'kind': 'subagent_done', 'child_id': child.id, 'parent_call_id': child.parent_call_id,
+                'state': child.state, 'chars': child.chars, 'tokens': child.tokens or child.chars // 4}
+        if error:
+            done['error'] = error
+        return done
+
     async def _child(self, child: Child, adapter, config, queue):
-        parts, error = [], None
+        parts, kept = [], 0
         cfg = replace(config, system_prompt=SUBAGENT_PROMPT)
-        step = SUBAGENT_RULES['progress_step_chars']
+        step, cap = SUBAGENT_RULES['progress_step_chars'], SUBAGENT_RULES['result_max_chars']
 
         async def consume():
+            nonlocal kept
             reported = 0
             async for ev in adapter.stream_events(child.task, cfg):
                 if ev.get('kind') == 'text':
-                    parts.append(ev['text'])
                     child.chars += len(ev['text'])
+                    if kept < cap:  # a runaway child cannot grow memory past the result cap
+                        parts.append(ev['text'][:cap - kept])
+                        kept += len(parts[-1])
                     if child.chars - reported >= step:
                         reported = child.chars
                         await queue.put({'kind': 'subagent_progress', 'child_id': child.id, 'chars': child.chars})
@@ -142,18 +168,13 @@ class SubagentGroup:
                 raise
             child.state = CANCELLED
         except asyncio.TimeoutError:
-            child.state, error = ERROR, 'timeout'
+            child.state, child.error = ERROR, 'timeout'
         except Exception:  # noqa: BLE001 -- a failing child must not take the parent down
-            child.state, error = ERROR, 'provider_error'
+            child.state, child.error = ERROR, 'provider_error'
         if child.state == CANCELLED:
             self.results[child.parent_call_id] = 'subagent cancelled by the user'
-        elif error:
-            self.results[child.parent_call_id] = f'subagent failed: {error}'
+        elif child.error:
+            self.results[child.parent_call_id] = f'subagent failed: {child.error}'
         else:
-            self.results[child.parent_call_id] = ''.join(parts)[:SUBAGENT_RULES['result_max_chars']]
-        child.tokens = child.tokens or child.chars // 4
-        done = {'kind': 'subagent_done', 'child_id': child.id, 'parent_call_id': child.parent_call_id,
-                'state': child.state, 'chars': child.chars, 'tokens': child.tokens}
-        if error:
-            done['error'] = error
-        await queue.put(done)
+            # Same redaction the parent applies to every other tool result.
+            self.results[child.parent_call_id] = redact(''.join(parts))[0]

@@ -267,7 +267,7 @@ export function AgentStage() {
       providerId: provider.id,
       model: !enabled ? selectedModel || undefined : undefined,
       tools: useSubagentStore.getState().enabled && !enabled
-        ? { enabled: true, subagents: true, thread_id: threadId, permission_mode: permission.mode }
+        ? { subagents: true, thread_id: threadId, permission_mode: permission.mode }
         : undefined,
     });
   };

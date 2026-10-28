@@ -1,5 +1,5 @@
 import type { NodeType } from "@/lib/types";
-import type { Block, FailoverAttempt, RunState, Segment, ToolCall } from "./types";
+import type { Block, FailoverAttempt, RunState, Segment, Subagent, ToolCall } from "./types";
 
 export const emptyRun: RunState = {
   runId: null,
@@ -117,6 +117,11 @@ function parseToolArgs(raw: unknown): { argv?: string[]; path?: string } {
   if (Array.isArray(o.argv)) out.argv = o.argv.map(String);
   if (typeof o.path === "string") out.path = o.path;
   return out;
+}
+
+/** A run that ends leaves no child running: whatever did not report is shown as cancelled. */
+function settleSubagents(children: Subagent[]): Subagent[] {
+  return children.map((c) => (c.state === "running" ? { ...c, state: "cancelled" } : c));
 }
 
 function patchTool(state: RunState, nodeId: string, callId: string, fn: (call: ToolCall) => ToolCall): RunState {
@@ -474,12 +479,13 @@ export function runReducer(state: RunState, action: Action): RunState {
     }
 
     case "run_stopped":
-      return { ...state, status: "stopped" };
+      return { ...state, status: "stopped", subagents: settleSubagents(state.subagents) };
 
     case "harness_done": {
       const status = String(action.data.status ?? "complete");
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status:
           status === "complete" ? "complete" : status === "stopped" ? "stopped" : "error",
         endedAt: Date.now(),
@@ -499,6 +505,7 @@ export function runReducer(state: RunState, action: Action): RunState {
     case "error":
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status: "error",
         endedAt: Date.now(),
         notices: [...state.notices, String(action.data.error ?? "Stream error")],
