@@ -29,11 +29,13 @@ textarea{width:100%;background:var(--sub-200);color:var(--ink);border:1px solid 
 <p class="note" id="note"></p>
 <!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
 <!-- nosemgrep: html.security.audit.insecure-document-method, opengrep-rules.html.security.audit.insecure-document-method -->
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: opengrep-rules.html.security.audit.insecure-document-method -->
 <script>
 const nodes=[["Researcher","Agent","40px","60px"],["tdd","Skill","40px","170px"],["Brief check","Gate","260px","60px"],["Merge approval","HITL","480px","60px"]];
 const ghost=[["Reviewer","Agent","480px","170px"]];
 let alt="A",stage=0;const stages=["Describe","Nilo is drafting","Review proposal","Applied · Keep / Undo"];
-function canvas(){const g=stage>=2&&stage<3||stage==2;let h=nodes.map(n=>`<div class="node" style="left:${n[2]};top:${n[3]}" tabindex="0"><b>${n[0]}</b><small>${n[1]}</small></div>`).join("");
+function canvas(){let h=nodes.map(n=>`<div class="node" style="left:${n[2]};top:${n[3]}" tabindex="0"><b>${n[0]}</b><small>${n[1]}</small></div>`).join("");
  if(stage>=2)h+=ghost.map(n=>`<div class="node ${stage==2?"ghost":""}" style="left:${n[2]};top:${n[3]}" aria-label="${stage==2?"Proposed: ":""}${n[1]} ${n[0]}" tabindex="0"><b>${n[0]}</b><small>${stage==2?"proposed · "+n[1]:n[1]}</small></div>`).join("");
  return `<div class="canvas">${h}${alt=="B"?overlay():""}</div>`}
 function review(){return `<div class="card" role="region" aria-label="Proposed changes"><b>Proposed changes · 2</b><br><label><input type="checkbox" checked> + Agent “Reviewer”</label><br><label><input type="checkbox" checked> → Brief check pass → Reviewer</label><div style="margin-top:6px;display:flex;gap:6px"><button>Apply 2 changes</button><button>Discard</button><button>Refine…</button></div></div>`}
