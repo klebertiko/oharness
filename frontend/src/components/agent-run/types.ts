@@ -192,6 +192,8 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
+  proposedPlan?: { planId: string; text: string };
   /** Children this run started (`subagent_*` events), in start order. */
   subagents: Subagent[];
   /** Set when the run reached its token ceiling (`budget_exceeded`). */

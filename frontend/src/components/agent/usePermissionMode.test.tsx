@@ -105,3 +105,13 @@ it("adopting falls back to ask when the backend cannot store the chosen mode", a
   expect(adopted).toBe("ask");
   expect(usePermissionStore.getState().modeFor("t9")).toBe("ask");
 });
+
+it("says why when the sidecar refuses to leave Plan mode while a plan waits, and keeps Plan", async () => {
+  usePermissionStore.getState().setMode("t1", "plan");
+  api.getPermission.mockResolvedValue({ thread_id: "t1", mode: "plan" });
+  api.setPermission.mockRejectedValue(Object.assign(new Error("plan_not_approved (409)"), { status: 409, code: "plan_not_approved" }));
+  const { result } = renderHook(() => usePermissionMode("t1"));
+  await act(async () => { await result.current.setMode("ask"); });
+  expect(result.current.mode).toBe("plan");
+  expect(result.current.error).toMatch(/plan is waiting for approval/i);
+});
