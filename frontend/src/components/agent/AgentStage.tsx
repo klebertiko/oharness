@@ -13,6 +13,8 @@ import { useWorkspaceTrust } from "@/components/agent/useWorkspaceTrust";
 import { policyRefusals } from "@/components/agent/policyRefusals";
 import { PlanArtifactCard } from "@/components/agent/PlanArtifactCard";
 import { usePlanArtifact } from "@/components/agent/usePlanArtifact";
+import { QueuedMessages } from "@/components/agent/QueuedMessages";
+import { useMessageQueueStore } from "@/store/messageQueueStore";
 import { PERMISSION_LABEL, isPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
@@ -220,13 +222,19 @@ export function AgentStage() {
   }, [messages.length, live, run.status, liveAnswer, following]);
 
   const slashPreset = presetFromSlashText(instruction);
-  const canStart =
-    !live &&
+  // A message can be composed (sent now, or queued behind the running turn) when there is a provider and text.
+  const canCompose =
     chatHarness.canSend &&
     !!provider &&
     instruction.trim().length > 0 &&
     !(slashPreset && "warning" in slashPreset) &&
     (!enabled || graph.nodes.length > 0 || Boolean(slashPreset && "preset" in slashPreset));
+  const canStart = !live && canCompose;
+  // Commands (`/exec`, `/read`) wait for the run; only a plain message can be queued.
+  const canQueue = live && canCompose && !slashPreset;
+  const queueKey = activeThreadId ?? "new";
+  const queued = useMessageQueueStore((state) => state.byThread[queueKey]);
+  const queue = useMemo(() => queued ?? [], [queued]);
 
   /** A `/` Tool was chosen: one run whose first act is the preset (contract §2.4).
       `exec` parks on the approval gate; the user sees the card before anything runs. */
@@ -254,13 +262,18 @@ export function AgentStage() {
   };
 
   const onStart = () => {
+    if (canQueue) {
+      // A turn is running: the message waits, visibly, and runs after it.
+      if (useMessageQueueStore.getState().enqueue(queueKey, instruction)) setInstruction("");
+      return;
+    }
     if (!canStart || !provider) return;
     if (slashPreset && "preset" in slashPreset) { void onPreset(slashPreset.preset); return; }
     send(instruction.trim());
   };
 
   /** Send one turn. `shown` is what the chat records when it differs from what the provider receives. */
-  const send = (text: string, shown = text, modeOverride?: PermissionMode) => {
+  const send = (text: string, shown = text, modeOverride?: PermissionMode, keepDraft = false) => {
     if (!provider) return;
     // The thread is born from the first message, not from a "New chat" click,
     // so the list never fills with empty "New chat" rows.
@@ -271,7 +284,7 @@ export function AgentStage() {
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: shown });
     runOwner.current = { threadId, instruction: shown, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
-    setInstruction("");
+    if (!keepDraft) setInstruction("");
     savedRunFor.current = null;
     // In Plan mode the turn names its thread and mode, so the sidecar can end it in a plan that waits for approval.
     const mode = modeOverride ?? permission.mode;
@@ -301,6 +314,26 @@ export function AgentStage() {
     if (text === null) return;
     send(`Carry out this approved plan:\n\n${text}`, "Plan approved. Carry it out.", "ask");
   };
+
+  /** Run the next queued message of this chat. A draft being typed is not touched. */
+  const sendNextQueued = () => {
+    if (!activeThreadId) return;
+    const next = useMessageQueueStore.getState().takeNext(activeThreadId);
+    if (next) send(next.text, next.text, undefined, true);
+  };
+
+  // The turn finished normally and its answer is in the chat: the next queued message starts. A stopped or failed
+  // turn pauses the queue instead (QueuedMessages offers Send next / Clear queue).
+  const drainedFor = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sendNextQueued is rebuilt every render; the guards below make it run once per finished turn.
+  useEffect(() => {
+    if (live || run.status !== "complete" || !run.runId || !activeThreadId || ownerThreadId !== activeThreadId) return;
+    if (drainedFor.current === run.runId || !(useMessageQueueStore.getState().byThread[activeThreadId]?.length)) return;
+    if (savedRunFor.current !== run.runId && summarizeRunOutput(run)) return; // wait for the answer to be saved
+    drainedFor.current = run.runId;
+    sendNextQueued();
+  }, [live, run, activeThreadId, ownerThreadId, queue]);
+  const queuePaused = !live && runInCurrentChat && (run.status === "error" || run.status === "stopped");
 
   const gateSeg = run.plan?.find((s) => s.state === "gate" && s.gate);
   const suggestions = [
@@ -479,6 +512,8 @@ export function AgentStage() {
               </Notice>
             </div>
           )}
+          <QueuedMessages items={queue} paused={queuePaused} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
+            onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
           <ChatComposer
             key={activeThreadId ?? "no-thread"}
             inputRef={composerRef}
@@ -522,7 +557,11 @@ export function AgentStage() {
               </span>
             )}
             {live ? (
-              <Button iconOnly size="lg" onClick={stop} aria-label="Stop run" title="Stop run" icon={<Square size={11} strokeWidth={2} fill="currentColor" aria-hidden />} />
+              <>
+                <Button size="lg" disabled={!canQueue} onClick={onStart} aria-label="Queue message"
+                  title={canQueue ? "Queue this message to run after the current turn" : "Type a message to queue it"}>Queue</Button>
+                <Button iconOnly size="lg" onClick={stop} aria-label="Stop run" title="Stop run" icon={<Square size={11} strokeWidth={2} fill="currentColor" aria-hidden />} />
+              </>
             ) : (
               <Button
                 iconOnly
