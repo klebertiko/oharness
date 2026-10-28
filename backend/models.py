@@ -125,6 +125,20 @@ class ChatPermission(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class ChatPlan(Base):
+    """The plan artifact a Plan-mode run ends in (`proposed` | `approved` | `discarded`).
+
+    One conversation has at most one `proposed` plan; while it waits, the conversation cannot leave Plan mode
+    (`sandbox.plan_store`). Only an authenticated client can approve or discard; a model's tool call cannot."""
+    __tablename__ = "chat_plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    thread_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class WorkspaceTrust(Base):
     """Per-workspace trust (false unless a person said so through the UI).
 
