@@ -32,22 +32,29 @@ class RunWorktree:
         self.service = service or WorkspaceService()
         self.workspace_id: str | None = None
         self.path: str | None = None
+        self.closed_id: str | None = None  # set once the worktree is really gone
 
     async def open(self) -> str:
         try:
-            info = await anyio.to_thread.run_sync(self.service.create, self.repo, "HEAD")
+            with anyio.CancelScope(shield=True):  # a cancellation must not leave a worktree nobody knows about: record it, then let close() remove it
+                info = await anyio.to_thread.run_sync(self.service.create, self.repo, "HEAD")
+                self.workspace_id, self.path = info["id"], info["path"]
         except WorkspaceError as exc:
             raise RuntimeError(f"could not make a worktree for this run: {exc.message}") from exc
-        self.workspace_id, self.path = info["id"], info["path"]
         return self.path
 
-    async def close(self) -> None:
+    async def close(self) -> str | None:
+        """Remove the worktree. Returns the rescue ref that kept the run's changes, if there were any."""
         if self.workspace_id is None:
-            return
+            return None
         workspace_id, self.workspace_id = self.workspace_id, None
         with anyio.CancelScope(shield=True):  # the run may be ending because its client went away
             try:
                 report = await anyio.to_thread.run_sync(self.service.removal_check, self.repo, workspace_id)
-                await anyio.to_thread.run_sync(self.service.remove, self.repo, workspace_id, report["confirmation_token"])
+                removed = await anyio.to_thread.run_sync(self.service.remove, self.repo, workspace_id, report["confirmation_token"])
             except Exception as exc:  # noqa: BLE001 - the run's outcome must not depend on the cleanup
                 log.warning("run worktree %s was not removed: %s", workspace_id, exc)
+                return None
+            self.closed_id = workspace_id
+            return (removed.get("rescue") or {}).get("ref")
+        return None

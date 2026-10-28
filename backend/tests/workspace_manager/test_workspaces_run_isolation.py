@@ -71,6 +71,11 @@ def test_two_simultaneous_runs_write_to_distinct_worktrees_and_leave_the_checkou
         assert len(worktrees(repo)) == 1  # ending the runs removed both worktrees
         assert not any(Path(p).exists() for p in (a, b))
         assert repo.out("status", "--porcelain").strip() == ""
+        for response in (first, second):  # what the run wrote is kept on a rescue ref, and the journal says which
+            events = client.get(f"/execute/logs/{response.headers['X-Execution-Id']}/events?limit=50").json()["events"]
+            closed = next(e for e in events if e["event"] == "worktree_closed")["data"]
+            assert closed["rescue_ref"].startswith("refs/openharness/rescue/")
+            assert "path" not in closed and all(e["event"] != "worktree_ready" or "path" not in e["data"] for e in events)
 
 
 def test_a_run_that_is_cut_off_still_removes_its_worktree(repo, oh_env, engine_that_writes):

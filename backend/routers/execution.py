@@ -354,7 +354,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                 _first_provider_ids(graph),
                 connections=connections,
                 secrets_store=secrets_store,
-                cwd=cwd,
+                cwd=None if isolation is not None else cwd,  # a run asked to be isolated never lets the intake turn touch the main checkout
                 # SEC P2-5, 2026-09-15: this call already spends real tokens
                 # regardless of which way routing decides, and it used to run
                 # completely outside the budget gate — the most common path
@@ -398,17 +398,6 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         events: list[dict] = []
         run_cwd = cwd
         try:
-            if isolation is not None:
-                try:
-                    run_cwd = await isolation.open()
-                except RuntimeError as exc:  # the manager's own refusal, already scrubbed: shown as is rather than as a provider failure
-                    fail_evt = {"event": "error", "data": {"error": str(exc)}}
-                    events.append(fail_evt)
-                    yield _sse(fail_evt["event"], fail_evt["data"])
-                    return
-                ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
-                events.append(ready_evt)
-                yield _sse(ready_evt["event"], ready_evt["data"])
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
                 events.append(warn_evt)
@@ -424,6 +413,20 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                         status = evt["data"]["status"]
                     yield _sse(evt["event"], evt["data"])
             else:
+                if isolation is not None:  # only a run that really executes the harness gets a worktree
+                    try:
+                        run_cwd = await isolation.open()
+                    except RuntimeError as exc:  # the manager's own refusal, already scrubbed: shown as is rather than as a provider failure
+                        for evt in ({"event": "error", "data": {"error": str(exc)}},
+                                    {"event": "harness_done", "data": {"status": "error", "total_tokens": 0, "tokens_estimated": False,
+                                                                       "elapsed_ms": 0, "nodes_run": 0}}):
+                            events.append(evt)
+                            yield _sse(evt["event"], evt["data"])
+                        status = "error"
+                        return
+                    ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
+                    events.append(ready_evt)
+                    yield _sse(ready_evt["event"], ready_evt["data"])
                 async for chunk in execute_harness(
                     graph,
                     execution_mode=body.mode,
@@ -459,9 +462,13 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
             RUNS.pop(run_id, None)
             # A fresh session: the request-scoped one is torn down by its
             # dependency and cannot be relied on inside a streaming generator.
-            await writer.finish(status)
-            if isolation is not None:
-                await isolation.close()
+            try:
+                await writer.finish(status)
+            finally:  # the worktree goes whether or not the journal write succeeded
+                if isolation is not None:
+                    rescue = await isolation.close()
+                    if isolation.closed_id is not None:
+                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": rescue}})
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
