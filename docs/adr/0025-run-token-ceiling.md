@@ -1,4 +1,4 @@
-# ADR 0009 — Run token ceiling and compaction events
+# ADR 0025 — Run token ceiling and compaction events
 
 Status: accepted (#164)
 
