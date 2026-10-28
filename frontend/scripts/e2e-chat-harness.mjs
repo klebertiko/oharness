@@ -106,7 +106,7 @@ for (const theme of ["dark", "light"]) {
     // 3. The harness is deleted: sending is blocked, nothing is swapped silently.
     await page.evaluate(() => localStorage.setItem("oh.harnessLibrary", JSON.stringify({ imports: [] })));
     await page.reload({ waitUntil: "networkidle" });
-    await page.getByRole("alert").filter({ hasText: /no longer available/ }).waitFor();
+    await page.getByRole("alert").filter({ hasText: /isn.t available/ }).waitFor();
     await composer().fill("Will this send?");
     assert.ok(await page.getByRole("button", { name: "Send message" }).isDisabled(), "send blocked");
     await axe(page, label("harness gone"));

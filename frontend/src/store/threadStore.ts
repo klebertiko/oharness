@@ -35,9 +35,6 @@ export type ThreadMessage = {
   harness?: ThreadHarness;
 };
 
-const sameBinding = (a: ThreadHarness | undefined, b: ThreadHarness) =>
-  !!a && a.kind === b.kind && (a.kind === "none" || (b.kind === "harness" && a.id === b.id && a.name === b.name));
-
 export const THREADS_STORAGE_KEY = "oh.threads.v1";
 
 export const DEFAULT_THREAD_TITLE = "New chat";
@@ -97,7 +94,8 @@ export const useThreadStore = create<ThreadState>()(
         const previous = from ?? thread.harness;
         if (previous && sameHarness(previous, harness)) {
           // Same harness: bind the chat (and refresh a renamed one) without saying anything.
-          if (!sameBinding(thread.harness, harness)) {
+          const current = thread.harness;
+          if (!current || (current.kind === "harness" && harness.kind === "harness" && current.name !== harness.name)) {
             set({ threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness } : t)) });
           }
           return;
@@ -105,7 +103,7 @@ export const useThreadStore = create<ThreadState>()(
         const now = Date.now();
         const hasMessages = (get().messagesByThread[threadId] ?? []).length > 0;
         const marker: ThreadMessage[] = hasMessages
-          ? [{ id: crypto.randomUUID(), role: "system", content: switchNotice(previous, harness), createdAt: now, harness }]
+          ? [{ id: crypto.randomUUID(), role: "system", content: switchNotice(harness), createdAt: now, harness }]
           : [];
         set({
           threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness, updatedAt: hasMessages ? now : t.updatedAt } : t)),

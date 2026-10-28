@@ -31,7 +31,7 @@ describe("chat harness binding", () => {
   });
 
   it("says when a change takes effect, in plain words", () => {
-    expect(switchNotice(NO_HARNESS, agile)).toBe("Harness changed to Agile Harness. It applies from your next message; earlier replies stay as they were.");
-    expect(switchNotice(agile, NO_HARNESS)).toBe("Harness changed to No harness. It applies from your next message; earlier replies stay as they were.");
+    expect(switchNotice(agile)).toBe("Harness changed to Agile Harness. It applies from your next message; earlier replies stay as they were.");
+    expect(switchNotice(NO_HARNESS)).toBe("Harness changed to No harness. It applies from your next message; earlier replies stay as they were.");
   });
 });

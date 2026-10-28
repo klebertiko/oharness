@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   HTMLElement.prototype.scrollIntoView = vi.fn();
   useThreadStore.setState({ threads: [], activeThreadId: null, messagesByThread: {} });
-  useHarnessLibraryStore.setState({ entries: [{ id: "agile", name: "Agile Harness", isDefault: true, bundle: agile as never, addedAt: 0 }], hydrated: true });
+  useHarnessLibraryStore.setState({ entries: [{ id: "agile", name: "Agile Harness", isDefault: true, bundle: agile as never, addedAt: 0 }], hydrated: true, failed: false } as never);
   useHarnessSessionStore.setState({ hydrated: true, enabled: true, activeBundle: agile as never });
   useProviderStore.setState({ connections: [connection] });
   useChatProviderStore.setState({ chosenId: "local" });
@@ -62,7 +62,7 @@ it("a harness that is gone blocks sending, says so, and offers to continue witho
   render(<AgentStage />);
   fireEvent.change(input(), { target: { value: "Hello" } });
   expect(sendButton().disabled).toBe(true);
-  expect(screen.getByRole("alert").textContent).toMatch(/Retired Harness.*no longer available/);
+  expect(screen.getByRole("alert").textContent).toMatch(/Retired Harness isn.t available/);
   fireEvent.click(screen.getByRole("button", { name: "Continue without a harness" }));
   expect(useThreadStore.getState().threads[0].harness).toEqual(NO_HARNESS);
   expect(sendButton().disabled).toBe(false);
@@ -78,4 +78,13 @@ it("shows the harness change as a quiet line in the transcript", () => {
   const note = screen.getByRole("separator", { name: /Harness changed to Agile Harness/ });
   expect(note).toBeTruthy();
   expect(vi.mocked(startDirectRun)).not.toHaveBeenCalled();
+});
+
+it("a chat from before the setting existed is bound to what it runs with on the next send", () => {
+  const id = useThreadStore.getState().createThread("Legacy");
+  expect(useThreadStore.getState().threads[0].harness).toBeUndefined();
+  render(<AgentStage />);
+  send();
+  expect(useThreadStore.getState().threads.find((t) => t.id === id)?.harness).toEqual({ kind: "harness", id: "agile", name: "Agile Harness" });
+  expect(useThreadStore.getState().messagesFor(id).some((m) => m.role === "system")).toBe(false);
 });

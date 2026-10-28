@@ -36,5 +36,5 @@ export const sameHarness = (a: ThreadHarness, b: ThreadHarness) =>
 
 export const harnessLabel = (h: ThreadHarness) => (h.kind === "none" ? "No harness" : h.name);
 
-export const switchNotice = (_from: ThreadHarness | undefined, to: ThreadHarness) =>
+export const switchNotice = (to: ThreadHarness) =>
   `Harness changed to ${harnessLabel(to)}. It applies from your next message; earlier replies stay as they were.`;

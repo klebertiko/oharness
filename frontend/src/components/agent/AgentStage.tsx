@@ -48,7 +48,7 @@ export function AgentStage() {
   const hydrated = useHarnessSessionStore((s) => s.hydrated);
   const hydrate = useHarnessSessionStore((s) => s.hydrate);
 
-  const chatHarness = useChatHarness();
+  const chatHarness = useChatHarness(true);
   const activeThreadId = useThreadStore((s) => s.activeThreadId);
   const createThread = useThreadStore((s) => s.createThread);
   const appendMessage = useThreadStore((s) => s.appendMessage);
@@ -252,6 +252,8 @@ export function AgentStage() {
     // so the list never fills with empty "New chat" rows.
     setFollowing(true);
     const threadId = activeThreadId ?? createThread(text.slice(0, 60), chatHarness.binding);
+    // A chat from before the setting existed takes the harness it is about to run with.
+    if (activeThreadId) useThreadStore.getState().setThreadHarness(activeThreadId, chatHarness.binding, chatHarness.binding);
     if (!activeThreadId) void permission.adopt(threadId);
     appendMessage(threadId, { role: "user", content: text });
     runOwner.current = { threadId, instruction: text, providerLabel: !enabled ? provider.label : undefined, harness: chatHarness.binding };
@@ -431,7 +433,7 @@ export function AgentStage() {
           {chatHarness.status.state === "missing" && (
             <div className="px-3 pb-2">
               <Notice tone="fault" action={<Button size="sm" onClick={() => chatHarness.choose(NO_HARNESS)}>Continue without a harness</Button>}>
-                {chatHarness.status.name} is no longer available. Choose another harness from the list below, or continue without one.
+                {chatHarness.status.name} isn't available. It may have been deleted, or the list of harnesses couldn't load. Choose another harness, or continue without one.
               </Notice>
             </div>
           )}
