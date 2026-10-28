@@ -39,7 +39,7 @@ export function summarizeRunOutput(run: RunState): string {
 
   if (texts.length === 0) {
     if (run.status === "error") return "Run failed.";
-    if (run.status === "stopped") return "Run stopped.";
+    if (run.status === "stopped") return run.budget ? "Run stopped at the token ceiling." : "Run stopped.";
     if (run.status === "complete") return "The run finished without a text answer.";
     return "";
   }

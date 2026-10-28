@@ -10,8 +10,11 @@ from routers.harnesses import router as harnesses_router
 from routers.execution import router as execution_router
 from routers.providers import router as providers_router
 from routers.cowork import router as cowork_router
+from routers.workspaces import router as workspaces_router
 from routers.usage import router as usage_router
 from routers.chat_tools import router as chat_tools_router
+from routers.subagents import router as subagents_router
+from routers.turn_diff import router as turn_diff_router
 from routers.studio_copilot import router as studio_copilot_router
 from routers.studio_assist import router as studio_assist_router
 from secret_store.factory import build_secrets_store
@@ -106,8 +109,11 @@ app.include_router(execution_router)
 app.include_router(bundles_router)
 app.include_router(providers_router)
 app.include_router(cowork_router)
+app.include_router(workspaces_router)
 app.include_router(usage_router)
 app.include_router(chat_tools_router)
+app.include_router(subagents_router)
+app.include_router(turn_diff_router)
 app.include_router(studio_copilot_router)
 app.include_router(studio_assist_router)
 

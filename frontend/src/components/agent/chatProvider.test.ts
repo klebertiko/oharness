@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chatProviderOptions, missingProviderAction, pickChatProvider } from "./chatProvider";
+import { chatProviderOptions, pickChatProvider } from "./chatProvider";
+import { missingProviderAction } from "@/components/providers/composerAction";
 import type { Connection } from "@/components/providers/providerStore";
 
 const conn = (over: Partial<Connection>): Connection =>
@@ -112,11 +113,11 @@ describe("missingProviderAction", () => {
   });
 
   it("names the paste-a-key action for an api-key credential, never a bare 'Unavailable'", () => {
-    expect(missingProviderAction([keyed], "or")).toEqual({ text: "Paste an OpenRouter key to send", id: "or" });
+    expect(missingProviderAction([keyed], "or")).toMatchObject({ text: "Paste an OpenRouter key", id: "or" });
   });
 
   it("names the on/off-switch action for a CLI or keyless credential", () => {
-    expect(missingProviderAction([keyless], "an")).toEqual({ text: "Turn on Anthropic to send", id: "an" });
+    expect(missingProviderAction([keyless], "an")).toMatchObject({ text: "Turn on · Anthropic", id: "an" });
   });
 
   it("falls back to a generic prompt when there is nothing concrete to expand", () => {

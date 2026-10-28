@@ -5,7 +5,7 @@ diagnosed, backend-only, no overlap with any concurrent agent's active files —
 `git status` mtimes and a coordination check with `automate-gauntlet-loop` before editing).
 
 Real user bug report, reproduced in a screenshot
-(`C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-17 042225.png`): the composer's
+(`C:\Users\<user>\Pictures\Screenshots\Captura de tela 2026-09-17 042225.png`): the composer's
 toolbar clearly shows "📁 Development" as the selected workspace folder. The user asks "em que
 folder estamos agora?" (what folder are we in now?) and OHarness replies "Não tenho
 visibilidade do diretório de trabalho daqui. Se quiser, roda `pwd` no terminal e me diz..." (I

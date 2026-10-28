@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   chatProviderOptions,
   chatProviderStatus,
-  missingProviderAction,
   pickChatProvider,
   providerReadiness,
 } from "./chatProvider";
+import { missingProviderAction } from "@/components/providers/composerAction";
 import type { Connection } from "@/components/providers/providerStore";
 
 /* providers-recovery: readiness must describe what a run will actually do.
@@ -47,8 +47,8 @@ describe("providerReadiness — model requirement (F7)", () => {
   });
 
   it("the composer names the missing model instead of letting the run fail", () => {
-    expect(missingProviderAction([ollama], "ollama-local")).toEqual({
-      text: "Choose a model for Ollama local to send",
+    expect(missingProviderAction([ollama], "ollama-local")).toMatchObject({
+      text: "Choose a model · Ollama local",
       id: "ollama-local",
     });
   });

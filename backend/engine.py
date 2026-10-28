@@ -62,6 +62,7 @@ class RunControl:
         self.gate = asyncio.Event()
         self.tool_approval = ToolApproval(self.gate)
         self.tool_mode = False
+        self.subagents = None  # sandbox.subagents.SubagentGroup when the run may start children
         self.decision: dict | None = None
         self.inbox: list[str] = []
         self.phase: str = "starting"

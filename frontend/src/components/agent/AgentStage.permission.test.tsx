@@ -14,12 +14,12 @@ vi.mock("@/components/agent-run/runClient", () => ({
   sendControl: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/chatToolsApi", () => ({
-  chatToolsApi: { getPermission: vi.fn(), setPermission: vi.fn(), getTrust: vi.fn(), setTrust: vi.fn() },
+  chatToolsApi: { getPermission: vi.fn(), setPermission: vi.fn(), getTrust: vi.fn(), setTrust: vi.fn(), getPlan: vi.fn(async () => ({ thread_id: "x", plan: null })) },
 }));
 vi.mock("@/components/agent/chatProvider", () => ({
   pickChatProvider: () => ({ id: "ollama", label: "Ollama", mode: "local", chosen: true }),
-  missingProviderAction: () => null,
 }));
+vi.mock("@/components/providers/composerAction", () => ({ missingProviderAction: () => null, performInPlace: vi.fn() }));
 vi.mock("@/components/agent/useChatTools", () => ({
   useChatTools: () => ({
     workspace: { root: "D:\w", name: "w" }, items: [], error: null, loading: false, readSkill: vi.fn(),

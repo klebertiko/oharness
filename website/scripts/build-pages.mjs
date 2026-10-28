@@ -18,7 +18,7 @@ const files = [
   'en/index.html', 'en/model.html', 'en/manifesto.html', 'en/MANIFESTO.md', 'en/examples/hello.ohm',
   'assets/mark.svg', 'assets/nilo.svg', 'assets/nilo-poses.json',
   'assets/sora-latin.woff2', 'assets/plex-mono-latin.woff2', 'assets/OFL-Sora.txt', 'assets/OFL-Plex.txt',
-  ...['studio','chats'].flatMap(name => ['light','dark'].map(theme => `assets/${name}-${theme}.webp`)),
+  ...['chats','studio','canvas','run','providers'].flatMap(name => ['light','dark'].map(theme => `assets/${name}-${theme}.webp`)),
 ];
 for (const file of files) {
   const destination = resolve(output, file);
@@ -28,8 +28,8 @@ for (const file of files) {
 await writeFile(resolve(output, '.nojekyll'), '');
 await writeFile(resolve(output, 'README.md'), `# OHarness website
 
-- Português brasileiro: https://klebertiko.github.io/OHarness/
-- American English: https://klebertiko.github.io/OHarness/en/
+- Português brasileiro: https://klebertiko.github.io/oharness/
+- American English: https://klebertiko.github.io/oharness/en/
 
 This is the static product website, generated from the website/ folder on main by npm run build:pages and deployed by the Pages workflow (.github/workflows/pages.yml). Edit the source on main, not this output.
 

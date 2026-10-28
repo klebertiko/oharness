@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio Creation Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- THROWAWAY PROTOTYPE (phase 1 of the Studio creation redesign). Not production code.
+     Tokens are copied from frontend/src/app/globals.css so the prototype reads as the real app. -->
+<style>
+/* Hallmark · macrostructure: workbench (header · canvas · inspector, docked composer) · genre: app-tool · design-system: frontend/src/app/globals.css */
+:root{
+  --font-ui:"Sora",ui-sans-serif,system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --sub-000:oklch(0.170 0.006 72);--sub-100:oklch(0.205 0.007 72);--sub-200:oklch(0.245 0.008 72);
+  --sub-300:oklch(0.295 0.009 72);--sub-400:oklch(0.355 0.010 72);
+  --line:oklch(0.350 0.010 72);--line-soft:oklch(0.275 0.008 72);
+  --ink:oklch(0.945 0.006 82);--ink-dim:oklch(0.820 0.007 82);--ink-mute:oklch(0.700 0.007 82);--ink-faint:oklch(0.600 0.006 82);
+  --signal:oklch(0.700 0.105 190);--signal-deep:oklch(0.570 0.095 190);--signal-ink:oklch(0.160 0.008 72);
+  --warn:oklch(0.620 0.120 80);--fault:oklch(0.550 0.160 28);
+  --nilo-body:var(--signal);--nilo-eye:oklch(0.955 0.012 85);--nilo-pupil:oklch(0.170 0.006 72);--nilo-beak:oklch(0.760 0.120 80);--nilo-rim:oklch(0.870 0.075 190);
+  --ghost:color-mix(in oklch,var(--signal) 14%,transparent);
+  --r:6px;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --sub-000:oklch(0.965 0.008 82);--sub-100:oklch(0.985 0.005 82);--sub-200:oklch(0.940 0.009 82);
+  --sub-300:oklch(0.905 0.010 82);--sub-400:oklch(0.865 0.011 82);
+  --line:oklch(0.810 0.011 82);--line-soft:oklch(0.885 0.009 82);
+  --ink:oklch(0.235 0.012 75);--ink-dim:oklch(0.380 0.011 75);--ink-mute:oklch(0.470 0.010 75);--ink-faint:oklch(0.560 0.009 75);
+  --signal:oklch(0.520 0.105 190);--signal-deep:oklch(0.440 0.095 190);--signal-ink:oklch(0.985 0.005 82);
+}}
+:root[data-theme="dark"]{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--sub-000);color:var(--ink);font:13px/1.5 var(--font-ui);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.mono{font-family:var(--font-mono)}
+.kbd{font:11px var(--font-mono);color:var(--ink-faint);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.btn{height:30px;padding:0 12px;border:1px solid var(--line);background:transparent;border-radius:var(--r);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--sub-200)}
+.btn.primary{background:var(--signal);border-color:var(--signal);color:var(--signal-ink);font-weight:600}
+.btn.primary:hover{background:var(--signal-deep)}
+.btn.quiet{border-color:transparent;color:var(--ink-mute)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* prototype-only state switcher, clearly separate from the app */
+.proto{position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:50;display:flex;gap:2px;padding:3px;border:1px dashed var(--warn);border-radius:8px;background:var(--sub-100);max-width:calc(100vw - 32px);overflow-x:auto}
+.proto span{font:11px var(--font-mono);color:var(--warn);padding:4px 8px;white-space:nowrap}
+.proto button{border:0;background:transparent;font-size:12px;padding:4px 10px;border-radius:5px;color:var(--ink-mute);white-space:nowrap}
+.proto button[aria-pressed="true"]{background:var(--sub-300);color:var(--ink)}
+
+.app{display:grid;grid-template-rows:48px minmax(0,1fr);height:100vh;padding-top:40px}
+/* one header replaces title bar + toolbar + editor bar + bundle dock */
+header{display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--sub-100);min-width:0}
+.crumb{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.crumb a{color:var(--ink-mute);text-decoration:none;white-space:nowrap}
+.crumb a:hover{color:var(--ink)}
+.name{font-weight:600;border:1px solid transparent;border-radius:5px;padding:2px 6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.name:hover{border-color:var(--line)}
+.dirty{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none}
+.saved{font-size:12px;color:var(--ink-faint);white-space:nowrap}
+.pill{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px;white-space:nowrap}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--signal)}
+.pill.warn .dot{background:var(--warn)}.pill.fault .dot{background:var(--fault)}
+.pill.busy .dot{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.run{display:inline-flex}
+.run .btn:first-child{border-radius:var(--r) 0 0 var(--r)}
+.run .btn:last-child{border-radius:0 var(--r) var(--r) 0;border-left:1px solid color-mix(in oklch,var(--signal-ink) 30%,transparent);padding:0 8px}
+.docmenu{color:var(--ink-faint);font-size:11px}
+
+.body{display:grid;grid-template-columns:200px minmax(0,1fr) 320px;min-height:0}
+.blocks{border-right:1px solid var(--line);background:var(--sub-100);padding:12px;overflow:auto}
+.blocks h2,.side h2{font-size:12px;font-weight:600;margin:0 0 8px;color:var(--ink-dim)}
+.search{width:100%;height:30px;border:1px solid var(--line);border-radius:var(--r);background:var(--sub-000);color:var(--ink);padding:0 8px;font:inherit}
+.blk{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border:0;background:transparent;border-radius:var(--r);text-align:left}
+.blk:hover{background:var(--sub-200)}
+.blk i{width:8px;height:8px;border-radius:2px;flex:none}
+.blk small{display:block;color:var(--ink-faint);font-size:11px;line-height:1.35}
+.hint{margin-top:14px;font-size:11px;color:var(--ink-faint);line-height:1.6}
+
+.canvas{position:relative;overflow:hidden;background:var(--sub-000);background-image:radial-gradient(var(--line-soft) 1px,transparent 1px);background-size:20px 20px}
+.node{position:absolute;width:180px;border:1px solid var(--line);border-left:3px solid var(--c,var(--signal));border-radius:8px;background:var(--sub-100);padding:8px 10px;transition:opacity .2s,border-color .2s}
+.node .t{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}
+.node .k{font-size:11px;font-weight:400;color:var(--ink-faint)}
+.node .d{font-size:12px;color:var(--ink-mute);margin-top:2px}
+.node .need{margin-top:6px;font-size:11px;color:var(--warn);display:flex;gap:6px;align-items:center}
+.node.sel{border-color:var(--signal);box-shadow:0 0 0 1px var(--signal)}
+.node.ghost{border-style:dashed;background:var(--ghost);border-left-style:dashed}
+.node.ghost .t::after{content:"proposed";font:500 10px var(--font-mono);color:var(--signal);text-transform:uppercase;letter-spacing:.04em}
+.node.ghost.off{opacity:.35}
+.node.run{border-color:var(--signal)}
+.node.run::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--signal);animation:pulse 1s infinite}
+svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+svg.wires path{fill:none;stroke:var(--line);stroke-width:1.5}
+svg.wires path.ghost{stroke:var(--signal);stroke-dasharray:5 4}
+svg.wires path.live{stroke:var(--signal)}
+.port{position:absolute;width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:var(--sub-200);display:grid;place-items:center;font-size:12px;color:var(--ink-mute);opacity:0;transition:opacity .15s}
+.node:hover + .port,.port:hover,.port:focus-visible{opacity:1}
+
+/* empty state: the composer is the hero of an empty canvas */
+.empty{position:absolute;inset:0;display:grid;place-items:center;padding:16px}
+.empty .card{width:min(560px,100%)}
+.empty h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.empty p{margin:0 0 14px;color:var(--ink-mute)}
+.or{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--ink-faint);font-size:12px}
+
+.composer{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(620px,calc(100% - 32px));border:1px solid var(--line);border-radius:12px;background:var(--sub-100);box-shadow:0 8px 28px oklch(0 0 0 / .35)}
+.empty .composer{position:static;transform:none;width:100%;box-shadow:none}
+.composer textarea{display:block;width:100%;min-height:44px;max-height:140px;resize:none;border:0;background:transparent;color:var(--ink);font:inherit;padding:12px 14px 4px}
+.composer textarea:focus{outline:none}
+.composer:focus-within{border-color:var(--signal)}
+.cbar{display:flex;align-items:center;gap:8px;padding:6px 8px 8px 14px;font-size:11px;color:var(--ink-faint);flex-wrap:wrap}
+.cbar .sp{flex:1}
+.prov{font:11px var(--font-mono);color:var(--ink-mute)}
+.menu{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);border:1px solid var(--line);border-radius:10px;background:var(--sub-100);padding:6px;display:none}
+.menu.open{display:block}
+.menu .blk[aria-selected="true"]{background:var(--sub-300)}
+
+/* proposal review bar sits where the composer was: one place for "what's next" */
+.review{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(620px,calc(100% - 32px));border:1px solid var(--signal);border-radius:12px;background:var(--sub-100);padding:12px 14px;box-shadow:0 8px 28px oklch(0 0 0 / .35)}
+.review h3{margin:0 0 8px;font-size:13px}
+.review ul{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:2px}
+.review li label{display:flex;gap:8px;align-items:center;padding:3px 4px;border-radius:5px}
+.review li label:hover{background:var(--sub-200)}
+.review .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);border:1px solid var(--line);background:var(--sub-200);border-radius:8px;padding:6px 8px 6px 12px;display:flex;gap:10px;align-items:center;font-size:12px}
+.runbar{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);border:1px solid var(--line);background:var(--sub-100);border-radius:12px;padding:8px 10px 8px 14px;display:flex;gap:10px;align-items:center;font-size:12px;white-space:nowrap}
+
+.side{border-left:1px solid var(--line);background:var(--sub-100);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:transparent;padding:5px 10px;border-radius:5px;color:var(--ink-mute)}
+.tabs button[aria-selected="true"]{background:var(--sub-300);color:var(--ink)}
+.pane{padding:14px;overflow:auto;flex:1}
+.field{margin-bottom:14px}
+.field label{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ink-dim);margin-bottom:4px}
+.field input,.field textarea,.field select{width:100%;border:1px solid var(--line);background:var(--sub-000);color:var(--ink);border-radius:var(--r);padding:6px 8px;font:inherit}
+.field textarea{min-height:76px;resize:vertical}
+.field.bad input,.field.bad textarea,.field.bad select{border-color:var(--warn)}
+.field .msg{font-size:11px;color:var(--warn);margin-top:3px}
+.assist{font-size:11px;color:var(--signal);border:0;background:transparent;padding:0}
+.suggest{border:1px dashed var(--signal);background:var(--ghost);border-radius:var(--r);padding:8px;margin-top:6px;font-size:12px}
+.needs{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:16px}
+.needs h3{margin:0 0 6px;font-size:12px}
+.needs li{font-size:12px;color:var(--ink-mute)}
+.needs a{color:var(--signal)}
+.problem{display:flex;gap:8px;width:100%;text-align:left;border:0;background:transparent;padding:8px;border-radius:6px;align-items:flex-start}
+.problem:hover{background:var(--sub-200)}
+.problem i{width:7px;height:7px;border-radius:50%;margin-top:6px;flex:none;background:var(--warn)}
+.problem.f i{background:var(--fault)}
+.problem small{display:block;color:var(--ink-faint)}
+.thread p{margin:0 0 10px}
+.thread .me{background:var(--sub-300);border-radius:8px;padding:6px 10px;margin-left:24px}
+.nilo{display:inline-block;vertical-align:middle;flex:none}
+.who{display:flex;align-items:center;gap:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.body.noside{grid-template-columns:200px minmax(0,1fr)}.body.noside .side{display:none}
+.pill.idle .dot{background:var(--ink-faint)}
+@media (max-width:1100px){.body{grid-template-columns:minmax(0,1fr) 300px}.body.noside{grid-template-columns:minmax(0,1fr)}.blocks{display:none}}
+@media (max-width:780px){.body{grid-template-columns:minmax(0,1fr)}.side{display:none}.saved,.docmenu{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="proto" role="group" aria-label="Prototype state (not part of the app)">
+  <span>PROTOTYPE</span>
+  <button data-s="empty">1 · Empty</button>
+  <button data-s="proposal">2 · Proposal review</button>
+  <button data-s="editing">3 · Editing</button>
+  <button data-s="problems">4 · Problems</button>
+  <button data-s="running">5 · Running</button>
+</div>
+
+<div class="app">
+  <header>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="#" title="Back to Studio library (Esc twice)">Studio</a><span aria-hidden="true" style="color:var(--ink-faint)">/</span>
+      <span class="name" contenteditable="true" role="textbox" aria-label="Harness name (F2)" id="hname">Research brief</span>
+      <span class="dirty" id="dirty" title="Unsaved changes" hidden></span>
+      <span class="saved" id="saved">Saved on this device</span>
+    </nav>
+    <span class="docmenu" title="Save · Save as · Discard · Import · Export · Examples come from the studio-actions toolbar (feat/studio-harness-actions)">[document actions · owned by studio-actions]</span>
+    <button class="pill" id="ready" aria-haspopup="dialog"><span class="dot"></span><span id="readyTxt">Ready to run</span></button>
+    <div class="run">
+      <button class="btn primary" id="runBtn" title="Run (Ctrl+Enter)">Run · Mock</button>
+      <button class="btn primary" aria-label="Choose run mode">▾</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="blocks" aria-label="Blocks">
+      <h2>Blocks</h2>
+      <input class="search" placeholder="Search blocks  ( N )" aria-label="Search blocks">
+      <div style="margin-top:8px" id="blockList"></div>
+      <p class="hint">Click adds after the selected block and connects it. Drag to place. Double-click the canvas, or drop a wire on empty space, to search here in place.</p>
+    </aside>
+
+    <main class="canvas" id="canvas" aria-label="Harness canvas">
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+      <div id="nodes"></div>
+      <div id="overlay"></div>
+    </main>
+
+    <aside class="side" aria-label="Details">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tInspector" aria-selected="true">Inspector</button>
+        <button role="tab" id="tNilo" aria-selected="false">Nilo</button>
+        <button role="tab" id="tProblems" aria-selected="false">Problems</button>
+      </div>
+      <div class="pane" id="pane" role="tabpanel"></div>
+    </aside>
+  </div>
+</div>
+<div class="sr" aria-live="polite" id="live"></div>
+
+<!-- Static design prototype, not shipped: innerHTML only receives the fixed template strings and data defined in this file, never external input. -->
+<!-- nosemgrep: opengrep-rules.html.security.audit.insecure-document-method -->
+<script>
+const $=s=>document.querySelector(s);
+/* Nilo's head, from NILO_FACE in frontend/src/components/brand/niloGrid.ts (tokens from globals.css). */
+const NILO_FACE=[".B.B........B.B.",".BBB........BBB.",".BBBBBBBBBBBBBB.",".RRRRRBBBBRRRRR.",".RRRRRBBBBRRRRR.",".RWWWRBBBBRWWWR.",".RWPWRBKKBRWPWR.",".RWWWRBKKBRWWWR.",".RRRRRBBBBRRRRR."];
+const NF={B:"--nilo-body",W:"--nilo-eye",P:"--nilo-pupil",K:"--nilo-beak",R:"--nilo-rim"};
+function nilo(w=20){let r="";NILO_FACE.forEach((row,y)=>[...row].forEach((c,x)=>{if(NF[c])r+=`<rect x="${x}" y="${y}" width="1" height="1" fill="var(${NF[c]})"/>`}));
+  return `<svg class="nilo" width="${w}" height="${Math.round(w*9/16)}" viewBox="0 0 16 9" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`}
+const BLOCKS=[
+  {k:"Agent",c:"var(--signal)",d:"A role that does the work"},
+  {k:"Gate",c:"var(--warn)",d:"A check that passes or fails"},
+  {k:"Human review",c:"var(--fault)",d:"A person approves or sends back"},
+  {k:"Skill",c:"var(--ink-mute)",d:"A capability an agent can use"},
+  {k:"MCP server",c:"var(--ink-mute)",d:"Tools from an MCP connector"},
+  {k:"Tool",c:"var(--ink-mute)",d:"HTTP, shell, repository"}];
+const BASE=[
+  {id:"a",k:"Agent",n:"Researcher",d:"Finds and summarises sources",x:40,y:140},
+  {id:"b",k:"Agent",n:"Writer",d:"Drafts the brief",x:260,y:140}];
+const PROPOSED=[
+  {id:"c",k:"Gate",n:"Brief check",d:"Sources cited · under 800 words",x:480,y:140,ghost:1},
+  {id:"d",k:"Human review",n:"Editor approves",d:"Approve or send back",x:700,y:140,ghost:1}];
+const EDGES=[["a","b"]],GEDGES=[["b","c"],["c","d"]];
+let state="editing",sel="b",accepted=new Set(["c","d"]);
+
+function color(k){return (BLOCKS.find(b=>b.k===k)||{}).c}
+function nodes(){
+  if(state==="empty")return[];
+  if(state==="proposal")return[...BASE,...PROPOSED];
+  return[...BASE,...PROPOSED.map(p=>({...p,ghost:0}))];
+}
+function edges(){
+  if(state==="empty")return[];
+  if(state==="proposal")return[...EDGES.map(e=>[...e,0]),...GEDGES.map(e=>[...e,1])];
+  return[...EDGES,...GEDGES].map(e=>[...e,0]);
+}
+function renderCanvas(){
+  const ns=nodes(),W=$("#wires");
+  $("#nodes").innerHTML=ns.map(n=>{
+    const need=state!=="proposal"&&n.id==="b"&&state!=="running"?`<div class="need">● Needs a provider</div>`:"";
+    const off=n.ghost&&!accepted.has(n.id)?" off":"";
+    const run=state==="running"&&n.id==="a"?" run":"";
+    return `<div class="node${n.ghost?" ghost":""}${off}${run}${sel===n.id&&state!=="proposal"?" sel":""}" style="left:${n.x}px;top:${n.y}px;--c:${color(n.k)}" tabindex="0" role="button"
+      aria-label="${n.ghost?"Proposed: ":""}${n.k} ${n.n}" data-id="${n.id}">
+      <div class="t"><span>${n.n}</span>${n.ghost?"":`<span class="k">${n.k}</span>`}</div><div class="d">${n.d}</div>${need}</div>
+      ${state==="editing"?`<button class="port" style="left:${n.x+189}px;top:${n.y+22}px" aria-label="Add a block after ${n.n}" title="Add after (Tab)">+</button>`:""}`;
+  }).join("");
+  const pos=Object.fromEntries(ns.map(n=>[n.id,n]));
+  W.innerHTML=edges().map(([a,b,g])=>{const A=pos[a],B=pos[b];if(!A||!B)return"";
+    const x1=A.x+180,y1=A.y+34,x2=B.x,y2=B.y+34,mx=(x1+x2)/2;
+    const live=state==="running"&&a==="a";
+    return `<path class="${g?"ghost":""}${live?" live":""}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`}).join("");
+  document.querySelectorAll(".node[data-id]").forEach(el=>el.onclick=()=>{if(state==="proposal")return;sel=el.dataset.id;setTab("inspector");render()});
+}
+function composer(empty){
+  return `<div class="composer" id="comp">
+    <div class="menu" id="menu" role="listbox" aria-label="Add a block">${BLOCKS.map((b,i)=>`<button class="blk" role="option" aria-selected="${i===0}"><i style="background:${b.c}"></i><span>${b.k}<small>${b.d}</small></span></button>`).join("")}</div>
+    <label class="sr" for="ask">Describe a change, or type / to add a block</label>
+    <textarea id="ask" rows="1" placeholder="${empty?"Describe the harness — who acts, what gets checked, where a person decides…":"Describe a change, or type / to add a block"}"></textarea>
+    <div class="cbar"><span class="prov who" title="Provider Nilo uses · change in Providers">${nilo(22)} Nilo · Ollama qwen3.5:9b</span><span class="sp"></span>
+      <span><span class="kbd">/</span> blocks</span><span><span class="kbd">↵</span> propose</span>
+      <button class="btn primary" id="go" style="height:28px">Propose</button></div></div>`;
+}
+function renderOverlay(){
+  const o=$("#overlay");
+  if(state==="empty"){
+    o.innerHTML=`<div class="empty"><div class="card"><h1>Start your harness</h1><p>Say what it should do and review the draft, or add the first block yourself.</p>${composer(true)}
+      <div class="or">or <button class="btn" data-add="Agent">+ Agent block</button><button class="btn quiet">Open an example</button><button class="btn quiet">Import .ohm</button></div></div></div>`;
+  }else if(state==="proposal"){
+    o.innerHTML=`<section class="review" aria-labelledby="rv"><h3 id="rv" class="who">${nilo(22)} Nilo proposes 4 changes · nothing applied yet</h3><ul>
+      ${[["c","Add Gate “Brief check”"],["d","Add Human review “Editor approves”"],["g1","Connect Writer → Brief check"],["g2","Connect Brief check pass → Editor approves"]].map(([id,t])=>`<li><label><input type="checkbox" ${id.startsWith("g")||accepted.has(id)?"checked":""} data-acc="${id}"> ${t}</label></li>`).join("")}
+      </ul><div class="row"><button class="btn primary" id="apply">Apply 4 changes <span class="kbd" style="color:inherit;border-color:currentColor">↵</span></button><button class="btn" id="discard">Discard <span class="kbd">Esc</span></button><span style="flex:1"></span><button class="btn quiet">Refine…</button></div></section>`;
+  }else if(state==="running"){
+    o.innerHTML=`<div class="runbar" role="status"><span class="pill busy" style="border:0;padding:0;height:auto"><span class="dot"></span></span>Running in Mock · Researcher · 4s<span style="color:var(--ink-faint)">Editing is paused</span><button class="btn">Stop <span class="kbd">Esc</span></button></div>`;
+  }else{
+    o.innerHTML=composer(false)+(state==="editing"&&window._applied?`<div class="toast" role="status">Applied 4 changes<button class="btn quiet" id="undo" style="height:24px">Undo <span class="kbd">Ctrl Z</span></button></div>`:"");
+  }
+  wire();
+}
+function renderHeader(){
+  document.querySelector(".body").classList.toggle("noside",state==="empty");$("#hname").textContent=state==="empty"?"Untitled harness":"Research brief";
+  const r=$("#ready"),t=$("#readyTxt");r.className="pill";
+  $("#dirty").hidden=state==="empty"||state==="running";
+  $("#saved").textContent=state==="empty"?"New · not saved yet":state==="running"?"Saved on this device":"Unsaved · autosaves in 2s";
+  $("#runBtn").disabled=state==="empty"||state==="proposal";
+  $("#runBtn").textContent=state==="running"?"Running…":"Run · Mock";
+  if(state==="empty"){r.classList.add("idle");t.textContent="Nothing to check yet";}
+  else if(state==="proposal"){r.classList.add("busy");t.textContent="Checking proposal…";}
+  else if(state==="running"){r.classList.add("busy");t.textContent="Running";}
+  else if(state==="problems"){r.classList.add("fault");t.textContent="2 problems";}
+  else{r.classList.add("warn");t.textContent="1 thing needed";}
+}
+let tab="inspector";
+function setTab(t){tab=t;["Inspector","Nilo","Problems"].forEach(x=>$("#t"+x).setAttribute("aria-selected",String(x.toLowerCase()===t)))}
+function renderPane(){
+  const p=$("#pane");
+  if(tab==="nilo"){
+    p.innerHTML=`<div class="thread"><p class="me">Add a quality check and an editor sign-off after the writer.</p>
+      <p class="who" style="align-items:flex-start">${nilo(22)}<span>Proposed a Gate with your two criteria and a Human review on its pass route. ${state==="proposal"?"<b>Waiting for your review on the canvas.</b>":"Applied · undo with Ctrl Z."}</span></p>
+      <p style="color:var(--ink-faint);font-size:12px">History of every proposal lives here. New requests start from the composer on the canvas.</p></div>`;
+    return;
+  }
+  if(tab==="problems"){
+    p.innerHTML=`<h2>Problems</h2>
+      <button class="problem f"><i></i><span>Writer has no provider<small>Writer · Run settings — choose one or stay in Mock</small></span></button>
+      <button class="problem"><i></i><span>“fail” route of Brief check goes nowhere<small>Brief check · drag from fail, or click to add a block there</small></span></button>
+      <p class="hint">Structure checks run as you edit. Bundle validation runs on save and before Run. Click a problem to select the block and jump to the field.</p>`;
+    return;
+  }
+  if(state==="empty"){p.innerHTML=`<p class="hint" style="margin:0">Select a block to see its settings. Nothing here yet.</p>`;return;}
+  const n=nodes().find(x=>x.id===sel)||BASE[1];
+  p.innerHTML=`<h2>${n.k}</h2>
+    ${n.id==="b"?`<div class="needs"><h3>Before this can run</h3><ul style="margin:0;padding-left:16px"><li>Choose a provider, or keep Mock · <a href="#prov">jump</a></li></ul></div>`:""}
+    <div class="field"><label for="f1">Name</label><input id="f1" value="${n.n}"></div>
+    <div class="field"><label for="f2">What it does <button class="assist who" id="assistBtn">${nilo(14)} Ask Nilo</button></label><textarea id="f2">${n.d}</textarea>
+      <div id="sugg"></div></div>
+    <div class="field${n.id==="b"?" bad":""}" id="prov"><label for="f3">Provider</label><select id="f3"><option>Choose…</option><option>Mock (no calls)</option><option>Ollama · qwen3.5:9b</option></select>${n.id==="b"?`<div class="msg">Required for Connected runs</div>`:""}</div>
+    <details><summary style="color:var(--ink-faint);font-size:12px;cursor:pointer">Advanced · ports, id</summary><p class="mono" style="font-size:11px;color:var(--ink-faint)">in: signal · out: signal<br>id: copy to clipboard</p></details>`;
+  $("#assistBtn").onclick=()=>{$("#sugg").innerHTML=`<div class="suggest" role="status"><b class="who">${nilo(16)} Nilo suggests</b>Turns the researcher's notes into a one-page brief: summary, three findings, cited sources. Stops and asks if sources disagree.<div class="row" style="display:flex;gap:6px;margin-top:8px"><button class="btn primary" style="height:26px">Use this</button><button class="btn" style="height:26px">Discard</button></div></div>`};
+}
+function wire(){
+  const ask=$("#ask"),menu=$("#menu");
+  if(ask){
+    ask.onkeydown=e=>{
+      if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(menu.classList.contains("open")){menu.classList.remove("open");ask.value="";go("editing")}else if(ask.value.trim())go("proposal")}
+      if(e.key==="Escape"){menu.classList.remove("open")}
+    };
+    ask.oninput=()=>menu.classList.toggle("open",ask.value.startsWith("/"));
+    $("#go").onclick=()=>{if(ask.value.trim()&&!ask.value.startsWith("/"))go("proposal")};
+  }
+  document.querySelectorAll("[data-acc]").forEach(c=>c.onchange=()=>{c.checked?accepted.add(c.dataset.acc):accepted.delete(c.dataset.acc);renderCanvas();});
+  const ap=$("#apply");if(ap){ap.onclick=()=>{window._applied=1;say("Applied 4 changes");go("editing")};$("#discard").onclick=()=>{say("Proposal discarded");go("editing")}}
+  const u=$("#undo");if(u)u.onclick=()=>{window._applied=0;render()};
+  document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>go("editing"));
+}
+function say(t){$("#live").textContent=t}
+function go(s){state=s;if(s==="problems")setTab("problems");else if(s==="proposal")setTab("nilo");else if(tab==="problems")setTab("inspector");render();
+  document.querySelectorAll(".proto button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.s===s)));
+  if(s==="proposal"){say("Nilo proposes 4 changes. Review on the canvas. Enter applies, Escape discards.");$("#apply").focus()}}
+function render(){renderHeader();renderCanvas();renderOverlay();renderPane()}
+$("#blockList").innerHTML=BLOCKS.map(b=>`<button class="blk" draggable="true"><i style="background:${b.c}"></i><span>${b.k}<small>${b.d}</small></span></button>`).join("");
+document.querySelectorAll(".proto button").forEach(b=>b.onclick=()=>go(b.dataset.s));
+["Inspector","Nilo","Problems"].forEach(x=>$("#t"+x).onclick=()=>{setTab(x.toLowerCase());renderPane()});
+$("#ready").onclick=()=>{setTab("problems");renderPane()};
+document.addEventListener("keydown",e=>{
+  const typing=/TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)||document.activeElement.isContentEditable;
+  if(state==="proposal"&&e.key==="Escape"){say("Proposal discarded");go("editing")}
+  if(!typing&&e.key==="/"){e.preventDefault();const a=$("#ask");if(a){a.focus();a.value="/";a.oninput()}}
+  if(!typing&&(e.key==="n"||e.key==="N")){e.preventDefault();$(".search").focus()}
+});
+go("empty");
+</script>
+</body>
+</html>

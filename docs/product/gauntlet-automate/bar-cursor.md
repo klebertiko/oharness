@@ -7,12 +7,12 @@ judging any Automate piece — do not compare against a description of Cursor
 from memory.
 
 ## Screenshots (the actual UI — open these, don't just read this summary)
-- `C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-10 163443.png`
+- `C:\Users\<user>\Pictures\Screenshots\Captura de tela 2026-09-10 163443.png`
   — Cursor sidebar: background/cloud-agent tasks listed under a repository
   ("NightwolfRGB project e...", "Workbench subagent drive", "Product page
   design ide...") each with an elapsed-time chip (4m / 36m / 16h) and a status
   glyph. This is the "what's running / what ran" list.
-- `C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-10 163504.png`
+- `C:\Users\<user>\Pictures\Screenshots\Captura de tela 2026-09-10 163504.png`
   — one automation's detail view: title, Active/Inactive toggle, repository
   selector, author; **Settings | Run History** tabs; a **Triggers** section
   (schedule in plain language, "+ Add Trigger"); an **Agent Instructions**

@@ -63,7 +63,10 @@ export type ComboboxProps = {
   describedBy?: string;
   value: string | null;
   options: ComboOption[];
-  onChange: (id: string) => void;
+  /** `shift` is true when the choice was made with Shift held (Shift+Enter, Shift+click). */
+  onChange: (id: string, meta?: { shift: boolean }) => void;
+  /** Replace the built-in substring filter (e.g. ranked search with a per-group cap). */
+  filter?: (options: ComboOption[], query: string) => ComboOption[];
   /** Keep the popover open after choosing this id (e.g. to set it up in place). */
   keepOpen?: (id: string) => boolean;
   searchable?: boolean;
@@ -127,6 +130,7 @@ export function Combobox({
   value,
   options,
   onChange,
+  filter,
   keepOpen,
   searchable = false,
   searchPlaceholder,
@@ -167,7 +171,10 @@ export function Combobox({
 
   const visible = useMemo(() => {
     const needle = searchable ? query.trim().toLowerCase() : "";
-    const rows = needle
+    // A custom filter also runs on an empty query, so it can cap long lists before anything is typed.
+    const rows = searchable && filter
+      ? filter(options, query)
+      : needle
       ? options.filter((o) => [o.label, o.detail ?? "", o.id].some((t) => t.toLowerCase().includes(needle)))
       : options;
     const typed = query.trim();
@@ -175,7 +182,7 @@ export function Combobox({
       return [...rows, { id: typed, label: `Use “${typed}”`, detail: "Not in the list — sent as typed" }];
     }
     return rows;
-  }, [options, query, searchable, allowCustom]);
+  }, [options, query, searchable, allowCustom, filter]);
 
   const firstEnabled = useCallback(
     (from: number, dir: 1 | -1) => {
@@ -236,6 +243,12 @@ export function Combobox({
     };
   }, [open, close, width]);
 
+  // A new query reorders the rows (ranked search): the best match is the first row, so Enter takes it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reset only when the typed text changes
+  useEffect(() => {
+    if (open && query) setCursor(Math.max(0, firstEnabled(0, 1)));
+  }, [query]);
+
   // Filtering can shrink the list under the cursor.
   useEffect(() => {
     if (!open) return;
@@ -247,10 +260,10 @@ export function Combobox({
     if (open) document.getElementById(optionId(cursor))?.scrollIntoView?.({ block: "nearest" });
   }, [open, cursor]);
 
-  const choose = (i: number) => {
+  const choose = (i: number, shift = false) => {
     const o = visible[i];
     if (!o || o.disabled) return;
-    onChange(o.id);
+    onChange(o.id, { shift });
     if (!keepOpen?.(o.id)) close();
   };
 
@@ -270,7 +283,7 @@ export function Combobox({
       if (i >= 0) setCursor(i);
     } else if (e.key === "Enter" || (onList && e.key === " ")) {
       e.preventDefault();
-      choose(cursor);
+      choose(cursor, e.shiftKey);
     } else if (onList && e.key.length === 1 && /\S/.test(e.key)) {
       // Type-ahead: jump to the next option starting with that character.
       const ch = e.key.toLowerCase();
@@ -305,9 +318,9 @@ export function Combobox({
       aria-selected={o.id === value}
       aria-disabled={o.disabled || undefined}
       onPointerMove={() => !o.disabled && setCursor(i)}
-      onClick={() => {
+      onClick={(e) => {
         setCursor(i);
-        choose(i);
+        choose(i, e.shiftKey);
       }}
       className={cn(
         "mx-1 flex min-h-control-lg items-center gap-2.5 rounded-control px-2.5 py-1.5",
@@ -364,10 +377,12 @@ export function Combobox({
     open &&
     pos &&
     createPortal(
-      // biome-ignore lint/a11y/noStaticElementInteractions: delegates keydown/blur from the focusable controls inside (input, trigger, options) to close and trap focus; the container itself is not a control
       <div
         ref={popRef}
         data-combobox-popover=""
+        // A landmark, so the portalled list is not "content outside any region" for assistive tech.
+        role="region"
+        aria-label={`${label} picker`}
         onKeyDown={onPopKeyDown}
         onBlur={(e) => {
           const next = e.relatedTarget as Node | null;

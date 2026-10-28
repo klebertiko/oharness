@@ -134,7 +134,7 @@ Next entries in this file will log each round's WINNER/GAP/EVIDENCE verdict as t
 
 ## 2026-09-16 — second bar added for piece 3, mid-round-1
 
-User shared a real screenshot (`C:\Users\klebe\Pictures\Screenshots\Captura de tela 2026-09-16
+User shared a real screenshot (`C:\Users\<user>\Pictures\Screenshots\Captura de tela 2026-09-16
 001633.png`) of a competing tool's live status pill — a dark rounded pill, one row: spinner
 glyph, then "10m 28s · 296.7k tokens · 2 running tasks · Thought for 4s" (dot-separated,
 uniform styling, no hierarchy between the aggregate and the current-step detail). Exact user
