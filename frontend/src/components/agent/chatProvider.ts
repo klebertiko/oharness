@@ -94,6 +94,46 @@ export function providerReadiness(c: Connection): ProviderReadiness {
   };
 }
 
+/** Why a probe failed, as far as the probe's own text lets us say. The table of
+    every `detail` the adapters emit, and why each maps where it does, lives in
+    docs/adr/0009-probe-detail-classification.md and is locked on the backend by
+    tests/test_probe_detail_contract.py; these rules must stay in step with it. */
+export type ProviderFaultClass =
+  | "key-rejected"
+  | "unreachable"
+  | "rate-limited"
+  | "out-of-credits"
+  | "cli-signin"
+  | "cli-missing"
+  | "unknown";
+
+const FAULT_BY_STATUS: Record<number, ProviderFaultClass> = {
+  401: "key-rejected",
+  403: "key-rejected",
+  402: "out-of-credits",
+  429: "rate-limited",
+};
+
+/** The single place a probe's `detail` becomes a class. Pure: only `health`
+    and `detail` are read. A CLI that is missing or signed out reports
+    `health: "setup"`, an HTTP failure `health: "fault"`; text that matches
+    nothing is `unknown` (never a guess at a nearby class), and a connection
+    that is neither faulted nor waiting on a CLI has no fault at all. */
+export function providerFault(c: Pick<Connection, "health" | "detail">): ProviderFaultClass | null {
+  const text = (c.detail ?? "").trim().toLowerCase();
+  if (c.health === "setup") {
+    if (text.includes(" cli not found on path.")) return "cli-missing";
+    if (text.includes(" cli is installed but not logged in.")) return "cli-signin";
+    return null;
+  }
+  if (c.health !== "fault") return null;
+  const status = /^http (\d{3}) from /.exec(text);
+  if (status) return FAULT_BY_STATUS[Number(status[1])] ?? "unknown";
+  if (text.startsWith("401 unauthorized")) return "key-rejected";
+  if (/^could not reach \S+\.$/.test(text) || /^\S+ did not respond in time\.$/.test(text)) return "unreachable";
+  return "unknown";
+}
+
 const modeOf = (c: Connection): "live" | "local" => (c.residence === "cloud" ? "live" : "local");
 
 /** The first connection ready to answer: a live cloud one wins, else a live
