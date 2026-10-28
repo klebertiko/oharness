@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import httpx
 
+from run_budget import compact_messages
 from .capabilities import capabilities
 from .discover import discover
 from .exec import run, risk_hints
@@ -37,13 +38,15 @@ def redact_value(value):
 
 
 class ToolBroker:
-    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False):
+    def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False,
+                 run_budget=None, compact_at=None):
         self.root = Path(root) if root else None
         # Already resolved by the caller (stored mode clamped by the request); unknown -> ask.
         self.permission_mode = effective_mode(permission_mode)
         # Stored by the sidecar per workspace; never taken from a run request.
         self.workspace_trusted = bool(workspace_trusted)
         self.control, self.options = control, options
+        self.run_budget, self.compact_at = run_budget, compact_at
         self.capabilities = capabilities(root, adapter_name)
         self.mock = adapter_name == 'mock'
         self.calls_used = self.reads_used = 0
@@ -169,6 +172,10 @@ class ToolBroker:
             messages.append({'role': 'user', 'content': preset_result})
         total_tokens, unsupported = 0, False
         while True:
+            compacted = compact_messages(messages, trigger_tokens=self.compact_at)
+            if compacted:
+                messages, info = compacted
+                yield {'kind': 'context_compacted', **info}
             calls, text, turn_tokens = [], [], 0
             tools = TOOL_SCHEMAS if self.calls_used < 8 and not unsupported else None
             self.provider_called = True
@@ -194,6 +201,10 @@ class ToolBroker:
             total_tokens += turn_tokens or max(1, len(''.join(text)) // 4)
             yield {'kind': 'usage', 'tokens': total_tokens}
             if not calls or not tools:
+                return
+            if self.run_budget and self.run_budget.exceeded(total_tokens):
+                yield {'kind': 'budget_exceeded', 'max_tokens': self.run_budget.max_tokens,
+                       'used_tokens': total_tokens, 'skipped_calls': len(calls)}
                 return
             # Redact the assistant's structured arguments before replaying them to the model.
             messages.append({'role': 'assistant', 'content': ''.join(text) or None, 'tool_calls': redact_value(calls)})

@@ -15,6 +15,8 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  budget: null,
+  compactions: [],
 };
 
 type Action =
@@ -436,6 +438,21 @@ export function runReducer(state: RunState, action: Action): RunState {
         ],
       };
 
+    case "budget_exceeded":
+      return {
+        ...state,
+        budget: { maxTokens: Number(action.data.max_tokens ?? 0), usedTokens: Number(action.data.used_tokens ?? 0) },
+      };
+
+    case "context_compacted":
+      return {
+        ...state,
+        compactions: [
+          ...state.compactions,
+          { beforeTokens: Number(action.data.before_tokens ?? 0), afterTokens: Number(action.data.after_tokens ?? 0) },
+        ],
+      };
+
     case "run_stopped":
       return { ...state, status: "stopped" };
 
@@ -444,7 +461,7 @@ export function runReducer(state: RunState, action: Action): RunState {
       return {
         ...state,
         status:
-          status === "complete" ? "complete" : status === "stopped" ? "stopped" : "error",
+          status === "complete" ? "complete" : status === "stopped" || status === "budget_exceeded" ? "stopped" : "error",
         endedAt: Date.now(),
         awaitingStep: null,
         totals: {

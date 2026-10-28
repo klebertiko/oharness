@@ -24,6 +24,7 @@ import { ThinkingStatus } from "@/components/brand/ThinkingStatus";
 import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
+import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useRunStream } from "@/components/agent-run/useRunStream";
 import { Gate } from "@/components/agent-run/Gate";
 import { bundleGraphToEngine } from "@/lib/bundleGraph";
@@ -419,7 +420,7 @@ export function AgentStage() {
                 tone={run.status === "error" ? "fault" : "info"}
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
-                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : "The turn stopped. You can reuse your instruction when ready."}</p>
+                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready." : "The turn stopped. You can reuse your instruction when ready.")}</p>
                 {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
               </Notice>
             )}
@@ -471,6 +472,7 @@ export function AgentStage() {
             <HarnessBar />
             <ChatProviderPicker disabled={live} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
+            {!enabled && <RunBudgetField />}
             {provider && !enabled && <div className="min-w-0 max-w-full sm:max-w-[220px]">
               <ModelPicker connection={connection} value={selectedModel} onChange={(model) => setModelChoices((current) => ({ ...current, [provider.id]: model }))}
                 label="Model for next turn" inheritLabel="Connection default" inheritDetail={connection?.defaultModel || "The provider CLI chooses its model"} disabled={live}
