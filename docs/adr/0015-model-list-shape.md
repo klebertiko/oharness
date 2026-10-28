@@ -26,7 +26,7 @@ modelos de cada uma. Duas formas: **lista única agrupada por conexão com busca
   resultado somem enquanto se digita.
 - Ranking: id exato, prefixo, início de palavra, trecho; todos os termos precisam casar; empate vai para o id mais curto.
 - Teclado (implementado no combo, #89): digitar filtra; ↑/↓ percorrem as linhas atravessando os grupos; Enter escolhe (salva o padrão, ADR 0014);
-  `s` escolhe só para a conversa; Esc limpa a busca e, vazia, fecha e devolve o foco ao chip.
+  `Shift+Enter` escolhe só para a conversa; Esc limpa a busca e, vazia, fecha e devolve o foco ao chip.
 
 ## Por quê
 Quem sabe o modelo digita o nome; quem não sabe vê as conexões prontas com poucas linhas cada. Dois níveis custam um passo a mais em todos os
