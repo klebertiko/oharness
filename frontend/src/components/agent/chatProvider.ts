@@ -17,6 +17,21 @@ export function needsModel(c: Connection): boolean {
   return Boolean(spec) && requiresModel(spec) && !c.defaultModel;
 }
 
+/** Ollama names a model without a tag as `:latest`; compare on that basis. */
+const withTag = (id: string) => (id.includes(":") ? id : `${id}:latest`);
+
+/** The default model of a local Ollama whose own model list does not contain
+    it: a run on this connection would fail on a model nobody pulled. Only the
+    endpoint's list counts as evidence (`modelsFromEndpoint`), never the static
+    catalog, and only while a probe has actually answered. Returns the id to
+    pull, or null when there is nothing to pull. */
+export function modelNotPulled(c: Connection): string | null {
+  if (c.provider !== "ollama" || c.residence !== "local" || !c.modelsFromEndpoint) return null;
+  if (!c.defaultModel || c.health === "fault" || c.health === "probing") return null;
+  const wanted = withTag(c.defaultModel);
+  return c.models.some((m) => withTag(m.id) === wanted) ? null : c.defaultModel;
+}
+
 export type ChatProvider = {
   /** The real connection id this resolves to, whether picked or Auto — the
       harness graph needs a concrete id to fall back to per unpinned node
@@ -61,7 +76,7 @@ export type ProviderReadiness = {
   label: string;
   tone: ChatProviderTone;
   /** What the person still has to do, or null when nothing. */
-  missing: "credential" | "turn-on" | "fix-failure" | "model" | null;
+  missing: "credential" | "turn-on" | "fix-failure" | "model" | "model-not-pulled" | null;
 };
 
 export function providerReadiness(c: Connection): ProviderReadiness {
@@ -83,6 +98,9 @@ export function providerReadiness(c: Connection): ProviderReadiness {
   }
   if (needsModel(c)) {
     return { state: "needs-model", ready: false, verified: false, label, tone, missing: "model" };
+  }
+  if (modelNotPulled(c)) {
+    return { state: "needs-model", ready: false, verified: false, label, tone, missing: "model-not-pulled" };
   }
   return {
     state: "ready",
@@ -168,6 +186,7 @@ export function pickChatProvider(connections: Connection[], chosenId?: string | 
 export function chatProviderStatus(connection: Connection): string {
   if (!connection.enabled || connection.health === "fault") return "Unavailable";
   if (connection.health !== "probing" && needsModel(connection)) return "No model chosen";
+  if (modelNotPulled(connection)) return "Model not pulled";
   switch (connection.health) {
     case "live": return "Verified";
     case "probing": return "Checking connection";
@@ -194,7 +213,7 @@ export function rowStatus(connection: Connection): string {
 export function rowTone(connection: Connection): ChatProviderTone {
   if (connection.health === "fault") return "failing";
   if (!connection.enabled) return "unconfigured";
-  if (connection.health !== "probing" && needsModel(connection)) return "attention";
+  if (connection.health !== "probing" && (needsModel(connection) || modelNotPulled(connection))) return "attention";
   switch (connection.health) {
     case "live": return "verified";
     case "probing": return "checking";
@@ -226,6 +245,8 @@ export function missingProviderAction(
   if (providerReadiness(target).missing === "model") {
     return { text: `Choose a model for ${target.label} to send`, id: target.id };
   }
+  const unpulled = modelNotPulled(target);
+  if (unpulled) return { text: `Pull ${unpulled} to send`, id: target.id };
   const spec = specOf(target);
   const article = /^[aeiou]/i.test(spec.vendor) ? "an" : "a";
   const verb =
