@@ -33,6 +33,20 @@ describe("Studio OHM import", () => {
     expect(screen.getByText("Imported · settle")).toBeTruthy();
   });
 
+  it("still imports when the canvas settles while the file is being validated", async () => {
+    const bundle = { schemaVersion: "1.0.0", manifest: { id: "mid-flight", name: "Mid", description: "" },
+      graph: { nodes: [{ id: "po", role: "product-owner", label: "PO" }], edges: [] } };
+    let release!: () => void;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => { await new Promise<void>(r => { release = r; }); return new Response(JSON.stringify({ ok: true, errors: [] })); }));
+    const { container } = render(<ValidateDock />);
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File([JSON.stringify(bundle)], "mid.ohm")] } });
+    await waitFor(() => expect(typeof release).toBe("function"));
+    act(() => { useCanvasStore.setState({ harnessMeta: { id: null, name: "Settled elsewhere", description: "" } }); });
+    await act(async () => { release(); });
+    await screen.findByText("Imported · mid-flight");
+    expect(useCanvasStore.getState().nodes).toHaveLength(1);
+  });
+
   it("leaves the current graph and bundle intact when validation rejects a file", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: false, errors: ["Invalid graph"] })));
     const nodes = [{ id: "kept", type: "agent" as const, position: { x: 1, y: 2 }, data: { label: "Kept" } }];
