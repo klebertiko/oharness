@@ -1,4 +1,4 @@
-# ADR 0010 — Pre-tool hooks (fail-closed)
+# ADR 0026 — Pre-tool hooks (fail-closed)
 
 Status: accepted (#165)
 
