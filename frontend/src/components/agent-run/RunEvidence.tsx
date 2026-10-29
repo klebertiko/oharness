@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { useReducer, useRef, useState } from "react";
 import { runsApi, type RunLogDetail } from "@/lib/runsApi";
+import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { sendControl, startContinuedRun } from "./runClient";
 import { emptyRun, runReducer } from "./runReducer";
 import { Transcript } from "./Transcript";
@@ -53,6 +54,7 @@ export function RunEvidence({ detail, onContinued }: { detail: RunLogDetail; onC
         }
         onContinued?.(next.id);
       },
+      useRunBudgetStore.getState().maxTokens,
     );
   };
   const load = async (id: string) => {

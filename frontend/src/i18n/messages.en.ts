@@ -196,6 +196,19 @@ export const en = {
   "provider.openrouter.where": "openrouter.ai, Keys.",
   "provider.openrouter.summary": "One key, many vendors. Pick the model this connection runs; OpenRouter routes it to a vendor that serves it.",
   "provider.openrouter.caveat": "Prices and availability are set by the upstream vendor and move without notice.",
+
+  "run.ceiling.label": "Token ceiling",
+  "run.ceiling.aria": "Token ceiling for this run",
+  "run.ceiling.none": "none",
+  "run.ceiling.whole": "Enter a whole number of tokens.",
+  "run.ceiling.min": "Use at least {min} tokens.",
+  "run.ceiling.max": "Use at most {max} tokens.",
+  "run.ceiling.keepsTokens": "The run uses {n} tokens.",
+  "run.ceiling.keepsNone": "The run uses no ceiling.",
+  "run.compacted": "context compacted — {before} → {after} tok",
+  "run.budgetExceeded": "budget_exceeded — stopped at {used} of {max} tok",
+  "run.stoppedAtCeiling": "Run stopped at the token ceiling.",
+  "run.notice.ceiling": "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready.",
 };
 
 export type MessageKey = keyof typeof en;

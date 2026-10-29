@@ -146,7 +146,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
       // In Plan mode the turn is answered directly and ends in a plan: the harness graph runs after approval.
       if (harnessEnabledRef.current && !tools?.preset && tools?.permission_mode !== "plan") {
         abortRef.current = startRun(
-          { graph_json: graphRef.current, mode, step, instruction, cwd, ...(cwd && useRunWorktreeStore.getState().enabled ? { worktree: true } : {}) },
+          { graph_json: graphRef.current, mode, step, instruction, cwd, ...(cwd && useRunWorktreeStore.getState().enabled ? { worktree: true } : {}), ...maxTokensPayload() },
           onEvent,
           onClose
         );

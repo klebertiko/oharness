@@ -258,6 +258,7 @@ Portable harness bundles: graph, roles, gates, embedded skills/agents/hooks.
 cd backend
 python -m oharness validate oharness/fixtures/default-agile.ohm
 python -m oharness run oharness/fixtures/default-agile.ohm --json   # eventos em JSON (schema: oharness/schema/run-event.schema.json); este harness tem um HITL, então a run para ali e sai com 1
+python -m oharness run my-harness.ohm --mode live --json   # Providers reais (OH_SECRETS=file|keychain); --workspace <projeto> --worktree para rodar numa cópia isolada
 ```
 
 Default harness id: `oharness.default.agile`. The sidecar lists the bundled harnesses at `GET /bundles/examples` and returns one at `GET /bundles/examples/{id}`.

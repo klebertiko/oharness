@@ -15,6 +15,8 @@ export interface StartRunPayload {
   mode: string;
   step: boolean;
   instruction?: string;
+  /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
+  max_tokens?: number;
   /** Working folder for CLI-backed adapters — a Cowork project's `rootPath`.
       Omitted (not empty-string) when the person picked "No folder", so the
       backend's own `resolve_cwd()` fallback decides, not an empty path. */
@@ -89,9 +91,11 @@ export function startRun(
 export function startContinuedRun(
   runId: string,
   onEvent: (event: string, data: Record<string, unknown>) => void,
-  onClose: (err?: Error) => void
+  onClose: (err?: Error) => void,
+  /** The token ceiling to start the continuation with (the ceiling is not saved with a run). */
+  maxTokens?: number | null
 ): () => void {
-  return pumpSse(apiUrl(`/execute/logs/${encodeURIComponent(runId)}/start`), {}, onEvent, onClose);
+  return pumpSse(apiUrl(`/execute/logs/${encodeURIComponent(runId)}/start`), maxTokens ? { max_tokens: maxTokens } : {}, onEvent, onClose);
 }
 
 /** Contract v1.1 §2.4 — a user-chosen tool that runs before the model is called. */
