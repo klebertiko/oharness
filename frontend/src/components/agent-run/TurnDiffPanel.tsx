@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui";
 import { turnDiffApi } from "@/lib/turnDiffApi";
 import type { TurnDiff } from "./types";
@@ -10,6 +10,7 @@ const REFUSED: Record<string, string> = {
   symlink_refused: "A link on the path blocks the revert, so nothing was changed.",
   not_revertible: "The earlier content was not kept, so it cannot be restored.",
   not_found: "This change is no longer recorded.",
+  workspace_gone: "The folder this turn changed is no longer there, so nothing can be restored.",
 };
 
 type FileState = { phase: "idle" | "busy" | "reverted"; error?: string };
@@ -19,6 +20,23 @@ export function TurnDiffPanel({ runId, turnDiff }: { runId: string | null; turnD
   const uid = useId();
   const [state, setState] = useState<Record<string, FileState>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  // A run reopened from history: files already reverted say so instead of offering Revert again.
+  useEffect(() => {
+    if (!runId) return;
+    let alive = true;
+    void turnDiffApi.state(runId).then((reverted) => {
+      if (!alive || !reverted) return;
+      setState((s) => {
+        const next = { ...s };
+        for (const [path, done] of Object.entries(reverted)) if (done && !next[path]) next[path] = { phase: "reverted" };
+        return next;
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [runId]);
 
   const revert = async (path: string) => {
     if (!runId) return;
@@ -36,7 +54,7 @@ export function TurnDiffPanel({ runId, turnDiff }: { runId: string | null; turnD
     <section aria-label="Files this turn changed" className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
       <div />
       <div className="min-w-0 rounded-control border border-line-soft bg-sub-100 px-2.5 py-2">
-        <h3 className="t-label text-ink-dim">Files this turn changed</h3>
+        <p className="t-label text-ink-dim">Files this turn changed</p>
         {!turnDiff.complete && (
           <p className="mt-1 text-meta text-warn-text">This workspace is too large to track completely, so the list may be missing files.</p>
         )}

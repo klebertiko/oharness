@@ -65,3 +65,9 @@ async def revert_change(db: AsyncSession, run_id: str, path) -> str:
 
 async def recorded_paths(db: AsyncSession, run_id: str) -> list:
     return list((await db.scalars(select(TurnChange.path).where(TurnChange.run_id == run_id))).all())
+
+
+async def change_states(db: AsyncSession, run_id: str) -> list:
+    """What the run recorded and whether each file was already reverted (for a reopened history)."""
+    rows = (await db.scalars(select(TurnChange).where(TurnChange.run_id == run_id).order_by(TurnChange.path))).all()
+    return [{'path': r.path, 'status': r.status, 'reverted': bool(r.reverted)} for r in rows]

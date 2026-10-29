@@ -42,6 +42,22 @@ describe("TurnDiffPanel", () => {
     expect(screen.getByRole("button", { name: "Revert new.txt" })).toBeTruthy();
   });
 
+  it("shows files already reverted as reverted when a run is reopened", async () => {
+    vi.spyOn(turnDiffApi, "state").mockResolvedValue({ "src/a.txt": true, "new.txt": false });
+    render(<TurnDiffPanel runId="r1" turnDiff={diff} />);
+    expect(await screen.findByText("reverted")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Revert src/a.txt" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Revert new.txt" })).toBeTruthy();
+  });
+
+  it("explains a revert that cannot happen because the folder is gone", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(turnDiffApi, "revert").mockResolvedValue({ ok: false, code: "workspace_gone" });
+    render(<TurnDiffPanel runId="r1" turnDiff={diff} />);
+    await user.click(screen.getByRole("button", { name: "Revert new.txt" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/no longer there/);
+  });
+
   it("shows why a revert was refused", async () => {
     const user = userEvent.setup();
     vi.spyOn(turnDiffApi, "revert").mockResolvedValue({ ok: false, code: "changed_since" });

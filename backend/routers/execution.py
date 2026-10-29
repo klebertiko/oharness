@@ -438,6 +438,10 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
                     events.append(ready_evt)
                     yield _sse(ready_evt["event"], ready_evt["data"])
+                # A run in its own worktree keeps its work through the rescue ref instead; the diff covers the shared folder.
+                tracker = TurnTracker(run_cwd, run_id) if run_cwd and isolation is None else None
+                if tracker:
+                    await tracker.begin()
                 async for chunk in execute_harness(
                     graph,
                     execution_mode=body.mode,
@@ -449,6 +453,12 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     enforce_budget=_enforce_node_budget,
                 ):
                     parsed = _parse_sse_chunk(chunk)
+                    if parsed and parsed["event"] == "harness_done" and tracker:
+                        # Last word of the run: what it changed in the folder, ahead of the closing event.
+                        turn_diff = await tracker.finish(SessionLocal)
+                        if turn_diff:
+                            events.append({"event": "turn_diff", "data": turn_diff})
+                            yield _sse("turn_diff", turn_diff)
                     if parsed:
                         events.append(parsed)
                         if parsed["event"] == "harness_done":
