@@ -45,6 +45,15 @@ describe("hook decisions in the run", () => {
     expect(call().denied?.reason).toBe("hook");
   });
 
+  it("says a simulated call did not start the hook", () => {
+    const withSkip = runReducer(withCall, { type: "sse", event: "tool_hook_decision", data: { node_id: "direct", call_id: "c1", hook_id: "guard", decision: "skipped", reason: "simulated" } });
+    const block = withSkip.plan[0].blocks.find((b) => b.kind === "tool");
+    if (!block || block.kind !== "tool") throw new Error("no tool block");
+    render(<ToolCard call={block.call} runId="r" />);
+    expect(screen.getByText(/hook guard: not run \(simulated\)/)).toBeTruthy();
+    cleanup();
+  });
+
   it("names the hook on the card", () => {
     render(<ToolCard call={call()} runId="r" />);
     expect(screen.getByText(/hook guard: blocked \(timeout\)/)).toBeTruthy();
@@ -96,6 +105,27 @@ describe("ToolHooksButton", () => {
     await user.click(screen.getByRole("button", { name: "Save hook" }));
     await waitFor(() => expect(put).toHaveBeenCalledWith("old", { argv: ["/usr/bin/audit", "--strict", "-v"], timeout_s: 8, tools: ["read", "exec"] }));
     expect(screen.queryByText(/Editing old/)).toBeNull();
+  });
+
+  it("removing the hook being edited leaves edit mode, closing the sheet drops a half-finished edit, and an invalid row cannot be edited", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(toolHooksApi, "list").mockResolvedValue([
+      { id: "old", argv: ["/x"], timeout_s: 2, tools: ["read"], invalid: false },
+      { id: "broken", argv: [], timeout_s: 1, tools: ["exec", "read", "discover"], invalid: true },
+    ]);
+    vi.spyOn(toolHooksApi, "remove").mockResolvedValue();
+    render(<ToolHooksButton />);
+    await user.click(screen.getByRole("button", { name: "Tool hooks" }));
+    expect(await screen.findByText(/remove it and register it again/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit hook broken" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit hook old" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Program (full path)")));
+    await user.click(screen.getByRole("button", { name: "Remove hook old" }));
+    expect(screen.queryByText(/Editing old/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit hook old" }));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Tool hooks" }));
+    expect(screen.queryByText(/Editing/)).toBeNull();
   });
 
   it("has no axe violations when open", async () => {

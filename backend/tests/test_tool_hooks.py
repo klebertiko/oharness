@@ -225,7 +225,7 @@ def test_hook_that_leaves_a_child_holding_its_pipes_is_blocked_by_the_timeout(tm
     assert not d.allowed and d.reason == 'timeout'
 
 
-# -- round 2: the gate is the same in mock runs ---------------------------------
+# -- round 2: a simulated run executes nothing, hooks included ------------------
 def mock_events(tmp_path, hooks, name='exec', args=None):
     control = RunControl('hook-mock')
     broker = ToolBroker(str(tmp_path), 'mock', control, ToolsRequest(enabled=True), permission_mode='ask', hooks=hooks)
@@ -235,16 +235,13 @@ def mock_events(tmp_path, hooks, name='exec', args=None):
     return asyncio.run(go())
 
 
-def test_blocking_hook_also_blocks_a_simulated_exec(tmp_path):
-    events = mock_events(tmp_path, [hook(script(tmp_path, 'raise SystemExit(1)'), hook_id='guard')])
-    assert [e['kind'] for e in events] == ['tool_call', 'tool_hook_decision', 'tool_denied']
-    assert events[1]['hook_id'] == 'guard' and events[2]['reason'] == 'hook'
-
-
-def test_allowing_hook_is_journaled_before_the_simulation(tmp_path):
-    events = mock_events(tmp_path, [hook(script(tmp_path, 'pass'), hook_id='ok1')])
+def test_simulated_exec_does_not_start_hooks_and_says_so(tmp_path):
+    marker = tmp_path / 'hook-ran'
+    events = mock_events(tmp_path, [hook(script(tmp_path, f'open({str(marker)!r}, "w")'), hook_id='guard'),
+                                    hook(script(tmp_path, 'pass', 'other.py'), hook_id='read-only', tools=('read',))])
     assert [e['kind'] for e in events] == ['tool_call', 'tool_hook_decision', 'tool_result']
-    assert events[-1]['simulated'] is True
+    assert events[1]['hook_id'] == 'guard' and events[1]['decision'] == 'skipped' and events[1]['reason'] == 'simulated'
+    assert events[2]['simulated'] is True and not marker.exists()
 
 
 def test_plan_mode_refusal_comes_before_any_hook_runs(tmp_path):

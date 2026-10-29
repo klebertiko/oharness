@@ -3,7 +3,7 @@
 Status: accepted (#165, follow-up to ADR 0026)
 
 ## Decision
-- The hook gate is one broker method used by the real and the mock path, so a simulated `exec` is vetoed and journaled exactly like a real one.
+- A **simulated** (mock) `exec` runs no program, hooks included: each matching hook is journaled as `skipped` (reason `simulated`) and the tool card says "not run (simulated)". Running a person's real programs during a demo that promises to execute nothing would be the surprise.
 - Plan-mode refusals still come first: nothing would run, so no hook is started for it.
 - The Tool hooks sheet edits a hook in place (id fixed, saved under the same id) and shows a stored row that no longer validates as "blocks every tool until replaced".
 - Docs: USAGE, GLOSSARY, CONTEXT (Hook). e2e: `e2e-tool-hooks.mjs` (register, edit, focus return, blocked tool card, both themes, axe).

@@ -87,12 +87,11 @@ class ToolBroker:
                     yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': note, 'mode': self.permission_mode}
                     return
                 if self.mock:
-                    blocked = False
-                    async for event in self._hook_gate(call_id, name, args):  # the same gate as a real run
-                        yield event
-                        blocked = event['kind'] == 'tool_denied'
-                    if blocked:
-                        return
+                    # A simulated run executes nothing, hooks included; the transcript says so instead of staying silent.
+                    for hook in (await self.hooks_loader() if self.hooks_loader else self.hooks):
+                        if name in hook.tools:
+                            yield {'kind': 'tool_hook_decision', 'call_id': call_id, 'hook_id': hook.id,
+                                   'decision': 'skipped', 'reason': 'simulated', 'duration_ms': 0}
                     self.last_result = redact('[mock] would run: ' + json.dumps(action.argv))[0]
                     yield {'kind': 'tool_result', 'call_id': call_id, 'ok': True, 'simulated': True,
                            'result': self.last_result, 'duration_ms': 0, 'truncated': False, 'redactions': 0,

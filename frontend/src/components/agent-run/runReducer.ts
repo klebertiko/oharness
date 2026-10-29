@@ -315,7 +315,7 @@ export function runReducer(state: RunState, action: Action): RunState {
           ...(call.hooks ?? []),
           {
             hookId: String(action.data.hook_id ?? ""),
-            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            decision: action.data.decision === "allow" ? "allow" : action.data.decision === "skipped" ? "skipped" : ("block" as const),
             reason: String(action.data.reason ?? ""),
           },
         ],
