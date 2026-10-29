@@ -74,7 +74,7 @@ export function GraphAudit() {
   const clean = faults.length === 0 && !noEntry;
 
   return (
-    <div className="pointer-events-none absolute right-[10px] top-[10px] z-10 flex w-[188px] flex-col items-end gap-[5px]">
+    <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 flex w-47 flex-col items-end gap-[5px]">
       <div role="status" className="oh-float pointer-events-auto flex min-h-control-sm w-full items-center gap-2 px-2">
         <span aria-hidden className={`h-1.5 w-1.5 flex-none rounded-none ${clean ? "bg-signal" : "bg-warn"}`} />
         <span className="t-body flex-1 text-ink-dim">

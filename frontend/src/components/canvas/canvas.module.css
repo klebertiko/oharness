@@ -75,7 +75,7 @@
   border-radius: 1px;
   border: 1px solid var(--line);
   background: var(--sub-000);
-  transition: background 110ms, border-color 110ms, box-shadow 110ms;
+  transition: background var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .stage.stage :global(.react-flow__handle-left) {

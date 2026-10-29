@@ -212,7 +212,7 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
           aria-current={active ? "true" : undefined}
           className={cn(
             "oh-focus-inner flex min-h-control-lg w-full items-center gap-2 rounded-control px-2.5 py-1.5 pr-9 text-left transition-colors",
-            active ? "bg-sub-200 shadow-[inset_2px_0_0_var(--signal)]" : "hover:bg-sub-200",
+            active ? "bg-sub-200 shadow-selected" : "hover:bg-sub-200",
           )}
         >
           <span id={titleId} className={cn("min-w-0 flex-1 truncate text-title", active ? "text-ink" : "text-ink-dim")}>{thread.title}</span>
@@ -237,7 +237,7 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
       )}
 
       {menuOpen && (
-        <div ref={menuRef} onKeyDown={onMenuKeyDown} className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-[184px] p-1" role="menu" aria-label={`Actions for ${thread.title}`}>
+        <div ref={menuRef} onKeyDown={onMenuKeyDown} className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-46 p-1" role="menu" aria-label={`Actions for ${thread.title}`}>
           {confirmingDelete ? (
             <div className="px-2 py-1.5" role="group" aria-label="Confirm delete">
               <p className="pb-2 text-body text-ink-dim">Delete this chat and its messages?</p>
