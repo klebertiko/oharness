@@ -1,7 +1,6 @@
 """Continue a run for real: the nodes the parent finished are restored from its journal, the rest are executed, and starting twice is refused."""
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
