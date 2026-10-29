@@ -18,7 +18,6 @@ def test_ceiling_stops_the_run_after_the_node_that_crosses_it(client):
     resp = _run(client, max_tokens=500)
     assert resp.status_code == 200
     events = _sse_events(resp.text)
-    names = [name for name, _ in events]
     done = dict(events)
     assert done["budget_exceeded"]["max_tokens"] == 500 and done["budget_exceeded"]["used_tokens"] == 100_000
     assert done["harness_done"]["status"] == "budget_exceeded"

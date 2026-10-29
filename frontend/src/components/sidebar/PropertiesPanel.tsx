@@ -35,7 +35,7 @@ const ADAPTERS: AdapterType[] = ["mock", "claude", "ollama", "openai", "lmstudio
 
 const inputCls =
   `${styles.fieldControl} w-full rounded-control border border-line-strong bg-sub-200 px-2 py-1 text-title text-ink transition-colors hover:bg-sub-300`;
-const textareaCls = `${inputCls} h-[76px] resize-none text-body leading-relaxed`;
+const textareaCls = `${inputCls} h-19 resize-none text-body leading-relaxed`;
 
 /** Picker trigger styled like the inspector's other fields. */
 const pickerCls = `${inputCls} h-8 justify-between text-left`;
@@ -132,14 +132,14 @@ function PortTable({ nodeId, type }: { nodeId: string; type: NodeType }) {
           <div key={r.key} className="flex items-center gap-2 py-[3px]">
             <span
               aria-hidden
-              className="h-[10px] w-[3px] flex-none rounded-none"
+              className="h-2.5 w-[3px] flex-none rounded-none"
               style={{
                 background: wired ? tone : "transparent",
                 boxShadow: wired ? "none" : `inset 0 0 0 1px var(--line)`,
               }}
             />
-            <span className="t-meta w-[24px] flex-none text-ink-mute">{r.dir}</span>
-            <span className="t-meta w-[56px] flex-none truncate" style={{ color: tone }}>
+            <span className="t-meta w-6 flex-none text-ink-mute">{r.dir}</span>
+            <span className="t-meta w-14 flex-none truncate" style={{ color: tone }}>
               {r.port.label}
             </span>
             <span className="t-body min-w-0 flex-1 truncate text-right text-ink-mute">
@@ -313,7 +313,7 @@ export function PropertiesPanel() {
       className="h-full"
       actions={
         <span
-          className="ml-1 h-[12px] w-[2px] rounded-none"
+          className="ml-1 h-3 w-0.5 rounded-none"
           style={{ background: role }}
           aria-hidden
         />
@@ -323,7 +323,7 @@ export function PropertiesPanel() {
       <div className="flex items-center gap-2.5 px-2.5 py-2.5">
         <span
           aria-hidden
-          className="grid h-[22px] w-[22px] flex-none place-items-center rounded-none"
+          className="grid h-5.5 w-5.5 flex-none place-items-center rounded-none"
           style={{
             background: "color-mix(in oklab, var(--role-c) 18%, var(--sub-200))",
             ["--role-c" as string]: role,
@@ -639,7 +639,7 @@ export function PropertiesPanel() {
               </div>
             )}
             {d.output && (
-              <pre className="t-meta oh-inset mt-2 max-h-[160px] overflow-auto whitespace-pre-wrap break-all p-2 text-ink-dim">
+              <pre className="t-meta oh-inset mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all p-2 text-ink-dim">
                 {d.output}
               </pre>
             )}

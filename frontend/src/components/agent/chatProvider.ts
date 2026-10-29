@@ -1,6 +1,7 @@
 import { specOf, type Connection } from "@/components/providers/providerStore";
 import { requiresModel } from "@/components/providers/catalog";
 import { modelNotPulled } from "@/components/providers/modelPull";
+import { tr } from "@/i18n/store";
 
 export { modelNotPulled };
 
@@ -172,14 +173,14 @@ export function pickChatProvider(connections: Connection[], chosenId?: string | 
 
 /** Probe evidence is distinct from enabled eligibility and the person's choice. */
 export function chatProviderStatus(connection: Connection): string {
-  if (!connection.enabled || connection.health === "fault") return "Unavailable";
-  if (connection.health !== "probing" && needsModel(connection)) return "No model chosen";
-  if (modelNotPulled(connection)) return "Model not pulled";
+  if (!connection.enabled || connection.health === "fault") return tr("status.unavailable");
+  if (connection.health !== "probing" && needsModel(connection)) return tr("status.noModel");
+  if (modelNotPulled(connection)) return tr("status.modelNotPulled");
   switch (connection.health) {
-    case "live": return "Verified";
-    case "probing": return "Checking connection";
-    case "degraded": return "Needs attention";
-    case "setup": return "Not verified";
+    case "live": return tr("status.verified");
+    case "probing": return tr("status.checking");
+    case "degraded": return tr("status.needsAttention");
+    case "setup": return tr("status.notVerified");
   }
 }
 
@@ -189,11 +190,11 @@ export function chatProviderStatus(connection: Connection): string {
     "not enabled" as more specific evidence (a credential WAS tried and
     rejected, not merely left off), so only a non-fault, disabled connection
     reads as "Not connected" instead of "Unavailable". Exported: the
-    Providers screen (`ProvidersList.tsx`, `Dossier.tsx`) reads the same
+    Providers screen (`providers/view.ts`) reads the same
     function so a connection never wears two different status words
     depending which surface you're looking at it from. */
 export function rowStatus(connection: Connection): string {
-  if (!connection.enabled && connection.health !== "fault") return "Not connected";
+  if (!connection.enabled && connection.health !== "fault") return tr("status.notConnected");
   return chatProviderStatus(connection);
 }
 

@@ -4,7 +4,8 @@ from sandbox.schemas import ToolsRequest
 
 RUN_COMMAND_DESCRIPTION = ('Run a program locally. No shell: argv only. A command needs the user approval unless the conversation permission mode '
     'runs it automatically (Auto: read-only git and listings in any workspace; project scripts such as npm test or pytest only in a workspace '
-    'the user trusted). In Plan mode (read-only) every command is refused.')
+    'the user trusted; Workspace write: also mkdir, touch, cp and mv with every path inside the workspace; Full: most commands, except high-risk '
+    'ones). Read-only refuses any command that could write and Plan refuses every command; the user sees each refusal with its reason.')
 
 
 @pytest.mark.parametrize('preset',[
@@ -108,3 +109,11 @@ def test_model_tool_schema_is_the_exact_published_contract():
             },
         },
     ]
+
+
+def test_the_command_description_names_every_mode_that_changes_what_runs_unasked():
+    from sandbox.permission import MODE_TABLE
+    from sandbox.schemas import RUN_COMMAND_DESCRIPTION as published
+    for mode in MODE_TABLE['modes']:
+        if mode['id'] != 'ask':  # Ask is the default the description starts from: a command needs approval
+            assert mode['label'] in published, mode['label']

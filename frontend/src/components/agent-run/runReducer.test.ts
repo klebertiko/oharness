@@ -464,3 +464,31 @@ describe("runReducer plan_proposed", () => {
     expect(runReducer(withPlan, { type: "reset", mode: "live", step: false }).proposedPlan).toBeUndefined();
   });
 });
+
+
+describe("node_restored (a continued run)", () => {
+  it("marks the node done with the earlier output, restored, and does not count it as run or as spend", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "mock", step: false });
+    state = runReducer(state, { type: "sse", event: "run_start", data: { run_id: "r2", mode: "mock", order: [
+      { node_id: "a", type: "llm", label: "A", adapter: "mock", model: "", intrinsic: false },
+    ] } });
+    state = runReducer(state, { type: "sse", event: "node_restored", data: { node_id: "a", output: "kept" } });
+    const step = state.plan.find((s) => s.nodeId === "a");
+    expect(step).toMatchObject({ state: "done", restored: true, output: "kept", tokens: 0 });
+    expect(state.totals.nodesRun).toBe(0);
+    expect(state.totals.tokens).toBe(0);
+  });
+});
+
+describe("runReducer plan_error", () => {
+  it("records that the plan could not be saved, so the chat can say so", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { node_id: "direct", code: "plan_not_saved" } });
+    expect(state.planNotSaved).toBe(true);
+    expect(state.proposedPlan).toBeUndefined();
+  });
+
+  it("a new run clears it", () => {
+    const flagged = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { code: "plan_not_saved" } });
+    expect(runReducer(flagged, { type: "reset", mode: "live", step: false }).planNotSaved).toBeUndefined();
+  });
+});

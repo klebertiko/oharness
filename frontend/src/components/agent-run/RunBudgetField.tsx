@@ -38,7 +38,7 @@ export function RunBudgetField() {
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-err` : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="h-control-md w-24 rounded-control border border-line bg-transparent px-2 text-body text-ink-dim"
+        className="h-control-md w-24 rounded-control border border-line-strong bg-transparent px-2 text-body text-ink-dim"
       />
       {error && (
         <span id={`${id}-err`} role="alert" className="text-meta text-fault-text">{error}</span>

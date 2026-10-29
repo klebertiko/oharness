@@ -85,6 +85,15 @@ export function startRun(
   return pumpSse(apiUrl("/execute/"), payload, onEvent, onClose);
 }
 
+/** Execute a continuation made by `POST /execute/logs/{id}/continue` (ADR 0044): finished nodes are restored, the rest run. */
+export function startContinuedRun(
+  runId: string,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+  onClose: (err?: Error) => void
+): () => void {
+  return pumpSse(apiUrl(`/execute/logs/${encodeURIComponent(runId)}/start`), {}, onEvent, onClose);
+}
+
 /** Contract v1.1 §2.4 — a user-chosen tool that runs before the model is called. */
 export type ToolPresetPayload =
   | { name: "exec"; argv: string[]; cwd?: string; timeout_s?: number }

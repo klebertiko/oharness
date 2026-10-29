@@ -60,7 +60,7 @@ function RailButton({
         "oh-focus-inner t-title flex h-control-lg w-full items-center gap-3 rounded-float px-3 text-left transition-colors",
         // Where you are: ink-primary and a signal bar. Where the pointer is:
         // one step of substrate. Hover never reads as "chosen".
-        active ? "bg-sub-200 text-ink shadow-[inset_2px_0_0_var(--signal)]" : "text-ink-mute hover:bg-sub-200 hover:text-ink",
+        active ? "bg-sub-200 text-ink shadow-selected" : "text-ink-mute hover:bg-sub-200 hover:text-ink",
       )}
     >
       <Icon size={16} strokeWidth={1.8} absoluteStrokeWidth className="flex-none" />

@@ -1,4 +1,5 @@
 import { modelNotPulled, providerFault, providerReadiness } from "@/components/agent/chatProvider";
+import { tr } from "@/i18n/store";
 import { specOf, type Connection } from "./providerStore";
 
 /**
@@ -45,42 +46,42 @@ function faultStep(c: Connection): NextStep | null {
   const spec = specOf(c);
   switch (fault) {
     case "key-rejected":
-      return { kind: "replaceKey", label: "Replace key", hint: "replace key", status: "Key rejected" };
+      return { kind: "replaceKey", label: tr("step.replaceKey"), hint: tr("step.replaceKey.hint"), status: tr("fault.keyRejected") };
     case "unreachable":
       if (c.provider === "ollama" && c.residence === "local") {
         return {
           kind: "copy",
-          label: "Copy `ollama serve`",
-          hint: "start Ollama",
-          status: "Unreachable",
+          label: tr("step.copyServe"),
+          hint: tr("step.copyServe.hint"),
+          status: tr("fault.unreachable"),
           copy: "ollama serve",
           thenRetest: true,
         };
       }
       if (spec.endpoint.editable) {
-        return { kind: "checkEndpoint", label: "Check endpoint", hint: "check endpoint", status: "Unreachable" };
+        return { kind: "checkEndpoint", label: tr("step.checkEndpoint"), hint: tr("step.checkEndpoint.hint"), status: tr("fault.unreachable") };
       }
-      return { kind: "retest", label: "Test again", hint: "retest", status: "Unreachable" };
+      return { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.unreachable") };
     case "rate-limited":
-      return { kind: "retest", label: "Test again later", hint: "retry later", status: "Rate limited" };
+      return { kind: "retest", label: tr("step.testLater"), hint: tr("step.testLater.hint"), status: tr("fault.rateLimited") };
     case "out-of-credits":
       return spec.billingUrl
-        ? { kind: "link", label: "Open billing", hint: "add credit", status: "Out of credits", href: spec.billingUrl, thenRetest: true }
-        : { kind: "retest", label: "Test again", hint: "retest", status: "Out of credits" };
+        ? { kind: "link", label: tr("step.openBilling"), hint: tr("step.openBilling.hint"), status: tr("fault.outOfCredits"), href: spec.billingUrl, thenRetest: true }
+        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.outOfCredits") };
     case "cli-signin": {
       const login = spec.credential.login;
       return login
-        ? { kind: "copy", label: `Copy \`${login}\``, hint: "sign in", status: "Sign-in needed", copy: login, thenRetest: true }
-        : { kind: "retest", label: "Test again", hint: "retest", status: "Sign-in needed" };
+        ? { kind: "copy", label: tr("step.copyLogin", { login }), hint: tr("step.copyLogin.hint"), status: tr("fault.signIn"), copy: login, thenRetest: true }
+        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.signIn") };
     }
     case "cli-missing": {
       const url = spec.credential.installUrl;
       return url
-        ? { kind: "link", label: "Open install guide", hint: "install CLI", status: "Not installed", href: url, thenRetest: true }
-        : { kind: "retest", label: "Test again", hint: "retest", status: "Not installed" };
+        ? { kind: "link", label: tr("step.openInstall"), hint: tr("step.openInstall.hint"), status: tr("fault.notInstalled"), href: url, thenRetest: true }
+        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.notInstalled") };
     }
     case "unknown":
-      return { kind: "retest", label: "Test again", hint: "retest", status: "Test failed" };
+      return { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.unknown") };
   }
 }
 
@@ -91,26 +92,26 @@ export function nextStep(c: Connection): NextStep | null {
     case "credential": {
       const vendor = specOf(c).vendor;
       const article = /^[aeiou]/i.test(vendor) ? "an" : "a";
-      return { kind: "paste", label: `Paste ${article} ${vendor} key`, hint: "add key" };
+      return { kind: "paste", label: tr("step.paste", { article, vendor }), hint: tr("step.paste.hint") };
     }
     case "turn-on":
-      return { kind: "turnOn", label: "Turn on", hint: "turn on" };
+      return { kind: "turnOn", label: tr("step.turnOn"), hint: tr("step.turnOn.hint") };
     case "model":
-      return { kind: "model", label: "Choose a model", hint: "choose model" };
+      return { kind: "model", label: tr("step.chooseModel"), hint: tr("step.chooseModel.hint") };
     case "model-not-pulled": {
       const id = modelNotPulled(c);
       if (!id) return null;
       return {
         kind: "copy",
-        label: `Copy \`ollama pull ${id}\``,
-        hint: "pull model",
-        status: "Model not pulled",
+        label: tr("step.copyPull", { id }),
+        hint: tr("step.copyPull.hint"),
+        status: tr("status.modelNotPulled"),
         copy: `ollama pull ${id}`,
         thenRetest: true,
       };
     }
     case "fix-failure":
-      return { kind: "retest", label: "Test again", hint: "retest" };
+      return { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint") };
     default:
       return null;
   }

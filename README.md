@@ -104,7 +104,7 @@ Five vendors. Anthropic and OpenAI connect through the CLI you are already signe
 | **Ollama** | Local daemon, default `http://127.0.0.1:11434/v1`, no key | Ollama Cloud is a separate connection. |
 | **Cursor** | Local `cursor-agent` CLI (`cursor-agent login`) | Agent-only: an LLM node cannot use it, a Delegate node can. On Windows it runs inside WSL2 (distro `Ubuntu-24.04` by default, override with `OHARNESS_CURSOR_WSL_DISTRO`); the native Windows `cursor-agent` stays blocked. |
 
-- **Chat picker.** Lists "Auto" (the first eligible connection, cloud before on-device) and the connections that can answer now. Setup stays on the Providers screen.
+- **Chat picker.** Lists "Auto" (the first eligible connection, cloud before on-device) and, grouped by connection, the models of the connections that can answer now, with a search. `Enter` saves the model as the connection's default; `Shift+Enter` (or "This chat only") applies it to the open chat alone. Connections one step from working sit in a **Needs action** group, each with the one step that fixes it, in the same words as Providers. Setup stays on the Providers screen.
 - **Per-node pins and failover.** A node can pin an ordered list of connections. If one rejects the call, the next is tried, and the attempts show in the run transcript. A node with no pin uses the chat's choice. If neither resolves, the run stops at that node with an error; it never swaps providers silently. Rule: [`docs/product/provider-harness-rule.md`](docs/product/provider-harness-rule.md).
 - **Secrets** are written by the sidecar's secrets store (`OH_SECRETS`, below), never by the Tauri shell.
 - **Experimental: Laya.** A local classifier ([ADR 0005](docs/adr/0005-laya-decision-node.md), [ADR 0006](docs/adr/0006-laya-front-door-cascade.md)). It needs a separate Laya process on loopback (`LAYA_LOOPBACK_PORT`, default 8761). With it running, a chat message goes to Laya first to decide between a direct answer and starting the harness; below 0.80 confidence, or when Laya is unavailable, the model-based triage decides as before. The decision is recorded as a `route_decision` event. A Laya `decision` node in a graph is advisory evidence only; no gate, edge or HITL step reads it.
@@ -274,7 +274,7 @@ OHarness/
 ├── backend/           FastAPI sidecar · oharness codec · adapters · sandbox
 ├── src-tauri/         Tauri v2 shell · NSIS bundle · embedded default .ohm
 ├── website/           Product site (pt-BR + en) — no backend coupling
-├── docs/              ADRs, harness-spec, CI/security policy
+├── docs/              ADRs, harness-spec, CI/security policy, design system (tokens, components, reference)
 ├── scripts/           Sidecar build, desktop smoke, advisory Laya shadow
 └── .github/           CI, security, SBOM, Scorecard, release, Laya shadow
 ```

@@ -1,0 +1,33 @@
+<!-- @dsCard group="Patterns" height=900 -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../bundle.css"><script src="../theme.js"></script><style>body{margin:0;padding:var(--space-4);background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.row{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-start;margin-bottom:var(--space-3)}.col{display:flex;flex-direction:column;gap:var(--space-2)}.cap{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute);margin-bottom:var(--space-1)}.line{display:flex;align-items:center;gap:var(--space-2)}.mono{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute)}.card{padding:var(--space-3);border:1px solid var(--line-soft);border-radius:var(--radius-control);background:var(--sub-200)}.t{margin:0;font:500 13px/1.3 var(--font-ui);color:var(--ink-primary)}.tree{margin:var(--space-1) 0 0 var(--space-2);padding-left:var(--space-3);border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:var(--space-1)}</style></head><body><div id="r"></div><script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script><script src="../bundle.js"></script><script>
+var h=React.createElement,O=window.OH;
+function Cap(t){return h("div",{className:"cap"},t)}
+
+function Tree(){return h("section",{"aria-label":"Subagents",className:"card",style:{maxWidth:520,background:"var(--sub-100)"}},
+  h("p",{className:"line",style:{margin:0}},h("span",{style:{font:"500 10px/1.4 var(--font-ui)",letterSpacing:"0.1em",textTransform:"uppercase",color:"var(--ink-dim)"}},"Nilo"),h("span",{className:"mono"},"running")),
+  h("ul",{className:"tree",style:{listStyle:"none",margin:"var(--space-1) 0 0 var(--space-2)"}},
+   [["Read the changelog","done","var(--ink-dim)"],["Compare API versions","running","var(--signal-text)"],["Draft the summary","cancelled","var(--ink-mute)"],["Check licences","error","var(--fault-text)"]].map(function(c,i){
+     return h("li",{key:i,className:"line"},h("span",{style:{flex:1,color:"var(--ink-primary)"}},c[0]),h("span",{className:"mono",style:{color:c[2]}},c[1]),c[1]==="running"?h(O.Button,{size:"sm","aria-label":"Cancel subagent "+c[0]},"Cancel"):null)})))}
+function App(){
+ return h(React.Fragment,null,
+  Cap("thinking status · Nilo's face, a verb, a detail line, quiet metrics (thinking, then waiting at a gate)"),
+  h("div",{className:"row"},
+   h("div",{className:"line"},h(O.Nilo,{state:"thinking",crop:"face",cell:2,label:"Nilo thinking"}),h("div",null,h("div",{style:{font:"500 13px/1.4 var(--font-ui)",color:"var(--ink-primary)"}},"Weaving the harness\u2026 ",h("span",{className:"mono"},"1m 12s \u00b7 4.2k tok")),h("div",null,"Waiting on the provider."))),
+   h("div",{className:"line"},h(O.Nilo,{state:"waiting",crop:"face",cell:2,label:"Nilo waiting"}),h("div",null,h("div",{style:{font:"500 13px/1.4 var(--font-ui)",color:"var(--ink-primary)"}},"Waiting for you\u2026"),h("div",null,"The human gate is open.")))),
+  Cap("tool card · approval pending, high risk (argv one item per line)"),
+  h("div",{className:"card",style:{maxWidth:520,borderColor:"var(--fault)"}},
+   h("div",{className:"line"},h("span",{className:"mono",style:{color:"var(--ink-primary)"}},"Run command"),h("span",{className:"mono"},"\u00b7 requested by the model"),h(O.Badge,{tone:"fault"},"high risk"),h("span",{style:{flex:1}}),h("span",{className:"mono",style:{color:"var(--warn-text)"}},"waiting for approval")),
+   h("ol",{"aria-label":"argv",style:{margin:"var(--space-2) 0",padding:"var(--space-2) var(--space-3)",listStyle:"none",background:"var(--sub-100)",borderRadius:"var(--radius-control)",font:"400 12px/1.6 var(--font-mono)",color:"var(--ink-primary)"}},h("li",null,"rm"),h("li",null,"-rf"),h("li",null,"build/")),
+   h("p",{style:{margin:0,color:"var(--ink-mute)"}},"This runs locally with your privileges; there is no system sandbox. It runs only if you approve."),
+   h("div",{className:"line",style:{marginTop:"var(--space-2)"}},h(O.Button,{variant:"primary"},"Approve"),h(O.Button,null,"Reject"))),
+  Cap("subagent tree · per-child cancel"),
+  Tree(),
+  Cap("turn diff · per-file revert, with the reason when it cannot"),
+  h("section",{"aria-label":"Files this turn changed",className:"card",style:{maxWidth:520,background:"var(--sub-100)"}},
+   h("p",{style:{margin:0,font:"500 10px/1.4 var(--font-ui)",letterSpacing:"0.1em",textTransform:"uppercase",color:"var(--ink-dim)"}},"Files this turn changed"),
+   [["src/paginate.ts","modified","+4 \u22122",true],["notes.md","added","+12 \u22120",true],["logo.png","modified","",false]].map(function(f,i){return h("div",{key:i,className:"line",style:{marginTop:"var(--space-1)",flexWrap:"wrap"}},h("span",{style:{flex:1,color:"var(--ink-primary)"}},f[0]),h("span",{className:"mono"},f[1]),h("span",{className:"mono"},f[2]),f[3]?h(O.Button,{size:"sm",variant:"ghost"},"Diff"):null,f[3]?h(O.Button,{size:"sm"},"Revert"):h("span",{className:"mono"},"binary \u2014 no diff, cannot be reverted"))})),
+  Cap("run states: markers carry shape as well as colour"),
+  h("div",{className:"row mono"},
+   [["gate","diamond"],["error","filled fault square"],["running","hollow, role edge"],["done","filled, role colour"],["skipped","dashed"],["pending","small hollow"]].map(function(m){return h("span",{key:m[0],className:"line"},h("span",{className:"oh-mark",style:{background:m[0]==="error"?"var(--fault)":m[0]==="done"?"var(--role-agent)":"transparent",border:m[0]==="running"?"2px solid var(--role-agent)":m[0]==="gate"?"1px solid var(--warn)":m[0]==="skipped"?"1px dashed var(--ink-faint)":m[0]==="pending"?"1px solid var(--ink-faint)":"0",transform:m[0]==="gate"?"rotate(45deg)":"none",width:m[0]==="pending"?7:9,height:m[0]==="pending"?7:9},"aria-hidden":"true"}),m[0]+" \u00b7 "+m[1])})))}
+ReactDOM.createRoot(document.getElementById('r')).render(h(App));
+</script></body></html>
