@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { validateMaxTokens } from "./runBudgetRules";
 
@@ -10,6 +10,10 @@ export function RunBudgetField() {
   const stored = useRunBudgetStore((s) => s.maxTokens);
   const [text, setText] = useState(stored ? String(stored) : "");
   const [error, setError] = useState("");
+  // The stored ceiling arrives after the first (server-matching) render: fill an empty field with it.
+  useEffect(() => {
+    setText((t) => (stored != null && t.trim() === "" ? String(stored) : t));
+  }, [stored]);
 
   const onChange = (next: string) => {
     setText(next);

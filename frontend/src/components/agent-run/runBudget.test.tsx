@@ -64,3 +64,21 @@ describe("RunBudgetField", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 });
+
+describe("persisted ceiling", () => {
+  afterEach(() => {
+    localStorage.clear();
+    useRunBudgetStore.setState({ maxTokens: null });
+  });
+
+  it("is saved when set and checked again when read back", async () => {
+    useRunBudgetStore.getState().setMaxTokens(5000);
+    expect(JSON.parse(localStorage.getItem("oh.runBudget.v1") ?? "{}").state.maxTokens).toBe(5000);
+    localStorage.setItem("oh.runBudget.v1", JSON.stringify({ state: { maxTokens: 3 }, version: 0 }));
+    await useRunBudgetStore.persist.rehydrate();
+    expect(useRunBudgetStore.getState().maxTokens).toBeNull(); // below the rules table: not trusted
+    localStorage.setItem("oh.runBudget.v1", JSON.stringify({ state: { maxTokens: 7000 }, version: 0 }));
+    await useRunBudgetStore.persist.rehydrate();
+    expect(useRunBudgetStore.getState().maxTokens).toBe(7000);
+  });
+});

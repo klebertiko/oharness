@@ -46,6 +46,8 @@ class ExecuteRequest(BaseModel):
     instruction: str | None = None
     cwd: str | None = None
     worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
+    # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
+    max_tokens: Any = None
 
 
 class DirectRequest(BaseModel):
@@ -322,6 +324,10 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
     require_workspace(body.worktree, cwd)
+    try:
+        run_budget = RunBudget(validate_max_tokens(body.max_tokens))
+    except ValueError:
+        return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     isolation = RunWorktree(cwd) if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
@@ -408,6 +414,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         # reducer client-side after a reload.
         events: list[dict] = []
         run_cwd = cwd
+        spent, ceiling_hit = 0, False
         try:
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
@@ -450,10 +457,23 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                 ):
                     parsed = _parse_sse_chunk(chunk)
                     if parsed:
+                        if parsed["event"] in ("node_done", "node_error"):
+                            spent += int(parsed["data"].get("tokens") or 0)
+                        if parsed["event"] == "harness_done" and ceiling_hit:
+                            # The run was stopped on purpose: say why, not just "stopped".
+                            parsed["data"]["status"] = STATUS_BUDGET_EXCEEDED
+                            chunk = _sse("harness_done", parsed["data"])
                         events.append(parsed)
                         if parsed["event"] == "harness_done":
                             status = parsed["data"].get("status", "complete")
                     yield chunk
+                    if parsed and not ceiling_hit and parsed["event"] in ("node_done", "node_error") and run_budget.exceeded(spent):
+                        ceiling_hit = True
+                        evt = {"event": "budget_exceeded", "data": {"max_tokens": run_budget.max_tokens, "used_tokens": spent}}
+                        events.append(evt)
+                        yield _sse(evt["event"], evt["data"])
+                        control.stop.set()  # the engine unwinds at its next checkpoint: no further node starts
+                        control.release()
         except GeneratorExit:
             control.stop.set()
             status = "interrupted"

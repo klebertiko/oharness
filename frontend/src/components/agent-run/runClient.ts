@@ -15,6 +15,8 @@ export interface StartRunPayload {
   mode: string;
   step: boolean;
   instruction?: string;
+  /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
+  max_tokens?: number;
   /** Working folder for CLI-backed adapters — a Cowork project's `rootPath`.
       Omitted (not empty-string) when the person picked "No folder", so the
       backend's own `resolve_cwd()` fallback decides, not an empty path. */

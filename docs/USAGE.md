@@ -26,6 +26,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
+- **Token ceiling**: the composer field sets the most tokens one run may use (100 to 10,000,000; empty means no ceiling, and the value is remembered). A run that reaches it stops at once and is marked **Budget exceeded** in the chat and in Run history. When a long tool conversation is compacted, the run shows the tokens before and after.
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)).
 
 ## Studio
