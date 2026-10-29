@@ -38,7 +38,7 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Copy.** Hint says the format: "Paste the key from your Anthropic console" / "Cole a chave do console da Anthropic". Error says what is wrong and what to do: "That key was rejected. Replace it." / "A chave foi recusada. Substitua-a."
 
-**In the app.** `ThreadsSidebar` uses `Input` (the chat search, `compact`). Fields in the Studio inspector are styled by hand (`PropertiesPanel` `inputCls`) and the composer uses its own textarea; `Input` is the one to use for new forms.
+**In the app.** `ThreadsSidebar` and the Providers model filter use `Input` (`compact`). Fields in the Studio inspector are styled by hand (`PropertiesPanel` `inputCls`) and the composer uses its own textarea; `Input` is the one to use for new forms.
 
 ## Badge
 
@@ -74,6 +74,8 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Use.** `title` and `titleId` together make a labelled region (`aria-labelledby`). Only `float` has a shadow.
 
+**Heading level.** `level={3}` makes the title an `h3` for a panel nested under a screen's `h2` (the Providers panels).
+
 **Don't.** A shadow to separate two panels (use a value step and `line`); nested panels more than one deep.
 
 **Two implementations.** The shell's docked regions (Harnesses, Runs, Threads, Studio panels, Cowork) still use `components/shell/Panel`, a 32px header with a `t-title` and mono meta, without the labelled-region contract. New work uses `ui/Panel`; merging the two is a follow-up (audit D6).
@@ -90,7 +92,9 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Don't.** Colour as the only selected cue; actions that are visible on every row (show them on hover or focus); a second selected mark.
 
-**In the app.** The shell's variant (`shell/ListRow`, with `StatusDot`, `ListGroup` and `RowAction`) is what Runs, Harnesses and Providers rows use today; `ui/ListRow` is the specified one (audit D6).
+**Description line.** `description` is a second line in plain `t-body` (the Providers list puts the status word and the short fix there); `meta` stays mono machine detail.
+
+**In the app.** The Providers list uses `ui/ListRow`. The shell's variant (`shell/ListRow`, with `StatusDot`, `ListGroup` and `RowAction`) is still what Runs, Harnesses and the Threads sidebar use; `ui/ListRow` is the specified one (audit D6).
 
 ## Notice
 
@@ -160,13 +164,15 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Rules.** Decorative by construction (`aria-hidden`): the word beside it carries the meaning, so colour is never alone, and hollow versus filled keeps "not set up" apart from "tried and failed". One marker per row.
 
-**Status.** Foundation only; the Providers rebuild is its first consumer. The chat picker's 6px tone dots and the shell's 7px `StatusDot` are older vocabularies that fold into it (audit D6).
+**Status.** The Providers screen (list rows, connection header, spend card) is its first consumer. The chat picker's 6px tone dots and the shell's 7px `StatusDot` are older vocabularies that fold into it (audit D6).
 
 ## ConfirmInline
 
 **Purpose.** Confirm a destructive action where it was asked, not in a dialog.
 
 **Anatomy.** A `role="group"` row: the prompt (wraps from 192px), a secondary **Cancel** that has the focus on arrival, and a `danger` button that names the act ("Remove key", never "OK"), with `loading` while it works. Escape cancels unless busy. Cancel's label comes from the `common.cancel` catalogue key.
+
+**In the app.** Removing a saved key on the Providers screen.
 
 **Don't.** A modal for a confirmation that fits in the row; "OK" or "Yes" on the destructive button.
 

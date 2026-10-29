@@ -61,6 +61,7 @@
       props.leading ? h("span", { className: "oh-row__lead" }, props.leading) : null,
       h("span", { className: "oh-row__main" },
         h("span", { className: "oh-row__title" }, props.title),
+        props.description ? h("span", { className: "oh-row__desc" }, props.description) : null,
         props.meta ? h("span", { className: "oh-row__meta" }, props.meta) : null),
       props.trailing ? h("span", { className: "oh-row__trail" }, props.trailing) : null);
   }
