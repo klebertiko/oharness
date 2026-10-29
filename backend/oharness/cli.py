@@ -104,7 +104,16 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--workspace", help="live/local: a project registered in OHarness; the run works in its folder")
     run_parser.add_argument("--worktree", action="store_true", help="live/local: run in a worktree of its own made from --workspace, removed when the run ends")
 
+    from . import headless
+
+    headless._backend_on_path()  # the factory intake lives beside `engine` in the backend, not in this package
+    from factory_intake import cli as factory_cli
+
+    factory_cli.add_parser(sub)
+
     args = parser.parse_args(argv)
+    if args.cmd == "factory":
+        return factory_cli.run(args)
     if args.cmd == "validate":
         result = validate_path(args.path)
         print(json.dumps({"ok": result.ok, "errors": result.errors}, indent=2))

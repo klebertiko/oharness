@@ -41,7 +41,8 @@ class PollState:
 class GitHubConnector:
     kind = "github"
 
-    def __init__(self, allowed_repos=frozenset(), secrets=None, client: httpx.Client | None = None, self_logins=frozenset()):
+    def __init__(self, allowed_repos=frozenset(), secrets=None, client: httpx.Client | None = None, self_logins=frozenset(),
+                 webhook_secret_ref: str | None = None, token_ref: str | None = None):
         """``allowed_repos`` is ``owner/name`` (empty accepts nothing: fail closed). ``self_logins`` are the GitHub accounts the factory's
         token posts as; their comments are never work (replies also carry ``MARKER``). An injected ``client`` stays the caller's."""
         self.allowed_repos = frozenset(r.lower() for r in allowed_repos)
@@ -49,6 +50,8 @@ class GitHubConnector:
         self._secrets = secrets
         self._client = client
         self._owns_client = client is None
+        self._webhook_secret_ref = webhook_secret_ref or secret_ref(WEBHOOK_SECRET_NAME)
+        self._token_ref = token_ref or secret_ref(TOKEN_NAME)
 
     def required_scopes(self) -> tuple[str, ...]:
         return ("issues:write", "pull_requests:write", "metadata:read")
@@ -64,7 +67,7 @@ class GitHubConnector:
         return self._client
 
     def _token(self) -> str:
-        token = (self._secrets.get(secret_ref(TOKEN_NAME)) if self._secrets else None) or ""
+        token = (self._secrets.get(self._token_ref) if self._secrets else None) or ""
         if not token:
             raise ConnectorError("no GitHub token is stored for the factory")
         return token
@@ -76,7 +79,7 @@ class GitHubConnector:
     # -- webhook -----------------------------------------------------------------------------------------------------------------
     def verify(self, delivery: Delivery) -> str:
         """Check the HMAC against the secret in the store and return the delivery id (for the replay guard)."""
-        secret = (self._secrets.get(secret_ref(WEBHOOK_SECRET_NAME)) if self._secrets else None) or ""
+        secret = (self._secrets.get(self._webhook_secret_ref) if self._secrets else None) or ""
         verify_hmac_sha256(secret.encode(), delivery.body, delivery.headers.get("x-hub-signature-256"))
         delivery_id = delivery.headers.get("x-github-delivery", "").strip()
         if not delivery_id:
