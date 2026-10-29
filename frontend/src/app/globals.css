@@ -824,6 +824,6 @@ input[type="range"]::-webkit-slider-thumb {
 }
 @media (prefers-reduced-motion: no-preference) {
   .oh-ghost-in {
-    animation: oh-ghost-in 220ms ease-out both;
+    animation: oh-ghost-in 220ms ease-out backwards;
   }
 }

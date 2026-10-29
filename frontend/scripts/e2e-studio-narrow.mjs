@@ -41,6 +41,18 @@ const launch = process.env.OHM_BROWSER_EXECUTABLE
   : { channel: process.env.OHM_BROWSER_CHANNEL || "msedge", headless: true };
 const browser = await chromium.launch(launch);
 const failures = [];
+async function stubbedContext(options, init) {
+  const context = await browser.newContext({ serviceWorkers: "block", ...options });
+  await context.addInitScript(init.fn, init.arg);
+  await context.route(`${API}/**`, async (route) => {
+    const request = route.request();
+    const key = `${request.method()} ${new URL(request.url()).pathname}`;
+    if (!Object.hasOwn(stubs, key)) return route.fulfill({ status: 501, contentType: "application/json", body: "{}" });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(stubs[key]) });
+  });
+  return context;
+}
+
 
 async function axe(page, label) {
   await page.addScriptTag({ content: axeSource });
@@ -54,16 +66,12 @@ async function axe(page, label) {
 for (const theme of ["dark", "light"]) {
   for (const width of [390, 768]) {
     const label = (s) => `${s} · ${theme} · ${width}`;
-    const context = await browser.newContext({ viewport: { width, height: 844 }, serviceWorkers: "block", reducedMotion: "reduce" });
-    await context.addInitScript(([t, api]) => {
-      try { localStorage.setItem("oharness-theme", t); } catch { /* storage blocked */ }
-      window.__OH_API__ = api;
-    }, [theme, API]);
-    await context.route(`${API}/**`, async (route) => {
-      const request = route.request();
-      const key = `${request.method()} ${new URL(request.url()).pathname}`;
-      if (!Object.hasOwn(stubs, key)) return route.fulfill({ status: 501, contentType: "application/json", body: "{}" });
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(stubs[key]) });
+    const context = await stubbedContext({ viewport: { width, height: 844 }, reducedMotion: "reduce" }, {
+      fn: ([t, api]) => {
+        try { localStorage.setItem("oharness-theme", t); } catch { /* storage blocked */ }
+        window.__OH_API__ = api;
+      },
+      arg: [theme, API],
     });
     const page = await context.newPage();
     page.setDefaultTimeout(12000);
@@ -88,6 +96,7 @@ for (const theme of ["dark", "light"]) {
       assert.ok(cardBox && cardBox.x >= 0 && cardBox.x + cardBox.width <= width + 1, `review card inside ${width}px`);
       assert.ok(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), "no sideways scroll");
       // Reduced motion: the ghosts arrive without an animation.
+      assert.ok((await page.locator(".react-flow__node").count()) >= 2, "ghosts are on the canvas");
       const animated = await page.evaluate(() => [...document.querySelectorAll(".react-flow__node")].some((n) => getComputedStyle(n).animationName !== "none"));
       assert.equal(animated, false, "no animation under reduced motion");
       await axe(page, label("review"));
@@ -103,13 +112,9 @@ for (const theme of ["dark", "light"]) {
 }
 // With motion allowed, the proposal fades in (opacity only).
 {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block", reducedMotion: "no-preference" });
-  await context.addInitScript((api) => { window.__OH_API__ = api; }, API);
-  await context.route(`${API}/**`, async (route) => {
-    const request = route.request();
-    const key = `${request.method()} ${new URL(request.url()).pathname}`;
-    if (!Object.hasOwn(stubs, key)) return route.fulfill({ status: 501, contentType: "application/json", body: "{}" });
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(stubs[key]) });
+  const context = await stubbedContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "no-preference" }, {
+    fn: (api) => { window.__OH_API__ = api; },
+    arg: API,
   });
   const page = await context.newPage();
   page.setDefaultTimeout(12000);

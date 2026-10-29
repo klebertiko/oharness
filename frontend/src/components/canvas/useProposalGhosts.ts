@@ -29,7 +29,7 @@ export function useProposalGhosts() {
         draggable: false,
         selectable: false,
         deletable: false,
-        className: "oh-ghost-in",
+        className: [(n as { className?: string }).className, "oh-ghost-in"].filter(Boolean).join(" "),
         connectable: false,
         // Not in the store, so the flow's own measurements never land on them: give a size to be drawn at all.
         initialWidth: 212,

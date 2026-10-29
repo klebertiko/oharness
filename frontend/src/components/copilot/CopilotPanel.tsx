@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Panel } from "@/components/shell/Panel";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
+import { PROPOSAL_STATES } from "@/lib/copilot/rules";
 import { useAssistProvider } from "@/lib/copilot/useAssistProvider";
 import { useCopilotStore, type Turn } from "@/store/copilotStore";
 import { ProposalCard } from "./ProposalCard";
@@ -82,7 +83,7 @@ export function CopilotPanel() {
   const [draft, setDraft] = useState("");
   const working = status === "working";
   // A proposal still waiting for review is what this request refines.
-  const refining = turns.some((t) => t.proposal?.state === "pending");
+  const refining = turns.some((t) => t.proposal && PROPOSAL_STATES[t.proposal.state].pending);
   const seconds = useElapsed(working);
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
