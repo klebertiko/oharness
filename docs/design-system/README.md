@@ -10,6 +10,7 @@ The design reference for every surface of the app. Tokens are the single vocabul
 | `brand.md` | Nilo: identity, style lock, animation language, where she may appear. |
 | `adoption.md` | Wiring, drift found in the app, decisions, guardrails and order of work. |
 | `audit/screens.md` | The screen-by-screen audit before the redesign and the same measurements after it, with captures in both themes. |
+| `audit/providers.md` | The Providers screen audit before its redesign, with captures in both themes at four widths. |
 
 Commands, from the repository root:
 
