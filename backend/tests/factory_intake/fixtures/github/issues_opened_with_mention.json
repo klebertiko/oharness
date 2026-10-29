@@ -1,0 +1,21 @@
+{
+ "action": "opened",
+ "issue": {
+  "number": 7,
+  "title": "Checkout fails",
+  "body": "@payments fix the rounding",
+  "html_url": "https://github.com/acme/payments/issues/7",
+  "labels": [],
+  "user": {
+   "login": "alice",
+   "type": "User"
+  }
+ },
+ "sender": {
+  "login": "alice",
+  "type": "User"
+ },
+ "repository": {
+  "full_name": "acme/payments"
+ }
+}

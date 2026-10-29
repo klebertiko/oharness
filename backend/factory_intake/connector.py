@@ -68,8 +68,11 @@ class Connector(Protocol):
     def required_scopes(self) -> tuple[str, ...]:
         """The minimum token permissions this connector needs, shown to the owner (documented per connector)."""
 
+    def verify(self, delivery: Delivery) -> str:
+        """Check the delivery's signature against the secret in the store (raises ``Rejected``); returns its delivery id for the replay guard."""
+
     def parse(self, delivery: Delivery, rules: TriggerRules) -> list[WorkItemDraft]:
-        """Authenticity is already checked by the receiver. Returns drafts only for activity the rules select; ignores the rest."""
+        """Called only after ``verify``. Returns drafts only for activity the rules select; ignores the rest."""
 
     def reply(self, ref: SourceRef, text: str) -> None:
         """Post ``text`` in the thread ``ref`` came from. Raises on failure; never merges, never pushes."""

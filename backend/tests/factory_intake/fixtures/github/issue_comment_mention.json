@@ -1,0 +1,29 @@
+{
+ "action": "created",
+ "issue": {
+  "number": 7,
+  "title": "Checkout fails",
+  "body": "steps...",
+  "html_url": "https://github.com/acme/payments/issues/7",
+  "labels": [],
+  "user": {
+   "login": "alice",
+   "type": "User"
+  }
+ },
+ "comment": {
+  "id": 501,
+  "body": "@payments please triage this",
+  "user": {
+   "login": "alice",
+   "type": "User"
+  }
+ },
+ "sender": {
+  "login": "alice",
+  "type": "User"
+ },
+ "repository": {
+  "full_name": "acme/payments"
+ }
+}
