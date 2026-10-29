@@ -95,6 +95,8 @@ export interface Segment {
   failover?: { attempts: FailoverAttempt[] };
 
   state: SegmentState;
+  /** A continued run took this node's output from the run it continues instead of executing it (`node_restored`). */
+  restored?: boolean;
   phase: Phase;
   phaseDetail: string;
 

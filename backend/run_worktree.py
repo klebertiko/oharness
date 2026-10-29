@@ -27,8 +27,9 @@ def require_workspace(requested: bool, cwd: str | None) -> None:
 class RunWorktree:
     """``open()`` makes the worktree and returns its directory; ``close()`` removes it (never raises: a leftover is an `orphaned` workspace)."""
 
-    def __init__(self, repo: str, service: WorkspaceService | None = None):
+    def __init__(self, repo: str, service: WorkspaceService | None = None, ref: str = "HEAD"):
         self.repo = repo
+        self.ref = ref  # HEAD, or the rescue ref of the run this one continues
         self.service = service or WorkspaceService()
         self.workspace_id: str | None = None
         self.path: str | None = None
@@ -37,7 +38,7 @@ class RunWorktree:
     async def open(self) -> str:
         try:
             with anyio.CancelScope(shield=True):  # a cancellation must not leave a worktree nobody knows about: record it, then let close() remove it
-                info = await anyio.to_thread.run_sync(self.service.create, self.repo, "HEAD")
+                info = await anyio.to_thread.run_sync(self.service.create, self.repo, self.ref)
                 self.workspace_id, self.path = info["id"], info["path"]
         except WorkspaceError as exc:
             raise RuntimeError(f"could not make a worktree for this run: {exc.message}") from exc

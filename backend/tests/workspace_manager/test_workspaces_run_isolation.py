@@ -122,3 +122,38 @@ def test_a_folder_that_is_not_a_repository_fails_the_run_with_an_error_event(oh_
                 chunks.append(chunk)
         client.portal.call(drain)
         assert any("event: error" in c and "worktree" in c for c in chunks) and engine_that_writes == []
+
+
+def test_a_continued_worktree_run_starts_from_the_edits_the_earlier_run_left(repo, oh_env, monkeypatch):
+    """The nodes already done are restored, not run again, so their file edits must be there: the new worktree starts from the rescue ref."""
+    import json
+
+    seen = {}
+
+    async def fake(graph, execution_mode="mock", control=None, run_id="", cwd=None, resume_outputs=None, **kwargs):
+        seen["cwd"], seen["resume"] = cwd, resume_outputs
+        seen["files"] = sorted(p.name for p in Path(cwd).glob("*.txt"))
+        if not resume_outputs:
+            Path(cwd, "edit-by-node-a.txt").write_text("node a was here\n", encoding="utf-8")
+            yield 'event: run_start\ndata: {"run_id": "%s", "mode": "mock", "order": []}\n\n' % run_id
+            yield 'event: node_done\ndata: {"node_id": "a", "output": "done a", "tokens": 0}\n\n'
+            yield 'event: node_start\ndata: {"node_id": "b"}\n\n'  # the run is cut off here
+        else:
+            yield 'event: harness_done\ndata: {"status": "complete", "total_tokens": 0, "tokens_estimated": false, "elapsed_ms": 0, "nodes_run": 0}\n\n'
+
+    monkeypatch.setattr(execution, "execute_harness", fake)
+    with TestClient(app) as client:
+        client.portal.call(register, repo.path)
+        parent = client.portal.call(start, repo.path)
+        parent_id = parent.headers["X-Execution-Id"]
+        for _ in range(4):  # worktree_ready, run_start, node_done, node_start
+            client.portal.call(anext, parent.body_iterator)
+        client.portal.call(parent.body_iterator.aclose)
+        assert len(worktrees(repo)) == 1  # the parent's worktree is gone; its edits live on the rescue ref
+    with TestClient(app) as client:
+        child = client.post(f"/execute/logs/{parent_id}/continue").json()["id"]
+        assert client.post(f"/execute/logs/{child}/start").status_code == 200
+        assert seen["resume"] == {"a": "done a"}
+        assert seen["files"] == ["edit-by-node-a.txt"]
+        assert len(worktrees(repo)) == 1  # and the continuation's worktree is removed when it ends
+        assert json.loads(client.get(f"/execute/logs/{child}").text)["status"] == "complete"
