@@ -90,7 +90,7 @@ export function TitleBar({
 
       <div
         data-tauri-drag-region
-        style={{ width: hydrated ? leftWidth : undefined }}
+        style={hydrated ? ({ "--brand-w": `${leftWidth}px` } as React.CSSProperties) : undefined}
         className="oh-header-brand flex min-w-0 flex-none items-center gap-2.5 px-4"
       >
         <Mark />
