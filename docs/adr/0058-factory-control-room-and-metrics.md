@@ -7,7 +7,7 @@ Status: proposta (issue #244, pacote A). Depende de 0053–0057.
 ### Sala de controle (app local, sem web hospedada)
 Destino do app para a fábrica, seguindo `docs/design-system/` (tokens, dois temas, alvo de toque de 44 px do ADR 0033, i18n pt-BR/en do ADR 0034, axe sem violações). Seções:
 1. **Runs**: ao vivo e históricas (usa o jornal existente). Abrir uma run ao vivo mostra a árvore e os eventos e permite interagir pelos controles que a run já oferece (parar, aprovar HITL, fila de mensagens).
-2. **Work items**: kanban pelas colunas derivadas (`new`, `triaged`, `planned`, `implementing`, `in_review`, `verifying`, `done`, `parked`); card abre histórico, spec (editável, com aprovar), artefatos e runs vinculadas. Mover cartão por arrastar **não** existe: as transições são ações com checkpoint, também acessíveis por teclado.
+2. **Work items**: kanban pelas colunas derivadas da tabela do ADR 0053 (`new`, `triaged`, `planned`, `implementing`, `in_review`, `verifying`, `monitoring`, `needs_you`, `parked`, `done`; `closed` atrás de filtro); card abre histórico, spec (editável, com aprovar), artefatos e runs vinculadas. Mover cartão por arrastar **não** existe: as transições são ações com checkpoint, também acessíveis por teclado.
 3. **Caixa de entrada**: itens `awaiting_human` (specs a aprovar, "pronto para revisão", perguntas do foreman).
 4. **Automações**: lista (somente leitura no pacote A; o B preenche).
 5. **Configuração**: definição vigente, diff entre versões, ativar/canary/rollback, agentes ligados/desligados, memória por agente, segredos (sem valores).

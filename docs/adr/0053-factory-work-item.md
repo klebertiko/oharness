@@ -17,17 +17,34 @@ Um **work item** é a linha persistente de uma tarefa. Mora no mesmo SQLite do s
 | `factory_id` | fábrica dona (ADR 0056). |
 | `factory_version` | hash da versão da definição fixada **na criação**; o item termina na versão em que começou (rollback/canary não o alteram). |
 | `title` | até 200 caracteres, redigido. |
-| `source` | `{kind, ref, url?}`. `kind`: `github_issue`, `github_pr`, `conversation`, `schedule`, `webhook`, `manual`. `ref` é opaco para o sidecar (ex.: `owner/repo#12`). A chave `(factory_id, source.kind, source.ref)` deduplica: repetir a entrada devolve o item existente (`200`), não cria outro. |
+| `source` | `{kind, ref, url?}`. `kind`: `github_issue`, `github_pr`, `conversation`, `schedule`, `webhook`, `manual`, `monitor` (aberto pelo estágio Monitor, ADR 0055). `ref` é opaco para o sidecar (ex.: `owner/repo#12`). A chave `(factory_id, source.kind, source.ref)` tem restrição **UNIQUE no banco** entre itens **abertos** (índice parcial: `status` fora de `done`, `cancelled`, `failed`); repetir a entrada (ou duas tentativas simultâneas de webhook) devolve o item aberto existente (`200`) e perde a corrida no banco, não no código. Se o item existente já fechou, uma nova entrada com a mesma chave cria um **novo** item ligado ao anterior (`reopens: <id>`); assim uma issue reaberta é refeita. `schedule` e `monitor` usam um `ref` com carimbo da ocorrência (ex.: `daily-cleanup@2026-10-29`), nunca um `ref` fixo. |
 | `origin_context` | texto de origem + anexos por referência. **Imutável** e preservado do começo ao fim: estágios leem, nunca reescrevem; novas informações entram como eventos. Sempre `trust: "untrusted"`. Redigido na entrada (`redact_value`). Limite: 64 KB; excedente é truncado com marcador, nunca descartado em silêncio. |
 | `stage` | `triage`, `spec`, `implement`, `review`, `verify`, `monitor` (ADR 0055). |
 | `status` | `queued`, `running`, `awaiting_human`, `parked`, `done`, `cancelled`, `failed`. |
-| `column` | derivada (nunca gravada) de `stage`+`status` para o kanban: `new`, `triaged`, `planned`, `implementing`, `in_review`, `verifying`, `done`, `parked`. |
+| `column` | derivada (nunca gravada) de `stage`+`status` pela **tabela única** abaixo. |
 | `spec` | texto da spec vigente + `spec_revision` (inteiro) + `approved_revision` (nulo até um humano aprovar). |
 | `cost` | tokens agregados das runs vinculadas (prompt/completion) e estimativa quando houver preço em `usage_tracking`. |
 | `created_at`, `updated_at`, `closed_at` | UTC. |
 
+### Tabela `stage`+`status` → `column`
+A tabela mora em `backend/factory/stages.py` e é espelhada em `frontend/src/factory/types.ts`; um teste de paridade compara os dois e exige que **todo** par possível tenha coluna.
+| Condição | Coluna |
+| --- | --- |
+| `status` = `done` | `done` |
+| `status` = `cancelled` ou `failed` | `closed` (mostra o motivo; filtro, não coluna principal do quadro) |
+| `status` = `parked` (qualquer estágio) | `parked` |
+| `awaiting_human` (qualquer estágio) | `needs_you` (a caixa de entrada; o cartão mostra o estágio) |
+| `stage` = `triage` (`queued`/`running`) | `new` |
+| `stage` = `spec` | `triaged` |
+| `stage` = `implement`, spec aprovada ou não exigida e ainda não iniciou | `planned` |
+| `stage` = `implement` em execução | `implementing` |
+| `stage` = `review` | `in_review` |
+| `stage` = `verify` | `verifying` |
+| `stage` = `monitor` | `monitoring` |
+O quadro mostra as colunas principais; `closed` fica atrás de um filtro. `GET ?column=` aceita todas.
+
 ### Tabelas auxiliares (todas append-only, exceto onde dito)
-- `factory_work_item_events`: histórico. `{work_item_id, sequence, type, actor, data_json, at}`. `actor.kind`: `human`, `foreman`, `agent`, `system`, `source`. Tipos: `created`, `stage_entered`, `stage_skipped`, `returned_to_review`, `spec_proposed`, `spec_edited`, `spec_approved`, `checkpoint_requested`, `checkpoint_resolved`, `run_linked`, `artifact_added`, `parked`, `resumed`, `cancelled`, `note`. `data_json` passa por `redact_value`.
+- `factory_work_item_events`: histórico. `{work_item_id, sequence, type, actor, data_json, at}`. `actor.kind`: `human`, `foreman`, `agent`, `system`, `source`. Tipos: `created`, `stage_entered`, `stage_skipped`, `returned_to_implement`, `verify_failed`, `recovered`, `advanced`, `changes_requested`, `failed`, `spec_proposed`, `spec_edited`, `spec_approved`, `checkpoint_requested`, `checkpoint_resolved`, `run_linked`, `artifact_added`, `parked`, `resumed`, `cancelled`, `note`. `data_json` passa por `redact_value`.
 - `factory_work_item_runs`: vínculo `{work_item_id, run_id, stage, agent_id, role}`. A run em si continua no jornal existente; o work item **referencia**, não copia, eventos.
 - `factory_artifacts`: `{id, work_item_id, kind, ref, label, created_at}`; `kind`: `pr` (URL), `diff` (ref de resgate/intervalo git), `video` (arquivo local sob a pasta de dados da fábrica), `spec`, `report`. O sidecar guarda **referências**, não segredos nem binários grandes.
 
@@ -40,7 +57,7 @@ GET  /factory/work-items/{id}/events?after=   histórico paginado
 POST /factory/work-items/{id}/actions         {action, ...}
 GET  /factory/metrics?window=                 ADR 0058
 ```
-`action`: `approve_spec {revision}`, `edit_spec {text, base_revision}`, `request_changes {note}`, `advance`, `park`, `resume`, `cancel`, `note`. Toda ação é um evento com `actor`. `edit_spec` com `base_revision` velha responde `409` (sem sobrescrever o que outra pessoa editou). Não existe ação `merge`, em nenhuma camada (ADR 0055).
+`action`: `approve_spec {revision}`, `edit_spec {text, base_revision}`, `request_changes {note}`, `advance`, `park`, `resume`, `cancel`, `note`. Toda ação é um evento com `actor`. `actor` é sempre definido **pelo servidor** a partir da credencial da chamada (ADR 0055); um `actor` enviado pelo cliente é ignorado. Ação sem evento equivalente não existe: `request_changes`→`changes_requested`, `advance`→`advanced`. `edit_spec` com `base_revision` velha responde `409` (sem sobrescrever o que outra pessoa editou). Não existe ação `merge`, em nenhuma camada (ADR 0055).
 
 Corpo de criação (o que o pacote B envia):
 ```json
