@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Mark } from "./Mark";
-import { useShellStore } from "./shellStore";
+import { RAIL_COLLAPSED, useShellStore } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
 import { KbdChord } from "@/components/ui";
 
@@ -28,6 +28,8 @@ interface Props {
   nodeCount: number;
   editingHarness?: boolean;
   onOpenPalette: () => void;
+  /** The rail under the bar is icon-only: the brand column takes its width, so the two line up (same state, not a second media query). */
+  railCollapsed?: boolean;
 }
 
 function useTauriWindow() {
@@ -75,6 +77,7 @@ export function TitleBar({
   nodeCount,
   editingHarness,
   onOpenPalette,
+  railCollapsed = false,
 }: Props) {
   const mac = useIsMac();
   const win = useTauriWindow();
@@ -90,7 +93,7 @@ export function TitleBar({
 
       <div
         data-tauri-drag-region
-        style={{ width: hydrated ? leftWidth : undefined }}
+        style={{ width: railCollapsed ? RAIL_COLLAPSED : hydrated ? leftWidth : undefined }}
         className="oh-header-brand flex min-w-0 flex-none items-center gap-2.5 px-4"
       >
         <Mark />
