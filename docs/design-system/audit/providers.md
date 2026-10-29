@@ -59,3 +59,43 @@ Linear's settings put one status line and one action per integration, with the d
 - Captures use a stubbed sidecar and the static export, in headless Chromium on Linux. Font rendering and pixel values may differ slightly from the Tauri webviews on macOS and Windows.
 - The sandbox has no internet and no real provider account, so no real `GET /models` list, no real 401 and no real Ollama were exercised; every fault is a synthetic `detail` that matches an ADR 0013 pattern.
 - Keyboard and reduced-motion behaviour were read from source and checked in the e2e added later in this work, not in this baseline.
+
+## After the redesign
+
+Same script, same nine states, same fixtures, against the screen of ADR 0035 (captures in [`providers-after/`](./providers-after), measurements in its `results.json`). All 40 captures are kept so the audit can be compared state by state: every state in both themes at 1280 and 375, and `providers-empty` also at 320 and 768.
+
+| Measure | Before | After |
+| --- | --- | --- |
+| axe violations (40 captures, both themes) | 0 | 0 |
+| Horizontal page scroll at 320, 375, 768, 1280 | none | none |
+| Controls under 44px with a touch pointer (`pointer: coarse`) | all (7 of 7 at 375px) | 0, from the emulated-touch run in `e2e-providers.mjs`; `results.json` counts with a mouse pointer, so its `under44` is not this figure |
+| Primary buttons in view | up to 2 (header button and Store) | at most 1, in every state tested |
+| Status marks | 2 shapes (round shell dot, square tone dot) | 1 (`StatusMark`, 8px square) |
+| Arbitrary Tailwind values in the new screen files (`ConnectionDetail`, `ConnectionPanel`, `ModelsPanel`, `ProvidersScreen`, `rows`) | 47 in 5 files | 15 in 5 files: 14 layout measures (reading width, pane width, column grid) and the drawn key redaction stripe in `ConnectionPanel.tsx` |
+| Languages | en | en and pt-BR |
+| Sidecar down | indistinguishable from a fresh install | its own notice, Retry, rows say "Can't check" |
+| Loading | rows shown as "Not connected" | skeleton at row height |
+| Model list | all ids in a 260px scroller, no search | filter, capped at 8 (25 with a filter), default marked, Use per row |
+
+How each finding was answered:
+
+| ID | Answer |
+| --- | --- |
+| D1 | `control-touch` (ADR 0033); verified with emulated touch in `e2e-providers.mjs`. |
+| D2, D4 | `StatusMark`, `Badge`-style `Panel`, `Button`, `Input`, `Notice`, `ConfirmInline`; `Chip`, `Btn`, `Block`, `Section` are no longer used by the screen (`Chip` stays for the dev-only run binding). |
+| D3 | The screen's remaining arbitrary values are layout measures. `RunBinding.tsx` (dev route only) still has its old ones. |
+| D5, D6 | The spend card sits under the list, one line, with its own budget error; no raw backend text. |
+| D7, D8 | `providerStore.loadState`; skeleton and offline states. |
+| D9 | ADR 0034, `src/i18n`. |
+| D10 | Removed in the foundation PR. |
+| D11 | Sentences in the body face; `t-meta` only for ids, keys, commands, model names, latencies. |
+| U1 to U3 | One header with one status word and one action, four panels, plain words for where it runs and how it bills. |
+| U4 | When a key is missing the key field is the action. |
+| U5 | Models panel with filter and Use, second after Connection. |
+| U6, U7 | The list is a pane of its own, and the screen on a narrow stage. |
+| U8 | Status words come from `providerReadiness` and `nextStep`; "Needs action" is the first group. |
+| U9 | The screen opens the connection nearest to answering. |
+| U10 | Inline confirmation, Cancel first. |
+| U11 | Not changed: it belongs to the shell title bar. |
+
+Still open: the shell title bar collision at 320px (U11); the rest of the app is not translated (ADR 0034); a real device for the touch check and a native speaker for the pt-BR copy.
