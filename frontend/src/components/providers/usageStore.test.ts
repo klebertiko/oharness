@@ -55,12 +55,12 @@ it("setBudget() saves then refreshes the summary", async () => {
 it("a rejected setBudget records an error and does not refresh", async () => {
   vi.mocked(usageApi.setBudget).mockRejectedValueOnce(new Error("Budget must be zero or a positive USD amount."));
   await useUsageStore.getState().setBudget(-5);
-  expect(useUsageStore.getState().error).toBe("Budget must be zero or a positive USD amount.");
+  expect(useUsageStore.getState().budgetError).toBe("Budget must be zero or a positive USD amount.");
   expect(usageApi.summary).not.toHaveBeenCalled();
 });
 
 it.each([NaN, Infinity, -Infinity, -1])("rejects invalid budget %s before sending JSON", async (value) => {
   await useUsageStore.getState().setBudget(value);
   expect(usageApi.setBudget).not.toHaveBeenCalled();
-  expect(useUsageStore.getState().error).toBe("Budget must be zero or a positive USD amount.");
+  expect(useUsageStore.getState().budgetError).toBe("Budget must be zero or a positive USD amount.");
 });

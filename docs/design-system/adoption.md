@@ -37,10 +37,12 @@ First the tokens mirror exactly what the code does today: parity, zero visual ch
 
 Done: tokens in DTCG format, the brand book, the experience contract, the Nilo rulebook, parity and contrast checks (no known defects left), self-hosted fonts, theme before paint, the corrected and new tokens in `globals.css`, the `ui/` components with tests, the guardrail test, and the redesign of every destination (`audit/screens.md`, with before and after captures in both themes).
 
+After the roadmap (2026-10-29): `audit/components.md` inventories every component and pattern the app gained and the deviations found; one token was added (`edge-selected`, ADR 0037).
+
 Still open:
 
 1. The Tailwind 4 `@theme` migration (#120) and Biome (#119): done. The type scale, spacing, radii and colours now live in the `@theme` block of `globals.css`, and `scripts/design-tokens.mjs` checks the `.t-*` roles against `--text-*` there.
 2. `latin-ext` for the two faces, when a locale needs it.
 3. Playwright pixel snapshots of `/dev/design-system` in both themes.
-4. Decide with the providers owners whether the Providers screen should open on the first provider rather than OpenRouter (`providerStore.selectedId`).
+4. ~~Decide whether the Providers screen should open on the first provider rather than OpenRouter.~~ Done in ADR 0035: with nothing picked, `selectedId` is empty and the screen opens the connection nearest to answering.
 5. Open decision kept from before: radius 10 and 7 against the shipped 4, 6 and 8.
