@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Panel } from "@/components/shell/Panel";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
+import { PROPOSAL_STATES } from "@/lib/copilot/rules";
 import { useAssistProvider } from "@/lib/copilot/useAssistProvider";
 import { useCopilotStore, type Turn } from "@/store/copilotStore";
 import { ProposalCard } from "./ProposalCard";
@@ -81,6 +82,8 @@ export function CopilotPanel() {
   const { mode, connectionId, provider, missing, requestSetup } = useAssistProvider();
   const [draft, setDraft] = useState("");
   const working = status === "working";
+  // A proposal still waiting for review is what this request refines.
+  const refining = turns.some((t) => t.proposal && PROPOSAL_STATES[t.proposal.state].pending);
   const seconds = useElapsed(working);
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -151,7 +154,7 @@ export function CopilotPanel() {
           ))}
           {working && (
             <div role="status" className="flex items-center gap-2">
-              <span className="t-meta text-ink-mute">Working · {seconds}s</span>
+              <span className="t-meta text-ink-mute">{refining ? "Refining the proposal" : "Drafting"} · {seconds}s</span>
               <button
                 type="button"
                 onClick={cancel}

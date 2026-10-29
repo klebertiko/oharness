@@ -816,3 +816,16 @@ input[type="range"]::-webkit-slider-thumb {
     cursor: pointer;
   }
 }
+
+/* A Nilo proposal fades in on the canvas (opacity only: the flow positions nodes with transform).
+   Under reduced motion it simply appears. */
+@keyframes oh-ghost-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .oh-ghost-in {
+    animation: oh-ghost-in 220ms ease-out backwards;
+  }
+}
