@@ -2,7 +2,7 @@
 
 Measured on 2026-10-29 against `main` at `b05a750` (after the roadmap: #89, #90 and the run, queue, diff and subagent work). `audit/screens.md` records the redesign of the screens; this file records what the product has become since, set against what the design system documents. Reproduce the counts with `git grep` as shown in each table, test files and `src/app/dev` excluded.
 
-The Providers screen was rebuilt in parallel (ADRs 0033 to 0036; audit in `providers.md`). Its files were neither measured nor changed here; the counts below exclude `providers/`, and the screen is documented in `components/providers.md`.
+The Providers screen was rebuilt in parallel (ADRs 0033 to 0035; audit in `providers.md`). Its files were neither measured nor changed here; the counts below exclude `providers/`, and the screen is documented in `components/providers.md`.
 
 ## What the design system documented before this change
 

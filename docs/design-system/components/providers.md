@@ -1,6 +1,6 @@
 # Providers
 
-The destination where connections are set up and fixed, rebuilt in ADRs 0033 to 0036 from the audit in `../audit/providers.md`. Code: `frontend/src/components/providers/*` (`ProvidersScreen`, `ConnectionList`, `ConnectionDetail`, `ConnectionPanel`, `ModelsPanel`, `ActivityPanel`, `SpendCard`, `ModelPicker`, `view.ts`, `rows.tsx`). It is a **Curated Library** (`../README.md` § Layout): stronger hierarchy, fewer controls, a status word and one action per connection, no mascot.
+The destination where connections are set up and fixed, rebuilt in ADRs 0033 to 0035 from the audit in `../audit/providers.md`. Code: `frontend/src/components/providers/*` (`ProvidersScreen`, `ConnectionList`, `ConnectionDetail`, `ConnectionPanel`, `ModelsPanel`, `ActivityPanel`, `SpendCard`, `ModelPicker`, `view.ts`, `rows.tsx`). It is a **Curated Library** (`../README.md` § Layout): stronger hierarchy, fewer controls, a status word and one action per connection, no mascot.
 
 **The words are the chat's words.** Readiness (`providerReadiness`), the status word and the one fix (`nextStep`) are the same functions the model picker and the composer use (ADRs 0013 to 0016), so a connection never reads two ways. They go through the `en` and `pt-BR` catalogue (ADR 0034). This is what keeps `model-picker.md` and this page in step.
 
@@ -10,7 +10,7 @@ The destination where connections are set up and fixed, rebuilt in ADRs 0033 to 
 
 **What opens.** `selectedId` is empty until a person picks one. With nothing picked, the open connection is the one **nearest to answering** (the order of ADR 0016), then the first; it is chosen once the sidecar has answered and held, so a connection that turns ready while you work on it does not swap the pane. Opening a connection from the chat (a Needs action row, the composer's call to action) lands directly on it.
 
-**Headings.** A visually hidden `h1` ("Providers"), the list's `h2` ("Connections"), the connection's `h2` (`t-display`), and one `h3` per panel (`Panel level={3}`).
+**Headings.** A visually hidden `h1` ("Providers"), the list's `h2` ("Connections"), one `h3` per list group ("Needs action", "Ready", "Agents only"; the single offline group's is visually hidden), the connection's `h2` (`t-display`), and one `h3` per panel (`Panel level={3}`).
 
 ## Connection list
 
@@ -85,7 +85,7 @@ The vendor's summary, where it runs (this device or the cloud), and a caveat `No
 | State | Behaviour |
 | --- | --- |
 | Loading | List skeleton and a three-block detail skeleton with final heights; nothing says "Not connected" yet. |
-| Offline (sidecar down) | A `fault` `Notice` across the top, "Couldn't reach the sidecar. These rows are the catalogue, not the current state of your connections. Check that OHarness is running, then retry." with **Retry**; rows say Can't check; the detail shows only the identity and a note. A fresh install and a dead sidecar no longer look the same. |
+| Offline (sidecar down) | A `fault` `Notice` across the top, "Couldn't reach the sidecar. These rows are the catalogue, not the current state of your connections. Check that OHarness is running, then retry." with **Retry**; rows say Can't check; the detail shows the identity, a note in place of the Connection, Models and Activity panels, and the About panel (it needs no sidecar). A fresh install and a dead sidecar no longer look the same. |
 | Fresh install | The list's info Notice and the connection nearest to answering open, with its next step as the one primary. |
 | Normal | As above. |
 
@@ -99,7 +99,7 @@ The vendor's summary, where it runs (this device or the cloud), and a caveat `No
 
 ## Tokens and components used
 
-`control-touch` (ADR 0033), `edge-selected` (ADR 0037) on the open row, `StatusMark` and `ConfirmInline` (the first screen to use them), `ListRow` with its `description` line, `Panel level={3}`, `Notice`, `Skeleton`, `Input compact`, `Badge`, `Button`, `Combobox`. No new token was added for this screen. The older `ToneDot`, `Chip`, `StateRule` and `Fact` atoms in `atoms.tsx` remain for the Studio run-binding panel (`/dev/providers`) and are the last two-vocabulary leftovers (audit D2 of `../audit/providers.md`).
+`control-touch` (ADR 0033), `edge-selected` (ADR 0037) on the open row, `StatusMark` and `ConfirmInline` (the first screen to use them), `ListRow` with its `description` line, `Panel level={3}`, `Notice`, `Skeleton`, `Input compact`, `Badge`, `Button`, `Combobox`. No new token was added for this screen. `atoms.tsx` still holds `Monogram`, `ResidenceMark`, `StateRule` and `TONE_TEXT`, which the Studio run-binding panel (`/dev/providers`) uses; `ToneDot`, `Chip` and `Fact` have no consumer left and can be deleted (audit D2 of `../audit/providers.md`).
 
 ## Don't
 
