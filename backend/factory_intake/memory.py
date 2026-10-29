@@ -15,19 +15,19 @@ def _now() -> str:
 class MemoryFactory:
     def __init__(self) -> None:
         self._items: dict[str, WorkItemView] = {}
-        self._by_key: dict[str, str] = {}
+        self._by_key: dict[tuple[str, str], str] = {}
         self.comments: dict[str, list[tuple[str, str]]] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def submit(self, draft: WorkItemDraft) -> WorkItemView:
         with self._lock:
-            existing = self._by_key.get(draft.idempotency_key)
-            if existing:
-                return self._items[existing]
+            key = (draft.source.kind, draft.idempotency_key)  # keys are scoped to their source: one source cannot read another's item
+            if key in self._by_key:
+                return self._items[self._by_key[key]]
             now = _now()
             item = WorkItemView(id=uuid.uuid4().hex[:12], state="queued", source=draft.source, title=draft.title, created_at=now, updated_at=now)
             self._items[item.id] = item
-            self._by_key[draft.idempotency_key] = item.id
+            self._by_key[key] = item.id
             return item
 
     def _get(self, item_id: str) -> WorkItemView:
@@ -42,21 +42,25 @@ class MemoryFactory:
         return updated
 
     def get(self, item_id: str) -> WorkItemView:
-        return self._get(item_id)
+        with self._lock:
+            return self._get(item_id)
 
     def list(self, state: WorkState | None = None, source=None, limit: int = 50) -> list[WorkItemView]:
-        items = [i for i in self._items.values() if (state is None or i.state == state) and (source is None or i.source.kind == source)]
+        with self._lock:
+            items = [i for i in self._items.values() if (state is None or i.state == state) and (source is None or i.source.kind == source)]
         return items[:limit]
 
     def comment(self, item_id: str, text: str, author: str) -> None:
-        self._get(item_id)
-        self.comments.setdefault(item_id, []).append((author, text))
+        with self._lock:
+            self._get(item_id)
+            self.comments.setdefault(item_id, []).append((author, text))
 
     def cancel(self, item_id: str) -> WorkItemView:
-        item = self._get(item_id)
-        if item.state in ("done", "failed", "cancelled"):
-            raise FactoryError("already_finished", f"work item is {item.state}")
-        return self._set(item, state="cancelled")
+        with self._lock:
+            item = self._get(item_id)
+            if item.state in ("done", "failed", "cancelled"):
+                raise FactoryError("already_finished", f"work item is {item.state}")
+            return self._set(item, state="cancelled", claim=None)
 
     def claim(self, item_id: str, holder: str) -> WorkItemView:
         with self._lock:
@@ -70,10 +74,11 @@ class MemoryFactory:
             item = self._get(item_id)
             if item.state != "claimed":
                 raise FactoryError("not_claimed", "work item is not claimed")
-            return self._set(item, state="waiting_human" if result.status == "needs_review" else "done" if result.status == "done" else "cancelled", claim=None)
+            return self._set(item, state="waiting_human" if result.status == "needs_review" else "queued", claim=None)
 
     def metrics(self, window_days: int = 7) -> dict:
-        counts: dict[str, int] = {}
-        for item in self._items.values():
-            counts[item.state] = counts.get(item.state, 0) + 1
-        return {"window_days": window_days, "by_state": counts, "cost_tokens": sum(i.cost_tokens for i in self._items.values())}
+        with self._lock:
+            counts: dict[str, int] = {}
+            for item in self._items.values():
+                counts[item.state] = counts.get(item.state, 0) + 1
+            return {"window_days": window_days, "by_state": counts, "cost_tokens": sum(i.cost_tokens for i in self._items.values())}

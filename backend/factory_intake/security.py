@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
+import re
+import threading
 import time
 from collections import OrderedDict
 from typing import Callable
@@ -37,8 +40,8 @@ def verify_hmac_sha256(secret: bytes, body: bytes, signature: str | None, prefix
         raise Rejected("no_secret", "no webhook secret is configured", 503)
     if not signature or not signature.startswith(prefix):
         raise Rejected("bad_signature", "missing or malformed signature", 401)
-    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(signature[len(prefix):].strip().lower(), expected):
+    expected = hmac.new(secret, body, hashlib.sha256).hexdigest().encode()
+    if not hmac.compare_digest(signature[len(prefix):].strip().lower().encode("utf-8", "replace"), expected):  # bytes: a non-ASCII header must be a 401, not a TypeError
         raise Rejected("bad_signature", "signature does not match", 401)
 
 
@@ -52,54 +55,76 @@ def verify_bearer(expected: str, header: str | None) -> None:
 
 
 class ReplayGuard:
-    """Remembers delivery ids for ``ttl`` seconds (bounded): a repeated id, or a timestamp outside the window, is refused."""
+    """Remembers delivery ids for ``ttl`` seconds. A repeated id, or a timestamp outside the window (or not a finite number), is refused.
+
+    Bounded, and bounded safely: expired ids are dropped, but a full table of still-valid ids refuses new deliveries (503) instead of
+    evicting one, so flooding the table cannot make an old signed delivery replayable."""
 
     def __init__(self, ttl: float = 600.0, max_entries: int = 10_000, clock: Callable[[], float] = time.time):
         self.ttl, self.max_entries, self._clock = ttl, max_entries, clock
         self._seen: OrderedDict[str, float] = OrderedDict()
+        self._lock = threading.Lock()
 
     def check(self, delivery_id: str, timestamp: float | None = None) -> None:
         now = self._clock()
-        if timestamp is not None and abs(now - timestamp) > self.ttl:
+        if timestamp is not None and (not math.isfinite(timestamp) or abs(now - timestamp) > self.ttl):
             raise Rejected("stale", "delivery timestamp is outside the accepted window", 400)
-        while self._seen and (len(self._seen) >= self.max_entries or next(iter(self._seen.values())) < now - self.ttl):
-            self._seen.popitem(last=False)
-        if delivery_id in self._seen:
-            raise Rejected("replay", "delivery already processed", 409)
-        self._seen[delivery_id] = now
+        with self._lock:
+            while self._seen and next(iter(self._seen.values())) < now - self.ttl:
+                self._seen.popitem(last=False)
+            if delivery_id in self._seen:
+                raise Rejected("replay", "delivery already processed", 409)
+            if len(self._seen) >= self.max_entries:
+                raise Rejected("busy", "too many recent deliveries; retry later", 503)
+            self._seen[delivery_id] = now
 
 
 class RateLimiter:
-    """Token bucket per key (a source, a client token): ``burst`` at once, ``per_second`` sustained."""
+    """Token bucket per key (a source, a client token): ``burst`` at once, ``per_second`` sustained.
+
+    A throttled key is never forgotten to make room: when the table is full, buckets that have refilled completely are dropped, and if it
+    is still full a *new* key is refused."""
 
     def __init__(self, per_second: float = 1.0, burst: int = 10, clock: Callable[[], float] = time.monotonic, max_keys: int = 10_000):
         self.per_second, self.burst, self._clock, self.max_keys = per_second, burst, clock, max_keys
-        self._buckets: OrderedDict[str, tuple[float, float]] = OrderedDict()
+        self._buckets: dict[str, tuple[float, float]] = {}
+        self._lock = threading.Lock()
+
+    def _refilled(self, tokens: float, last: float, now: float) -> float:
+        return min(float(self.burst), tokens + (now - last) * self.per_second)
 
     def allow(self, key: str) -> bool:
-        now = self._clock()
-        tokens, last = self._buckets.pop(key, (float(self.burst), now))
-        tokens = min(float(self.burst), tokens + (now - last) * self.per_second)
-        allowed = tokens >= 1.0
-        self._buckets[key] = (tokens - 1.0 if allowed else tokens, now)
-        while len(self._buckets) > self.max_keys:
-            self._buckets.popitem(last=False)
-        return allowed
+        with self._lock:
+            now = self._clock()
+            if key not in self._buckets and len(self._buckets) >= self.max_keys:
+                self._buckets = {k: v for k, v in self._buckets.items() if self._refilled(v[0], v[1], now) < self.burst}
+                if len(self._buckets) >= self.max_keys:
+                    return False
+            tokens, last = self._buckets.get(key, (float(self.burst), now))
+            tokens = self._refilled(tokens, last, now)
+            allowed = tokens >= 1.0
+            self._buckets[key] = (tokens - 1.0 if allowed else tokens, now)
+            return allowed
 
     def require(self, key: str) -> None:
         if not self.allow(key):
             raise Rejected("rate_limited", "too many requests", 429)
 
 
+_FENCE_TAG = re.compile(r"<(\s*/?\s*untrusted)", re.IGNORECASE)
+
+
 def fence_untrusted(source: str, text: str, limit: int = 20_000) -> str:
-    """Quote outside text as data for a model prompt. The fence cannot be closed from inside: the closing tag is broken up in the text."""
-    clean = redact(text[:limit])[0].replace("</untrusted", "<\u200b/untrusted")
+    """Quote outside text as data for a model prompt. Secrets are redacted first (then the text is cut), and any ``<untrusted`` or
+    ``</untrusted`` in the text, in any case or spacing, is broken up so the text cannot forge or close the fence. This labels data; it
+    does not make instructions inside it safe to obey (ADR 0059)."""
+    clean = _FENCE_TAG.sub("<\u200b\\1", redact(text)[0][:limit])
     return f"<untrusted source={source!r}>\n{clean}\n</untrusted>"
 
 
 def safe_for_log(text: str, limit: int = 200) -> str:
-    """One redacted line for a log: never the raw outside text, never a secret."""
-    return redact(" ".join(text.split())[:limit])[0]
+    """One line for a log: redacted first, then collapsed and cut to ``limit``. Never the raw outside text, never a secret."""
+    return " ".join(redact(text)[0].split())[:limit]
 
 
 def secret_ref(name: str) -> str:

@@ -1,7 +1,7 @@
 import pytest
 
 from factory_intake.memory import MemoryFactory
-from factory_intake.port import FactoryError, FactoryPort, ReleaseResult, SourceRef, WorkItemDraft
+from factory_intake.port import MAX_BODY, FactoryError, FactoryPort, ReleaseResult, SourceRef, WorkItemDraft, clamp_draft
 
 
 def draft(key="k1", title="t"):
@@ -29,7 +29,36 @@ def test_claim_then_release_goes_to_review_not_done():
     released = f.release(item.id, ReleaseResult(summary="s", branch="b", status="needs_review"))
     assert released.state == "waiting_human" and released.claim is None
     with pytest.raises(FactoryError):
-        f.release(item.id, ReleaseResult(summary="s", status="done"))
+        f.release(item.id, ReleaseResult(summary="s", status="abandoned"))
+
+
+def test_abandoning_a_claim_requeues_and_a_release_can_never_complete():
+    f = MemoryFactory()
+    item = f.submit(draft())
+    f.claim(item.id, "a")
+    assert f.release(item.id, ReleaseResult(summary="gave up", status="abandoned")).state == "queued"
+    with pytest.raises(Exception):
+        ReleaseResult(summary="x", status="done")
+
+
+def test_cancelling_a_claimed_item_drops_the_claim():
+    f = MemoryFactory()
+    item = f.submit(draft())
+    f.claim(item.id, "a")
+    assert f.cancel(item.id).claim is None
+
+
+def test_idempotency_keys_are_scoped_to_their_source():
+    f = MemoryFactory()
+    a = f.submit(draft("k"))
+    other = f.submit(WorkItemDraft(source=SourceRef(kind="webhook", external_id="9"), title="mine", idempotency_key="k"))
+    assert other.id != a.id and other.title == "mine"
+
+
+def test_clamp_draft_cuts_oversized_text_and_names_a_blank_title():
+    d = clamp_draft(SourceRef(kind="github", external_id="1"), "  ", "b" * 70_000, ["x" * 500] * 80, "u" * 500, "k" * 500)
+    assert d.title == "(untitled)" and len(d.body) == MAX_BODY and len(d.labels) == 50 and len(d.labels[0]) == 100
+    assert len(d.requested_by) == 200 and len(d.idempotency_key) == 200
 
 
 def test_cancel_and_unknown_ids():

@@ -6,9 +6,9 @@ around); until it lands, tests use ``memory.MemoryFactory``. Every string in ``W
 """
 from __future__ import annotations
 
-from typing import Literal, Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 SourceKind = Literal["github", "gitlab", "azdo", "linear", "jira", "slack", "teams", "webhook", "mcp", "cli", "schedule"]
 WorkState = Literal["queued", "running", "waiting_human", "done", "failed", "cancelled", "claimed"]
@@ -33,9 +33,22 @@ class WorkItemDraft(BaseModel):
     source: SourceRef
     title: str = Field(min_length=1, max_length=MAX_TITLE)
     body: str = Field(default="", max_length=MAX_BODY)
-    labels: tuple[str, ...] = Field(default=(), max_length=50)
+    labels: tuple[Annotated[str, StringConstraints(max_length=100)], ...] = Field(default=(), max_length=50)
     requested_by: str = Field(default="", max_length=200, description="opaque author id as the source reports it; never an authorization")
     idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+def clamp_draft(source: SourceRef, title: str, body: str, labels, requested_by: str, idempotency_key: str) -> "WorkItemDraft":
+    """Build a draft from outside text that may be too long or empty: cut to the limits (sources allow larger bodies than the factory
+    keeps) and give a blank title a placeholder, so a normal oversized payload is never a validation error."""
+    return WorkItemDraft(
+        source=source,
+        title=(" ".join(title.split())[:MAX_TITLE]) or "(untitled)",
+        body=body[:MAX_BODY],
+        labels=tuple(str(label)[:100] for label in list(labels)[:50]),
+        requested_by=requested_by[:200],
+        idempotency_key=idempotency_key[:200],
+    )
 
 
 class Claim(BaseModel):
@@ -65,7 +78,7 @@ class ReleaseResult(BaseModel):
 
     summary: str = Field(max_length=MAX_COMMENT)
     branch: str | None = Field(default=None, max_length=200)
-    status: Literal["done", "needs_review", "abandoned"]
+    status: Literal["needs_review", "abandoned"]  # a release never completes an item: review is a person's checkpoint, abandoning re-queues it
 
 
 class FactoryError(Exception):
@@ -79,7 +92,7 @@ class FactoryError(Exception):
 @runtime_checkable
 class FactoryPort(Protocol):
     def submit(self, draft: WorkItemDraft) -> WorkItemView:
-        """Create a work item; the same ``idempotency_key`` returns the item it already created."""
+        """Create a work item; the same ``(source.kind, idempotency_key)`` returns the item it already created."""
 
     def get(self, item_id: str) -> WorkItemView: ...
 
