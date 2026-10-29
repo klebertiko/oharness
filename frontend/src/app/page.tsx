@@ -17,8 +17,11 @@ import {
   LayoutTemplate,
   Sparkles,
   Network,
+  Languages,
 } from "lucide-react";
 
+import { LOCALES, LOCALE_NAME } from "@/i18n/locale";
+import { useLocaleStore } from "@/i18n/store";
 import { StudioOverview } from "@/components/studio/StudioOverview";
 import { StudioActionsBar } from "@/components/studio/StudioActionsBar";
 import { newStudioHarness, openStudioPreset } from "@/lib/studio";
@@ -122,6 +125,7 @@ export default function Home() {
     openStudioPreset(p);
   };
 
+  const locale = useLocaleStore((s) => s.locale);
   // biome-ignore lint/correctness/useExhaustiveDependencies: store actions are stable references; the palette rebuilds only on the state it displays
   const commands = useMemo<Command[]>(() => {
     const insert: Command[] = NODE_TEMPLATES.map((t) => ({
@@ -263,8 +267,17 @@ export default function Home() {
           },
         ];
 
+    const languages: Command[] = LOCALES.filter((l) => l !== locale).map((l) => ({
+      id: `language:${l}`,
+      label: `Language: ${LOCALE_NAME[l]}`,
+      group: "View",
+      icon: Languages,
+      run: () => useLocaleStore.getState().setLocale(l),
+    }));
+
     return [
       ...studioOnly,
+      ...languages,
       {
         id: "toggle-left",
         label: "Toggle left panel",
@@ -281,7 +294,7 @@ export default function Home() {
         run: () => setKeymapOpen(true),
       },
     ];
-  }, [nodes.length, executionMode, isRunning, selectedNodeId, actions, isStudio, studioView, openCopilot]);
+  }, [locale, nodes.length, executionMode, isRunning, selectedNodeId, actions, isStudio, studioView, openCopilot]);
 
   const providersLeft = (
     <Panel title={PROVIDERS_PANEL_TITLE} meta={`${connectionCount}`} className="h-full">

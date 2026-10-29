@@ -12,6 +12,7 @@ import { Sheet } from "@/components/ui";
 import { shellNavCommands, type Command } from "./commands";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
+import { useLocaleStore } from "@/i18n/store";
 
 /**
  * Split handle. 5px hit area over a 1px visual rule — the standard trick, but
@@ -133,6 +134,7 @@ export function AppShell({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Hydration runs once, deliberately
   useEffect(() => {
     shell.hydrate();
+    useLocaleStore.getState().hydrate();
     void hydrateProviders();
   }, []);
 

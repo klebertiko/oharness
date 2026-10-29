@@ -74,6 +74,10 @@ _Avoid_: function, action
 Either an McpServer or a Tool in the Connections dock.
 _Avoid_: integration, plugin
 
+**Hook**:
+A program the person registers in the sidecar (never taken from a workspace). Before a tool runs, each hook that names the tool must exit 0; an error or a timeout blocks the tool and the run records the hook id. A hook can only veto, never approve.
+_Avoid_: plugin, callback
+
 ### Providers
 
 **Provider**:
