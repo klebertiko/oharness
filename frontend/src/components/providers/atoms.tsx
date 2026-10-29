@@ -64,7 +64,7 @@ export function Monogram({
     <span
       aria-hidden
       className={[
-        "grid flex-none place-items-center rounded-control border bg-sub-200 font-mono font-medium leading-none tracking-[0.04em]",
+        "grid flex-none place-items-center rounded-control border bg-sub-200 font-mono font-medium leading-none tracking-wide",
         MONO_SIZE[size],
         live ? "border-signal-deep text-ink-dim" : "border-line text-ink-mute",
       ].join(" ")}
@@ -152,7 +152,7 @@ export function ProbeTrace({
   height?: number;
 }) {
   if (!probes.length) {
-    return <span aria-hidden className="h-3 w-[35px] flex-none border-b border-dashed border-ink-faint" />;
+    return <span aria-hidden className="h-3 w-9 flex-none border-b border-dashed border-ink-faint" />;
   }
   const max = Math.max(...probes.map((p) => p.ms), 1);
   return (
@@ -163,7 +163,7 @@ export function ProbeTrace({
         return (
           <span
             key={i}
-            className={`w-[2px] rounded-none ${!p.ok ? "bg-fault" : last ? TONE_DOT[tone] : "bg-ink-faint"}`}
+            className={`w-0.5 rounded-none ${!p.ok ? "bg-fault" : last ? TONE_DOT[tone] : "bg-ink-faint"}`}
             style={{ height: h }}
           />
         );
