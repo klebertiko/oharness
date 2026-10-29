@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "1.1.0",
+  "manifest": {
+    "id": "roundtrip-test",
+    "name": "Roundtrip fixture",
+    "version": "0.1.0",
+    "description": "Authoring fidelity",
+    "license": "MIT",
+    "tags": [
+      "test"
+    ]
+  },
+  "graph": {
+    "viewport": {
+      "x": -10,
+      "y": 20,
+      "zoom": 0.75
+    },
+    "nodes": [
+      {
+        "id": "writer",
+        "type": "agent",
+        "role": "agent",
+        "label": "Writer",
+        "position": {
+          "x": -40.5,
+          "y": 130
+        },
+        "data": {
+          "label": "Writer",
+          "roleId": "author",
+          "providerIds": [
+            "fixture-provider"
+          ],
+          "model": "fixture-model",
+          "systemPrompt": "Preserve this prompt.\nIncluding its second line.",
+          "prompt": "Draft a response",
+          "secretRef": "vaultref:fixture",
+          "extension": {
+            "enabled": false,
+            "limit": 0
+          }
+        },
+        "measured": {
+          "width": 212,
+          "height": 100
+        }
+      },
+      {
+        "id": "review",
+        "type": "gate",
+        "role": "gate",
+        "label": "Review",
+        "position": {
+          "x": 340,
+          "y": 210.25
+        },
+        "data": {
+          "label": "Review",
+          "checklist": [
+            "Correct",
+            "Clear"
+          ],
+          "custom": {
+            "owner": "team"
+          }
+        },
+        "measured": {
+          "width": 212,
+          "height": 96
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "revision",
+        "type": "harness",
+        "source": "writer",
+        "target": "review",
+        "sourceHandle": "out",
+        "targetHandle": "in",
+        "data": {
+          "condition": "accept",
+          "kind": "accept",
+          "signal": "draft-ready",
+          "extension": [
+            "first",
+            "second"
+          ]
+        }
+      }
+    ]
+  },
+  "content": {
+    "prompts": {
+      "draft": "Line one\nLine two"
+    },
+    "agents": {},
+    "skills": {},
+    "hooks": {},
+    "commands": {},
+    "scripts": {}
+  },
+  "runtime": {
+    "preferred": "api",
+    "cli": null,
+    "env": [],
+    "secrets": []
+  },
+  "validation": {
+    "mockProfile": "default"
+  },
+  "extension": {
+    "formatOwner": "roundtrip-test"
+  }
+}

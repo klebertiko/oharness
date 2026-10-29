@@ -1,0 +1,112 @@
+Skip to main content
+OHarness
+Providers
+Search
+Ctrl
+K
+Chats
+Studio
+Providers
+Use light theme
+Keyboard map
+Hide panel
+Providers
+Connections
+
+1 of 6 ready
+
+Needs action
+Anthropic
+Not connected · turn on
+Cloud
+OpenAI
+Not connected · turn on
+Cloud
+Ollama Cloud
+Not connected · add key
+Cloud
+OpenRouter
+Not connected · add key
+Cloud
+Ready
+QA local
+Not verified
+On this device
+Agents only
+Cursor
+Not connected · turn on
+Cloud
+Spend
+Refresh
+
+Cost unknown
+
+No budget. Set one
+AN
+Anthropic
+
+Not connected
+
+Run `claude login` (or open Claude Code once and sign in).
+
+Cloud · Chat · Your plan
+
+Turn on
+Connection
+Sign-in
+
+Uses your claude login
+
+Run claude login (or open Claude Code once and sign in).
+
+Endpoint
+
+Set by the vendor.
+
+Anthropic docs
+In use
+
+Off
+
+Chats and runs skip it.
+
+Turn on
+Models
+4 listed
+Default model
+CLI default
+
+Runs use it unless an agent pins its own. Leave the CLI default to let the CLI decide.
+
+From the OHarness catalogue. Test the connection to list what it serves.
+
+claude-opus-5
+200k context · $15.00 → $75.00 / Mtok
+Use
+claude-sonnet-5
+200k context · $3.00 → $15.00 / Mtok
+Use
+claude-fable-5-1
+200k context · $1.00 → $5.00 / Mtok
+Use
+claude-haiku-4-5
+200k context · $0.800 → $4.00 / Mtok
+Use
+Activity
+Reachability
+
+Not tested yet
+
+Tokens
+
+—
+
+No usage recorded yet.
+
+About Anthropic
+
+Claude models via the local claude CLI, non-interactive print mode. Runs on your Claude Pro or Max seat, not a metered API key.
+
+Prompts are sent to Anthropic's servers.
+
+Tool execution is disabled on every call (--tools ""): this connection answers chat, it does not run commands or touch files.

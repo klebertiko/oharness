@@ -479,7 +479,7 @@ const patch = (list: Connection[], id: string, f: (c: Connection) => Connection)
 
 export const useProviderStore = create<ProviderState>((set, get) => ({
   connections: seed.map(offlineTemplate),
-  selectedId: "openrouter",
+  selectedId: "",
   binding: ["anthropic", "ollama-local"],
   query: "",
   hydrated: false,

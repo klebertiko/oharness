@@ -71,9 +71,14 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 }));
 
 /** Completeness is backend evidence; a priced subtotal is not the total. */
-export function usageCostLabel(usage: { costComplete?: boolean; estimatedCostUsd?: number | null }): string {
+export function usageCostParts(usage: { costComplete?: boolean; estimatedCostUsd?: number | null }): { kind: "unknown" } | { kind: "amount"; amount: string } {
   const cost = usage.estimatedCostUsd;
-  if (usage.costComplete !== true || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return "cost unknown";
-  if (cost === 0) return "$0.00 estimated";
-  return `${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 4 }).format(cost)} estimated`;
+  if (usage.costComplete !== true || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return { kind: "unknown" };
+  if (cost === 0) return { kind: "amount", amount: "$0.00" };
+  return { kind: "amount", amount: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 4 }).format(cost) };
+}
+
+export function usageCostLabel(usage: { costComplete?: boolean; estimatedCostUsd?: number | null }): string {
+  const parts = usageCostParts(usage);
+  return parts.kind === "unknown" ? "cost unknown" : `${parts.amount} estimated`;
 }

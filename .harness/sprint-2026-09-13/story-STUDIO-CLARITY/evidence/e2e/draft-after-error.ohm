@@ -26,6 +26,7 @@
             "Ready for review"
           ],
           "adapter": "mock",
+          "status": "idle",
           "providerIds": [
             "anthropic"
           ]
@@ -48,7 +49,8 @@
         "data": {
           "label": "Review Gate",
           "gateId": "review",
-          "checklist": "tests · AC"
+          "checklist": "tests · AC",
+          "status": "idle"
         },
         "measured": {
           "width": 212,
@@ -66,7 +68,8 @@
         },
         "data": {
           "label": "HITL",
-          "approvalLabel": "Accept"
+          "approvalLabel": "Accept",
+          "status": "idle"
         },
         "measured": {
           "width": 212,

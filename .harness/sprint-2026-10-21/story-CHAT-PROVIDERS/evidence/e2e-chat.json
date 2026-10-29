@@ -1,6 +1,7 @@
 {
   "result": "passed",
   "checks": [
+    "Model combo open with a Needs action group: axe clean in both themes",
     "Send completes and request carries explicit model/connection",
     "Copy success/denial feedback and reuse only edits composer",
     "503 failure exposes instruction reuse with no execution",
@@ -28,7 +29,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 639.25,
+        "y": 536.046875,
         "width": 242,
         "height": 64
       }
@@ -38,7 +39,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 695.1875,
+        "y": 608.046875,
         "width": 297,
         "height": 64
       }
@@ -48,7 +49,7 @@
       "overflow": false,
       "composer": {
         "x": 65,
-        "y": 759.125,
+        "y": 623.4375,
         "width": 336,
         "height": 64
       }
@@ -57,9 +58,9 @@
       "width": 768,
       "overflow": false,
       "composer": {
-        "x": 242,
-        "y": 759.125,
-        "width": 501,
+        "x": 241,
+        "y": 706.828125,
+        "width": 502,
         "height": 64
       }
     },
@@ -67,8 +68,8 @@
       "width": 1440,
       "overflow": false,
       "composer": {
-        "x": 419.5,
-        "y": 815.0625,
+        "x": 419,
+        "y": 777.609375,
         "width": 818,
         "height": 64
       }
