@@ -1,0 +1,36 @@
+<!-- @dsCard group="Patterns" height=760 -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../bundle.css"><script src="../theme.js"></script><style>body{margin:0;padding:var(--space-4);background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.row{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-start;margin-bottom:var(--space-3)}.col{display:flex;flex-direction:column;gap:var(--space-2)}.cap{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute);margin-bottom:var(--space-1)}.line{display:flex;align-items:center;gap:var(--space-2)}.mono{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute)}.card{padding:var(--space-3);border:1px solid var(--line-soft);border-radius:var(--radius-control);background:var(--sub-200)}.t{margin:0;font:500 13px/1.3 var(--font-ui);color:var(--ink-primary)}.tree{margin:var(--space-1) 0 0 var(--space-2);padding-left:var(--space-3);border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:var(--space-1)}</style></head><body><div id="r"></div><script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script><script src="../bundle.js"></script><script>
+var h=React.createElement,O=window.OH;
+function Cap(t){return h("div",{className:"cap"},t)}
+
+function KeyRow(){var st=React.useState(false),ask=st[0],set=st[1];
+ return h("div",{style:{display:"flex",gap:"var(--space-3)",padding:"var(--space-3)",alignItems:"flex-start"}},
+  h("dt",{style:{width:128,color:"var(--ink-mute)"}},"API key"),
+  h("dd",{style:{margin:0,flex:1}},
+   ask?h(O.ConfirmInline,{prompt:"Remove the saved OpenRouter key? Runs on this connection stop until you add another.",confirmLabel:"Remove key",onCancel:function(){set(false)},onConfirm:function(){set(false)}})
+      :h(React.Fragment,null,h("div",{className:"mono"},"sk-or-████████ · 41 characters withheld"),h("div",{style:{color:"var(--ink-mute)"}},"In the OS keychain · added 12 Oct 2026"),
+        h("div",{className:"line",style:{marginTop:"var(--space-2)"}},h(O.Button,{size:"sm"},"Replace"),h(O.Button,{size:"sm",variant:"danger",onClick:function(){set(true)}},"Remove")))))}
+function App(){
+ var rows=[["Needs action",[["Ollama","fault","Unreachable · start Ollama","Local"],["OpenRouter","ok","Verified","Cloud"]]],["Ready",[["Anthropic","ok","Verified","Cloud"]]],["Agents only",[["Cursor","idle","Not verified · sign in","Cloud"]]]];
+ return h("div",{className:"row"},
+  h("div",{style:{width:320,background:"var(--sub-000)",borderRight:"1px solid var(--line-soft)",padding:"var(--space-3) var(--space-2)"}},
+   h("p",{className:"t",style:{padding:"0 var(--space-2)"}},"Connections"),h("p",{style:{margin:"0 0 var(--space-2)",padding:"0 var(--space-2)",color:"var(--ink-mute)"}},"2 of 4 ready"),
+   rows.map(function(g){return h("section",{key:g[0],"aria-label":g[0]},h("p",{style:{margin:"var(--space-2) 0 var(--space-1)",padding:"0 var(--space-2)",font:"500 12px/1.4 var(--font-ui)",color:"var(--ink-mute)"}},g[0]),
+    g[1].map(function(r){return h(O.ListRow,{key:r[0],title:r[0],selected:r[0]==="Ollama",leading:h(O.StatusMark,{tone:r[1]}),description:r[2],trailing:h("span",{style:{color:"var(--ink-mute)"}},r[3])})}))})),
+  h("div",{style:{flex:1,minWidth:340,maxWidth:560,display:"flex",flexDirection:"column",gap:"var(--space-3)"}},
+   Cap("Ollama open · one primary in the header · a warn notice for Model not pulled"),
+   h("div",{className:"line",style:{alignItems:"flex-start"}},
+    h("span",{className:"oh-badge",style:{height:32,width:32,padding:0,justifyContent:"center"},"aria-hidden":"true"},"OL"),
+    h("div",{style:{flex:1}},h("h2",{style:{margin:0,font:"500 20px/1.2 var(--font-ui)",letterSpacing:"-0.018em",color:"var(--ink-primary)"}},"Ollama"),
+     h("p",{className:"line",style:{margin:"var(--space-1) 0 0"}},h(O.StatusMark,{tone:"fault"}),h("span",{style:{color:"var(--fault-text)",fontWeight:500}},"Unreachable")),
+     h("p",{style:{margin:"var(--space-1) 0 0",color:"var(--ink-dim)"}},"Nothing answered at 127.0.0.1:11434."),
+     h("p",{style:{margin:"var(--space-1) 0 0",color:"var(--ink-mute)"}},"Runs on this device · free")),
+    h(O.Button,{variant:"primary"},"Copy `ollama serve`")),
+   h(O.Panel,{title:"Connection",titleId:"pv1"},
+    h("dl",{style:{margin:0}},
+     h("div",{style:{display:"flex",gap:"var(--space-3)",padding:"var(--space-3)",alignItems:"flex-start"}},h("dt",{style:{width:128,color:"var(--ink-mute)"}},"Key"),h("dd",{style:{margin:0,flex:1}},"No key needed",h("div",{style:{color:"var(--ink-mute)"}},"The daemon is unauthenticated: any app on this machine can use it."))))),
+   h(O.Notice,{tone:"warn",title:"llama3.2 isn't pulled on this machine"},"Copy the pull command, run it in a terminal, then test again."),
+   Cap("a connection that owns a key (OpenRouter) · Remove is confirmed in the Key row, Cancel first"),
+   h(O.Panel,{title:"Connection · OpenRouter",titleId:"pv2"},h("dl",{style:{margin:0}},h(KeyRow)))))}
+ReactDOM.createRoot(document.getElementById('r')).render(h(App));
+</script></body></html>

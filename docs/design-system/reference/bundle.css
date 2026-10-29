@@ -90,6 +90,7 @@
 .oh-row__lead { display: inline-flex; flex: none; color: var(--ink-mute); }
 .oh-row__main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .oh-row__title { font: 500 13px/1.3 var(--font-ui); color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oh-row__desc { font: 400 12px/1.4 var(--font-ui); color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oh-row__meta { font: 400 10.5px/1.4 var(--font-mono); letter-spacing: 0.02em; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oh-row__trail { display: inline-flex; flex: none; align-items: center; gap: var(--space-2); }
 .oh-row[disabled] { opacity: 0.45; cursor: not-allowed; }

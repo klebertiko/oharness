@@ -11,7 +11,7 @@ How each piece of the interface is built and used. The tokens (`../tokens.json`)
 | [`studio.md`](./studio.md) | Studio overview, actions bar, canvas, node plates, viewport dock, graph audit, ValidateDock, inspector and field assist, the agentic panel (Nilo) with proposals, the harness library. |
 | [`shell.md`](./shell.md) | Title bar, rail, status bar, split handle, command palette, keymap sheet, threads sidebar, the two Panel and ListRow implementations. |
 | [`patterns.md`](./patterns.md) | Cross-cutting patterns: empty, error and loading states, one action per state, density, motion, i18n and copy. |
-| `providers.md` | The Providers destination. Written after the Providers rebuild lands on `main`. |
+| [`providers.md`](./providers.md) | The Providers destination after its rebuild (ADRs 0033 to 0035): layout, list, connection header, panels, spend, states, accessibility. |
 
 ## How each component is described
 

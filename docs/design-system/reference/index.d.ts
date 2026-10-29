@@ -46,6 +46,8 @@ export interface ListRowProps {
   title: ReactNode;
   /** Machine detail under the title, set in IBM Plex Mono. */
   meta?: ReactNode;
+  /** A second line in plain text (the Providers list: status word and short fix). */
+  description?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
   selected?: boolean;

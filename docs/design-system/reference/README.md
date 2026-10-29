@@ -4,7 +4,7 @@ Vanilla React (classic script, no build) of Button, Input, Badge, Panel, ListRow
 
 - `bundle.js` assigns `window.OH`. The Nilo code is a faithful port of `frontend/src/components/brand/` (grid, frames, loop).
 - `bundle.css` uses only token variables. Its first line imports the fonts from Google Fonts for this preview only; the app must self-host them (see `../adoption.md`).
-- `ModelPicker/`, `Composer/` and `RunSurfaces/` are pattern previews: the model picker (chip, grouped list, scope, Needs action, Model not pulled), the composer states (queue, plan card, permission, call to action) and the run surfaces (thinking status, approval card, subagent tree, turn diff, markers). They compose the components above and mirror `../components/*.md`; the real components are in `frontend/src`.
+- `ModelPicker/`, `Composer/`, `RunSurfaces/` and `Providers/` are pattern previews (the last is the Providers destination: grouped list, connection header with its one primary, panels, a warn notice and the inline confirmation): the model picker (chip, grouped list, scope, Needs action, Model not pulled), the composer states (queue, plan card, permission, call to action) and the run surfaces (thinking status, approval card, subagent tree, turn diff, markers). They compose the components above and mirror `../components/*.md`; the real components are in `frontend/src`.
 - `*/README.md` is the usage guideline per component (the new ones are documented in `../components/`); `*/preview.html` is a small live example; `Cover/` is the brand cover.
 - `index.d.ts` documents the props.
 

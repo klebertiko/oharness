@@ -2,7 +2,7 @@
 
 Measured on 2026-10-29 against `main` at `b05a750` (after the roadmap: #89, #90 and the run, queue, diff and subagent work). `audit/screens.md` records the redesign of the screens; this file records what the product has become since, set against what the design system documents. Reproduce the counts with `git grep` as shown in each table, test files and `src/app/dev` excluded.
 
-The Providers screen is being rebuilt in parallel (ADRs 0033 to 0036). Its files are listed as *out of scope* and are neither measured nor changed here; the Providers section is written in `components/providers.md` after the first of those pull requests is on `main`.
+The Providers screen was rebuilt in parallel (ADRs 0033 to 0035; audit in `providers.md`). Its files were neither measured nor changed here; the counts below exclude `providers/`, and the screen is documented in `components/providers.md`.
 
 ## What the design system documented before this change
 
@@ -84,9 +84,9 @@ The Providers screen is being rebuilt in parallel (ADRs 0033 to 0036). Its files
 | Shell panel and list row (second implementations) | `shell/Panel`, `shell/ListRow` | none | H, finding D6 |
 | Nilo and the mark | `brand/*`, `shell/Mark` | `brand.md` + reference | `brand.md`, reference |
 
-### Out of scope here (Providers rebuild)
+### Providers (rebuilt in parallel)
 
-`providers/*` (ProvidersList, Dossier, ModelPicker, ModelSection, Wallet, RunBinding, CredentialSeal, atoms) and `app/dev/providers`. Documented in `components/providers.md` after the first rebuild pull request merges.
+`providers/*` (ProvidersScreen, ConnectionList, ConnectionDetail, ConnectionPanel, ModelsPanel, ActivityPanel, SpendCard, ModelPicker, RunBinding, atoms) and `app/dev/providers`: measured by `audit/providers.md`, documented in `components/providers.md`. Not part of the deviation counts here.
 
 ## Deviations
 

@@ -5,7 +5,7 @@
 <!-- Local preview harness only. Each component preview is its own page, loaded in an iframe: no HTML strings, no dynamic code. It is never published to Pages and never ships in the app. -->
 <script>
 var theme=new URLSearchParams(location.search).get('theme')||'dark';document.documentElement.dataset.theme=theme;
-var cards={"Badge": 110, "Button": 190, "Cover": 288, "Input": 200, "Kbd": 80, "ListRow": 200, "Nilo": 560, "Panel": 220, "Notice": 260, "EmptyState": 220, "Segmented": 230, "StatusMark": 330, "ModelPicker": 640, "Composer": 720, "RunSurfaces": 900};
+var cards={"Badge": 110, "Button": 190, "Cover": 288, "Input": 200, "Kbd": 80, "ListRow": 200, "Nilo": 560, "Panel": 220, "Notice": 260, "EmptyState": 220, "Segmented": 230, "StatusMark": 330, "ModelPicker": 640, "Composer": 720, "RunSurfaces": 900, "Providers": 760};
 Object.keys(cards).forEach(function(n){
   var card=document.createElement('div');card.className='card';
   var h=document.createElement('div');h.className='h';h.textContent=n;
