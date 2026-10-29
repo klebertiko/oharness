@@ -120,6 +120,10 @@ _Avoid_: history log, executions
 The OHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
 _Avoid_: Copilot (a Microsoft brand; never in UI copy, docs or examples), AI assistant, bot
 
+**Turn diff**:
+The list of files a turn changed in the Workspace, with the diff of each. Reverting restores one file to how it was before the turn and never touches another; it refuses a file that changed again afterwards.
+_Avoid_: undo (that word is for Studio edits), patch
+
 **Studio**:
 The place where a person designs a harness: overview, canvas, inspector.
 _Avoid_: designer, builder
