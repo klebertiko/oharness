@@ -92,3 +92,33 @@ describe("bindThreadHarness", () => {
     expect(s().messagesFor(id)).toHaveLength(1);
   });
 });
+
+describe("moving a harness change to a new chat (fork)", () => {
+  it("copies the conversation into a new chat on the new harness and puts the original back", () => {
+    const id = s().createThread("Plan", NO_HARNESS);
+    s().appendMessage(id, { role: "user", content: "hi" });
+    s().appendMessage(id, { role: "assistant", content: "hello", harness: NO_HARNESS });
+    s().setThreadHarness(id, agile);
+    const fork = s().forkThreadForHarness(id)!;
+    const original = s().threads.find((t) => t.id === id)!;
+    expect(original.harness).toEqual(NO_HARNESS);
+    expect(s().messagesFor(id).map((m) => m.role)).toEqual(["user", "assistant"]);
+    const copy = s().threads.find((t) => t.id === fork)!;
+    expect(copy.harness).toEqual(agile);
+    expect(copy.title).toBe("Plan · Agile Harness");
+    expect(original.updatedAt).toBe(s().messagesFor(id).at(-1)?.createdAt);
+    expect(s().messagesFor(fork).map((m) => [m.role, m.content])).toEqual([["user", "hi"], ["assistant", "hello"]]);
+    expect(s().messagesFor(fork)[1].harness).toEqual(NO_HARNESS);
+    expect(s().messagesFor(fork)[0].id).not.toBe(s().messagesFor(id)[0].id);
+    expect(s().activeThreadId).toBe(fork);
+  });
+
+  it("only applies while the change is the last thing in the chat", () => {
+    const id = s().createThread("Plan", NO_HARNESS);
+    s().appendMessage(id, { role: "user", content: "hi" });
+    s().setThreadHarness(id, agile);
+    s().appendMessage(id, { role: "user", content: "later" });
+    expect(s().forkThreadForHarness(id)).toBeNull();
+    expect(s().threads).toHaveLength(1);
+  });
+});

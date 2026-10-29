@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { sameHarness, switchNotice, type ThreadHarness } from "@/lib/chatHarness";
+import { harnessLabel, sameHarness, switchNotice, type ThreadHarness } from "@/lib/chatHarness";
 import { usePermissionStore } from "./permissionStore";
 
 export type Thread = {
@@ -37,6 +37,12 @@ export type ThreadMessage = {
   from?: ThreadHarness;
 };
 
+/** Is the last message a fresh harness change (the only moment a chat can be forked for it)? */
+export const canForkForHarness = (messages: ThreadMessage[]): boolean => {
+  const last = messages.at(-1);
+  return last?.role === "system" && !!last.harness && !!last.from;
+};
+
 export const THREADS_STORAGE_KEY = "oh.threads.v1";
 
 export const DEFAULT_THREAD_TITLE = "New chat";
@@ -50,6 +56,8 @@ export interface ThreadState {
   setThreadHarness: (threadId: string, harness: ThreadHarness, from?: ThreadHarness) => void;
   /** Give a chat from before the setting the harness it is running with. Never overrides one, never leaves a marker. */
   bindThreadHarness: (threadId: string, harness: ThreadHarness) => void;
+  /** While a harness change is the last thing in a chat: copy the chat into a new one on the new harness and put the original back. Returns the new chat's id, or null when it no longer applies. */
+  forkThreadForHarness: (threadId: string) => string | null;
   selectThread: (id: string) => void;
   /** Blank slate: no thread is created until the first message is sent. */
   startNewChat: () => void;
@@ -120,6 +128,27 @@ export const useThreadStore = create<ThreadState>()(
           threads: get().threads.map((t) => (t.id === threadId ? { ...t, harness, updatedAt: messages.length > 0 ? now : t.updatedAt } : t)),
           messagesByThread: { ...get().messagesByThread, [threadId]: [...kept, ...marker] },
         });
+      },
+
+      forkThreadForHarness: (threadId) => {
+        const thread = get().threads.find((t) => t.id === threadId);
+        const messages = get().messagesByThread[threadId] ?? [];
+        const marker = messages.at(-1);
+        if (!thread || !marker?.harness || !marker.from || !canForkForHarness(messages)) return null;
+        const kept = messages.slice(0, -1);
+        const now = Date.now();
+        const id = crypto.randomUUID();
+        const copy: Thread = { id, title: `${thread.title} · ${harnessLabel(marker.harness)}`, createdAt: now, updatedAt: now, archived: false, harness: marker.harness };
+        set({
+          threads: [copy, ...get().threads.map((t) => (t.id === threadId ? { ...t, harness: marker.from, updatedAt: kept.at(-1)?.createdAt ?? t.updatedAt } : t))],
+          activeThreadId: id,
+          messagesByThread: {
+            ...get().messagesByThread,
+            [threadId]: kept,
+            [id]: kept.map((m) => ({ ...m, id: crypto.randomUUID() })),
+          },
+        });
+        return id;
       },
 
       bindThreadHarness: (threadId, harness) => {
