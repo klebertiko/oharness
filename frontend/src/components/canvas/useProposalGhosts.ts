@@ -29,6 +29,7 @@ export function useProposalGhosts() {
         draggable: false,
         selectable: false,
         deletable: false,
+        className: "oh-ghost-in",
         connectable: false,
         // Not in the store, so the flow's own measurements never land on them: give a size to be drawn at all.
         initialWidth: 212,
