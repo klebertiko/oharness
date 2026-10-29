@@ -43,7 +43,7 @@ import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { NO_HARNESS, type ThreadHarness } from "@/lib/chatHarness";
 import { useChatHarness } from "./useChatHarness";
-import { useThreadStore } from "@/store/threadStore";
+import { canForkForHarness, useThreadStore } from "@/store/threadStore";
 import { Button, KbdChord, Notice } from "@/components/ui";
 import { chordCaps, useIsMac } from "@/components/shell/keys";
 
@@ -57,6 +57,13 @@ import { chordCaps, useIsMac } from "@/components/shell/keys";
 function adoptNewChat(threadId: string): string {
   useChatModelStore.getState().adopt(NEW_CHAT_KEY, threadId);
   return threadId;
+}
+
+/** Fork a fresh harness change into a new chat; the model choice for this conversation follows, the permission mode deliberately does not (the new chat asks, like any new chat). */
+function moveHarnessChangeToNewChat(threadId: string) {
+  const forkId = useThreadStore.getState().forkThreadForHarness(threadId);
+  if (!forkId) return;
+  useChatModelStore.setState((s) => (s.overrides[threadId] ? { overrides: { ...s.overrides, [forkId]: { ...s.overrides[threadId] } } } : s));
 }
 
 export function AgentStage() {
@@ -422,11 +429,16 @@ export function AgentStage() {
           <>
           <h1 className="sr-only">Chat</h1>
           <div role="log" aria-label="Conversation" aria-busy={live || undefined} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-6 pt-3">
-            {messages.map((m) => m.role === "system" ? (
-              <p key={m.id} data-testid="harness-change" className="flex items-center gap-3 self-stretch text-meta text-ink-mute">
-                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+            {messages.map((m, index) => m.role === "system" ? (
+              <p key={m.id} data-testid="harness-change" className="flex flex-wrap items-center gap-x-3 gap-y-1 self-stretch text-meta text-ink-mute">
+                <span aria-hidden className="h-px min-w-6 flex-1 bg-line-soft" />
                 <span className="max-w-[60ch] text-center">{m.content}</span>
-                <span aria-hidden className="h-px flex-1 bg-line-soft" />
+                {index === messages.length - 1 && canForkForHarness(messages) && !live && (
+                  <Button size="sm" variant="ghost" onClick={() => activeThreadId && moveHarnessChangeToNewChat(activeThreadId)}>
+                    Move to a new chat
+                  </Button>
+                )}
+                <span aria-hidden className="h-px min-w-6 flex-1 bg-line-soft" />
               </p>
             ) : (
               <div
