@@ -1,8 +1,8 @@
 # Component and pattern audit
 
-Measured on 2026-10-29 against `main` at `b05a750`; D13 to D15 were added by the final pass over `main` after the Providers rebuild (after the roadmap: #89, #90 and the run, queue, diff and subagent work). `audit/screens.md` records the redesign of the screens; this file records what the product has become since, set against what the design system documents. Reproduce the counts with `git grep` as shown in each table, test files and `src/app/dev` excluded.
+Measured on 2026-10-29 against `main` at `b05a750` (after the roadmap: #89, #90 and the run, queue, diff and subagent work). D13 to D15 and the test counts under *Checks run* come from a final pass over `main` after the Providers rebuild (#234). `audit/screens.md` records the redesign of the screens; this file records what the product has become since, set against what the design system documents. Reproduce the counts with `git grep` as shown in each table, test files and `src/app/dev` excluded.
 
-The Providers screen was rebuilt in parallel (ADRs 0033 to 0035; audit in `providers.md`). Its files were neither measured nor changed here; the counts below exclude `providers/`, and the screen is documented in `components/providers.md`.
+The Providers screen was rebuilt in parallel (ADRs 0033 to 0035; audit in `providers.md`). Its files were not measured in the first pass, so the D1 to D12 counts exclude `providers/`; the final pass (D13, D1's guardrail) did touch `providers/atoms.tsx` and `RunBinding.tsx`. The screen is documented in `components/providers.md`.
 
 ## What the design system documented before this change
 

@@ -33,8 +33,6 @@ export const TONE_TEXT: Record<ChatProviderTone, string> = {
   unconfigured: "text-ink-mute",
 };
 
-/** One readiness dot. Hollow when nothing is configured, filled once there is
-    something to report — the same filled/hollow grammar as the residence mark. */
 /* ── Monogram ─────────────────────────────────────────────────────────────────
    Vendor identity as a two-letter mono tile, in grey.
 
