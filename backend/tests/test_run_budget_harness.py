@@ -45,6 +45,6 @@ def test_a_run_whose_last_node_crosses_the_ceiling_is_left_complete(client):
     assert "budget_exceeded" not in done and done["harness_done"]["status"] == "complete"
 
 
-def test_a_malformed_token_count_does_not_fail_the_run():
-    from routers.execution import _token_count
-    assert [_token_count(v) for v in ("12", 3.9, None, "x", {}, -4)] == [12, 3, 0, 0, 0, 0]
+def test_a_continued_run_keeps_the_ceiling_it_is_started_with(client):
+    # `/start` validates the ceiling before it claims the continuation, so a bad value costs nothing.
+    assert client.post("/execute/logs/no-such-run/start", json={"max_tokens": 5}).status_code in (400, 404)

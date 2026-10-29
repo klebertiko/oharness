@@ -50,6 +50,20 @@ describe("RunBudgetField", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/no ceiling/);
   });
 
+  it("speaks the chosen language, including the refusal reason", async () => {
+    const { useLocaleStore } = await import("@/i18n/store");
+    useLocaleStore.setState({ locale: "pt-BR" });
+    try {
+      const user = userEvent.setup();
+      render(<RunBudgetField />);
+      const field = screen.getByRole("textbox", { name: "Teto de tokens desta execução" });
+      await user.type(field, "7");
+      expect(screen.getByRole("alert").textContent).toMatch(/Use pelo menos 100 tokens\. A execução não usa teto\./);
+    } finally {
+      useLocaleStore.setState({ locale: "en" });
+    }
+  });
+
   it("shows the stored ceiling again after a remount", () => {
     useRunBudgetStore.setState({ maxTokens: 5000 });
     render(<RunBudgetField />);

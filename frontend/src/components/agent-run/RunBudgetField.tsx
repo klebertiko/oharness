@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useId, useState } from "react";
+import { useT } from "@/i18n/store";
 import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { validateMaxTokens } from "./runBudgetRules";
 
 /** Token ceiling for the next run. A run that reaches it stops as `budget_exceeded`. */
 export function RunBudgetField() {
   const id = useId();
+  const t = useT();
   const setMaxTokens = useRunBudgetStore((s) => s.setMaxTokens);
   const stored = useRunBudgetStore((s) => s.maxTokens);
   const [text, setText] = useState("");
@@ -21,20 +23,20 @@ export function RunBudgetField() {
     // An invalid entry leaves the last valid ceiling in force; the message says so.
     if (check.ok) setMaxTokens(check.value);
     const current = useRunBudgetStore.getState().maxTokens;
-    setError(check.ok ? "" : `${check.message} The run uses ${current ? `${current} tokens` : "no ceiling"}.`);
+    setError(check.ok ? "" : `${t(check.key, check.vars)} ${current ? t("run.ceiling.keepsTokens", { n: current }) : t("run.ceiling.keepsNone")}`);
   };
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <label htmlFor={id} className="text-meta text-ink-mute">Token ceiling</label>
+      <label htmlFor={id} className="text-meta text-ink-mute">{t("run.ceiling.label")}</label>
       <input
         id={id}
         type="text"
         inputMode="numeric"
         autoComplete="off"
         value={text}
-        placeholder="none"
-        aria-label="Token ceiling for this run"
+        placeholder={t("run.ceiling.none")}
+        aria-label={t("run.ceiling.aria")}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-err` : undefined}
         onChange={(e) => onChange(e.target.value)}
