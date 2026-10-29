@@ -41,8 +41,7 @@ const failures = [];
 async function axe(page, label) {
   await page.addScriptTag({ content: axeSource });
   const violations = await page.evaluate(async () => {
-    // The Run toolbar is out of scope here: its light-theme kbd chip is signal-ink on signal (3.73:1), a token-level finding that predates this flow.
-    const r = await window.axe.run({ exclude: [["[aria-label=\"Run controls\"]"]] }, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });
+    const r = await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });
     return r.violations.map((v) => `${v.id}: ${v.nodes.slice(0, 2).map((n) => `${n.target.join(" ")} ${(n.any[0]?.message ?? "").slice(0, 160)} <${n.html.slice(0, 120)}>`).join(" | ")}`);
   });
   if (violations.length) failures.push(`${label}: axe ${violations.join("; ")}`);
