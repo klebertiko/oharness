@@ -4,7 +4,7 @@ Where a person says what to do and decides how much the machine may do on its ow
 
 ## Layout
 
-From top to bottom: queued messages (when any), the textarea, the permission row, run notes (workspace tools state), then the toolbar: **Harness switch**, **Subagents**, **model picker**, **workspace chip**, **token ceiling** (only when no harness runs the turn), **Tool hooks**, a flexible gap, then the call to action or the send hint and the send controls. The run settings are one `fieldset` that is disabled while a turn runs (60% opacity), so none of them changes under a running turn. Narrow layouts (below 640px) raise every control to 36px and hide the hint.
+From top to bottom: queued messages (when any), the textarea, the permission row, run notes (workspace tools state), then the toolbar: **Harness switch**, **Subagents**, **model picker**, **workspace chip**, **token ceiling** (only when no harness runs the turn), **Tool hooks**, a flexible gap, then the call to action or the send hint and the send controls. The run settings are one `fieldset` that is disabled while a turn runs (60% opacity), so none of them changes under a running turn. Narrow layouts (below 640px) raise every control to 36px and hide both the send hint and the call to action (the disabled Send button's tooltip then carries the fix).
 
 **One action per state.** Idle with something to send: Send is the single primary. Running: **Queue** (secondary, large) and **Stop run** (icon-only). Nothing can answer: the call to action from `model-picker.md` takes the hint's place and Send is disabled with the same words as its tooltip.
 

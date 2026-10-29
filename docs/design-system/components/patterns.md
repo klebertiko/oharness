@@ -18,7 +18,7 @@ Every list and panel has all three, designed (`../experience.md`). Each says wha
 
 **Copy for errors.** Two short sentences: what happened, what the person can do. "Couldn't reach the activity log" followed by the panel's retry, not "Error 500". Never blame, never an exclamation mark, never a raw exception text as the only message (the exception can follow in `t-code`).
 
-**Gaps found.** The Activity panel loads with plain text where a skeleton would reserve the rows (audit D6 follow-up); `ui/Input` has no consumer outside the catalogue, so hand-made field classes exist in at least six places (Inspector, hooks form, token ceiling, chat rename, tool decision note, search); fold them into `Input` as screens are touched.
+**Gaps found.** The Activity panel loads with plain text where a skeleton would reserve the rows (audit D6 follow-up); `ui/Input` has one consumer outside the catalogue (the chat search), so hand-made field classes exist in at least six places (Inspector, hooks form, token ceiling, chat rename, tool decision note, search); fold them into `Input` as screens are touched.
 
 ## One action per state
 

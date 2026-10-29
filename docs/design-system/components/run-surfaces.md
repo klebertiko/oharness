@@ -98,6 +98,6 @@ ADR 0024. **Purpose.** What a turn changed in the workspace, with a one-shot rev
 
 **Anatomy.** A face-crop Nilo at 2px per cell, a rotating verb (thinking: Thinking, Hooting, Pondering, Perching on it, Preening the plan, Untangling, Weaving the harness; working: Working, Wiring nodes, Running checks, Typing furiously, Building; waiting: Waiting for you), a `detail` sentence ("Walking the harness graph.", "Waiting on the provider.") and, quietest, mono tabular digits in `ink-mute` for elapsed time and tokens. Three tiers: personality, current step, raw metrics. The moving parts are `aria-hidden`; assistive tech hears one stable `role="status"` line, "OHarness is working". It keeps no clock and never invents a reading: without a token count no token segment renders (never "0 tok").
 
-**Nilo's state.** `thinking` while the provider works, `waiting` while a gate holds the run. See `../brand.md` § Nilo in the run and chat states for the full mapping.
+**Nilo's state.** Only `thinking` and `waiting` are wired today: `thinking` while the provider works, `waiting` while a gate holds the run. See `../brand.md` § Nilo in the run and chat states for the full mapping.
 
 **Reduced motion.** One still pose per state; the verb still changes every three seconds, as text.

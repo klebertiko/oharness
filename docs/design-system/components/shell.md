@@ -34,7 +34,7 @@ The frame around every destination. Code: `components/shell/*` and `agent/Thread
 
 **Anatomy.** A 5px hit area over a 1px visual rule. The rule stays transparent until the pointer is over it (`line-strong`) or it is being dragged (`signal`), so a pointer sweeping the window does not light the frame up.
 
-**Accessibility.** A `separator` (`aria-orientation="vertical"`, `aria-valuenow`, named "Resize navigation panel" or "Resize inspector") that takes the keyboard: the arrow keys move it 16px at a time, because a mouse-only resize is a resize some people cannot perform. The arrows move it 16px, with Shift 48px. Below 1020px the right panel is a sheet.
+**Accessibility.** A `separator` (`aria-orientation="vertical"`, `aria-valuenow`, named "Resize navigation panel" or "Resize inspector") that takes the keyboard: the arrow keys move it, because a mouse-only resize is a resize some people cannot perform. The arrows move it 16px, with Shift 48px. Below 1020px the right panel is a sheet.
 
 ## Command palette
 

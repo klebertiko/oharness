@@ -36,7 +36,7 @@ Which pose a surface may wear, for the states the roadmap added. "Shipped" is wi
 | Chats home, nothing running | `idle`, 6px cell, interactive | Chat welcome | Shipped |
 | A turn is running, waiting on the provider | `thinking`, face crop, 2px cell | `ThinkingStatus` in the chat | Shipped |
 | A human gate holds the run | `waiting`, face crop | `ThinkingStatus` above the gate card | Shipped |
-| A tool or subagent is running | `working` (types on the laptop) | `ThinkingStatus`, whose verbs for it already exist | Specified |
+| A tool or subagent is running | `working` (types on the laptop) | `ThinkingStatus`. Its `working` verbs exist, but `AgentStage` passes only `thinking` and `waiting`, so this pose is wired nowhere yet | Specified |
 | Studio's empty canvas, a draft being described | `waiting` | Studio welcome | Specified in this file since the first version |
 | 90 s without input on an interactive Nilo | `sleeping` | Any interactive Nilo | Shipped |
 | Plan awaiting approval, queue paused, budget exceeded, Needs action, Model not pulled, turn diff, subagent tree | none | Decision and spec surfaces | By rule |

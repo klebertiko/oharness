@@ -38,7 +38,7 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Copy.** Hint says the format: "Paste the key from your Anthropic console" / "Cole a chave do console da Anthropic". Error says what is wrong and what to do: "That key was rejected. Replace it." / "A chave foi recusada. Substitua-a."
 
-**In the app.** Fields in the Studio inspector are styled by hand (`PropertiesPanel` `inputCls`) and the composer uses its own textarea; `Input` is used in the catalogue and is the one to use for new forms.
+**In the app.** `ThreadsSidebar` uses `Input` (the chat search, `compact`). Fields in the Studio inspector are styled by hand (`PropertiesPanel` `inputCls`) and the composer uses its own textarea; `Input` is the one to use for new forms.
 
 ## Badge
 
@@ -130,11 +130,11 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 ## Segmented
 
-**Purpose.** A single choice among two to five options, always visible.
+**Purpose.** A single choice among a few options, always visible (up to five; the permission mode is the one sanctioned six, kept in one table).
 
 **Anatomy.** A radiogroup with a `line-strong` edge; each option `control-sm` high, `text-body` `font-medium`; the chosen one is `sub-300` and `ink-primary`, the rest `ink-mute`. One tab stop (roving `tabIndex`), arrow keys move and choose, `aria-checked` says which. `hint` is the tooltip with the consequence; an option can be `disabled`.
 
-**Use.** The composer's permission mode (Read-only, Ask, Auto, Plan, Workspace write, Full), where `hint` explains each and the whole group is disabled while a turn runs.
+**Use.** The composer's permission mode (Plan, Read-only, Ask, Auto, Workspace write, Full, strictest first), where `hint` explains each and the whole group is disabled while a turn runs.
 
 **Don't.** More than five options (use the Combobox); two segmented controls side by side with related meaning; a Segmented for an action (it is a state).
 
