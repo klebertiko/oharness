@@ -4,12 +4,14 @@ The design reference for every surface of the app. Tokens are the single vocabul
 
 | File | What it is |
 | --- | --- |
-| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 59 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and the `--text-*` scale in the `@theme` block of `globals.css`. |
+| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 61 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and the `--text-*` scale in the `@theme` block of `globals.css`. |
 | `README.md` | This brand book: content, visual foundations, iconography, layout, contrast audit. |
 | `experience.md` | The experience contract: no flicker, shift or lag; findable and legible; honest and reversible. |
 | `brand.md` | Nilo: identity, style lock, animation language, where she may appear. |
 | `adoption.md` | Wiring, drift found in the app, decisions, guardrails and order of work. |
+| `components/` | One page per component family (primitives, model picker, composer, run surfaces, Studio, shell), the cross-cutting `patterns.md` and, after the Providers rebuild, `providers.md`: anatomy, states, use and misuse, accessibility, copy (en, with a pt-BR reference) and a real example from the app. Start at `components/README.md`. |
 | `audit/screens.md` | The screen-by-screen audit before the redesign and the same measurements after it, with captures in both themes. |
+| `audit/components.md` | The inventory of every component and pattern in the app against what is documented, and the deviations found (fixed or kept, with the reason). |
 | `audit/providers.md` | The Providers screen audit before its redesign, with captures in both themes at four widths. |
 
 Commands, from the repository root:
