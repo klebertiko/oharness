@@ -12,7 +12,10 @@
   },
   "pull_request": {
    "url": "x"
-  }
+  },
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z",
+  "id": 1009
  },
  "sender": {
   "login": "alice",

@@ -23,7 +23,7 @@ class Delivery:
 
 
 _HANDLE = re.compile(r"^@?[A-Za-z0-9][A-Za-z0-9_-]{0,38}$")
-_CODE = re.compile(r"```.*?```|`[^`\n]*`|^>.*$", re.DOTALL | re.MULTILINE)
+_CODE = re.compile(r"(?s:```.*?```)|`[^`\n]*`|(?m:^>[^\n]*$)")
 
 
 @dataclass(frozen=True)
@@ -70,7 +70,8 @@ class Connector(Protocol):
         """The minimum token permissions this connector needs, shown to the owner (documented per connector)."""
 
     def verify(self, delivery: Delivery) -> str:
-        """Check the delivery's signature against the secret in the store (raises ``Rejected``); returns its delivery id for the replay guard."""
+        """Check the delivery's signature against the secret in the store (raises ``Rejected``); returns its delivery id for the receiver's
+        replay guard. ``parse`` calls it too, so calling ``parse`` alone is already safe."""
 
     def parse(self, delivery: Delivery, rules: TriggerRules) -> list[WorkItemDraft]:
         """``parse`` verifies the delivery itself (raises ``Rejected``), so a forged payload can never become a draft. Returns drafts only for activity the rules select; ignores the rest."""
