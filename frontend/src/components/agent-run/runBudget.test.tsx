@@ -50,6 +50,20 @@ describe("RunBudgetField", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/no ceiling/);
   });
 
+  it("speaks the chosen language, including the refusal reason", async () => {
+    const { useLocaleStore } = await import("@/i18n/store");
+    useLocaleStore.setState({ locale: "pt-BR" });
+    try {
+      const user = userEvent.setup();
+      render(<RunBudgetField />);
+      const field = screen.getByRole("textbox", { name: "Teto de tokens desta execução" });
+      await user.type(field, "7");
+      expect(screen.getByRole("alert").textContent).toMatch(/Use pelo menos 100 tokens\. A execução não usa teto\./);
+    } finally {
+      useLocaleStore.setState({ locale: "en" });
+    }
+  });
+
   it("shows the stored ceiling again after a remount", () => {
     useRunBudgetStore.setState({ maxTokens: 5000 });
     render(<RunBudgetField />);
@@ -62,5 +76,23 @@ describe("RunBudgetField", () => {
     expect(await axeViolations(container)).toEqual([]);
     await user.type(screen.getByRole("textbox"), "7");
     expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("persisted ceiling", () => {
+  afterEach(() => {
+    localStorage.clear();
+    useRunBudgetStore.setState({ maxTokens: null });
+  });
+
+  it("is saved when set and checked again when read back", async () => {
+    useRunBudgetStore.getState().setMaxTokens(5000);
+    expect(JSON.parse(localStorage.getItem("oh.runBudget.v1") ?? "{}").state.maxTokens).toBe(5000);
+    localStorage.setItem("oh.runBudget.v1", JSON.stringify({ state: { maxTokens: 3 }, version: 1 }));
+    await useRunBudgetStore.persist.rehydrate();
+    expect(useRunBudgetStore.getState().maxTokens).toBeNull(); // below the rules table: not trusted
+    localStorage.setItem("oh.runBudget.v1", JSON.stringify({ state: { maxTokens: 7000 }, version: 1 }));
+    await useRunBudgetStore.persist.rehydrate();
+    expect(useRunBudgetStore.getState().maxTokens).toBe(7000);
   });
 });

@@ -33,6 +33,7 @@ import { SubagentToggle } from "@/components/agent/SubagentToggle";
 import { useSubagentStore } from "@/store/subagentStore";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
 import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
+import { useT } from "@/i18n/store";
 import { useRunStream } from "@/components/agent-run/useRunStream";
 import { Gate } from "@/components/agent-run/Gate";
 import { bundleGraphToEngine } from "@/lib/bundleGraph";
@@ -152,6 +153,7 @@ export function AgentStage() {
     [activeBundle, instruction, provider]
   );
 
+  const t = useT();
   const { run, elapsed, live, reset, start, stop, resolveGate } = useRunStream({
     graph,
     harnessEnabled: enabled,
@@ -509,7 +511,7 @@ export function AgentStage() {
                 tone={run.status === "error" ? "fault" : "info"}
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
-                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready." : "The turn stopped. You can reuse your instruction when ready.")}</p>
+                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? t("run.notice.ceiling") : "The turn stopped. You can reuse your instruction when ready.")}</p>
                 {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
               </Notice>
             )}
@@ -564,7 +566,7 @@ export function AgentStage() {
             <SubagentToggle />
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
-            {!enabled && <RunBudgetField />}
+            <RunBudgetField />
             <ToolHooksButton />
             </fieldset>
             <span className="flex-1" />

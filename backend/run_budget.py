@@ -62,3 +62,51 @@ def compact_messages(messages, *, trigger_tokens=None):
     if after >= before:
         return None
     return out, {'before_tokens': before, 'after_tokens': after}
+
+
+def parse_run_budget(value) -> RunBudget:
+    """The one way a request's `max_tokens` becomes a budget; raises ValueError('invalid_run_budget')."""
+    return RunBudget(validate_max_tokens(value))
+
+
+def token_count(value) -> int:
+    """Tokens off an event, tolerant of anything malformed (a bad count must never fail a run)."""
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+class HarnessCeiling:
+    """Decides, from a harness run's own events, when its token ceiling has been reached with work still to do.
+
+    Nodes are one provider call each, so the check runs between nodes: the node that crosses the
+    ceiling finishes, then the run stops. A run whose last planned node crosses it is left as it ended.
+    A node a Gate sends back (`gate_retry`) is work still to do. `spent` may start above zero when the
+    routing call already used tokens.
+    """
+
+    def __init__(self, budget: RunBudget, spent: int = 0):
+        self.budget, self.spent, self.hit = budget, spent, False
+        self.planned: list = []
+        self.finished: set = set()
+
+    def observe(self, name: str, data: dict):
+        """Feed one event; returns the `budget_exceeded` payload once, when the run must stop."""
+        if self.hit or self.budget.max_tokens is None:
+            return None
+        if name == 'run_start':
+            self.planned = [n.get('node_id') for n in data.get('order', []) if isinstance(n, dict)]
+        elif name == 'node_start':
+            self.finished.discard(data.get('node_id'))
+        elif name in ('node_restored', 'node_skipped'):
+            self.finished.add(data.get('node_id'))
+        elif name in ('node_done', 'node_error'):
+            self.finished.add(data.get('node_id'))
+            self.spent += token_count(data.get('tokens'))
+        if name not in ('run_start', 'node_done', 'node_error', 'gate_retry') or not self.budget.exceeded(self.spent):
+            return None
+        if name == 'gate_retry' or any(n not in self.finished for n in self.planned):
+            self.hit = True
+            return {'max_tokens': self.budget.max_tokens, 'used_tokens': self.spent}
+        return None
