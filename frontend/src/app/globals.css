@@ -64,6 +64,7 @@
   --spacing-control-sm: var(--control-sm);
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
+  --spacing-control-touch: var(--control-touch);
 
   --radius-control: var(--r-control);
   --radius-panel: var(--r-panel);
@@ -215,6 +216,8 @@
   --control-sm: 24px;
   --control-md: 28px;
   --control-lg: 36px;
+  /* Minimum pointer target on touch (pointer: coarse), ADR 0033. */
+  --control-touch: 44px;
 
   --r-control: 4px;
   --r-panel: 6px;

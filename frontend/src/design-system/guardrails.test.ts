@@ -63,7 +63,8 @@ describe("design-system guardrails", () => {
     expect(bad).toEqual([]);
   });
 
-  it("keeps the interface in English (no accented Portuguese strings)", () => {
-    expect(offenders(/[À-ÖØ-öø-ÿ]/, /\.tsx?$/)).toEqual([]);
+  it("keeps accented text inside src/i18n (ADR 0034): everything else in src is English", () => {
+    const outside = offenders(/[À-ÖØ-öø-ÿ]/, /\.tsx?$/).filter((o) => !o.startsWith(`i18n${path.sep}`));
+    expect(outside).toEqual([]);
   });
 });

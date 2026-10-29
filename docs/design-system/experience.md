@@ -25,7 +25,7 @@ The system is judged by how it feels under use. These rules are testable; each o
 - **Navigation shows where you are.** The current destination in the rail has `aria-current="page"`, `ink-primary` and a `signal` indicator; the header names the current document. Back never loses a draft.
 - **Reading measure.** Conversation text is a single column of 60 to 68ch in `t-reading`; code and traces may run wider in `t-code`.
 - **Status is never colour alone.** `Badge` always carries a word; `fault-text` and `warn-text` always carry an icon or label.
-- **Targets.** Pointer targets are at least 24px (`control-sm`) on desktop and 36px (`control-lg`) on narrow layouts.
+- **Targets.** Pointer targets are at least 24px (`control-sm`) on desktop, 36px (`control-lg`) on narrow layouts and 44px (`control-touch`) when the primary input is touch (`pointer: coarse`).
 - **Empty, loading, error and success are designed states of every list and panel.** Each says what is true and what to do next.
 
 ## Honest and reversible
