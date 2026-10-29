@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import dataclass
 import logging
 import re
 import time
@@ -17,9 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import usage_tracking
 from database import SessionLocal, get_db
-from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
+from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact, RunInput, RunLink
 from run_worktree import RunWorktree, require_workspace
-from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run
+from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run, resume_seed, claim_start, release_start
 from adapters import get_adapter, AdapterConfig
 from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
@@ -303,8 +304,21 @@ def _apply_instruction(graph: dict, instruction: str | None) -> dict:
     return {**graph, "nodes": nodes}
 
 
+@dataclass
+class ResumeSeed:
+    """A continued run (ADR 0044): the already-created run to execute and the outputs it starts from."""
+    run_id: str
+    outputs: dict[str, str]
+    sequence: int
+    base_ref: str | None = None  # a worktree run starts from the rescue ref that kept the earlier run's edits
+
+
 @router.post("/")
 async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await _execute_run(body, request, db)
+
+
+async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession, resume: ResumeSeed | None = None):
     if body.harness_id:
         h = await db.get(Harness, body.harness_id)
         if not h:
@@ -323,7 +337,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
     require_workspace(body.worktree, cwd)
-    isolation = RunWorktree(cwd) if body.worktree else None
+    isolation = RunWorktree(cwd, ref=(resume.base_ref if resume else None) or "HEAD") if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
     # routing call just below (it already invokes a real adapter). "mock" is
@@ -383,21 +397,27 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         if not routed.engage_harness:
             name = "Nilo reply (no harness)"
 
-    run_id = str(uuid.uuid4())
-    log = ExecutionLog(
-        id=run_id,
-        harness_id=body.harness_id or "adhoc",
-        harness_name=name,
-        status="running",
-    )
-    db.add(log)
-    db.add(RunRecord(id=run_id, source="harness"))
-    await db.commit()
+    if resume is None:
+        run_id = str(uuid.uuid4())
+        log = ExecutionLog(
+            id=run_id,
+            harness_id=body.harness_id or "adhoc",
+            harness_name=name,
+            status="running",
+        )
+        db.add(log)
+        db.add(RunRecord(id=run_id, source="harness"))
+        await db.flush()
+        # What the run started with, so it can be continued later and run the same harness the same way.
+        db.add(RunInput(run_id=run_id, graph_json=json.dumps(graph), mode=body.mode, cwd=cwd, worktree=body.worktree))
+        await db.commit()
+    else:
+        run_id = resume.run_id  # created (and claimed) by the continuation; its journal already holds the event that opened it
 
     control = RunControl(run_id, step=body.step)
     RUNS[run_id] = control
 
-    writer = RunWriter(run_id)
+    writer = RunWriter(run_id, sequence=resume.sequence if resume else 0)
 
     async def event_stream():
         status = "error"
@@ -448,6 +468,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     secrets_store=secrets_store,
                     cwd=run_cwd,
                     enforce_budget=_enforce_node_budget,
+                    resume_outputs=resume.outputs if resume else None,
                 ):
                     parsed = _parse_sse_chunk(chunk)
                     if parsed:
@@ -940,7 +961,7 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
     return {
         **metadata(record),
         **await lineage(db, log_id),
-        "resumable": is_resumable(lg, record),
+        "resumable": is_resumable(lg, record, await db.get(RunInput, log_id)),
         "id": lg.id,
         "harness_id": lg.harness_id,
         "harness_name": lg.harness_name,
@@ -951,6 +972,31 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         "result": result,
         "artifacts": await list_artifacts(log_id, db),
     }
+
+
+@router.post("/logs/{log_id}/start")
+async def start_continued_run(log_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Execute a continuation made by ``/continue``: finished nodes are restored from the run it continues, the rest run for real.
+
+    A continuation starts once: a second call (double click, retry) is a 409 and executes nothing.
+    """
+    await _require_log(db, log_id)
+    link = await db.get(RunLink, log_id)
+    inputs = await db.get(RunInput, log_id)
+    if link is None or not await claim_start(db, log_id):
+        raise HTTPException(409, {"code": "not_startable", "message": "only a continued run that has not started yet can be started"})
+    try:
+        if inputs is None:
+            raise HTTPException(409, {"code": "inputs_unavailable", "message": "the run this continues was saved before its harness was kept; it cannot be continued"})
+        outputs = await resume_seed(db, link.parent_id)
+        record = await db.get(RunRecord, log_id)
+        if record is None:
+            raise HTTPException(409, {"code": "inputs_unavailable", "message": "this continuation has no saved journal"})
+        body = ExecuteRequest(graph_json=json.loads(inputs.graph_json), mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree)
+        return await _execute_run(body, request, db, ResumeSeed(log_id, outputs, record.last_sequence, inputs.base_ref))
+    except BaseException:
+        await release_start(db, log_id)
+        raise
 
 
 @router.post("/logs/{log_id}/continue", status_code=201)

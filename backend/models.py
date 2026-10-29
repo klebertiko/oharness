@@ -38,6 +38,18 @@ class RunRecord(Base):
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class RunInput(Base):
+    """What a run was started with, kept so a continuation can run the same harness the same way (ADR 0044)."""
+    __tablename__ = "run_inputs"
+    run_id: Mapped[str] = mapped_column(ForeignKey("run_records.id"), primary_key=True)
+    graph_json: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="mock")
+    cwd: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    worktree: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A continued worktree run starts from the rescue ref that kept the earlier run's edits (None: the repository's HEAD).
+    base_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
 class RunLink(Base):
     """A run that continues (or forks) another: points at the parent and the last sequence it had. Never touches the parent's journal."""
     __tablename__ = "run_links"

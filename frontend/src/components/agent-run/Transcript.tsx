@@ -315,7 +315,8 @@ function SegmentView({
               {stepActivity.label}
             </span>
           )}
-          {segment.state === "done" && (
+          {segment.restored && <span className="t-meta flex-none text-ink-mute">Restored from the earlier run</span>}
+          {segment.state === "done" && !segment.restored && (
             <span className="t-meta flex-none text-ink-mute">
               {segment.latencyMs ? fmtLatency(segment.latencyMs) : null}
               {segment.tokens ? ` · ${segment.tokensEstimated ? "~" : ""}${fmtTokens(segment.tokens)} tok` : null}
