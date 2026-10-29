@@ -4,7 +4,8 @@ from sandbox.schemas import ToolsRequest
 
 RUN_COMMAND_DESCRIPTION = ('Run a program locally. No shell: argv only. A command needs the user approval unless the conversation permission mode '
     'runs it automatically (Auto: read-only git and listings in any workspace; project scripts such as npm test or pytest only in a workspace '
-    'the user trusted). In Plan mode (read-only) every command is refused.')
+    'the user trusted; Workspace write: also mkdir, touch, cp and mv with every path inside the workspace; Full: most commands, except high-risk '
+    'ones). Read-only refuses any command that could write and Plan refuses every command; the user sees each refusal with its reason.')
 
 
 @pytest.mark.parametrize('preset',[
