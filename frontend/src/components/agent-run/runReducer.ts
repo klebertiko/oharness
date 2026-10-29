@@ -378,6 +378,15 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
     }
 
+    case "worktree_ready":
+      return { ...state, notices: [...state.notices, "This run works in its own worktree; your folder is not touched."] };
+
+    case "worktree_closed": {
+      const ref = typeof action.data.rescue_ref === "string" ? action.data.rescue_ref : null;
+      const text = ref ? `The worktree was removed. Its changes are kept on ${ref}.` : "The worktree was removed. It had no changes to keep.";
+      return { ...state, notices: [...state.notices, text] };
+    }
+
     case "node_restored":
       return patch(state, String(d.node_id), (s) => ({
         ...s,
