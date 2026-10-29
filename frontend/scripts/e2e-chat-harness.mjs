@@ -98,6 +98,11 @@ for (const theme of ["dark", "light"]) {
     await page.getByRole("option", { name: /^Demo Harness/ }).click();
     await page.getByText(/Harness changed to Demo Harness/).waitFor();
     assert.equal(await page.getByText("Answer run-1").count(), 1, "earlier reply untouched");
+    // Continuity: the change can be moved to a new chat that carries the conversation; the old one is put back.
+    await page.getByRole("button", { name: "Move to a new chat" }).click();
+    await page.getByRole("button", { name: "Harness: Demo Harness" }).waitFor();
+    assert.equal(await page.getByTestId("harness-change").count(), 0, "no marker in the new chat");
+    assert.equal(await page.getByText("Answer run-1").count(), 1, "the new chat carries the earlier reply");
     await send("Now with the demo harness");
     await page.getByText("Answer run-2").waitFor();
     assert.deepEqual(requests, ["POST /execute/direct", "POST /execute/"]);

@@ -65,6 +65,7 @@
   --spacing-control-sm: var(--control-sm);
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
+  --spacing-control-touch: var(--control-touch);
 
   --radius-control: var(--r-control);
   --radius-panel: var(--r-panel);
@@ -217,6 +218,8 @@
   --control-sm: 24px;
   --control-md: 28px;
   --control-lg: 36px;
+  /* Minimum pointer target on touch (pointer: coarse), ADR 0033. */
+  --control-touch: 44px;
 
   --r-control: 4px;
   --r-panel: 6px;
@@ -814,5 +817,18 @@ input[type="range"]::-webkit-slider-thumb {
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/* A Nilo proposal fades in on the canvas (opacity only: the flow positions nodes with transform).
+   Under reduced motion it simply appears. */
+@keyframes oh-ghost-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .oh-ghost-in {
+    animation: oh-ghost-in 220ms ease-out backwards;
   }
 }

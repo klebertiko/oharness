@@ -1,0 +1,48 @@
+/** English is the source catalog: every key exists here first, and `messages.pt-BR.ts` must define the same keys (a type error otherwise). Machine data (ids, commands, model names) never goes through a catalog. */
+export const en = {
+  "common.cancel": "Cancel",
+
+  "status.notConnected": "Not connected",
+  "status.unavailable": "Unavailable",
+  "status.noModel": "No model chosen",
+  "status.modelNotPulled": "Model not pulled",
+  "status.verified": "Verified",
+  "status.checking": "Checking connection",
+  "status.needsAttention": "Needs attention",
+  "status.notVerified": "Not verified",
+
+  "fault.keyRejected": "Key rejected",
+  "fault.unreachable": "Unreachable",
+  "fault.rateLimited": "Rate limited",
+  "fault.outOfCredits": "Out of credits",
+  "fault.signIn": "Sign-in needed",
+  "fault.notInstalled": "Not installed",
+  "fault.unknown": "Test failed",
+
+  "step.replaceKey": "Replace key",
+  "step.replaceKey.hint": "replace key",
+  "step.copyServe": "Copy `ollama serve`",
+  "step.copyServe.hint": "start Ollama",
+  "step.checkEndpoint": "Check endpoint",
+  "step.checkEndpoint.hint": "check endpoint",
+  "step.testAgain": "Test again",
+  "step.testAgain.hint": "retest",
+  "step.testLater": "Test again later",
+  "step.testLater.hint": "retry later",
+  "step.openBilling": "Open billing",
+  "step.openBilling.hint": "add credit",
+  "step.copyLogin": "Copy `{login}`",
+  "step.copyLogin.hint": "sign in",
+  "step.openInstall": "Open install guide",
+  "step.openInstall.hint": "install CLI",
+  "step.paste": "Paste {article} {vendor} key",
+  "step.paste.hint": "add key",
+  "step.turnOn": "Turn on",
+  "step.turnOn.hint": "turn on",
+  "step.chooseModel": "Choose a model",
+  "step.chooseModel.hint": "choose model",
+  "step.copyPull": "Copy `ollama pull {id}`",
+  "step.copyPull.hint": "pull model",
+};
+
+export type MessageKey = keyof typeof en;

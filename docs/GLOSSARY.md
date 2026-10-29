@@ -21,6 +21,7 @@ Two rules shape every word below:
 | **Skill** | A named capability an Agent may invoke. |
 | **Signal** | A typed exit state on an edge. |
 | **Connector** | An McpServer or a Tool in the Connections dock. |
+| **Hook** | A program you register that must exit 0 before a tool runs. An error or a timeout blocks the tool, and the run records which hook decided. |
 | **Provider** | A registered LLM backend with credentials (shown on Providers). |
 | **Workspace** | The folder on this device a chat's tools read and run in. |
 | **Studio, Chats, Providers** | The three destinations of the app. |

@@ -1,8 +1,8 @@
 # Primitives
 
-The set in `frontend/src/components/ui/` (exported from `ui/index.ts`), tested with vitest and axe and shown at `/dev/design-system` in both themes. The runnable specification of Button, Input, Badge, Panel, ListRow and Kbd is `../reference/`; Notice, EmptyState, Skeleton, Segmented and Sheet are documented here first and join the reference in the next step. The Combobox has its own file, `model-picker.md`.
+The set in `frontend/src/components/ui/` (exported from `ui/index.ts`), tested with vitest and axe and shown at `/dev/design-system` in both themes. The runnable specification of Button, Input, Badge, Panel, ListRow and Kbd is `../reference/`; Notice, EmptyState, Skeleton, Segmented and Sheet are documented here first and join the reference in the next step. The Combobox has its own file, `model-picker.md`. `StatusMark` and `ConfirmInline` came with the Providers foundation (ADR 0033, 0034) and are described at the end.
 
-Shared rules, which every entry assumes: sentence case; the 2px `signal` focus ring on `:focus-visible`; control edges are `line-strong`, panel edges `line` or `line-soft`; heights `control-sm` 24, `control-md` 28, `control-lg` 36 (every size rises to 36 below 640px); disabled is `opacity-45` and always explained nearby; no transition on layout properties; under `prefers-reduced-motion` every transition and animation is instant.
+Shared rules, which every entry assumes: sentence case; the 2px `signal` focus ring on `:focus-visible`; control edges are `line-strong`, panel edges `line` or `line-soft`; heights `control-sm` 24, `control-md` 28, `control-lg` 36 (every size rises to 36 below 640px, and to `control-touch` 44 when the primary pointer is touch, `pointer: coarse`, ADR 0033: Button, Input, ListRow and Segmented carry the `pointer-coarse:` classes); disabled is `opacity-45` and always explained nearby; no transition on layout properties; under `prefers-reduced-motion` every transition and animation is instant.
 
 ## Button
 
@@ -151,3 +151,24 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 **Don't.** A sheet for a destructive confirmation that fits inline; a sheet that opens another sheet.
 
 **Copy.** Title names the task: "Tool hooks" / "Hooks de ferramentas" · "Keyboard map" / "Mapa de teclado".
+
+## StatusMark
+
+**Purpose.** The one state marker: an 8px square beside the word that names the state. It replaces the two dot vocabularies the Providers audit found (D2).
+
+**Anatomy.** `h-2 w-2`, square (`rounded-none`). Tones: `ok` (`signal`), `warn`, `fault`, `busy` (`ink-dim`, pulsing, still under reduced motion), `idle` (`ink-mute`), `off` (hollow, `ink-mute` edge: nothing configured yet).
+
+**Rules.** Decorative by construction (`aria-hidden`): the word beside it carries the meaning, so colour is never alone, and hollow versus filled keeps "not set up" apart from "tried and failed". One marker per row.
+
+**Status.** Foundation only; the Providers rebuild is its first consumer. The chat picker's 6px tone dots and the shell's 7px `StatusDot` are older vocabularies that fold into it (audit D6).
+
+## ConfirmInline
+
+**Purpose.** Confirm a destructive action where it was asked, not in a dialog.
+
+**Anatomy.** A `role="group"` row: the prompt (wraps from 192px), a secondary **Cancel** that has the focus on arrival, and a `danger` button that names the act ("Remove key", never "OK"), with `loading` while it works. Escape cancels unless busy. Cancel's label comes from the `common.cancel` catalogue key.
+
+**Don't.** A modal for a confirmation that fits in the row; "OK" or "Yes" on the destructive button.
+
+**Copy.** Prompt says what is lost: "Remove the saved key for {connection}?" / "Remover a chave salva de {connection}?"; button: Remove key / Remover chave.
+

@@ -20,7 +20,7 @@ How each piece of the interface is built and used. The tokens (`../tokens.json`)
 3. **States and variants**: every state the code can reach, and which variant to pick.
 4. **Use and misuse**: when it is the right piece, and what to reach for instead.
 5. **Accessibility**: keyboard, focus, ARIA and reduced motion.
-6. **Copy**: the strings as shipped (English) with a pt-BR translation reference. The product is English-only today (`patterns.md` § i18n); pt-BR is what to ship when a locale lands, so the same tone and length are already checked.
+6. **Copy**: the strings as shipped (English) with a pt-BR translation reference. The interface has `en` and `pt-BR` catalogues, but only the Providers vocabulary is translated so far (`patterns.md` § i18n); for everything else the pt-BR here is the reference for when it moves into the catalogue.
 7. **Example**: a real use in the app, by file.
 
 A new component or pattern enters the app with its row in `../audit/components.md` and its section here, in the same pull request.

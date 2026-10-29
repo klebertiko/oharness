@@ -16,7 +16,6 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 - **Queue**: type while a turn is running and press `Mod+Enter` (or Queue): the message waits in a visible list above the composer and runs after the current turn, one at a time, in order. Remove one with its button. If the turn stops or fails the queue pauses; Send next or Clear queue decides. Commands (`/exec`, `/read`) wait for the turn to finish.
 - **Subagents** (off by default): turn it on and the model can hand tasks to child runs, up to four per run. The chat shows Nilo and each child with its state; **Cancel** stops one child and leaves the rest running.
 - **Token ceiling** (no harness): a number in the toolbar. A run that reaches it stops with the status **Budget exceeded**. An invalid entry keeps the last valid ceiling and says so.
-- **Tool hooks**: register a program that must exit 0 before a tool runs; anything else blocks the tool. Hooks run without a shell and without your secrets.
 - **Files this turn changed**: after a turn in a workspace, the chat lists the files it changed with a diff and a one-time **Revert** per file. A file edited after the turn is left alone.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
 - **Permission mode** (the preset) is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
@@ -31,6 +30,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
+- **Tool hooks** (composer, *Tool hooks*): register a program that must exit 0 before a tool runs. If it fails or takes longer than its timeout (1 to 10 seconds), the tool does not run and the tool card says which hook blocked it. A hook runs without a shell and without your secrets, only ever vetoes (it cannot approve a command), and is stored by the sidecar, never read from a workspace. Edit changes a hook in place; a stored hook that no longer validates blocks every tool until you remove it and register it again. A simulated (mock) run starts no hook; the tool card says it was not run.
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)). **Activity** lists every run; open an interrupted one and choose **Continue as a new run** to start a linked run from its saved events (the original never changes).
 
 ## Studio
