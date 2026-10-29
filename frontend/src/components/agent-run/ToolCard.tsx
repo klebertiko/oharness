@@ -74,7 +74,7 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
         <span className="t-meta text-ink">{title}</span>
         {call.origin && <span className="t-meta text-ink-mute">· {call.origin === "model" ? "requested by the model" : "requested by you"}</span>}
         {call.autoApproved && <span data-auto-approved className="rounded-control bg-sub-300 px-1.5 py-0.5 text-meta text-ink-mute">auto-approved: {autoApprovedBy(call.autoApproved.mode)}</span>}
-        {high && <span className="rounded-control px-1.5 py-0.5 text-meta font-semibold uppercase" style={{ background: "var(--fault)", color: "var(--signal-ink)" }}>high risk</span>}
+        {high && <span className="rounded-control px-1.5 py-0.5 text-meta font-semibold uppercase" style={{ background: "var(--fault)", color: "var(--fault-ink)" }}>high risk</span>}
         <span className="flex-1" />
         <span className="t-meta" style={{ color: TONE[state.tone] }}>{state.label}</span>
       </div>

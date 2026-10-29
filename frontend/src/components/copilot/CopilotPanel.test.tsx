@@ -85,11 +85,24 @@ describe("CopilotPanel", () => {
     const user = userEvent.setup();
     renderPanel();
     await user.type(composer(), "build it{Enter}");
-    expect(await screen.findByText(/Working/)).toBeTruthy();
+    expect(await screen.findByText(/Drafting · /)).toBeTruthy();
     expect(composer().disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     fireEvent.keyDown(composer(), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText(/Working/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Drafting/)).toBeNull());
+  });
+
+  it("says it is refining, not drafting, while a proposal is still waiting for review", async () => {
+    mockPlan.mockResolvedValueOnce(ok({ summary: "Added Writer.", ops: [{ op: "addNode", ref: "n1", type: "agent", label: "Writer" }] }));
+    const user = userEvent.setup();
+    renderPanel();
+    await user.type(composer(), "write{Enter}");
+    await screen.findByRole("region", { name: "Proposed changes" });
+    mockPlan.mockImplementation(
+      (_r, signal) => new Promise((_, reject) => signal!.addEventListener("abort", () => reject(new DOMException("a", "AbortError")))),
+    );
+    await user.type(composer(), "make it shorter{Enter}");
+    expect(await screen.findByText(/Refining the proposal · /)).toBeTruthy();
   });
 
   it("tags offline answers", async () => {

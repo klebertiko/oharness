@@ -14,3 +14,6 @@ O modo Plan (#102) já recusava todo `exec`. Faltava o fim da run: um artefato d
 
 ## Consequências
 O plano é texto do modelo: aprovar não o torna verificado, só impede execução sem decisão. O frontend restaura o cartão após recarregar via `GET /chat/tools/plan`.
+
+## Adendo (2026-10-29): plano que não foi salvo
+Se guardar o plano falhar (banco travado, por exemplo), a resposta já foi entregue: a run termina `complete` e emite `plan_error` `{code: "plan_not_saved"}` em vez de `plan_proposed`, sem detalhes internos. Nada fica esperando aprovação, então a conversa pode sair de Plan; o chat mostra o aviso e a pessoa reenvia. A descrição de `run_command` que o modelo recebe agora nomeia todos os modos (Read-only, Workspace write, Full).
