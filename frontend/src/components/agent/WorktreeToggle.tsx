@@ -14,7 +14,7 @@ export function WorktreeToggle({ disabled = false }: { disabled?: boolean }) {
       aria-checked={enabled}
       disabled={disabled}
       onClick={() => setEnabled(!enabled)}
-      title="Run the harness in its own copy of your folder (a Git worktree). Your folder is not touched; changes the run leaves are kept on a rescue ref."
+      title="Run the harness in its own copy of your folder (a Git worktree). Your folder is not touched; changes the run leaves are kept on a rescue ref. Slash tools and Plan mode are not harness runs: they still work in your folder."
     >
       {`Own worktree ${enabled ? "on" : "off"}`}
     </Button>

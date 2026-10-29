@@ -171,6 +171,21 @@ def test_a_run_that_ends_normally_tells_the_client_where_its_changes_were_kept(r
         client.portal.call(drain)
         closed = [c for c in chunks if c.startswith("event: worktree_closed")]
         assert len(closed) == 1 and "refs/openharness/rescue/" in closed[0]
-        assert chunks.index(closed[0]) > max(i for i, c in enumerate(chunks) if c.startswith("event: harness_done"))
+        assert chunks.index(closed[0]) < min(i for i, c in enumerate(chunks) if c.startswith("event: harness_done"))  # before the run is complete
         journal_events = client.get(f"/execute/logs/{response.headers['X-Execution-Id']}/events?limit=50").json()["events"]
         assert [e["event"] for e in journal_events].count("worktree_closed") == 1  # on the stream and in the journal, once
+
+
+def test_a_continue_made_the_moment_the_run_completes_already_finds_the_rescue_ref(repo, oh_env, engine_that_writes):
+    with TestClient(app) as client:
+        client.portal.call(register, repo.path)
+        response = client.portal.call(start, repo.path)
+        events = []
+
+        async def drain():
+            async for chunk in response.body_iterator:
+                events.append(chunk)
+        client.portal.call(drain)
+        run_id = response.headers["X-Execution-Id"]
+        journal_events = [e["event"] for e in client.get(f"/execute/logs/{run_id}/events?limit=50").json()["events"]]
+        assert journal_events.index("worktree_closed") < journal_events.index("harness_done")

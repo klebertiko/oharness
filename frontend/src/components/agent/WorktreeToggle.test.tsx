@@ -16,7 +16,8 @@ describe("WorktreeToggle", () => {
     const { container } = render(<WorktreeToggle />);
     const toggle = screen.getByRole("switch", { name: "Own worktree off" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
-    expect(toggle.getAttribute("title")).toMatch(/copy of your folder/i);
+    expect(toggle.getAttribute("title")).toMatch(/own copy of your folder/i);
+    expect(toggle.getAttribute("title")).toMatch(/Plan mode/);
     toggle.focus();
     await user.keyboard("{Enter}");
     expect(useRunWorktreeStore.getState().enabled).toBe(true);

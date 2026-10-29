@@ -565,7 +565,7 @@ export function AgentStage() {
             <SubagentToggle />
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
-            {enabled && workspace?.rootPath && <WorktreeToggle />}
+            {enabled && workspace?.rootPath && <WorktreeToggle disabled={live} />}
             {!enabled && <RunBudgetField />}
             <ToolHooksButton />
             </fieldset>

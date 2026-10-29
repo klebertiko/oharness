@@ -472,18 +472,20 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                     resume_outputs=resume.outputs if resume else None,
                 ):
                     parsed = _parse_sse_chunk(chunk)
+                    if parsed and parsed["event"] == "harness_done" and isolation is not None:
+                        # The run is over: remove its worktree and say where its changes went BEFORE the run is marked complete, so a
+                        # Continue made the moment it completes already finds the rescue ref (and the client still listens).
+                        await isolation.close()
+                        if isolation.closed_id is not None:
+                            closed_evt = {"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}}
+                            closed_sent = True
+                            events.append(closed_evt)
+                            yield _sse(closed_evt["event"], closed_evt["data"])
                     if parsed:
                         events.append(parsed)
                         if parsed["event"] == "harness_done":
                             status = parsed["data"].get("status", "complete")
                     yield chunk
-                if isolation is not None:  # the run ended normally: say where its changes went while the client is still listening
-                    rescue = await isolation.close()
-                    if isolation.closed_id is not None:
-                        closed_evt = {"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": rescue}}
-                        closed_sent = True
-                        events.append(closed_evt)
-                        yield _sse(closed_evt["event"], closed_evt["data"])
         except GeneratorExit:
             control.stop.set()
             status = "interrupted"
@@ -507,9 +509,9 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                 await writer.finish(status)
             finally:  # the worktree goes whether or not the journal write succeeded
                 if isolation is not None:
-                    rescue = await isolation.close()  # a no-op when the run already closed it above
-                    if isolation.closed_id is not None and not closed_sent:
-                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": rescue}})
+                    await isolation.close()  # a no-op when the run already closed it above
+                    if isolation.closed_id is not None and not closed_sent:  # the other endings: only the journal hears of it
+                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}})
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
