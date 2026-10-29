@@ -114,7 +114,7 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
       {call.approval?.decision && call.approval.note ? <p className="mt-1 text-meta text-ink-mute">note: {call.approval.note}</p> : null}
       {call.hooks?.map((h) => (
         <p key={h.hookId} className="mt-1 text-meta text-ink-mute" data-hook-decision>
-          hook {h.hookId}: {h.decision === "allow" ? "allowed" : `blocked (${h.reason.replace("_", " ")})`}
+          hook {h.hookId}: {h.decision === "allow" ? "allowed" : h.decision === "skipped" ? "not run (simulated)" : `blocked (${h.reason.replace("_", " ")})`}
         </p>
       ))}
       {call.denied?.note ? <p className="mt-1 text-meta text-ink-mute">{call.denied.note}</p> : null}
