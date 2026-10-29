@@ -1,0 +1,13 @@
+<!-- @dsCard group="Components" height=260 -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../bundle.css"><script src="../theme.js"></script><style>body{margin:0;padding:var(--space-4);background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.row{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-start;margin-bottom:var(--space-3)}.col{display:flex;flex-direction:column;gap:var(--space-2)}.cap{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute);margin-bottom:var(--space-1)}.line{display:flex;align-items:center;gap:var(--space-2)}.mono{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute)}.card{padding:var(--space-3);border:1px solid var(--line-soft);border-radius:var(--radius-control);background:var(--sub-200)}.t{margin:0;font:500 13px/1.3 var(--font-ui);color:var(--ink-primary)}.tree{margin:var(--space-1) 0 0 var(--space-2);padding-left:var(--space-3);border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:var(--space-1)}</style></head><body><div id="r"></div><script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script><script src="../bundle.js"></script><script>
+var h=React.createElement,O=window.OH;
+function Cap(t){return h("div",{className:"cap"},t)}
+
+function App(){return h(React.Fragment,null,
+ Cap("info · warn · fault  (fault is announced at once; the others politely)"),
+ h("div",{className:"col",style:{maxWidth:520}},
+  h(O.Notice,{tone:"info",title:"Saved on this device"},"Export an OHM file to share a copy."),
+  h(O.Notice,{tone:"warn",action:h(O.Button,{size:"sm"},"Open Providers")},"There is no shell on the other side: | would be passed literally. Run one program at a time."),
+  h(O.Notice,{tone:"fault",title:"Couldn't continue this run",action:h(O.Button,{size:"sm"},"Try again")},"Its saved events stay as they are.")))}
+ReactDOM.createRoot(document.getElementById('r')).render(h(App));
+</script></body></html>

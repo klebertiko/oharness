@@ -1,10 +1,11 @@
 # Reference implementation
 
-Vanilla React (classic script, no build) of Button, Input, Badge, Panel, ListRow, Kbd and Nilo, styled only with tokens. It is the specification the real components in `frontend/src/components/ui/` are built from, and a quick way to see both themes.
+Vanilla React (classic script, no build) of Button, Input, Badge, Panel, ListRow, Kbd and Nilo, plus Notice, EmptyState, Segmented, StatusMark, ConfirmInline, Skeleton and Popover, styled only with tokens. It is the specification the real components in `frontend/src/components/ui/` are built from, and a quick way to see both themes.
 
 - `bundle.js` assigns `window.OH`. The Nilo code is a faithful port of `frontend/src/components/brand/` (grid, frames, loop).
 - `bundle.css` uses only token variables. Its first line imports the fonts from Google Fonts for this preview only; the app must self-host them (see `../adoption.md`).
-- `*/README.md` is the usage guideline per component; `*/preview.html` is a small live example; `Cover/` is the brand cover.
+- `ModelPicker/`, `Composer/` and `RunSurfaces/` are pattern previews: the model picker (chip, grouped list, scope, Needs action, Model not pulled), the composer states (queue, plan card, permission, call to action) and the run surfaces (thinking status, approval card, subagent tree, turn diff, markers). They compose the components above and mirror `../components/*.md`; the real components are in `frontend/src`.
+- `*/README.md` is the usage guideline per component (the new ones are documented in `../components/`); `*/preview.html` is a small live example; `Cover/` is the brand cover.
 - `index.d.ts` documents the props.
 
 Preview locally (from the repository root):
