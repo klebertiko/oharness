@@ -47,6 +47,14 @@ describe("design-system guardrails", () => {
     expect(offenders(/["'`]#[0-9a-fA-F]{3,8}["'`]/, /\.tsx?$/)).toEqual([]);
   });
 
+  it("marks a selected row with shadow-selected, not an ad hoc inset shadow", () => {
+    expect(offenders(/shadow-\[inset_2px_0_0/, /\.tsx$/)).toEqual([]);
+  });
+
+  it("takes transition times from the duration tokens (the 620ms march and the reduced-motion reset are the only literals)", () => {
+    expect(offenders(/transition[^;]*\b\d+ms\b/, /\.css$/).filter((o) => !o.includes("0.01ms"))).toEqual([]);
+  });
+
   it("uses state colours as text only through warn-text, fault-text and signal-text", () => {
     expect(offenders(/(?<![-\w])(?:hover:|focus:)?text-(?:warn|fault|signal)(?![-\w])/, /\.tsx$/)).toEqual([]);
   });

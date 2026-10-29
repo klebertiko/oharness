@@ -139,7 +139,7 @@ export function HarnessWire({
           <div
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
-            className="t-meta pointer-events-auto absolute select-none rounded-none border px-[4px] uppercase leading-[13px]"
+            className="t-meta pointer-events-auto absolute select-none rounded-none border px-1 uppercase leading-[13px]"
             style={{
               transform: `translate(-50%,-50%) translate(${lx}px, ${ly}px)`,
               background: selected ? colour : "var(--sub-000)",

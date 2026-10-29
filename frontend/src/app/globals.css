@@ -71,6 +71,8 @@
   --radius-composer: var(--r-composer);
   --radius-hero: var(--r-hero);
 
+  --shadow-selected: var(--edge-selected);
+
   --default-transition-duration: var(--duration-fast);
 
   --default-transition-timing-function: var(--ease-standard);
@@ -205,6 +207,7 @@
   --shadow-float: 0 22px 58px oklch(0.08 0.005 72 / 0.34);
   --surface-highlight: oklch(1 0 0 / 0.045);
   --overlay-backdrop: oklch(0 0 0 / 0.42);
+  --edge-selected: inset 2px 0 0 var(--signal);
 
   /* ── Chrome metrics ────────────────────────────────────────────────────── */
   --h-titlebar: 48px;
