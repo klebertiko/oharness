@@ -57,7 +57,7 @@ Rules in both: machine data (ids, models, paths, keys, durations, argv) is `t-me
 - Hover, press and focus: `duration-fast` (110ms) with `ease-standard`, on `background-color` and `border-color` only.
 - Entrances (sheets, the welcome block, cards appearing): `duration-enter` (420ms) with `ease-enter`, opacity and an 8px translate only.
 - Never width, height, top, left, margin or a shadow blur. Collapsing animates `opacity` and `transform`.
-- Live state is a travelling tick or a step, not a pulse: a running plate gets a 1px sweep, a live wire a dash march, a probe in progress a dot that pulses (the only pulse, and only while the probe runs).
+- Live state is a travelling tick or a step, not a pulse: a running plate gets a 1px sweep, a live wire a dash march, the only pulses are a probe or run step in progress (`StatusMark` `busy`, the picker's `checking` dot, a live step), and `Skeleton`, all of which stop under reduced motion.
 - **Reduced motion**: `prefers-reduced-motion: reduce` makes every animation and transition instant (the global reset in `globals.css`), `Skeleton` and the Button spinner stop (`motion-reduce:animate-none`), Nilo shows one still pose per state, and the canvas camera jumps. Nothing relies on motion to convey state: every animated marker has a word beside it.
 
 ## i18n and copy
@@ -73,4 +73,4 @@ Rules in both: machine data (ids, models, paths, keys, durations, argv) is `t-me
 
 ## Status is never colour alone
 
-A state is a word or a shape plus a colour. `Badge` always carries a word. `warn` and `fault` as text use `warn-text` and `fault-text` and sit beside an icon or label. The six connection tones differ in shape as well as colour (filled, hollow ring, pulsing). Run markers differ in shape (diamond, filled square, hollow square, dashed square). The guardrail test fails a raw `text-warn`, `text-fault` or `text-signal` class.
+A state is a word or a shape plus a colour. `Badge` always carries a word. `warn` and `fault` as text use `warn-text` and `fault-text` and sit beside an icon or label. The word beside a state marker carries the meaning; the connection tones add shape only where they can (hollow ring for not connected, pulsing for checking), so the filled ones (verified, not verified, needs attention, unavailable) rely on the word. Run markers differ in shape (diamond, filled square, hollow square, dashed square). The guardrail test fails a raw `text-warn`, `text-fault` or `text-signal` class.

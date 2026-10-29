@@ -52,7 +52,7 @@ The **run ladder** under it is the plan as one bar (`role="progressbar"`, "Harne
 
 ## Token ceiling and budget stop
 
-The field is in `composer.md`. A run that reaches the ceiling ends with the explicit status **Budget exceeded** (never "failed"), shown in the transport state, the Runs panel and the saved detail. Compaction of older tool results (`context_compacted`) is silent to the person: the transcript is unchanged.
+The field is in `composer.md`. A run that reaches the ceiling ends with the explicit status `budget_exceeded`, never plain "failed". Today the words differ by surface: the Runs panel says **Budget exceeded**, the transport bar maps it to "stopped", and the transcript prints the raw token (`budget_exceeded — stopped at {used} of {max} tok`). The rule is one human label, **Budget exceeded**, everywhere; the transport and transcript wording is a known gap (the raw token also breaks the copy rules). Compaction of older tool results (`context_compacted`) is silent to the person: the transcript is unchanged.
 
 ## Runs panel (Activity)
 

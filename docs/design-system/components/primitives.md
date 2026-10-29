@@ -18,7 +18,7 @@ Shared rules, which every entry assumes: sentence case; the 2px `signal` focus r
 
 **Don't.** Two primaries side by side; a label like "Submit" or "Yes"; a disabled primary with no reason on screen (leave it enabled and explain on press, or put the reason in a `Notice`); swapping the label for "Loading…".
 
-**Accessibility.** A native `<button type="button">`. `iconOnly` requires `aria-label` and gets a `title`. `loading` renders a `role="status"` "Working" and sets `aria-busy`. A toggle button uses `role="switch"` with `aria-checked` (the `SubagentToggle`).
+**Accessibility.** A native `<button type="button">`. `iconOnly` requires `aria-label`; the component adds no tooltip, so pass `title` as well (with the chord, if any). `loading` renders a `role="status"` "Working" and sets `aria-busy`. A toggle button uses `role="switch"` with `aria-checked` (the `SubagentToggle`).
 
 **Copy.** Verbs and objects: Use in chat / Usar no chat · Approve plan / Aprovar plano · Discard plan / Descartar plano · Send next / Enviar próxima · Clear queue / Limpar fila · Revert / Reverter · Cancel / Cancelar.
 

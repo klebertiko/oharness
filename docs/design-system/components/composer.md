@@ -18,7 +18,7 @@ From top to bottom: queued messages (when any), the textarea, the permission row
 
 **Accessibility.** The textarea is `aria-label="Message OHarness"` with `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant` on the open list; options are `role="option"` with `aria-selected`.
 
-**Copy.** Placeholder idle: "Ask OHarness… Type / for commands and skills" / "Pergunte ao OHarness… Digite / para comandos e skills". While a turn runs: "A turn is running. Send queues your message to run after it." / "Um turno está em andamento. Enviar coloca a mensagem na fila para rodar depois dele."
+**Copy.** Placeholder idle, no folder: "Ask OHarness… Type / for commands and skills" / "Pergunte ao OHarness… Digite / para comandos e skills"; with a workspace: "Ask OHarness… Type / for commands, skills and tools in {workspace}" / "Pergunte ao OHarness… Digite / para comandos, skills e ferramentas em {workspace}"; the list header then reads "Commands, skills & tools · {workspace}" (otherwise "Commands & skills"). While a turn runs: "A turn is running. Send queues your message to run after it." / "Um turno está em andamento. Enviar coloca a mensagem na fila para rodar depois dele."
 
 ## Permission presets and Plan mode
 
@@ -109,9 +109,9 @@ ADR 0025. **Purpose.** Stop a run that reaches a token total.
 
 ADR 0026. **Purpose.** Register a program that must exit 0 before a tool runs; anything else blocks it.
 
-**Anatomy.** A ghost "Tool hooks" button opens a `Sheet` with a short explanation ("It must exit 0 for the tool to run; an error or a timeout blocks it. Hooks run without a shell and without your secrets."), the registered hooks as a list (id, tools, timeout, a Remove button; a row that no longer validates says "blocks every tool until replaced"), and a form: Hook id, Program (full path), Arguments (one per line), Timeout (seconds), "Runs before" checkboxes, **Save hook**.
+**Anatomy.** A ghost "Tool hooks" button opens a `Sheet` with a short explanation ("It must exit 0 for the tool to run; an error or a timeout blocks it. Hooks run without a shell and without your secrets."), the registered hooks as a list (id, tools, timeout, **Edit** and **Remove** buttons; a row that no longer validates has no Edit and says "blocks every tool until you remove it and register it again"), and a form: Hook id, Program (full path), Arguments (one per line), Timeout (seconds), "Runs before" checkboxes, **Save hook**.
 
-**States.** empty ("No hooks yet."), saved, invalid entry (message above the form), sidecar unavailable ("Hooks are unavailable right now."), removal failed ("Could not remove the hook."). A blocked tool shows "hook {id}: blocked ({reason})" on its card.
+**States.** empty ("No hooks yet."), saved, editing ("Editing {id}. Saving replaces it." with a **Cancel edit** button), invalid entry (message above the form), sidecar unavailable ("Hooks are unavailable right now."), removal failed ("Could not remove the hook."). A blocked tool shows "hook {id}: blocked ({reason})" on its card.
 
 **Don't.** Offer to run a hook from the workspace (hooks are registered only through the authenticated sidecar); a shell field.
 
