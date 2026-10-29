@@ -22,8 +22,8 @@ from ..security import Rejected, secret_ref, verify_hmac_sha256
 API = "https://api.github.com"
 TOKEN_NAME, WEBHOOK_SECRET_NAME = "github-token", "github-webhook-secret"
 _THREAD = re.compile(r"^([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})#([0-9]{1,9})$")
-_ISSUE_EVENTS = {"opened", "edited", "reopened", "labeled"}
-_PR_EVENTS = {"opened", "edited", "reopened", "ready_for_review", "labeled"}
+_ISSUE_EVENTS = {"opened", "reopened", "labeled"}  # an edit is not new content: it never starts work
+_PR_EVENTS = {"opened", "reopened", "ready_for_review", "labeled"}
 MAX_REPLY = 60_000
 MAX_PAGES = 10
 MARKER = "<!-- oharness-factory -->"  # on every reply: the factory never reacts to its own comments, whoever the token belongs to
@@ -131,7 +131,7 @@ class GitHubConnector:
             return []
         thread = f"{repo.lower()}#{int(item['number'])}"
         return [clamp_draft(
-            SourceRef(kind="github", external_id=thread, url=item.get("html_url"), thread_ref=thread),
+            SourceRef(kind="github", ref=thread, url=item.get("html_url"), thread_ref=thread),
             str(item.get("title") or ""), text,
             [str(l.get("name", "")) for l in item.get("labels", []) if isinstance(l, dict)] + (["pull-request"] if is_pr else []),
             login, f"{thread}:{key}",
@@ -210,5 +210,5 @@ class GitHubConnector:
                     events = get(f"/repos/{repo}/issues/{issue['number']}/events", per_page=100).json()
                     actor = next((e.get("actor") for e in reversed(events) if e.get("event") == "labeled" and str((e.get("label") or {}).get("name", "")).lower() == trigger[0]), None)
                     drafts += self.parse_event("issues", {"action": "labeled", "label": {"name": trigger[0]}, "issue": issue, "sender": actor, "repository": full}, f"poll-label-{issue['number']}", rules)
-                drafts += self.parse_event("issues", {"action": "edited", "issue": issue, "sender": issue.get("user"), "repository": full}, f"poll-issue-{issue['number']}", rules)
+                drafts += self.parse_event("issues", {"action": "opened", "issue": issue, "sender": issue.get("user"), "repository": full}, f"poll-issue-{issue['number']}", rules)
         return list({d.idempotency_key: d for d in drafts}.values()), PollState(since=cursor)

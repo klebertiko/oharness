@@ -1,16 +1,15 @@
 # ADR 0060: Fonte de trabalho GitHub
 
-Status: aceita (implementação no PR de GitHub). Primeira entrega do contrato do ADR 0059.
+Status: aceita. Primeira entrega do contrato do ADR 0059. Conceitos de: docs.warp.dev/factories/integrations/github (gatilhos, filtros, mensagem no thread, política de bots); desenho próprio.
 
 ## Decisão
-- **Gatilhos:** issue ou PR aberto/comentado com menção ao handle da fábrica (`@payments`), ou label configurado como gatilho. Um comentário de bot da própria fábrica nunca dispara (evita laço). `allowed_authors` limita quem pode disparar.
-- **Entrada:** webhook (`X-Hub-Signature-256`, HMAC do segredo no cofre, `X-GitHub-Delivery` como id de replay) e/ou polling da API REST com ETag. Webhook só no receptor local (ADR 0061); polling não abre porta nenhuma e é o caminho recomendado para quem não quer receber conexões.
-- **Saída:** o resultado volta no mesmo issue/PR (comentário) via `reply`. A fábrica não faz merge, não faz push em branch protegida, não aprova PR.
-- **Token (escopo mínimo):** fine-grained PAT ou GitHub App restrito aos repositórios escolhidos, com `Issues: read/write`, `Pull requests: read/write` (comentar) e `Metadata: read`; **sem** `Contents: write`, `Administration` nem `Workflows`. Quem escreve código usa o worktree local e a credencial git do dono, fora do conector.
-- **Idempotência:** chave `<owner/repo>#<n>:item` (descrição por menção ou label: um item por issue/PR) ou `<owner/repo>#<n>:comment:<id>` (um por comentário), em minúsculas; iguais por webhook e por polling, então os dois caminhos juntos não duplicam. O id de entrega serve só ao replay guard.
-- **Laço:** respostas da fábrica levam um marcador (`<!-- oharness-factory -->`) e, se o token for de usuário, `self_logins` lista a conta; comentários de bots/da própria fábrica nunca são trabalho.
-- **Polling:** comentários e issues/PRs atualizados desde o último ponto (oldest first, até 10 páginas de 100; se cortar, o cursor para no último processado), mesmas regras do webhook, inclusive quem aplicou o label (lido dos eventos da issue).
+- **Gatilhos implementados:** issue/PR aberto, reaberto ou com label (`issues`, `pull_request`: `opened`, `reopened`, `labeled`, `ready_for_review`), comentário criado (`issue_comment`, `pull_request_review_comment`). Disparam por menção ao handle (só em conteúdo novo, fora de código e citação) ou por label configurado (comparação sem diferenciar maiúsculas). Edição não dispara. **Roadmap, não prometido:** review enviado, `workflow_run`/check suite, push, merge de PR (a conclusão do item é do A, por merge observado).
+- **Filtros:** repositórios permitidos (lista vazia aceita **nada**), `allowed_authors`, bots ignorados (`type: Bot` ou `[bot]`), contas da própria fábrica (`self_logins`) e o marcador `<!-- oharness-factory -->` em toda resposta — a fábrica nunca reage ao que ela mesma escreveu, mesmo com token de usuário. As regras de filtro de automação (ADR 0062) refinam isso por repositório, label, autor e branch.
+- **Entrada:** webhook (`X-Hub-Signature-256` com o segredo do cofre; `X-GitHub-Delivery` para o replay guard; `parse` verifica a assinatura sozinho) e/ou polling com `since`. Polling não abre porta e é o caminho para quem não quer receber conexões; cobre menção em comentário, menção em descrição e label (o autor do label vem dos eventos da issue, então `allowed_authors` vale igual nos dois caminhos), paginando até 10 páginas e retomando de onde cortou.
+- **Dedup:** `source.ref = owner/repo#n` (minúsculas); chave `<ref>:item` (descrição por menção ou label: um item por issue/PR) ou `<ref>:comment:<id>` (um por comentário). Iguais por webhook e por polling.
+- **Saída:** o resultado vai por comentário no mesmo issue/PR (`reply`; `thread_ref` validado por regex e limitado aos repositórios permitidos; texto redigido e cortado). A fábrica não faz merge, não faz push em branch protegida, não aprova PR; branches e PRs que ela abrir seguem a proteção do repositório.
+- **Token (escopo mínimo):** fine-grained PAT ou GitHub App restrito aos repositórios escolhidos, com `Issues: read/write`, `Pull requests: read/write` (comentar) e `Metadata: read`; **sem** `Contents: write`, `Administration` nem `Workflows`. Quem escreve código usa o worktree local e a credencial git do dono, fora do conector. Segredos no cofre: `factory/github-token` e `factory/github-webhook-secret`.
 - Corpo, título e comentário são texto não confiável (ADR 0059).
 
 ## Não verificado
-Nada foi exercido contra a API real do GitHub (sem rede/token no sandbox); payloads de teste seguem a documentação pública dos eventos `issues`, `issue_comment` e `pull_request`.
+Nada foi exercido contra a API real do GitHub (sem rede/token no sandbox); os payloads de teste seguem a documentação pública dos eventos `issues`, `issue_comment` e `pull_request`. Verificar localmente: assinatura de uma entrega real, resposta no thread, paginação do polling.

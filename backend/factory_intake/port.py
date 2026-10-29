@@ -10,8 +10,12 @@ from typing import Annotated, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-SourceKind = Literal["github", "gitlab", "azdo", "linear", "jira", "slack", "teams", "webhook", "mcp", "cli", "schedule"]
-WorkState = Literal["queued", "running", "waiting_human", "done", "failed", "cancelled", "claimed"]
+# Vocabulary of the foundation (package A, ADR 0053): `source.kind` is the connector, `status` the item's lifecycle. `done` is set only by an observed
+# merge or a person's confirmation, never by intake; a release returns an item to review, not to done.
+SourceKind = Literal["github", "gitlab", "azdo", "linear", "jira", "slack", "teams", "webhook", "mcp", "cli", "schedule", "conversation", "manual", "monitor"]
+WorkState = Literal["queued", "running", "awaiting_human", "waiting_merge", "claimed", "parked", "done", "cancelled", "failed"]
+TERMINAL: frozenset[str] = frozenset({"done", "cancelled", "failed"})
+CLAIMABLE: frozenset[str] = frozenset({"queued", "running", "awaiting_human", "parked"})
 
 MAX_TITLE, MAX_BODY, MAX_COMMENT = 300, 20_000, 10_000
 
@@ -20,7 +24,7 @@ class SourceRef(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: SourceKind
-    external_id: str = Field(max_length=200, description="id of the issue/PR/message in the source system")
+    ref: str = Field(max_length=200, description="id of the issue/PR/message in the source system")
     url: str | None = Field(default=None, max_length=2000)
     thread_ref: str | None = Field(default=None, max_length=500, description="opaque handle the connector uses to answer in the same thread")
 
@@ -55,7 +59,7 @@ class Claim(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     holder: str
-    worktree: str | None = None
+    worktree_ref: str | None = None
 
 
 class WorkItemView(BaseModel):
@@ -81,6 +85,18 @@ class ReleaseResult(BaseModel):
     status: Literal["needs_review", "abandoned"]  # a release never completes an item: review is a person's checkpoint, abandoning re-queues it
 
 
+class SubmitResult(BaseModel):
+    """What ``submit`` did. ``created``: a new item. ``replay``: the same ``(source.kind, idempotency_key)`` was already delivered (nothing
+    changed). Neither: the work belongs to an item that is still open for the same ``(source.kind, source.ref)``, a reply in its thread, so
+    the caller adds it as a comment (ADR 0059)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: "WorkItemView"
+    created: bool = False
+    replay: bool = False
+
+
 class FactoryError(Exception):
     """A request the factory refused; ``code`` is stable and safe to show."""
 
@@ -91,12 +107,15 @@ class FactoryError(Exception):
 
 @runtime_checkable
 class FactoryPort(Protocol):
-    def submit(self, draft: WorkItemDraft) -> WorkItemView:
-        """Create a work item; the same ``(source.kind, idempotency_key)`` returns the item it already created."""
+    def submit(self, draft: WorkItemDraft) -> SubmitResult:
+        """Create a work item, or say why not (``SubmitResult``): the same ``(source.kind, idempotency_key)`` is a replay; an open item with
+        the same ``(source.kind, source.ref)`` is a follow-up. A closed item with that ref does not block a new one."""
 
-    def get(self, item_id: str) -> WorkItemView: ...
+    def get(self, item_id: str) -> WorkItemView:
+        """The item, or ``FactoryError('not_found')``."""
 
-    def list(self, state: WorkState | None = None, source: SourceKind | None = None, limit: int = 50) -> list[WorkItemView]: ...
+    def list(self, state: WorkState | None = None, source: SourceKind | None = None, limit: int = 50) -> list[WorkItemView]:
+        """Items newest first; ``state='awaiting_human'`` is the inbox."""
 
     def comment(self, item_id: str, text: str, author: str) -> None:
         """Add a comment as untrusted input to the item's conversation."""
@@ -109,4 +128,5 @@ class FactoryPort(Protocol):
     def release(self, item_id: str, result: ReleaseResult) -> WorkItemView:
         """Give a claimed item back; it goes to review, never to merge."""
 
-    def metrics(self, window_days: int = 7) -> dict: ...
+    def metrics(self, window_days: int = 7) -> dict:
+        """Throughput, cost and quality figures for the window."""

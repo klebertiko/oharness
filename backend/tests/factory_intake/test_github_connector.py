@@ -138,7 +138,7 @@ def test_reply_posts_to_the_same_issue_with_the_token_and_redacts_the_text():
         return httpx.Response(201, json={})
 
     c = connector(httpx.Client(transport=httpx.MockTransport(handler)))
-    c.reply(SourceRef(kind="github", external_id="x", thread_ref="acme/payments#7"), "done, see " + TOKEN)
+    c.reply(SourceRef(kind="github", ref="x", thread_ref="acme/payments#7"), "done, see " + TOKEN)
     assert seen["url"] == "https://api.github.com/repos/acme/payments/issues/7/comments"
     assert seen["auth"] == f"Bearer {TOKEN}" and TOKEN not in seen["body"]["body"] and seen["body"]["body"].endswith("<!-- oharness-factory -->")
 
@@ -147,20 +147,20 @@ def test_reply_posts_to_the_same_issue_with_the_token_and_redacts_the_text():
 def test_reply_refuses_threads_it_does_not_serve(thread):
     c = connector(httpx.Client(transport=httpx.MockTransport(lambda r: pytest.fail("no request expected"))))
     with pytest.raises(ConnectorError):
-        c.reply(SourceRef(kind="github", external_id="x", thread_ref=thread), "hi")
+        c.reply(SourceRef(kind="github", ref="x", thread_ref=thread), "hi")
 
 
 def test_a_failed_reply_raises_a_generic_error_without_the_token_or_body():
     c = connector(httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403, text=f"bad {TOKEN}"))))
     with pytest.raises(ConnectorError) as exc:
-        c.reply(SourceRef(kind="github", external_id="x", thread_ref="acme/payments#7"), "hi")
+        c.reply(SourceRef(kind="github", ref="x", thread_ref="acme/payments#7"), "hi")
     assert TOKEN not in str(exc.value) and "403" in str(exc.value)
 
 
 def test_reply_without_a_token_refuses():
     c = GitHubConnector(frozenset({"acme/payments"}), MemorySecrets())
     with pytest.raises(ConnectorError):
-        c.reply(SourceRef(kind="github", external_id="x", thread_ref="acme/payments#7"), "hi")
+        c.reply(SourceRef(kind="github", ref="x", thread_ref="acme/payments#7"), "hi")
 
 
 def poll_handler(comment, issue, labeled_issue, calls):
@@ -219,3 +219,26 @@ def test_a_cut_listing_resumes_where_it_stopped_instead_of_skipping():
 
     _, state = connector(httpx.Client(transport=httpx.MockTransport(handler))).poll(RULES, PollState("2026-01-01T00:00:00Z"), "2026-01-09T00:00:00Z")
     assert state.since == "2026-01-01T05:00:00Z"
+
+
+def test_an_edit_or_a_quoted_or_code_mention_does_not_start_work():
+    payload = json.loads((FIX / "issues_opened_with_mention.json").read_text())
+    payload["action"] = "edited"
+    assert connector().parse_event("issues", payload, "d", RULES) == []
+    comment = json.loads((FIX / "issue_comment_mention.json").read_text())
+    comment["comment"]["body"] = "> @payments quoted\n\n`@payments` in code"
+    assert connector().parse_event("issue_comment", comment, "d", RULES) == []
+
+
+def test_end_to_end_a_mention_creates_an_item_and_a_second_comment_on_the_thread_follows_up():
+    from factory_intake.memory import MemoryFactory
+    from factory_intake.pipeline import deliver
+
+    factory, c = MemoryFactory(), connector()
+    [first] = c.parse(delivery("issues_opened_with_mention", "issues"), RULES)
+    [second] = c.parse(delivery("issue_comment_mention", "issue_comment", delivery_id="d-2"), RULES)
+    created = deliver(factory, first)
+    follow = deliver(factory, second)
+    assert created.outcome == "created" and follow.outcome == "followup" and follow.item.id == created.item.id
+    assert factory.comments[created.item.id] == [("alice", "@payments please triage this")]
+    assert deliver(factory, second).outcome == "replay"
