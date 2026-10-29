@@ -43,6 +43,7 @@ const PAIRS = [
   ["Quietest ink", "ink-faint", SUB, 4.5, true],
   ["Signal as text", "signal", ["sub-000", "sub-100"], 4.5, true],
   ["Text on signal fill", "signal-ink", ["signal"], 4.5, true],
+  ["Text on fault fill (high-risk badge, close hover)", "fault-ink", ["fault"], 4.5, true],
   ["Warn as a marker (text uses warn-text)", "warn", ["sub-000", "sub-100"], 3, true],
   ["Warn text", "warn-text", SUB, 4.5, true],
   ["Fault text", "fault-text", SUB, 4.5, true],
