@@ -24,3 +24,5 @@ How each piece of the interface is built and used. The tokens (`../tokens.json`)
 7. **Example**: a real use in the app, by file.
 
 A new component or pattern enters the app with its row in `../audit/components.md` and its section here, in the same pull request.
+
+The runnable counterpart is `../reference/`: the primitives plus `Notice`, `EmptyState`, `Segmented`, `StatusMark`, `ConfirmInline`, `Skeleton` and `Popover`, and three pattern previews (`ModelPicker`, `Composer`, `RunSurfaces`) that show the states these pages describe, in both themes (`?theme=dark|light`).
