@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 export function ListRow({
   title,
   meta,
+  description,
   leading,
   trailing,
   selected = false,
@@ -22,6 +23,8 @@ export function ListRow({
   title: ReactNode;
   /** Machine detail (ids, models, paths), set in IBM Plex Mono. */
   meta?: ReactNode;
+  /** One line of prose under the title (a status and what to do), set in the body face. */
+  description?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
   selected?: boolean;
@@ -46,6 +49,7 @@ export function ListRow({
       {leading && <span className="inline-flex flex-none text-ink-mute">{leading}</span>}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="t-title truncate text-inherit">{title}</span>
+        {description && <span className="t-body truncate text-ink-mute">{description}</span>}
         {meta && <span className="t-meta truncate text-ink-mute">{meta}</span>}
       </span>
       {trailing && <span className="inline-flex flex-none items-center gap-2">{trailing}</span>}

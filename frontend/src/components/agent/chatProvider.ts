@@ -190,7 +190,7 @@ export function chatProviderStatus(connection: Connection): string {
     "not enabled" as more specific evidence (a credential WAS tried and
     rejected, not merely left off), so only a non-fault, disabled connection
     reads as "Not connected" instead of "Unavailable". Exported: the
-    Providers screen (`ProvidersList.tsx`, `Dossier.tsx`) reads the same
+    Providers screen (`providers/view.ts`) reads the same
     function so a connection never wears two different status words
     depending which surface you're looking at it from. */
 export function rowStatus(connection: Connection): string {
