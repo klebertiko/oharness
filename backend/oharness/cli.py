@@ -3,6 +3,7 @@ import json
 import sys
 from pathlib import Path
 
+from .headless import Refusal
 from .validate import validate_path
 
 RUN_EVENT_SCHEMA = Path(__file__).resolve().parent / "schema" / "run-event.schema.json"
@@ -19,9 +20,18 @@ class ContractError(RuntimeError):
     """The engine emitted something the published run-event schema rejects."""
 
 
-async def _stream(bundle: dict):
-    """Run the harness in mock mode (no Provider, no network). A person-only checkpoint (HITL) stops the run: headless never approves for them."""
+async def _stream(bundle: dict, mode: str = "mock", workspace: str | None = None, worktree: bool = False):
+    """Run the harness. Mock needs no Provider and no database; live/local go through the sidecar's own run path (`headless`).
+
+    A person-only checkpoint (HITL) stops the run in both: headless never approves for them."""
     import uuid
+
+    if mode != "mock":
+        from . import headless
+
+        async for event, data in headless.stream_live(bundle, mode, workspace, worktree):
+            yield event, data
+        return
 
     backend = str(Path(__file__).resolve().parent.parent)  # `engine` is a top-level module of the backend, not part of this package
     if backend not in sys.path:
@@ -38,7 +48,7 @@ async def _stream(bundle: dict):
             control.release()
 
 
-def _run(path: Path, as_json: bool) -> int:
+def _run(path: Path, as_json: bool, mode: str = "mock", workspace: str | None = None, worktree: bool = False) -> int:
     import asyncio
 
     from jsonschema import Draft202012Validator
@@ -55,7 +65,7 @@ def _run(path: Path, as_json: bool) -> int:
 
     async def drive() -> str:
         final, sequence = "error", 0
-        async for event, data in _stream(bundle):
+        async for event, data in _stream(bundle, mode, workspace, worktree):
             sequence += 1
             line = {"sequence": sequence, "event": event, "data": data}
             worst = best_match(validator.iter_errors(line))
@@ -76,6 +86,9 @@ def _run(path: Path, as_json: bool) -> int:
     except ContractError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_RUN_FAILED
+    except Refusal as exc:  # refused before anything ran: nothing was printed to stdout
+        print(f"run refused: {exc}", file=sys.stderr)
+        return exc.exit_code
     except Exception as exc:  # a crash is a failed run, reported on stderr with a one-line cause rather than a traceback
         print(f"run crashed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return EXIT_RUN_FAILED
@@ -88,9 +101,14 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser = sub.add_parser("validate")
     validate_parser.add_argument("path", type=Path)
 
-    run_parser = sub.add_parser("run", help="run a harness headless (mock mode) and stream its events")
+    run_parser = sub.add_parser("run", help="run a harness headless and stream its events")
     run_parser.add_argument("path", type=Path)
     run_parser.add_argument("--json", action="store_true", help="one schema-valid JSON event per line (schema/run-event.schema.json)")
+
+    run_parser.add_argument("--mode", choices=("mock", "live", "local"), default="mock",
+                            help="mock (default): no Provider, no network. live/local: the Providers you connected in OHarness (needs OH_SECRETS=file|keychain)")
+    run_parser.add_argument("--workspace", help="live/local: a project registered in OHarness; the run works in its folder")
+    run_parser.add_argument("--worktree", action="store_true", help="live/local: run in a worktree of its own made from --workspace, removed when the run ends")
 
     args = parser.parse_args(argv)
     if args.cmd == "validate":
@@ -98,5 +116,5 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": result.ok, "errors": result.errors}, indent=2))
         return 0 if result.ok else 1
     if args.cmd == "run":
-        return _run(args.path, args.json)
+        return _run(args.path, args.json, args.mode, args.workspace, args.worktree)
     return EXIT_INVALID
