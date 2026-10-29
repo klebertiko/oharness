@@ -64,6 +64,18 @@ describe("design-system guardrails", () => {
     expect(inputs).toEqual([]);
   });
 
+  it("never edges a field with the hairline (line or line-soft), even when the element spans lines", () => {
+    const bad = files
+      .filter((f) => f.endsWith(".tsx"))
+      .flatMap((f) => {
+        const text = fs.readFileSync(f, "utf8");
+        return [...text.matchAll(/<(input|textarea|select)\b[\s\S]*?(?:\/>|<\/\1>)/g)]
+          .filter((m) => /\bborder-line(?:-soft)?(?![-\w])/.test(m[0]))
+          .map((m) => `${path.relative(SRC, f)}:${text.slice(0, m.index).split("\n").length}`);
+      });
+    expect(bad).toEqual([]);
+  });
+
   it("never removes the focus ring without a stated replacement", () => {
     // Allowed: a wrapper draws the ring (composer, palette tick) or the element is a programmatic focus target.
     const allowed = ["agent/ChatComposer.tsx", "studio/StudioOverview.tsx", "shell/CommandPalette.tsx", "shell/AppShell.tsx", "ui/Combobox.tsx"].map((f) => f.replace(/\//g, path.sep));

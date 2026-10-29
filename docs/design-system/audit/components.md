@@ -105,11 +105,12 @@ Counts are for the files in scope (everything except `providers/`, tests and `ap
 | D9 | `maskColor="rgb(0 0 0 / 0.58)"` on the React Flow minimap | 1 | 1 | **Documented**: the only raw colour outside `globals.css`. It is a different alpha from `overlay-backdrop` (0.42), so swapping it would change the pixels. Candidate for the visual-change pull request that retunes overlays. |
 | D10 | `uppercase` on two one-word markers (the `HIGH` risk chip on a tool call and the wire label) | 2 | 2 | **Documented**: allowed by the content rule (one word); neither uses the `t-label` role. Use `t-label` for new ones. |
 | D11 | Copy in the product is English only; pt-BR exists in the release notes and the site | | | **Documented**: the guardrail test keeps the interface free of accented strings. Component docs give pt-BR next to each string as the translation reference for when a locale ships (`components/patterns.md` § i18n). |
+| D12 | A text field edged with the hairline `border-line` (1.6:1) instead of the control edge: the token-ceiling input in the composer toolbar | 1 | 0 | **Fixed**: `border-line-strong`, the edge every other field uses (3:1 or better on `sub-000` to `sub-200`). The only visible change in this series, a darker 1px edge on one field. The existing guardrail missed it because the element spans several lines; it now matches across lines. |
 
 ## Guardrails added
 
-`frontend/src/design-system/guardrails.test.ts` now also fails on an ad hoc `shadow-[inset_2px_0_0` (use `shadow-selected`) and on a literal `Nms` in a stylesheet `transition`. The parity test checks the new `edge-selected` variable in both directions.
+`frontend/src/design-system/guardrails.test.ts` now also fails on a field edged with `border-line` or `border-line-soft` (across lines), on an ad hoc `shadow-[inset_2px_0_0` (use `shadow-selected`) and on a literal `Nms` in a stylesheet `transition`. The parity test checks the new `edge-selected` variable in both directions.
 
 ## Checks run
 
-`npm run typecheck`, `npm run lint`, `npx vitest run` (160 files, 1274 tests) and `npm run build` from `frontend/`, and `node scripts/design-tokens.mjs --check` and `node scripts/check-contrast.mjs` from the root. The contrast table is unchanged: `edge-selected` is an existing `signal` on a `sub-200` fill, a pair already required at 3:1.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (160 files, 1277 tests) and `npm run build` from `frontend/`, and `node scripts/design-tokens.mjs --check` and `node scripts/check-contrast.mjs` from the root. The contrast table is unchanged: `edge-selected` is an existing `signal` on a `sub-200` fill, a pair already required at 3:1.
