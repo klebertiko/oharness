@@ -87,7 +87,7 @@ export function RunControls({
   const parked = run.status === "paused";
 
   return (
-    <div className="flex h-[34px] flex-none items-center gap-2 border-b border-line bg-sub-100 px-2.5">
+    <div className="flex h-8.5 flex-none items-center gap-2 border-b border-line bg-sub-100 px-2.5">
       <span
         className="h-[7px] w-[7px] flex-none rounded-none"
         style={{ background: s.color }}
@@ -97,7 +97,7 @@ export function RunControls({
         {s.word}
       </span>
 
-      <span className="mx-1 h-[14px] w-px flex-none bg-line-soft" aria-hidden />
+      <span className="mx-1 h-3.5 w-px flex-none bg-line-soft" aria-hidden />
 
       {live ? (
         <>

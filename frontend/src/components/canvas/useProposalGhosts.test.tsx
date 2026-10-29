@@ -26,7 +26,7 @@ describe("useProposalGhosts", () => {
     seed();
     const { result } = renderHook(() => useProposalGhosts());
     expect(result.current.nodes).toHaveLength(1);
-    expect(result.current.nodes[0]).toMatchObject({ draggable: false, selectable: false, deletable: false, ariaLabel: "Proposed: Agent Reviewer" });
+    expect(result.current.nodes[0]).toMatchObject({ draggable: false, selectable: false, deletable: false, className: "oh-ghost-in", ariaLabel: "Proposed: Agent Reviewer" });
     expect(result.current.edges.length).toBeGreaterThan(0);
     expect(result.current.edges.every((e) => (e.data as { ghost?: boolean }).ghost && e.selectable === false)).toBe(true);
   });

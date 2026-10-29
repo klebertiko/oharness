@@ -131,4 +131,16 @@ describe("AgentStage plan mode", () => {
     const region = await screen.findByRole("region", { name: "Plan awaiting your approval" });
     expect(region.textContent).toContain("1. Restored");
   });
+
+  it("when the sidecar could not save the plan the chat says so and offers nothing to approve", async () => {
+    render(<AgentStage />);
+    const threadId = await sendInPlanMode();
+    emit("run_start", { run_id: "r1", mode: "live", step: false, order: [{ node_id: "direct", type: "agent", label: "Chat", adapter: "http", model: "" }], unreachable: [] });
+    emit("node_done", { node_id: "direct", output: "1. Add the page", tokens: 3 });
+    emit("plan_error", { node_id: "direct", code: "plan_not_saved" });
+    emit("harness_done", { status: "complete", total_tokens: 3, elapsed_ms: 5, nodes_run: 1 });
+    expect((await screen.findByText(/The plan could not be saved/)).closest("[role=status]")?.textContent).toMatch(/send your message again/i);
+    expect(screen.queryByRole("region", { name: "Plan awaiting your approval" })).toBeNull();
+    expect(threadId).toBeTruthy();
+  });
 });

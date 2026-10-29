@@ -4,17 +4,14 @@ import json
 from fastapi.testclient import TestClient
 
 from main import app
+from test_run_resume import run_until_node_a_is_done_then_cut
 from test_run_store import start_stream
 
 
 def partial_run():
-    """A run cut off after its first events (the client went away): committed events, coverage `partial`."""
+    """A harness run cut off after its first nodes (the client went away): committed events, coverage `partial`."""
     with TestClient(app) as client:
-        response = client.portal.call(start_stream, 'direct')
-        run_id = response.headers['X-Execution-Id']
-        client.portal.call(anext, response.body_iterator)
-        client.portal.call(response.body_iterator.aclose)
-    return run_id
+        return run_until_node_a_is_done_then_cut(client)
 
 
 def events_of(client, run_id):
@@ -67,7 +64,7 @@ def test_only_a_partial_run_that_is_no_longer_running_can_be_continued():
         refused = client.post(f'/execute/logs/{done}/continue')
         assert refused.status_code == 409 and refused.json()['detail']['code'] == 'not_resumable'
 
-        live = client.portal.call(start_stream, 'direct')
+        live = client.portal.call(start_stream, 'harness')
         live_id = live.headers['X-Execution-Id']
         client.portal.call(anext, live.body_iterator)
         assert client.post(f'/execute/logs/{live_id}/continue').status_code == 409  # still running
@@ -95,9 +92,20 @@ def test_a_legacy_log_without_a_journal_cannot_be_continued():
         assert client.post(f'/execute/logs/{legacy}/continue').status_code == 409
 
 
-def test_a_continued_direct_run_keeps_its_source_and_has_its_first_event_atomically():
-    run_id = partial_run()  # a direct run
+def test_a_continuation_has_its_first_event_atomically():
+    run_id = partial_run()
     with TestClient(app) as client:
         child = client.post(f'/execute/logs/{run_id}/continue').json()['id']
-        assert client.get(f'/execute/logs/{child}').json()['source'] == 'direct'
+        assert client.get(f'/execute/logs/{child}').json()['source'] == 'harness'
         assert client.get(f'/execute/logs/{child}').json()['last_sequence'] == 1
+
+
+def test_a_direct_chat_turn_has_no_harness_to_run_again_so_it_is_not_continuable():
+    with TestClient(app) as client:
+        response = client.portal.call(start_stream, 'direct')
+        run_id = response.headers['X-Execution-Id']
+        client.portal.call(anext, response.body_iterator)
+        client.portal.call(response.body_iterator.aclose)
+    with TestClient(app) as client:
+        assert client.get(f'/execute/logs/{run_id}').json()['resumable'] is False
+        assert client.post(f'/execute/logs/{run_id}/continue').status_code == 409

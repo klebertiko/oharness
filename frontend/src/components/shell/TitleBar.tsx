@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Mark } from "./Mark";
-import { useShellStore } from "./shellStore";
+import { RAIL_COLLAPSED, useShellStore } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
 import { KbdChord } from "@/components/ui";
 
@@ -28,6 +28,8 @@ interface Props {
   nodeCount: number;
   editingHarness?: boolean;
   onOpenPalette: () => void;
+  /** The rail under the bar is icon-only: the brand column takes its width, so the two line up (same state, not a second media query). */
+  railCollapsed?: boolean;
 }
 
 function useTauriWindow() {
@@ -57,8 +59,8 @@ function WindowButton({
       aria-label={label}
       onClick={onClick}
       className={[
-        "grid h-titlebar w-[44px] place-items-center text-ink-mute transition-colors",
-        danger ? "hover:bg-fault hover:text-signal-ink" : "hover:bg-sub-300 hover:text-ink",
+        "grid h-titlebar w-11 place-items-center text-ink-mute transition-colors",
+        danger ? "hover:bg-fault hover:text-fault-ink" : "hover:bg-sub-300 hover:text-ink",
       ].join(" ")}
     >
       {children}
@@ -75,6 +77,7 @@ export function TitleBar({
   nodeCount,
   editingHarness,
   onOpenPalette,
+  railCollapsed = false,
 }: Props) {
   const mac = useIsMac();
   const win = useTauriWindow();
@@ -86,11 +89,11 @@ export function TitleBar({
       data-tauri-drag-region
       className="oh-header relative z-30 flex h-titlebar flex-none items-stretch border-b border-line-soft bg-sub-100 text-ink-dim"
     >
-      {mac && win && <div className="w-[68px] flex-none" aria-hidden />}
+      {mac && win && <div className="w-17 flex-none" aria-hidden />}
 
       <div
         data-tauri-drag-region
-        style={{ width: hydrated ? leftWidth : undefined }}
+        style={{ width: railCollapsed ? RAIL_COLLAPSED : hydrated ? leftWidth : undefined }}
         className="oh-header-brand flex min-w-0 flex-none items-center gap-2.5 px-4"
       >
         <Mark />

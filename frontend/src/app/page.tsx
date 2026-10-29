@@ -17,8 +17,11 @@ import {
   LayoutTemplate,
   Sparkles,
   Network,
+  Languages,
 } from "lucide-react";
 
+import { LOCALES, LOCALE_NAME } from "@/i18n/locale";
+import { useLocaleStore } from "@/i18n/store";
 import { StudioOverview } from "@/components/studio/StudioOverview";
 import { StudioActionsBar } from "@/components/studio/StudioActionsBar";
 import { newStudioHarness, openStudioPreset } from "@/lib/studio";
@@ -26,7 +29,6 @@ import { BUNDLED_HARNESS_COMMAND_GROUP } from "@/lib/studioExamples";
 import { hasStudioDraft, startAutosave } from "@/lib/studioDocuments";
 import { Button, EmptyState } from "@/components/ui";
 import { AppShell } from "@/components/shell/AppShell";
-import { Panel } from "@/components/shell/Panel";
 import { useShellStore } from "@/components/shell/shellStore";
 import type { Command } from "@/components/shell/commands";
 import { apiUrl } from "@/lib/apiBase";
@@ -40,10 +42,7 @@ import { ARRANGE_CHORD } from "@/components/canvas/CanvasDock";
 import { ValidateDock } from "@/components/studio/ValidateDock";
 import { AgentStage } from "@/components/agent/AgentStage";
 import { ThreadsSidebar } from "@/components/agent/ThreadsSidebar";
-import { PROVIDERS_PANEL_TITLE } from "@/components/providers/copy";
-import { ProvidersList } from "@/components/providers/ProvidersList";
-import { Dossier } from "@/components/providers/Dossier";
-import { useProviderStore } from "@/components/providers/providerStore";
+import { ProvidersScreen } from "@/components/providers/ProvidersScreen";
 
 import { useCanvasStore } from "@/store/canvasStore";
 import { useModeStore } from "@/store/modeStore";
@@ -78,7 +77,6 @@ export default function Home() {
   const actions = useHarnessActions();
   const { section, studioView, toggleLeft, toggleRight, setKeymapOpen, setPaletteOpen, setSection, setStudioView } =
     useShellStore();
-  const connectionCount = useProviderStore((s) => s.connections.length);
   const [backendOk, setBackendOk] = useState(false);
   const isStudio = section === "studio";
   const copilotOpen = useCopilotStore((s) => s.open);
@@ -122,6 +120,7 @@ export default function Home() {
     openStudioPreset(p);
   };
 
+  const locale = useLocaleStore((s) => s.locale);
   // biome-ignore lint/correctness/useExhaustiveDependencies: store actions are stable references; the palette rebuilds only on the state it displays
   const commands = useMemo<Command[]>(() => {
     const insert: Command[] = NODE_TEMPLATES.map((t) => ({
@@ -263,8 +262,17 @@ export default function Home() {
           },
         ];
 
+    const languages: Command[] = LOCALES.filter((l) => l !== locale).map((l) => ({
+      id: `language:${l}`,
+      label: `Language: ${LOCALE_NAME[l]}`,
+      group: "View",
+      icon: Languages,
+      run: () => useLocaleStore.getState().setLocale(l),
+    }));
+
     return [
       ...studioOnly,
+      ...languages,
       {
         id: "toggle-left",
         label: "Toggle left panel",
@@ -281,19 +289,13 @@ export default function Home() {
         run: () => setKeymapOpen(true),
       },
     ];
-  }, [nodes.length, executionMode, isRunning, selectedNodeId, actions, isStudio, studioView, openCopilot]);
-
-  const providersLeft = (
-    <Panel title={PROVIDERS_PANEL_TITLE} meta={`${connectionCount}`} className="h-full">
-      <ProvidersList />
-    </Panel>
-  );
+  }, [locale, nodes.length, executionMode, isRunning, selectedNodeId, actions, isStudio, studioView, openCopilot]);
 
   // The contextual left panel. Destinations that own the whole stage don't
   // get one.
   const left =
     section === "providers"
-      ? providersLeft
+      ? null
       : section === "studio"
         ? (studioView === "editor" ? <NodePalette /> : null)
         : section === "chats"
@@ -328,7 +330,7 @@ export default function Home() {
 
   const stage =
     section === "providers" ? (
-      <Dossier />
+      <ProvidersScreen />
     ) : isStudio ? (
       studioStage
     ) : (

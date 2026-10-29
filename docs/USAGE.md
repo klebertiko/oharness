@@ -10,9 +10,13 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 
 ## Chats
 
-- Pick the provider with the composer chip. **Auto** uses the first eligible connection, cloud before on-device. Setup stays on Providers.
+- Pick the provider and model with the composer chip, which reads `{connection} · {model}`. **Auto** uses the first eligible connection, cloud before on-device. The list is grouped by connection, with a search ("Find a model"). `Enter` saves the model as that connection's default; `Shift+Enter`, or "This chat only" in the list, applies it to the open chat alone (the chip then says so). Connections that cannot answer yet appear under **Needs action**, nearest to ready first, each with one step ("Turn on", "Replace key", "Copy `ollama serve`"). Choosing one opens it in Providers; when nothing can answer, the composer shows the same step as a button. A local model that is not downloaded reads "Model not pulled" with a "Copy `ollama pull …`" step. Setup stays on Providers.
+- The **harness** chip next to it chooses which harness runs this chat (or "No harness" to talk to the model directly). It applies from your next message; earlier replies keep the harness that wrote them. **Edit in Studio** opens the harness in use.
 - Pick the **workspace** with the other chip: the folder the chat's tools read and run commands in. With no folder, tools use a scratch directory.
 - **Queue**: type while a turn is running and press `Mod+Enter` (or Queue): the message waits in a visible list above the composer and runs after the current turn, one at a time, in order. Remove one with its button. If the turn stops or fails the queue pauses; Send next or Clear queue decides. Commands (`/exec`, `/read`) wait for the turn to finish.
+- **Subagents** (off by default): turn it on and the model can hand tasks to child runs, up to four per run. The chat shows Nilo and each child with its state; **Cancel** stops one child and leaves the rest running.
+- **Token ceiling** (no harness): a number in the toolbar. A run that reaches it stops with the status **Budget exceeded**. An invalid entry keeps the last valid ceiling and says so.
+- **Files this turn changed**: after a turn in a workspace, the chat lists the files it changed with a diff and a one-time **Revert** per file. A file edited after the turn is left alone.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
 - **Permission mode** (the preset) is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
 
@@ -26,7 +30,8 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
-- Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)).
+- **Tool hooks** (composer, *Tool hooks*): register a program that must exit 0 before a tool runs. If it fails or takes longer than its timeout (1 to 10 seconds), the tool does not run and the tool card says which hook blocked it. A hook runs without a shell and without your secrets, only ever vetoes (it cannot approve a command), and is stored by the sidecar, never read from a workspace. Edit changes a hook in place; a stored hook that no longer validates blocks every tool until you remove it and register it again. A simulated (mock) run starts no hook; the tool card says it was not run.
+- Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)). **Activity** lists every run; open an interrupted one and choose **Continue as a new run** to start a linked run from its saved events (the original never changes).
 
 ## Studio
 
@@ -41,6 +46,13 @@ Studio is where you design a harness: overview, canvas, inspector.
 
 ## Providers
 
+Providers (`Alt+3`) lists your connections on the left and opens one on the right. On a narrow window the list is the screen: pick a connection to open it, and use **Providers** at the top to come back. Each connection shows one status word and, when something is missing, one button that fixes it (paste a key, turn on, choose a model, copy `ollama serve`, open billing, sign in). Under it, **Connection** holds the key, the endpoint and the on/off switch; **Models** holds the default model, with a filter for long lists; **Activity** shows the last tests and the spend.
+
+- **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
+- **Remove a key.** **Remove** asks first, with **Cancel** selected.
+- **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
+- **Language.** The Providers screen is in English and Brazilian Portuguese. It follows the browser language; `Mod+K`, then "Language", switches it. The rest of the app is still English.
+
 | Vendor | Connects through |
 | --- | --- |
 | Anthropic | Local `claude` CLI (`claude login`); chat only, tools disabled |
@@ -54,3 +66,7 @@ A node can pin an ordered list of providers; if one rejects the call the next is
 ## Workspaces
 
 A workspace is a folder on this device. Add one from the workspace chip in Chats. Trusting a workspace (needed for Auto to run project scripts) is a separate, explicit step with a warning, and you can revoke it in one click.
+
+## Design system
+
+The interface follows a documented design system: tokens, the brand book, a page per component family, a screen audit and a runnable reference. Start at [`docs/design-system/README.md`](design-system/README.md).

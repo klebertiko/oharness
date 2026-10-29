@@ -75,8 +75,8 @@ function connectionIdFromService(service: string): string {
 
 /** Does a pasted value plausibly belong to this vendor? Empty/short input
     passes (nothing to contradict yet) so the warning only fires once there's
-    enough text to actually disagree with `expected`. Shared by the Dossier's
-    full credential entry (`CredentialSeal.tsx`) and the chat combo's inline
+    enough text to actually disagree with `expected`. Shared by the Providers
+    screen's key field (`ConnectionPanel.tsx`) and the chat combo's inline
     setup (`ChatProviderPicker.tsx`) so the two surfaces never drift to
     different validation wording for the same mistake. */
 export function prefixMatches(value: string, expected?: string): boolean {

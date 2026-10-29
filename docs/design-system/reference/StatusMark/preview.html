@@ -1,0 +1,17 @@
+<!-- @dsCard group="Components" height=330 -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../bundle.css"><script src="../theme.js"></script><style>body{margin:0;padding:var(--space-4);background:var(--sub-000);color:var(--ink-dim);font:400 12px/1.5 var(--font-ui)}.row{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-start;margin-bottom:var(--space-3)}.col{display:flex;flex-direction:column;gap:var(--space-2)}.cap{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute);margin-bottom:var(--space-1)}.line{display:flex;align-items:center;gap:var(--space-2)}.mono{font:400 11px/1.4 var(--font-mono);color:var(--ink-mute)}.card{padding:var(--space-3);border:1px solid var(--line-soft);border-radius:var(--radius-control);background:var(--sub-200)}.t{margin:0;font:500 13px/1.3 var(--font-ui);color:var(--ink-primary)}.tree{margin:var(--space-1) 0 0 var(--space-2);padding-left:var(--space-3);border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:var(--space-1)}</style></head><body><div id="r"></div><script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script><script src="../bundle.js"></script><script>
+var h=React.createElement,O=window.OH;
+function Cap(t){return h("div",{className:"cap"},t)}
+
+var T=[["ok","Verified"],["warn","Needs attention"],["fault","Unavailable"],["busy","Checking connection"],["idle","Not verified"],["off","Not connected"]];
+function App(){var s=React.useState(false),on=s[0],set=s[1];
+ return h(React.Fragment,null,
+  Cap("an 8px square beside the word that names the state · decorative, the word carries the meaning"),
+  h("div",{className:"row"},T.map(function(t){return h("span",{key:t[0],className:"line"},h(O.StatusMark,{tone:t[0]}),t[1])})),
+  Cap("ConfirmInline · Cancel has the focus · the button names the act · Escape cancels"),
+  on?h("div",{style:{maxWidth:520}},h(O.ConfirmInline,{prompt:"Remove the saved key for OpenRouter?",confirmLabel:"Remove key",onCancel:function(){set(false)},onConfirm:function(){set(false)}}))
+     :h(O.Button,{variant:"danger",onClick:function(){set(true)}},"Remove key…"),
+  Cap("Skeleton · exact size of what will load"),
+  h("div",{className:"col",style:{maxWidth:340}},h(O.Skeleton),h(O.Skeleton),h(O.Skeleton)))}
+ReactDOM.createRoot(document.getElementById('r')).render(h(App));
+</script></body></html>

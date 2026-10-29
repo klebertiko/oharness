@@ -54,7 +54,7 @@ export function ListRow({
         aria-current={selected || undefined}
         className={[
           "oh-focus-inner flex min-h-control-lg w-full items-center gap-3 rounded-control px-2.5 py-2 text-left transition-colors",
-          selected ? "bg-sub-200 shadow-[inset_2px_0_0_var(--signal)]" : "hover:bg-sub-200",
+          selected ? "bg-sub-200 shadow-selected" : "hover:bg-sub-200",
         ].join(" ")}
       >
         {leading}
