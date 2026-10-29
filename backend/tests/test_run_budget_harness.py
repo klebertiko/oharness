@@ -35,3 +35,17 @@ def test_a_ceiling_nobody_reaches_changes_nothing(client):
 
 def test_invalid_ceiling_is_refused_for_harness_runs_too(client):
     assert _run(client, max_tokens=5).status_code == 400
+
+
+def test_a_run_whose_last_node_crosses_the_ceiling_is_left_complete(client):
+    graph = {"nodes": [{"id": "in", "type": "input", "data": {"prompt": "hi"}},
+                       {"id": "a", "type": "llm", "data": {"label": "a", "providerIds": ["anthropic"], "model": "claude-sonnet-5"}}],
+             "edges": [{"source": "in", "target": "a"}]}
+    resp = client.post("/execute/", json={"graph_json": graph, "mode": "live", "instruction": "work", "max_tokens": 500})
+    done = dict(_sse_events(resp.text))
+    assert "budget_exceeded" not in done and done["harness_done"]["status"] == "complete"
+
+
+def test_a_malformed_token_count_does_not_fail_the_run():
+    from routers.execution import _token_count
+    assert [_token_count(v) for v in ("12", 3.9, None, "x", {}, -4)] == [12, 3, 0, 0, 0, 0]

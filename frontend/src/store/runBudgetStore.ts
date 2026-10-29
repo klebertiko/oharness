@@ -20,6 +20,8 @@ export const useRunBudgetStore = create<RunBudgetState>()(
     }),
     {
       name: RUN_BUDGET_STORAGE_KEY,
+      version: 1,
+      partialize: (s) => ({ maxTokens: s.maxTokens }),
       storage: createJSONStorage(() => localStorage),
       // A stored value from an older build or a hand edit is checked again before it is trusted.
       merge: (stored, current) => {

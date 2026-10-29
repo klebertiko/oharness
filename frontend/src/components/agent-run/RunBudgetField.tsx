@@ -8,9 +8,9 @@ export function RunBudgetField() {
   const id = useId();
   const setMaxTokens = useRunBudgetStore((s) => s.setMaxTokens);
   const stored = useRunBudgetStore((s) => s.maxTokens);
-  const [text, setText] = useState(stored ? String(stored) : "");
+  const [text, setText] = useState("");
   const [error, setError] = useState("");
-  // The stored ceiling arrives after the first (server-matching) render: fill an empty field with it.
+  // Start empty so the first client render matches the static HTML, then show the remembered ceiling.
   useEffect(() => {
     setText((t) => (stored != null && t.trim() === "" ? String(stored) : t));
   }, [stored]);

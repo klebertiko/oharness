@@ -11,3 +11,5 @@ Status: accepted (#164, follow-up to ADR 0025)
 - **Compaction inside a harness run.** Each node is one prompt to one adapter; there is no growing message list to compact, so there is nothing to report. Compaction exists only in the tool conversation (`ToolBroker`), which is where context grows.
 - **A hard stop mid-node.** A node is one provider call; its tokens are known only when it ends (or when streamed length crosses the ceiling in the harness-off path). The ceiling is therefore checked between nodes: a single node can overshoot, never a second one.
 - **Interface language.** The app has no translation layer yet (all copy is English, per the copy standard), so the new strings follow it; nothing here adds a locale mechanism.
+- **A reply that routing answers directly** (no harness) is one finished provider call; the ceiling is not applied to it, and the intake call's tokens count toward a harness run's total once the harness is engaged.
+- **A run whose last node crosses the ceiling** is left as it ended (`complete`): there is nothing left to stop, so it is not relabelled.
