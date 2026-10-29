@@ -7,7 +7,9 @@ Status: aceita (implementação no PR de GitHub). Primeira entrega do contrato d
 - **Entrada:** webhook (`X-Hub-Signature-256`, HMAC do segredo no cofre, `X-GitHub-Delivery` como id de replay) e/ou polling da API REST com ETag. Webhook só no receptor local (ADR 0061); polling não abre porta nenhuma e é o caminho recomendado para quem não quer receber conexões.
 - **Saída:** o resultado volta no mesmo issue/PR (comentário) via `reply`. A fábrica não faz merge, não faz push em branch protegida, não aprova PR.
 - **Token (escopo mínimo):** fine-grained PAT ou GitHub App restrito aos repositórios escolhidos, com `Issues: read/write`, `Pull requests: read/write` (comentar) e `Metadata: read`; **sem** `Contents: write`, `Administration` nem `Workflows`. Quem escreve código usa o worktree local e a credencial git do dono, fora do conector.
-- **Idempotência:** `idempotency_key = github:<repo>:<issue|pr>#<n>:<delivery|comment id>`.
+- **Idempotência:** chave `<owner/repo>#<n>:item` (descrição por menção ou label: um item por issue/PR) ou `<owner/repo>#<n>:comment:<id>` (um por comentário), em minúsculas; iguais por webhook e por polling, então os dois caminhos juntos não duplicam. O id de entrega serve só ao replay guard.
+- **Laço:** respostas da fábrica levam um marcador (`<!-- oharness-factory -->`) e, se o token for de usuário, `self_logins` lista a conta; comentários de bots/da própria fábrica nunca são trabalho.
+- **Polling:** comentários e issues/PRs atualizados desde o último ponto (oldest first, até 10 páginas de 100; se cortar, o cursor para no último processado), mesmas regras do webhook, inclusive quem aplicou o label (lido dos eventos da issue).
 - Corpo, título e comentário são texto não confiável (ADR 0059).
 
 ## Não verificado

@@ -70,9 +70,8 @@ def test_unselected_activity_is_ignored(name, event):
 
 def test_a_trigger_label_and_a_mention_in_the_description_both_start_work():
     [by_label] = connector().parse(delivery("issues_labeled_trigger", "issues"), RULES)
-    assert by_label.idempotency_key == "acme/payments#7:label:factory"
     [by_mention] = connector().parse(delivery("issues_opened_with_mention", "issues"), RULES)
-    assert by_mention.idempotency_key == "acme/payments#7:mention"
+    assert by_label.idempotency_key == by_mention.idempotency_key == "acme/payments#7:item"  # one item per issue, whichever trigger came first
     [pr] = connector().parse(delivery("pull_request_opened_with_mention", "pull_request"), RULES)
     assert "pull-request" in pr.labels and pr.source.thread_ref == "acme/payments#9"
 
@@ -91,10 +90,44 @@ def test_injection_text_is_only_stored_as_data():
     assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in draft.body  # kept as data to show a person; never executed or elevated here
 
 
+def sign(body: bytes) -> dict:
+    return {"x-github-event": "issues", "x-github-delivery": "d", "x-hub-signature-256": "sha256=" + hmac.new(b"whsec", body, hashlib.sha256).hexdigest()}
+
+
 def test_malformed_bodies_are_rejected_not_crashed():
     for body in (b"not json", b"[]", b"\xff\xfe"):
         with pytest.raises(Rejected):
-            connector().parse(Delivery({"x-github-event": "issues", "x-github-delivery": "d"}, body), RULES)
+            connector().parse(Delivery(sign(body), body), RULES)
+
+
+def test_parse_refuses_an_unsigned_or_forged_payload_by_itself():
+    body = (FIX / "issue_comment_mention.json").read_bytes()
+    for headers in ({"x-github-event": "issue_comment", "x-github-delivery": "d"}, {**sign(b"other"), "x-github-event": "issue_comment"}):
+        with pytest.raises(Rejected) as exc:
+            connector().parse(Delivery(headers, body), RULES)
+        assert exc.value.status == 401
+
+
+def test_weird_shapes_are_ignored_not_500():
+    c = connector()
+    for payload in ({"repository": {"full_name": 5}, "sender": {"login": "a"}}, {"repository": {"full_name": "acme/payments"}, "sender": None},
+                    {"repository": {"full_name": "acme/payments"}, "sender": {"login": "a"}, "issue": {"number": "x"}, "action": "opened"}):
+        assert c.parse_event("issues", payload, "d", RULES) == []
+
+
+def test_the_factorys_own_comments_never_start_work_even_from_a_user_token():
+    payload = json.loads((FIX / "issue_comment_mention.json").read_text())
+    own = GitHubConnector(frozenset({"acme/payments"}), secrets(), self_logins={"Alice"})
+    assert own.parse_event("issue_comment", payload, "d", RULES) == []
+    payload["comment"]["body"] = "@payments status ... <!-- oharness-factory -->"
+    assert connector().parse_event("issue_comment", payload, "d", RULES) == []
+
+
+def test_labels_match_case_insensitively_and_repo_casing_does_not_change_the_key():
+    payload = json.loads((FIX / "issues_labeled_trigger.json").read_text())
+    payload["label"]["name"], payload["repository"]["full_name"] = "FACTORY", "Acme/Payments"
+    [draft] = connector().parse_event("issues", payload, "d", RULES)
+    assert draft.idempotency_key == "acme/payments#7:item"
 
 
 def test_reply_posts_to_the_same_issue_with_the_token_and_redacts_the_text():
@@ -107,7 +140,7 @@ def test_reply_posts_to_the_same_issue_with_the_token_and_redacts_the_text():
     c = connector(httpx.Client(transport=httpx.MockTransport(handler)))
     c.reply(SourceRef(kind="github", external_id="x", thread_ref="acme/payments#7"), "done, see " + TOKEN)
     assert seen["url"] == "https://api.github.com/repos/acme/payments/issues/7/comments"
-    assert seen["auth"] == f"Bearer {TOKEN}" and TOKEN not in seen["body"]["body"]
+    assert seen["auth"] == f"Bearer {TOKEN}" and TOKEN not in seen["body"]["body"] and seen["body"]["body"].endswith("<!-- oharness-factory -->")
 
 
 @pytest.mark.parametrize("thread", ["evil/other#1", "acme/payments#1/../../x", "acme/payments", None, "acme/payments#7?x=1"])
@@ -130,23 +163,59 @@ def test_reply_without_a_token_refuses():
         c.reply(SourceRef(kind="github", external_id="x", thread_ref="acme/payments#7"), "hi")
 
 
-def test_polling_yields_the_same_drafts_and_the_same_keys_as_webhooks():
-    comment = json.loads((FIX / "issue_comment_mention.json").read_text())
-    issue, labeled = comment["issue"], json.loads((FIX / "issues_labeled_trigger.json").read_text())["issue"]
-
+def poll_handler(comment, issue, labeled_issue, calls):
     def handler(request: httpx.Request):
         path = request.url.path
+        calls.append(path)
         assert request.headers["authorization"] == f"Bearer {TOKEN}"
-        assert path.endswith("/issues/7") or request.url.params["since"] == "2026-01-01T00:00:00Z"
         if path.endswith("/issues/comments"):
-            return httpx.Response(200, json=[{**comment["comment"], "issue_url": "https://api.github.com/repos/acme/payments/issues/7"}])
+            assert request.url.params["since"] == "2026-01-01T00:00:00Z"
+            return httpx.Response(200, json=[{**comment["comment"], "issue_url": "https://api.github.com/repos/acme/payments/issues/7"}] * 3)
         if path.endswith("/issues/7"):
             return httpx.Response(200, json=issue)
+        if path.endswith("/issues/7/events"):
+            return httpx.Response(200, json=[{"event": "labeled", "label": {"name": "factory"}, "actor": {"login": "maintainer", "type": "User"}}])
         if path.endswith("/issues"):
-            return httpx.Response(200, json=[{**labeled, "id": 77}])
+            return httpx.Response(200, json=[{**labeled_issue, "id": 77, "user": {"login": "outsider", "type": "User"}}])
         pytest.fail(path)
+    return handler
 
-    c = connector(httpx.Client(transport=httpx.MockTransport(handler)))
+
+def test_polling_yields_the_same_drafts_and_keys_as_webhooks_and_fetches_each_issue_once():
+    comment = json.loads((FIX / "issue_comment_mention.json").read_text())
+    labeled = json.loads((FIX / "issues_labeled_trigger.json").read_text())["issue"]
+    calls: list[str] = []
+    c = connector(httpx.Client(transport=httpx.MockTransport(poll_handler(comment, comment["issue"], labeled, calls))))
     drafts, state = c.poll(RULES, PollState("2026-01-01T00:00:00Z"), "2026-01-02T00:00:00Z")
-    assert sorted(d.idempotency_key for d in drafts) == ["acme/payments#7:comment:501", "acme/payments#7:label:factory"]
-    assert state.since == "2026-01-02T00:00:00Z"
+    assert sorted({d.idempotency_key for d in drafts}) == ["acme/payments#7:comment:501", "acme/payments#7:item"]
+    assert calls.count("/repos/acme/payments/issues/7") == 1 and state.since == "2026-01-02T00:00:00Z"
+
+
+def test_polling_attributes_a_label_to_whoever_applied_it_like_the_webhook_does():
+    comment = json.loads((FIX / "issue_comment_mention.json").read_text())
+    labeled = json.loads((FIX / "issues_labeled_trigger.json").read_text())["issue"]
+    rules = TriggerRules(handle="@payments", labels=frozenset({"factory"}), allowed_authors=frozenset({"maintainer"}))
+    c = connector(httpx.Client(transport=httpx.MockTransport(poll_handler(comment, comment["issue"], labeled, []))))
+    drafts, _ = c.poll(rules, PollState("2026-01-01T00:00:00Z"), "2026-01-02T00:00:00Z")
+    assert [d.requested_by for d in drafts] == ["maintainer"]  # the outsider-authored issue is accepted because a maintainer labeled it
+
+
+def test_polling_a_description_mention_works_without_a_webhook():
+    issue = json.loads((FIX / "issues_opened_with_mention.json").read_text())["issue"]
+
+    def handler(request: httpx.Request):
+        return httpx.Response(200, json=[issue] if request.url.path.endswith("/issues") else [])
+
+    drafts, _ = connector(httpx.Client(transport=httpx.MockTransport(handler))).poll(RULES, PollState("t0"), "t1")
+    assert [d.idempotency_key for d in drafts] == ["acme/payments#7:item"]
+
+
+def test_a_cut_listing_resumes_where_it_stopped_instead_of_skipping():
+    def handler(request: httpx.Request):
+        if request.url.path.endswith("/issues/comments"):
+            nxt = '<https://api.github.com/repos/acme/payments/issues/comments?page=2>; rel="next"'
+            return httpx.Response(200, json=[{"id": 1, "body": "x", "updated_at": "2026-01-01T05:00:00Z", "user": None}], headers={"Link": nxt})
+        return httpx.Response(200, json=[])
+
+    _, state = connector(httpx.Client(transport=httpx.MockTransport(handler))).poll(RULES, PollState("2026-01-01T00:00:00Z"), "2026-01-09T00:00:00Z")
+    assert state.since == "2026-01-01T05:00:00Z"
