@@ -19,6 +19,7 @@ Two rules shape every word below:
 | **Gate** | A blocking checkpoint with PASS/FAIL routing. |
 | **HITL** | The human authority piece (merge, acceptance); not an Agent. |
 | **Skill** | A named capability an Agent may invoke. |
+| **Token ceiling** | The most tokens a run may use before it stops with the status `budget_exceeded`. Set in the composer; applies to harness-off and harness runs. |
 | **Signal** | A typed exit state on an edge. |
 | **Connector** | An McpServer or a Tool in the Connections dock. |
 | **Hook** | A program you register that must exit 0 before a tool runs. An error or a timeout blocks the tool, and the run records which hook decided. |

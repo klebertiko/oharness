@@ -56,6 +56,10 @@ _Avoid_: human-in-the-loop node as a generic Agent, approval widget
 A named capability an Agent may invoke or that may appear as a canvas node (e.g. `tdd`, `hallmark`).
 _Avoid_: plugin, prompt pack (unless referring only to content)
 
+**Token ceiling**:
+The most tokens one run may use. A run that reaches it stops with the explicit status `budget_exceeded`; a context compaction is reported with its tokens before and after.
+_Avoid_: quota, limit (ambiguous with the global USD budget)
+
 **Signal**:
 A typed exit-state on an edge (e.g. `"Ready for QA"`). Agents and Gates emit and consume Signals; they do not call each other directly.
 _Avoid_: unlabeled edge, message, event (unless domain event elsewhere)

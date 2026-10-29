@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLE_ICON, ROLE_VAR } from "@/lib/roles";
+import { useT } from "@/i18n/store";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
@@ -619,6 +620,7 @@ export function Transcript({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const t = useT();
 
   const connections = useProviderStore((s) => s.connections);
   const chosenProviderId = useChatProviderStore((s) => s.chosenId);
@@ -691,7 +693,7 @@ export function Transcript({
         <div key={`compaction-${i}`} className="grid grid-cols-[24px_minmax(0,1fr)] pb-1">
           <div />
           <p className="t-meta text-ink-mute">
-            context compacted — {fmtTokens(c.beforeTokens)} → {fmtTokens(c.afterTokens)} tok
+            {t("run.compacted", { before: fmtTokens(c.beforeTokens), after: fmtTokens(c.afterTokens) })}
           </p>
         </div>
       ))}
@@ -699,7 +701,7 @@ export function Transcript({
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />
           <p role="status" className="t-meta" style={{ color: "var(--warn-text)" }}>
-            budget_exceeded — stopped at {fmtTokens(run.budget.usedTokens)} of {fmtTokens(run.budget.maxTokens)} tok
+            {t("run.budgetExceeded", { used: fmtTokens(run.budget.usedTokens), max: fmtTokens(run.budget.maxTokens) })}
           </p>
         </div>
       )}

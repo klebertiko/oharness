@@ -109,3 +109,56 @@ def test_compaction_never_stubs_the_current_turns_results():
     messages = [{'role': 'user', 'content': 'u'}, {'role': 'assistant', 'content': None, 'tool_calls': []}]
     messages += [{'role': 'tool', 'tool_call_id': str(i), 'content': 'z' * 4000} for i in range(5)]
     assert compact_messages(messages, trigger_tokens=100) is None
+
+
+# -- round 2: the harness-run decision and the shared parser ---------------------
+def _feed(ceiling, events):
+    return [ceiling.observe(name, data) for name, data in events]
+
+
+def test_parse_run_budget_is_the_one_entry_point():
+    from run_budget import parse_run_budget
+    assert parse_run_budget(None).max_tokens is None and parse_run_budget(500).max_tokens == 500
+    for bad in (5, True, '10'):
+        with pytest.raises(ValueError):
+            parse_run_budget(bad)
+
+
+def test_harness_ceiling_stops_only_a_run_that_still_has_work():
+    from run_budget import HarnessCeiling
+    c = HarnessCeiling(RunBudget(500))
+    out = _feed(c, [('run_start', {'order': [{'node_id': 'a'}, {'node_id': 'b'}]}),
+                    ('node_done', {'node_id': 'a', 'tokens': 600})])
+    assert out[0] is None and out[1] == {'max_tokens': 500, 'used_tokens': 600} and c.hit
+    last = HarnessCeiling(RunBudget(500))
+    assert _feed(last, [('run_start', {'order': [{'node_id': 'a'}]}), ('node_done', {'node_id': 'a', 'tokens': 600})]) == [None, None]
+    assert not last.hit
+
+
+def test_harness_ceiling_keeps_counting_through_gate_retries():
+    from run_budget import HarnessCeiling
+    c = HarnessCeiling(RunBudget(500))
+    out = _feed(c, [('run_start', {'order': [{'node_id': 'work'}, {'node_id': 'gate'}]}),
+                    ('node_done', {'node_id': 'work', 'tokens': 100}), ('node_done', {'node_id': 'gate', 'tokens': 450}),
+                    ('gate_retry', {'node_id': 'gate'})])
+    assert out[2] is None  # the gate was the last planned node: nothing left... until it loops back
+    assert out[3] == {'max_tokens': 500, 'used_tokens': 550}
+
+
+def test_harness_ceiling_restored_nodes_count_as_finished_and_spend_nothing():
+    from run_budget import HarnessCeiling
+    c = HarnessCeiling(RunBudget(500))
+    out = _feed(c, [('run_start', {'order': [{'node_id': 'a'}, {'node_id': 'b'}]}),
+                    ('node_restored', {'node_id': 'a', 'output': 'x'}), ('node_done', {'node_id': 'b', 'tokens': 900})])
+    assert out == [None, None, None] and not c.hit  # b was the last real node
+
+
+def test_harness_ceiling_already_spent_by_routing_stops_before_the_first_node():
+    from run_budget import HarnessCeiling
+    c = HarnessCeiling(RunBudget(100), spent=150)
+    assert c.observe('run_start', {'order': [{'node_id': 'a'}]}) == {'max_tokens': 100, 'used_tokens': 150}
+
+
+def test_a_malformed_token_count_cannot_fail_the_run_even_when_infinite():
+    from run_budget import token_count
+    assert [token_count(v) for v in ('12', 3.9, None, 'x', {}, -4, float('inf'), '1e999')] == [12, 3, 0, 0, 0, 0, 0, 0]

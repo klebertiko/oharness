@@ -22,7 +22,7 @@ from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, Ru
 from run_worktree import RunWorktree, require_workspace
 from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run, resume_seed, claim_start, release_start
 from adapters import get_adapter, AdapterConfig
-from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
+from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
@@ -48,6 +48,8 @@ class ExecuteRequest(BaseModel):
     instruction: str | None = None
     cwd: str | None = None
     worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
+    # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
+    max_tokens: Any = None
 
 
 class DirectRequest(BaseModel):
@@ -319,6 +321,10 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
 
 
 async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession, resume: ResumeSeed | None = None):
+    try:
+        run_budget = parse_run_budget(body.max_tokens)
+    except ValueError:
+        return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     if body.harness_id:
         h = await db.get(Harness, body.harness_id)
         if not h:
@@ -429,6 +435,8 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
         # reducer client-side after a reload.
         events: list[dict] = []
         run_cwd = cwd
+        # The intake call already spent real tokens before any node ran.
+        ceiling = HarnessCeiling(run_budget, routed.tokens if routed is not None and routed.engage_harness else 0)
         try:
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
@@ -482,10 +490,20 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                             events.append({"event": "turn_diff", "data": turn_diff})
                             yield _sse("turn_diff", turn_diff)
                     if parsed:
+                        due = ceiling.observe(parsed["event"], parsed["data"])
+                        if parsed["event"] == "harness_done" and ceiling.hit and parsed["data"].get("status") == STATUS_STOPPED:
+                            # The run was stopped on purpose: say why, not just "stopped".
+                            parsed["data"]["status"] = STATUS_BUDGET_EXCEEDED
+                            chunk = _sse("harness_done", parsed["data"])
                         events.append(parsed)
                         if parsed["event"] == "harness_done":
                             status = parsed["data"].get("status", "complete")
                     yield chunk
+                    if parsed and due:
+                        evt = {"event": "budget_exceeded", "data": due}
+                        events.append(evt)
+                        yield _sse(evt["event"], evt["data"])
+                        control.stop.set()  # the engine unwinds at its next checkpoint: no further node starts
         except GeneratorExit:
             control.stop.set()
             status = "interrupted"
@@ -583,7 +601,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
     except ValidationError:
         return JSONResponse({'error': 'invalid_argument'}, status_code=400)
     try:
-        run_budget = RunBudget(validate_max_tokens(body.max_tokens))
+        run_budget = parse_run_budget(body.max_tokens)
     except ValueError:
         return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     preset_only = tool_options is not None and tool_options.preset is not None and not tool_options.summarize
@@ -985,12 +1003,17 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/logs/{log_id}/start")
-async def start_continued_run(log_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+async def start_continued_run(log_id: str, request: Request, db: AsyncSession = Depends(get_db), body: dict | None = None):
     """Execute a continuation made by ``/continue``: finished nodes are restored from the run it continues, the rest run for real.
 
     A continuation starts once: a second call (double click, retry) is a 409 and executes nothing.
     """
     await _require_log(db, log_id)
+    # The ceiling is the person's choice for this start (not saved with the run). Checked before the claim, so a bad value costs nothing.
+    try:
+        max_tokens = parse_run_budget((body or {}).get("max_tokens")).max_tokens
+    except ValueError:
+        return JSONResponse({"error": "invalid_run_budget"}, status_code=400)
     link = await db.get(RunLink, log_id)
     inputs = await db.get(RunInput, log_id)
     if link is None or not await claim_start(db, log_id):
@@ -1002,7 +1025,7 @@ async def start_continued_run(log_id: str, request: Request, db: AsyncSession = 
         record = await db.get(RunRecord, log_id)
         if record is None:
             raise HTTPException(409, {"code": "inputs_unavailable", "message": "this continuation has no saved journal"})
-        body = ExecuteRequest(graph_json=json.loads(inputs.graph_json), mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree)
+        body = ExecuteRequest(graph_json=json.loads(inputs.graph_json), mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree, max_tokens=max_tokens)
         return await _execute_run(body, request, db, ResumeSeed(log_id, outputs, record.last_sequence, inputs.base_ref))
     except BaseException:
         await release_start(db, log_id)
