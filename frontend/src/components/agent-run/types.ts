@@ -194,6 +194,8 @@ export interface RunState {
   routeDecision: RouteDecision | null;
   /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
   proposedPlan?: { planId: string; text: string };
+  /** `plan_error`: the answer arrived but the sidecar could not keep it as a plan, so there is nothing to approve. */
+  planNotSaved?: boolean;
   /** Children this run started (`subagent_*` events), in start order. */
   subagents: Subagent[];
   /** Set when the run reached its token ceiling (`budget_exceeded`). */

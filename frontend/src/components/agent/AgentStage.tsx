@@ -493,6 +493,12 @@ export function AgentStage() {
               </Notice>
             ))}
 
+            {runInCurrentChat && run.planNotSaved && !live && (
+              <Notice tone="warn">
+                The plan could not be saved, so there is nothing to approve. Send your message again to get a new plan.
+              </Notice>
+            )}
+
             {planArtifact.plan && !live && (
               <PlanArtifactCard text={planArtifact.plan.text} busy={planArtifact.busy} error={planArtifact.error}
                 onApprove={() => void approvePlan()} onDiscard={() => void planArtifact.discard()} />
