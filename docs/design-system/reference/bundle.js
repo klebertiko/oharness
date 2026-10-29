@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"OH","components":[{"name":"Button"},{"name":"Input"},{"name":"Badge"},{"name":"Panel"},{"name":"ListRow"},{"name":"Kbd"},{"name":"Nilo"}]} */
+/* @ds-bundle: {"format":4,"namespace":"OH","components":[{"name":"Button"},{"name":"Input"},{"name":"Badge"},{"name":"Panel"},{"name":"ListRow"},{"name":"Kbd"},{"name":"Nilo"},{"name":"Notice"},{"name":"EmptyState"},{"name":"Segmented"},{"name":"StatusMark"},{"name":"ConfirmInline"},{"name":"Skeleton"},{"name":"Popover"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -566,5 +566,97 @@ function statePose(state           , tRaw        )       {
       svg, bubble ? h("span", { className: "oh-nilo-bubble", "aria-hidden": "true" }, bubble) : null);
   }
 
-  window.OH = { Nilo: Nilo, Button: Button, Input: Input, Badge: Badge, Panel: Panel, ListRow: ListRow, Kbd: Kbd };
+
+  /* ── Added with the component docs (docs/design-system/components): Notice, EmptyState, Segmented, StatusMark, ConfirmInline, Skeleton, Popover ── */
+  var ICONS = {
+    info: "M12 8h.01M11 12h1v4h1M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+    warn: "M12 9v4M12 17h.01M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z",
+    fault: "M12 8v5M12 16h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"
+  };
+  function Icon(props) {
+    return h("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", className: props.className },
+      h("path", { d: ICONS[props.name] }));
+  }
+
+  function Notice(props) {
+    var tone = props.tone || "info";
+    return h("div", { className: cx("oh-notice", "oh-notice--" + tone, props.className), role: props.role || (tone === "fault" ? "alert" : "status") },
+      h(Icon, { name: tone, className: "oh-notice__icon" }),
+      h("div", { className: "oh-notice__body" },
+        props.title ? h("p", { className: "oh-notice__title" }, props.title) : null,
+        props.children ? h("div", { className: "oh-notice__text" }, props.children) : null),
+      props.action ? h("div", { className: "oh-notice__action" }, props.action) : null);
+  }
+
+  function EmptyState(props) {
+    return h("div", { className: cx("oh-empty", props.className) },
+      h("p", { className: "oh-empty__title" }, props.title),
+      props.children ? h("p", { className: "oh-empty__text" }, props.children) : null,
+      props.action || null);
+  }
+
+  function Segmented(props) {
+    var refs = React.useRef([]);
+    var opts = props.options;
+    function move(from, step) {
+      var enabled = opts.filter(function (o) { return !o.disabled; });
+      var at = enabled.indexOf(opts[from]);
+      var next = enabled[(at + step + enabled.length) % enabled.length];
+      props.onChange(next.value);
+      var el = refs.current[opts.indexOf(next)]; if (el) el.focus();
+    }
+    return h("div", { role: "radiogroup", "aria-label": props.label, className: cx("oh-seg", props.className) },
+      opts.map(function (o, i) {
+        var on = o.value === props.value;
+        return h("button", {
+          key: o.value, type: "button", role: "radio", "aria-checked": on ? "true" : "false", title: o.hint, disabled: o.disabled,
+          tabIndex: on ? 0 : -1, className: "oh-seg__opt",
+          ref: function (el) { refs.current[i] = el; },
+          onClick: function () { props.onChange(o.value); },
+          onKeyDown: function (e) {
+            if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); move(i, 1); }
+            else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); move(i, -1); }
+          }
+        }, o.label);
+      }));
+  }
+
+  /* The one state marker: an 8px square beside the word that names the state. Decorative. */
+  function StatusMark(props) {
+    return h("span", { className: cx("oh-mark", "oh-mark--" + (props.tone || "idle"), props.className), "aria-hidden": "true" });
+  }
+
+  function ConfirmInline(props) {
+    var box = React.useRef(null);
+    /* Cancel is the first button, and it has the focus on arrival. */
+    React.useEffect(function () { var b = box.current && box.current.querySelector("button"); if (b) b.focus(); }, []);
+    return h("div", { ref: box, role: "group", "aria-label": props.confirmLabel, className: cx("oh-confirm", props.className),
+      onKeyDown: function (e) { if (e.key === "Escape" && !props.busy) props.onCancel(); } },
+      h("span", { className: "oh-confirm__prompt" }, props.prompt),
+      h(Button, { onClick: props.onCancel, disabled: props.busy }, props.cancelLabel || "Cancel"),
+      h(Button, { variant: "danger", onClick: props.onConfirm, loading: props.busy }, props.confirmLabel));
+  }
+
+  function Skeleton(props) { return h("div", { "aria-hidden": "true", className: cx("oh-skel", props.className) }); }
+
+  /* A static popover list: groups of options with a tone mark, a detail and a selected state (the model picker). */
+  function Popover(props) {
+    return h("div", { className: cx("oh-pop", props.className) },
+      props.header ? h("p", { className: "oh-pop__head" }, props.header) : null,
+      props.search ? h("div", { className: "oh-pop__search" }, h("input", { className: "oh-input__field", placeholder: props.search, "aria-label": props.search })) : null,
+      props.panel || null,
+      h("div", { role: "listbox", "aria-label": props.label, className: "oh-pop__list" },
+        props.groups.map(function (g, gi) {
+          return h("div", { key: gi, role: g.title ? "group" : undefined, "aria-label": g.title },
+            g.title ? h("p", { className: "oh-pop__group" }, g.title) : null,
+            g.options.map(function (o, oi) {
+              return h("div", { key: oi, role: "option", "aria-selected": o.selected ? "true" : "false", "aria-disabled": o.disabled ? "true" : undefined, className: "oh-opt" },
+                o.tone ? h(StatusMark, { tone: o.tone }) : null,
+                h("span", { className: "oh-opt__main" }, h("span", { className: "oh-opt__label" }, o.label), o.detail ? h("span", { className: "oh-opt__detail" }, o.detail) : null));
+            }));
+        })),
+      props.footer ? h("div", { className: "oh-pop__foot" }, props.footer) : null);
+  }
+
+  window.OH = { Nilo: Nilo, Button: Button, Input: Input, Badge: Badge, Panel: Panel, ListRow: ListRow, Kbd: Kbd, Notice: Notice, EmptyState: EmptyState, Segmented: Segmented, StatusMark: StatusMark, ConfirmInline: ConfirmInline, Skeleton: Skeleton, Popover: Popover };
 })();
