@@ -38,7 +38,7 @@ export function ListRow({
       className={cn(
         "flex min-h-control-lg pointer-coarse:min-h-control-touch w-full items-center gap-2 rounded-control px-3 py-1 text-left text-ink-dim transition-colors",
         "hover:bg-sub-200 active:bg-sub-300 disabled:cursor-not-allowed disabled:opacity-45",
-        selected && "bg-sub-200 text-ink shadow-[inset_2px_0_0_var(--signal)]",
+        selected && "bg-sub-200 text-ink shadow-selected",
         className,
       )}
       {...rest}

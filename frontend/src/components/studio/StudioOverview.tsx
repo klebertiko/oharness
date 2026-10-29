@@ -162,7 +162,7 @@ export function StudioOverview() {
                 rows={3}
                 placeholder="Describe the harness you want… e.g. research a topic, draft a brief, then a review gate before a person approves."
                 aria-describedby={copilotError ? "studio-describe-error" : undefined}
-                className="block min-h-[88px] w-full resize-y rounded-t-composer bg-transparent px-4 pb-2 pt-4 text-reading text-ink placeholder:text-ink-mute focus-visible:outline-hidden"
+                className="block min-h-22 w-full resize-y rounded-t-composer bg-transparent px-4 pb-2 pt-4 text-reading text-ink placeholder:text-ink-mute focus-visible:outline-hidden"
               />
               <div className="flex flex-wrap items-center gap-2 px-2.5 pb-2.5 pt-1">
                 <div className="flex flex-wrap gap-2">{newHarness}{openOhm}</div>

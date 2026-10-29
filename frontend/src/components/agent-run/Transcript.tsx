@@ -118,7 +118,7 @@ function ToolRow({ call, transcriptRunId }: { call: ToolCall; transcriptRunId: s
       style={failed ? { borderColor: "var(--fault)" } : undefined}
     >
       <span
-        className="h-[10px] w-[2px] flex-none rounded-none"
+        className="h-2.5 w-0.5 flex-none rounded-none"
         style={{
           background: pending ? "var(--signal)" : failed ? "var(--fault)" : "var(--ink-faint)",
         }}
@@ -290,14 +290,14 @@ function SegmentView({
       <div
         className={`${css.gutter} ${first ? css.gutterFirst : ""} ${last ? css.gutterLast : ""}`}
       >
-        <div className="flex h-[22px] items-center justify-center pl-[3px]">
+        <div className="flex h-5.5 items-center justify-center pl-[3px]">
           <Marker segment={segment} />
         </div>
       </div>
 
       <div className={`min-w-0 pb-3 ${pending ? "opacity-45" : ""}`}>
         {/* Node header — label left, identity centre-dim, cost right. */}
-        <div className="flex h-[22px] min-w-0 items-center gap-2">
+        <div className="flex h-5.5 min-w-0 items-center gap-2">
           <Icon size={12} strokeWidth={1.75} style={{ color: role }} className="flex-none" />
           <span className="t-title min-w-0 flex-none truncate text-ink">{segment.label}</span>
           <span className="t-meta min-w-0 flex-1 truncate text-ink-mute">

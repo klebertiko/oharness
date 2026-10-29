@@ -103,7 +103,7 @@ export function ValidateDock() {
       <span className="flex-1" />
       {fresh && message && <span role="status" className={"text-body min-w-0 truncate " + (status === "error" ? "text-fault-text" : status === "ok" ? "text-signal-text" : "text-ink-mute")} title={message}>{message}</span>}
     </div>
-    {fresh && (errors.length > 0 || steps.length > 0) && <div className="max-h-[120px] overflow-y-auto px-2.5 py-1.5">
+    {fresh && (errors.length > 0 || steps.length > 0) && <div className="max-h-30 overflow-y-auto px-2.5 py-1.5">
       {errors.length > 0 && <ul className="space-y-0.5">{errors.map((error, i) => <li key={i} className="t-body text-fault-text">{error}</li>)}</ul>}
       {steps.length > 0 && <ol className="space-y-0.5">{steps.map((step, i) => <li key={step.nodeId + i} className="t-meta text-ink-dim">{i + 1}. {step.role} ({step.nodeId}) — {step.status}{step.note ? " · " + step.note : ""}</li>)}</ol>}
     </div>}
