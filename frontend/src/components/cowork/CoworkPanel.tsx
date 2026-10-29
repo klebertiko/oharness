@@ -160,7 +160,7 @@ export function CoworkPanel() {
               disabled={busy}
               title="Delete project"
               onClick={() => void onDelete(p.id)}
-              className="grid h-[22px] w-[22px] flex-none place-items-center rounded-control text-ink-mute hover:bg-sub-200 hover:text-ink"
+              className="grid h-5.5 w-5.5 flex-none place-items-center rounded-control text-ink-mute hover:bg-sub-200 hover:text-ink"
             >
               <Trash2 size={12} strokeWidth={1.8} />
             </button>

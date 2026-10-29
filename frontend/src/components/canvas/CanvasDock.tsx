@@ -53,7 +53,7 @@ function DockButton({
 /** Chord for "Auto-arrange graph" (keys.ts spec; also bound in app/page.tsx). */
 export const ARRANGE_CHORD = "Shift+L";
 
-const Rule = () => <span className="my-[4px] w-px flex-none bg-line-soft" aria-hidden />;
+const Rule = () => <span className="my-1 w-px flex-none bg-line-soft" aria-hidden />;
 
 interface Props {
   snap: boolean;
@@ -81,7 +81,7 @@ export function CanvasDock({ snap, onSnap, locked, onLock, panMode, onPanMode }:
   }, [flash]);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-[10px] z-10 flex justify-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-2.5 z-10 flex justify-center">
       <div className="oh-float pointer-events-auto flex h-7 items-stretch overflow-hidden">
         <DockButton icon={Minus} label="Zoom out" onClick={() => zoomOut({ duration: 140 })} />
         <button
@@ -92,7 +92,7 @@ export function CanvasDock({ snap, onSnap, locked, onLock, panMode, onPanMode }:
             zoomTo(1, { duration: 140 });
             setFlash(true);
           }}
-          className={`oh-focus-inner t-meta grid w-[46px] place-items-center border-x border-line-soft transition-colors hover:bg-sub-300 hover:text-ink ${
+          className={`oh-focus-inner t-meta grid w-11.5 place-items-center border-x border-line-soft transition-colors hover:bg-sub-300 hover:text-ink ${
             flash ? "text-signal-text" : "text-ink-dim"
           }`}
         >

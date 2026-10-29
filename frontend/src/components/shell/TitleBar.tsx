@@ -57,7 +57,7 @@ function WindowButton({
       aria-label={label}
       onClick={onClick}
       className={[
-        "grid h-titlebar w-[44px] place-items-center text-ink-mute transition-colors",
+        "grid h-titlebar w-11 place-items-center text-ink-mute transition-colors",
         danger ? "hover:bg-fault hover:text-fault-ink" : "hover:bg-sub-300 hover:text-ink",
       ].join(" ")}
     >
@@ -86,7 +86,7 @@ export function TitleBar({
       data-tauri-drag-region
       className="oh-header relative z-30 flex h-titlebar flex-none items-stretch border-b border-line-soft bg-sub-100 text-ink-dim"
     >
-      {mac && win && <div className="w-[68px] flex-none" aria-hidden />}
+      {mac && win && <div className="w-17 flex-none" aria-hidden />}
 
       <div
         data-tauri-drag-region
