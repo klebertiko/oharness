@@ -1,0 +1,48 @@
+import type { MessageKey } from "./messages.en";
+
+/** Brazilian Portuguese. Same keys as `messages.en.ts`; the design system's content rules apply (sentence case, second person, say what to do next, no exclamation marks). The only source file where accented text is allowed (`guardrails.test.ts`). */
+export const ptBR: Record<MessageKey, string> = {
+  "common.cancel": "Cancelar",
+
+  "status.notConnected": "Não conectado",
+  "status.unavailable": "Indisponível",
+  "status.noModel": "Sem modelo escolhido",
+  "status.modelNotPulled": "Modelo não baixado",
+  "status.verified": "Verificado",
+  "status.checking": "Verificando a conexão",
+  "status.needsAttention": "Precisa de atenção",
+  "status.notVerified": "Não verificado",
+
+  "fault.keyRejected": "Chave recusada",
+  "fault.unreachable": "Inacessível",
+  "fault.rateLimited": "Limite de uso atingido",
+  "fault.outOfCredits": "Sem créditos",
+  "fault.signIn": "Login necessário",
+  "fault.notInstalled": "Não instalado",
+  "fault.unknown": "Teste falhou",
+
+  "step.replaceKey": "Trocar a chave",
+  "step.replaceKey.hint": "trocar a chave",
+  "step.copyServe": "Copiar `ollama serve`",
+  "step.copyServe.hint": "iniciar o Ollama",
+  "step.checkEndpoint": "Revisar o endereço",
+  "step.checkEndpoint.hint": "revisar o endereço",
+  "step.testAgain": "Testar de novo",
+  "step.testAgain.hint": "testar de novo",
+  "step.testLater": "Testar de novo mais tarde",
+  "step.testLater.hint": "tentar mais tarde",
+  "step.openBilling": "Abrir a cobrança",
+  "step.openBilling.hint": "adicionar crédito",
+  "step.copyLogin": "Copiar `{login}`",
+  "step.copyLogin.hint": "entrar",
+  "step.openInstall": "Abrir o guia de instalação",
+  "step.openInstall.hint": "instalar a CLI",
+  "step.paste": "Colar a chave {vendor}",
+  "step.paste.hint": "colar a chave",
+  "step.turnOn": "Ligar",
+  "step.turnOn.hint": "ligar",
+  "step.chooseModel": "Escolher um modelo",
+  "step.chooseModel.hint": "escolher o modelo",
+  "step.copyPull": "Copiar `ollama pull {id}`",
+  "step.copyPull.hint": "baixar o modelo",
+};

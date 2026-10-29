@@ -1,5 +1,6 @@
 export { Badge, type BadgeRole, type BadgeTone } from "./Badge";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
+export { ConfirmInline } from "./ConfirmInline";
 export { EmptyState } from "./EmptyState";
 export { Input, type InputProps } from "./Input";
 export { Kbd, KbdChord } from "./Kbd";
@@ -9,3 +10,4 @@ export { Panel, type PanelVariant } from "./Panel";
 export { Segmented, type SegmentedOption } from "./Segmented";
 export { Sheet } from "./Sheet";
 export { Skeleton, SkeletonRows } from "./Skeleton";
+export { StatusMark, type StatusTone } from "./StatusMark";

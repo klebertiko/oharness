@@ -91,10 +91,10 @@ const seed: Connection[] = [
     endpoint: "https://api.anthropic.com",
     secret: null,
     health: "live",
-    detail: "Logged in as klebertiko@gmail.com (pro plan). 4 models offered on this seat.",
+    detail: "Signed in on the CLI (pro plan). 4 models offered on this seat.",
     probes: [188, 204, 191, 176, 199, 212, 183, 195, 180, 207, 190, 186],
     facts: [
-      { k: "account", v: "klebertiko@gmail.com" },
+      { k: "account", v: "user@example.com" },
       { k: "plan", v: "pro", tone: "signal" },
       { k: "cli", v: "claude · on PATH", tone: "signal" },
     ],
@@ -117,10 +117,10 @@ const seed: Connection[] = [
     endpoint: "https://api.cursor.com",
     secret: null,
     health: "live",
-    detail: "Logged in as klebertiko@gmail.com. Delegation only — no completion endpoint exists.",
+    detail: "Signed in on the CLI. Delegation only — no completion endpoint exists.",
     probes: [246, 231, 259, 240, 268, 252, 238, 244, 271, 249, 235, 257],
     facts: [
-      { k: "account", v: "klebertiko@gmail.com" },
+      { k: "account", v: "user@example.com" },
       { k: "cli", v: "cursor-agent · on PATH", tone: "signal" },
     ],
     models: [
@@ -443,6 +443,10 @@ interface ProviderState {
   /** Ledger filter — the honest default is "everything", not "healthy only". */
   query: string;
   hydrated: boolean;
+  /** What the sidecar has told this session: "idle" before the first request, "loading" while it is in flight,
+      "ready" once its rows were merged, "offline" when it could not be reached (rows are then the unverified
+      catalogue, not a claim that nothing is connected). */
+  loadState: "idle" | "loading" | "ready" | "offline";
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -479,6 +483,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   binding: ["anthropic", "ollama-local"],
   query: "",
   hydrated: false,
+  loadState: "idle",
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -489,13 +494,15 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     // The claim is only kept on success: a sidecar that is still booting (or a
     // 5xx) must not leave every connection on the offline template for the
     // whole session - release it so the next mounted consumer retries.
-    const release = () => set({ hydrated: false });
+    const release = () => set({ hydrated: false, loadState: "offline" });
+    set({ loadState: "loading" });
     try {
       const res = await fetch(apiUrl("/providers/connections"));
       if (!res.ok) return release();
       const body = (await res.json()) as { connections: BackendConnectionRow[] };
       const byId = new Map(body.connections.map((row) => [row.id, row]));
       set({
+        loadState: "ready",
         connections: get().connections.map((c) => {
           const row = byId.get(c.id);
           if (!row) return c;

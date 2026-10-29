@@ -81,7 +81,7 @@ describe("providerStore.reportRunOutcome", () => {
   });
 
   it("a genuine provider-level failure moves a previously-live connection to fault, with an honest detail", () => {
-    seed({ health: "live", enabled: true, detail: "Logged in as klebertiko@gmail.com." });
+    seed({ health: "live", enabled: true, detail: "Signed in on the CLI." });
     useProviderStore.getState().reportRunOutcome("an", {
       ok: false,
       detail: "401 invalid_api_key — the key was revoked or belongs to a deleted project.",

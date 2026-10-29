@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { useLocaleStore } from "@/i18n/store";
 import { nextStep } from "./nextStep";
 import type { Connection } from "./providerStore";
 
@@ -53,5 +54,19 @@ describe("nextStep - one action per state", () => {
   it("without a known failure it falls back to the readiness step", () => {
     expect(nextStep(conn({ health: "setup", enabled: false, secret: null }))).toMatchObject({ kind: "paste", label: "Paste an OpenRouter key" });
     expect(nextStep(conn({ health: "live" }))).toBeNull();
+  });
+});
+
+describe("nextStep in Brazilian Portuguese", () => {
+  afterEach(() => useLocaleStore.setState({ locale: "en" }));
+
+  it("speaks one language per state: label, hint and status, commands untouched", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    expect(nextStep(conn({ detail: "401 unauthorized — the key was rejected." }))).toMatchObject({ label: "Trocar a chave", status: "Chave recusada" });
+    expect(nextStep(conn({ provider: "ollama", residence: "local", detail: "Could not reach http://127.0.0.1:11434." }))).toMatchObject({
+      label: "Copiar `ollama serve`",
+      copy: "ollama serve",
+    });
+    expect(nextStep(conn({ health: "setup", enabled: false, secret: null }))?.label).toBe("Colar a chave OpenRouter");
   });
 });
