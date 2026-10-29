@@ -77,7 +77,7 @@ function Resizer({
       }}
       className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "right-[-3px]" : "left-[-3px]"}`}
     >
-      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
+      <span className="pointer-events-none absolute inset-y-0 left-0.5 w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
     </div>
   );
 }

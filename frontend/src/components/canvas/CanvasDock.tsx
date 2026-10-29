@@ -81,7 +81,7 @@ export function CanvasDock({ snap, onSnap, locked, onLock, panMode, onPanMode }:
   }, [flash]);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-[10px] z-10 flex justify-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-2.5 z-10 flex justify-center">
       <div className="oh-float pointer-events-auto flex h-7 items-stretch overflow-hidden">
         <DockButton icon={Minus} label="Zoom out" onClick={() => zoomOut({ duration: 140 })} />
         <button

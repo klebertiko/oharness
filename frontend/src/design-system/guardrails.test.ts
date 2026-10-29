@@ -51,8 +51,13 @@ describe("design-system guardrails", () => {
     expect(offenders(/shadow-\[inset_2px_0_0/, /\.tsx$/)).toEqual([]);
   });
 
-  it("takes transition times from the duration tokens (the 620ms march and the reduced-motion reset are the only literals)", () => {
-    expect(offenders(/transition[^;]*\b\d+ms\b/, /\.css$/).filter((o) => !o.includes("0.01ms"))).toEqual([]);
+  it("takes transition times and easing from the tokens (the 620ms march and the reduced-motion reset are the only literals)", () => {
+    expect(offenders(/transition[^;]*(?:\b\d*\.?\d+m?s\b|cubic-bezier)/, /\.css$/).filter((o) => !o.includes("0.01ms"))).toEqual([]);
+  });
+
+  it("uses a scale class, not an arbitrary even pixel value, for spacing and size (odd 3, 5, 7, 9, 11px marker sizes are documented in audit/components.md)", () => {
+    // components/providers is being rebuilt in its own pull requests (ADRs 0033 to 0036); drop this exemption when they land.
+    expect(offenders(/(?<![\w-])(?:min-w|min-h|max-h|w|h|px|py|pl|pr|pt|pb|mt|mb|my|mx|gap|size|top|left|right|bottom|inset)-\[\d*[02468]px\]/, /\.tsx$/).filter((o) => !o.startsWith(`components${path.sep}providers${path.sep}`))).toEqual([]);
   });
 
   it("uses state colours as text only through warn-text, fault-text and signal-text", () => {
