@@ -1,9 +1,14 @@
 # ADR 0062: Automações agendadas e gatilhos por evento
 
-Status: aceita (implementação no PR de automações).
+Status: aceita (implementação no PR de automações). Conceitos de: docs.warp.dev/factories/automations (gatilho + filtros + agente, semântica de casamento, filtro de payload, filtros não controlam acesso); desenho próprio.
 
 ## Decisão
-- Uma automação = {id, nome, cron local ou gatilho de evento, `WorkItemDraft` modelo, teto de custo por execução e por período, estado `active|paused`}. Definida em arquivo versionado (alinhado ao "definição como código" do Pacote A), sem segredos.
-- Cada disparo cria um work item com `source.kind = "schedule"` e `idempotency_key = <automação>:<instante>` (reinício não duplica). Pausar/retomar é explícito; o histórico (disparo, item criado, custo, resultado) é gravado localmente.
-- **Limites:** disparo é recusado se o teto de custo do período foi atingido ou se há um item da mesma automação ainda em aberto (sem empilhamento). Nunca merge; o resultado entra em revisão humana.
-- Cron avaliado em processo local (sem serviço externo); o texto do modelo é do dono e não recebe conteúdo externo sem passar pelo ADR 0059.
+- **Automação** = {id, `enabled`, `agent` (o agente da definição que trata; padrão o foreman), `triggers[]`, prompt do dono}. Arquivo `automations/<id>/automation.md` (frontmatter + corpo, o espaço reservado pelo ADR 0056), versionado, **sem segredo**; ela só **filtra e roteia**: o que o agente pode fazer continua nas permissões do agente (ADR 0054/0055), não no filtro.
+- **Gatilho** = `provider` + `event` + `filter`. Providers: `github` (eventos do ADR 0060), `webhook` (entregas do ADR 0061, com `webhook_ids` obrigatório e `payload` opcional), `schedule` (`cron_fired`, com `name` e `cron` de 5 campos avaliado no fuso local, ex.: `0 3 * * 0`), e os esqueletos do ADR 0064 quando existirem.
+- **Casamento:** o evento tem de combinar provider, evento e **todos** os filtros; dentro de um filtro de lista, **qualquer** valor serve; lista vazia não restringe. `not_in` exclui. Filtro de payload espelha o formato do corpo: chaves aninhadas, `in` (igual a array pura), `not_in`, `exists`; string compara exata e com maiúsculas, número numericamente, chave ausente falha `in` e passa `not_in`, objeto aninhado exige a chave, array de objetos casa se algum elemento casar. Bots são pulados por padrão (`skip_bots`).
+- **Disparo:** cria um work item (`source.kind = schedule|github|webhook`, `ref` com carimbo da ocorrência, ex.: `daily-cleanup@2026-10-29T03:00`, nunca fixo, como pede o ADR 0053) pela `pipeline.deliver`. Reinício não duplica (chave = automação+ocorrência). Várias automações podem casar o mesmo evento; cada uma cria o seu item, então o dono evita filtros sobrepostos (documentado).
+- **Estado e controle:** `active|paused` (pausar/retomar pela CLI, API e UI do A); perdas de disparo durante o app fechado são **puladas**, não acumuladas (no máximo uma execução de compensação, configurável), para não explodir custo ao reabrir.
+- **Limites de custo:** teto por execução (herda o teto de tokens do work item/run, ADR 0025/0040) e teto por período por automação; atingido, o disparo é recusado e registrado. Sem empilhamento: se há item aberto da mesma automação, não cria outro.
+- **Histórico** local: cada avaliação (casou ou não, por quê), disparo, item criado, custo, resultado. **Teste de filtro** contra um evento guardado, sem disparar.
+- **Exemplo:** remoção periódica de código morto — `schedule`, prompt do dono, agente `implement`, item vai a revisão humana; nunca merge.
+- Nenhum filtro é controle de acesso: quem pode enviar o evento é decidido pela autenticação do ADR 0059/0061, não pelo filtro.

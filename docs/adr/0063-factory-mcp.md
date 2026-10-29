@@ -1,8 +1,15 @@
 # ADR 0063: Factory MCP
 
-Status: aceita (implementação no PR do MCP).
+Status: aceita (implementação no PR do MCP). Conceitos de: docs.warp.dev/factories/factory-mcp (enviar trabalho, assumir localmente, devolver à mesma tarefa, avisar o foreman, aviso de que assumir não trava a tarefa); desenho próprio e **local**.
 
 ## Decisão
-- Servidor MCP local, **stdio por padrão** (`oharness factory mcp`), JSON-RPC 2.0 mínimo (`initialize`, `tools/list`, `tools/call`) escrito à mão, sem dependência nova. Sem HTTP; um transporte de rede só viria com ADR próprio.
-- Ferramentas: `factory_submit`, `factory_list`, `factory_status`, `factory_comment`, `factory_cancel`, `factory_metrics`, `factory_claim` (assumir: o item vai a `claimed`, a run própria da fábrica é suspensa e o agente local trabalha num worktree/sessão local) e `factory_release` (devolver: resumo + branch, o item vai a revisão humana).
-- Segurança: o cliente MCP é um processo local do dono; ainda assim, o conteúdo que ele envia é tratado como entrada (limites de tamanho/taxa do ADR 0059), a saída das ferramentas é dado (campos de fonte externa saem citados), e nenhuma ferramenta faz merge, push ou executa comando. Credenciais não passam pelo MCP.
+- Servidor MCP local, **stdio** (`oharness factory mcp`), JSON-RPC 2.0 mínimo (`initialize`, `tools/list`, `tools/call`) escrito à mão, sem dependência nova. Sem rede: um transporte HTTP só entraria com ADR próprio. O cliente é um processo local do dono (Claude Code, Codex, Cursor...); credencial de cliente do cofre quando o processo não for o do dono.
+- **Ferramentas** (todas na classe agente/integração, ADR 0059): `factory_submit` (colocar trabalho: título + nota; para continuar trabalho local, a nota referencia a branch/PR já publicado), `factory_list`, `factory_status` (item, runs, artefatos, conversa), `factory_search`, `factory_comment` (guiar a sessão do foreman: progresso, pergunta, bloqueio), `factory_cancel`, `factory_metrics`, `factory_inbox` (itens `awaiting_human`, só leitura), `factory_claim` e `factory_release`.
+- **Assumir de verdade:** diferente de um MCP que não trava a tarefa, `factory_claim` muda o item para `claimed`, **suspende a run da fábrica** (continuável) e devolve o contexto do item e **comandos git sugeridos** para preparar um worktree isolado num clone local. O MCP **não modifica arquivos**; o agente (ou `oharness factory claim --worktree`) executa a preparação. Outro `claim` num item assumido é recusado.
+- **Devolver:** `factory_release {summary, branch?, status}` com a branch **já publicada**; o item volta a revisão (`needs_review`) ou à fila (`abandoned`) e o foreman decide o próximo passo. Não conclui o item e não há ferramenta de merge. `done` vem de merge observado ou confirmação humana (A).
+- **Fora do alcance do MCP, por construção:** aprovar spec, responder pergunta de checkpoint, `confirm_merged`, ativar/reverter definição (classe humana). Sem ferramenta de execução de comando, de push ou de leitura de credencial; tokens não passam pelo MCP.
+- **Dados de fora são dados:** campos que vieram de issue/mensagem/webhook saem das ferramentas dentro de `fence_untrusted` e com segredos redigidos; entradas do cliente passam por tamanho e taxa (ADR 0059) e viram comentário/item não confiável.
+- **Notificação** (rota de aviso a Slack/Linear ao terminar): fora deste corte.
+
+## Não verificado
+Interoperabilidade com clientes reais (Claude Code, Codex, Cursor) — testado com um cliente JSON-RPC de teste sobre stdio. Verificar localmente com `claude mcp add`.
