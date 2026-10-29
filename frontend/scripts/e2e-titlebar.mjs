@@ -2,8 +2,9 @@
  * The title bar on narrow screens (320 and 375px, both themes, three destinations). Proves, in a real
  * browser against the static export with a stubbed sidecar:
  *
- *   - the brand column is as wide as the rail under it (52px), not the desktop rail width;
- *   - the destination name never touches or overlaps the search button;
+ *   - the brand column is exactly as wide as the rail under it (and the rail is the narrow one);
+ *   - what the bar shows for the destination (its name, or the harness name field in the Studio editor)
+ *     clears the search button;
  *   - nothing scrolls the page sideways and axe finds nothing.
  */
 import assert from "node:assert/strict";
@@ -47,17 +48,26 @@ try {
       for (const dest of ["Chats", "Studio", "Providers"]) {
         await page.getByRole("button", { name: dest, exact: true }).first().click();
         await page.waitForTimeout(250);
+        if (dest === "Studio" && !(await page.locator(".oh-header-name").count())) {
+          // The editor shows the harness name field in the bar: the widest thing that can crowd the search button.
+          await page.getByRole("button", { name: /new harness/i }).first().click();
+          await page.locator(".oh-header-name").waitFor();
+        }
         const m = await page.evaluate(() => {
           const rect = (s) => document.querySelector(s)?.getBoundingClientRect();
           const rail = document.querySelector("nav")?.getBoundingClientRect();
           const brand = rect(".oh-header-brand");
+          const name = rect(".oh-header-name");
           const mode = rect(".oh-header-mode");
+          const shown = name && name.width > 0 ? name : mode;
           const search = rect('button[aria-label="Search and commands"]');
-          return { brand: brand?.width, rail: rail?.width, modeRight: mode?.right, searchLeft: search?.left, side: document.documentElement.scrollWidth > innerWidth + 1 };
+          return { brand: brand?.width, rail: rail?.width, shownRight: shown?.right, shownWidth: shown?.width, usesName: Boolean(name), searchLeft: search?.left, side: document.documentElement.scrollWidth > innerWidth + 1 };
         });
         const label = `${dest} ${theme} ${width}`;
-        assert.equal(m.brand, 52, `${label}: brand column is the narrow rail width`);
-        assert.ok(m.modeRight + 8 <= m.searchLeft, `${label}: destination (${m.modeRight}) clears the search button (${m.searchLeft}) by 8px`);
+        assert.equal(m.brand, m.rail, `${label}: brand column (${m.brand}) is as wide as the rail (${m.rail})`);
+        assert.equal(m.rail, 52, `${label}: the rail is the icon-only one`);
+        assert.ok(m.shownWidth > 0, `${label}: the destination is shown`);
+        assert.ok(m.shownRight + 8 <= m.searchLeft, `${label}: destination (${m.shownRight}) clears the search button (${m.searchLeft}) by 8px`);
         assert.equal(m.side, false, `${label}: sideways scroll`);
         await page.addScriptTag({ content: axeSource });
         const v = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] })).violations.map((x) => x.id));

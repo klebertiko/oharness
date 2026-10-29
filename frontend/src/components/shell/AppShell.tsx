@@ -281,6 +281,7 @@ export function AppShell({
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
         onOpenPalette={() => setPaletteOpen(true)}
+        railCollapsed={narrow.left}
       />
 
       {toolbar}

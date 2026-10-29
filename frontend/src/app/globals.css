@@ -281,8 +281,7 @@
 }
 
 /* Quiet, contextual header; native window actions are desktop-only. */
-/* The brand column lines up with the rail below it. Its width is a variable, not an inline width, so the narrow rule can win. */
-.oh-header-brand { width: var(--brand-w, var(--w-rail)); }
+.oh-header-brand { width: var(--w-rail); }
 .oh-work-overlay { background: var(--overlay-backdrop); }
 .oh-header-context { border-left: 1px solid var(--line-soft); }
 @media (max-width: 768px) {
