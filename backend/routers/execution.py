@@ -1,6 +1,7 @@
 import asyncio
 import json
 from dataclasses import dataclass
+import logging
 import re
 import time
 import uuid
@@ -797,9 +798,14 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                         if broker and stored == "plan" and broker.permission_mode == "plan" and tool_options.preset is None and tool_options.thread_id and output.strip():
                             # Plan mode ends in a plan artifact; nothing executes until a person approves it. Only a plain turn in a conversation
                             # stored in Plan: the approval barrier and the card follow the stored mode, and a `/read` or `/exec` is not a plan.
-                            async with SessionLocal() as plan_session:
-                                plan = await propose_plan(plan_session, tool_options.thread_id, output)
-                            yield emit("plan_proposed", {"node_id": node_id, **plan})
+                            try:
+                                async with SessionLocal() as plan_session:
+                                    plan = await propose_plan(plan_session, tool_options.thread_id, output)
+                            except Exception:  # noqa: BLE001 - the answer was already delivered; only the approval card is missing
+                                logging.getLogger(__name__).exception("plan not saved (run %s)", run_id)
+                                yield emit("plan_error", {"node_id": node_id, "code": "plan_not_saved"})
+                            else:
+                                yield emit("plan_proposed", {"node_id": node_id, **plan})
                 except Exception as exc:  # noqa: BLE001
                     status = STATUS_ERROR
                     total_tokens = node_tokens

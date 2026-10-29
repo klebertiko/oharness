@@ -186,10 +186,10 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
         />
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="flex h-[26px] items-center gap-2 pl-[11px] pr-2">
+        <div className="flex h-6.5 items-center gap-2 pl-[11px] pr-2">
           <span
             aria-hidden
-            className="grid h-[16px] w-[16px] flex-none place-items-center rounded-none"
+            className="grid h-4 w-4 flex-none place-items-center rounded-none"
             style={{
               background: "color-mix(in oklab, var(--role-c) 16%, var(--sub-200))",
               ["--role-c" as string]: role,
@@ -204,18 +204,18 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
 
         {/* ── Spec / note — machine facts in mono, human copy in prose ────── */}
         {spec && (
-          <div title={typeof spec === "string" ? spec : undefined} className="t-meta truncate border-t border-line-soft py-[4px] pl-[11px] pr-2 text-ink-mute">
+          <div title={typeof spec === "string" ? spec : undefined} className="t-meta truncate border-t border-line-soft py-1 pl-[11px] pr-2 text-ink-mute">
             {spec}
           </div>
         )}
         {(isAwaitingHuman ? awaitingHuman?.question : note) && (
-          <div className="t-body truncate border-t border-line-soft py-[4px] pl-[11px] pr-2 text-ink-mute">
+          <div className="t-body truncate border-t border-line-soft py-1 pl-[11px] pr-2 text-ink-mute">
             {isAwaitingHuman ? awaitingHuman?.question : note}
           </div>
         )}
 
         {isAwaitingHuman && awaitingHuman?.context && (
-          <details className="border-t border-line-soft px-[11px] py-[4px]">
+          <details className="border-t border-line-soft px-[11px] py-1">
             <summary className="t-meta cursor-pointer text-ink-mute hover:text-ink-dim">
               show what it is asking you to approve
             </summary>
@@ -333,7 +333,7 @@ export function BaseNode({ id, type, data, selected, spec, note }: BaseNodeProps
 
 /** Four corner brackets, offset off the plate. Selection, no glow. */
 function RegistrationMarks() {
-  const base = "pointer-events-none absolute h-[8px] w-[8px] border-signal";
+  const base = "pointer-events-none absolute h-2 w-2 border-signal";
   return (
     <>
       <span aria-hidden className={`${base} left-[-5px] top-[-5px] border-l border-t`} />

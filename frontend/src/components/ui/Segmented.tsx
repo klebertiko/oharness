@@ -65,7 +65,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
-              "h-control-sm rounded-control px-2 text-body font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 max-sm:h-control-lg",
+              "h-control-sm rounded-control px-2 text-body font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 max-sm:h-control-lg pointer-coarse:h-control-touch",
               on ? "bg-sub-300 text-ink" : "text-ink-mute hover:bg-sub-200 hover:text-ink",
             )}
           >

@@ -4,12 +4,15 @@ The design reference for every surface of the app. Tokens are the single vocabul
 
 | File | What it is |
 | --- | --- |
-| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 58 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and the `--text-*` scale in the `@theme` block of `globals.css`. |
+| `tokens.json` | Every token, in DTCG format, two themes. `npm test` proves the 61 colour, shape, layout and motion variables match `frontend/src/app/globals.css` and the 7 type roles match the `.t-*` rules and the `--text-*` scale in the `@theme` block of `globals.css`. |
 | `README.md` | This brand book: content, visual foundations, iconography, layout, contrast audit. |
 | `experience.md` | The experience contract: no flicker, shift or lag; findable and legible; honest and reversible. |
 | `brand.md` | Nilo: identity, style lock, animation language, where she may appear. |
 | `adoption.md` | Wiring, drift found in the app, decisions, guardrails and order of work. |
+| `components/` | One page per component family (primitives, model picker, composer, run surfaces, Studio, shell), the cross-cutting `patterns.md` and, after the Providers rebuild, `providers.md`: anatomy, states, use and misuse, accessibility, copy (en, with a pt-BR reference) and a real example from the app. Start at `components/README.md`. |
 | `audit/screens.md` | The screen-by-screen audit before the redesign and the same measurements after it, with captures in both themes. |
+| `audit/components.md` | The inventory of every component and pattern in the app against what is documented, and the deviations found (fixed or kept, with the reason). |
+| `audit/providers.md` | The Providers screen audit before its redesign, with captures in both themes at four widths. |
 
 Commands, from the repository root:
 
@@ -60,7 +63,7 @@ OHarness is an everyday agent workspace with a visual Graph Engineering Studio i
 
 ## Contrast audit
 
-Generated, not hand-written: `node scripts/check-contrast.mjs --md` computes WCAG 2 relative luminance from the oklch values in both themes and exits non-zero if a required pair fails; `npm test` fails if this table is stale. Ratios are listed per ground in order (`sub-000` first); text needs 4.5:1, control edges, focus rings and meaningful marks need 3:1. Every row is required except those marked "Limit", which record a ground a token is not meant for: the app ships no value that misses the bar. `warn` and `fault` are fills, markers and borders; their text forms are `warn-text` and `fault-text`, and `signal` as text is `signal-text`. A panel edge (`line`) is decoration and exempt; a control edge is `line-strong`.
+Generated, not hand-written: `node scripts/check-contrast.mjs --md` computes WCAG 2 relative luminance from the oklch values in both themes and exits non-zero if a required pair fails; `npm test` fails if this table is stale. Ratios are listed per ground in order (`sub-000` first); text needs 4.5:1, control edges, focus rings and meaningful marks need 3:1. Every row is required except those marked "Limit", which record a ground a token is not meant for: the app ships no value that misses the bar. `warn` and `fault` are fills, markers and borders; their text forms are `warn-text` and `fault-text`, text on a fault fill is `fault-ink`, and `signal` as text is `signal-text`. A panel edge (`line`) is decoration and exempt; a control edge is `line-strong`.
 
 <!-- contrast:start -->
 | Pair (`foreground` on grounds) | Min | Graphite | Ivory | Verdict |
@@ -71,6 +74,7 @@ Generated, not hand-written: `node scripts/check-contrast.mjs --md` computes WCA
 | `ink-faint` on `sub-000`, `sub-100`, `sub-200`, `sub-300` | 4.5:1 | 6.3 / 5.9 / 5.3 / 4.6 | 5.4 / 5.8 / 5.0 / 4.5 | Pass |
 | `signal` on `sub-000`, `sub-100` | 4.5:1 | 7.5 / 7.0 | 4.6 / 4.9 | Pass |
 | `signal-ink` on `signal` | 4.5:1 | 7.6 | 4.9 | Pass |
+| `fault-ink` on `fault` | 4.5:1 | 5.0 | 5.0 | Pass |
 | `warn` on `sub-000`, `sub-100` | 3:1 | 5.2 / 4.9 | 3.3 / 3.5 | Pass |
 | `warn-text` on `sub-000`, `sub-100`, `sub-200`, `sub-300` | 4.5:1 | 6.3 / 5.9 / 5.4 / 4.6 | 5.5 / 5.8 / 5.1 / 4.6 | Pass |
 | `fault-text` on `sub-000`, `sub-100`, `sub-200`, `sub-300` | 4.5:1 | 6.3 / 5.9 / 5.4 / 4.6 | 5.5 / 5.8 / 5.1 / 4.6 | Pass |

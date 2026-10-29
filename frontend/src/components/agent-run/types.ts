@@ -28,7 +28,7 @@ export interface ToolCall {
   autoApproved?: { mode: string; reason: string };
   denied?: { reason: "rejected" | "approval_timeout" | "policy" | "hook"; note: string; /** The permission mode that refused it (absent for a refusal that is not about the mode). */ mode?: string };
   /** The pre-tool hook that decided, from `tool_hook_decision` (one entry per hook evaluated, in order). */
-  hooks?: { hookId: string; decision: "allow" | "block"; reason: string }[];
+  hooks?: { hookId: string; decision: "allow" | "block" | "skipped"; reason: string }[];
   truncated?: boolean;
   timedOut?: boolean;
   simulated?: boolean;
@@ -196,6 +196,8 @@ export interface RunState {
   routeDecision: RouteDecision | null;
   /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
   proposedPlan?: { planId: string; text: string };
+  /** `plan_error`: the answer arrived but the sidecar could not keep it as a plan, so there is nothing to approve. */
+  planNotSaved?: boolean;
   /** Children this run started (`subagent_*` events), in start order. */
   subagents: Subagent[];
   /** Set when the run reached its token ceiling (`budget_exceeded`). */

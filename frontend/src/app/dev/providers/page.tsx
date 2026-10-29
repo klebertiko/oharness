@@ -4,9 +4,7 @@ import { Activity, KeyRound, Plug, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/shell/AppShell";
 import { Panel } from "@/components/shell/Panel";
 import type { Command } from "@/components/shell/commands";
-import { PROVIDERS_PANEL_TITLE } from "@/components/providers/copy";
-import { ProvidersList } from "@/components/providers/ProvidersList";
-import { Dossier } from "@/components/providers/Dossier";
+import { ProvidersScreen } from "@/components/providers/ProvidersScreen";
 import { RunBinding } from "@/components/providers/RunBinding";
 import { useProviderStore, specOf } from "@/components/providers/providerStore";
 import { activeVault, VAULT_LABEL } from "@/components/providers/secrets";
@@ -70,12 +68,8 @@ export default function ProvidersDevPage() {
       selectedId={selectedId}
       backendOk
       toolbar={null}
-      left={
-        <Panel title={PROVIDERS_PANEL_TITLE} meta={`${connections.length}`}>
-          <ProvidersList />
-        </Panel>
-      }
-      stage={<Dossier />}
+      left={null}
+      stage={<ProvidersScreen />}
       right={
         <Panel
           title="Run binding"
