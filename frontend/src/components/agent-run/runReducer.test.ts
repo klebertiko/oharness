@@ -464,3 +464,16 @@ describe("runReducer plan_proposed", () => {
     expect(runReducer(withPlan, { type: "reset", mode: "live", step: false }).proposedPlan).toBeUndefined();
   });
 });
+
+describe("runReducer plan_error", () => {
+  it("records that the plan could not be saved, so the chat can say so", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { node_id: "direct", code: "plan_not_saved" } });
+    expect(state.planNotSaved).toBe(true);
+    expect(state.proposedPlan).toBeUndefined();
+  });
+
+  it("a new run clears it", () => {
+    const flagged = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { code: "plan_not_saved" } });
+    expect(runReducer(flagged, { type: "reset", mode: "live", step: false }).planNotSaved).toBeUndefined();
+  });
+});
