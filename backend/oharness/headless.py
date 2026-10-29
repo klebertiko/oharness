@@ -23,10 +23,29 @@ class Refusal(Exception):
         self.exit_code = exit_code
 
 
+def parse_frame(chunk: str) -> tuple[str, dict]:
+    """One engine SSE frame (`event: x` / `data: {...}`) as (event, data)."""
+    import json
+
+    event, _, rest = chunk.partition("\n")
+    return event.removeprefix("event: ").strip(), json.loads(rest.removeprefix("data: ").strip())
+
+
+def run_graph(bundle: dict) -> dict:
+    """The shape the engine and the run routes take: nodes/edges at the top, the bundle's `runtime` beside them. Mock and live use this one."""
+    return {**bundle["graph"], "runtime": bundle.get("runtime")}
+
+
 def _backend_on_path() -> None:
+    import os
+
     backend = str(Path(__file__).resolve().parent.parent)  # `engine`, `routers`, `database`... are top-level modules of the backend
     if backend not in sys.path:
         sys.path.insert(0, backend)
+    if "DATABASE_URL" not in os.environ:  # the app's own data directory (database, secrets), as the packaged sidecar configures it, not ./data
+        from sidecar_entry import configure_environment
+
+        configure_environment()
 
 
 async def load_runtime():
@@ -45,8 +64,6 @@ async def load_runtime():
 async def stream_live(bundle: dict, mode: str, workspace: str | None, worktree: bool):
     """Yield (event, data) for a real run. Raises ``Refusal`` when the run cannot start."""
     _backend_on_path()
-    import json
-
     from fastapi import HTTPException
     from starlette.requests import Request
 
@@ -58,7 +75,7 @@ async def stream_live(bundle: dict, mode: str, workspace: str | None, worktree: 
     connections, secrets_store = await load_runtime()
     app = SimpleNamespace(state=SimpleNamespace(provider_connections=connections, secrets_store=secrets_store))
     request = Request({"type": "http", "app": app})
-    graph = {**bundle["graph"], "runtime": bundle.get("runtime")}  # nodes/edges at the top, as the app sends them; the engine reads `runtime` too
+    graph = run_graph(bundle)
 
     async with SessionLocal() as db:
         cwd = None
@@ -67,15 +84,20 @@ async def stream_live(bundle: dict, mode: str, workspace: str | None, worktree: 
             if cwd is None:  # the app quietly ignores an unknown folder; a terminal user asked for it by name, so say no
                 raise Refusal("the workspace is not a project registered in OHarness (or its folder is gone): add it as a project first")
         try:
-            response = await _execute_run(ExecuteRequest(graph_json=graph, mode=mode, cwd=cwd, worktree=worktree), request, db)
+            response = await _execute_run(ExecuteRequest(graph_json=graph, mode=mode, cwd=workspace, worktree=worktree), request, db)
         except HTTPException as exc:
-            detail = exc.detail.get("message") if isinstance(exc.detail, dict) else str(exc.detail)
+            detail = (exc.detail.get("message") or exc.detail.get("code")) if isinstance(exc.detail, dict) else exc.detail
+            detail = detail or f"HTTP {exc.status_code}"
             raise Refusal(str(detail), EXIT_RUN_FAILED if exc.status_code == 402 else EXIT_INVALID) from exc
         run_id = response.headers.get("X-Execution-Id") or str(uuid.uuid4())
-        async for chunk in response.body_iterator:
-            event, _, rest = chunk.partition("\n")
-            name, data = event.removeprefix("event: ").strip(), json.loads(rest.removeprefix("data: ").strip())
-            yield name, data
-            if name == "hitl_pause" and run_id in RUNS:  # nobody here to approve: end the run at the checkpoint
+        try:
+            async for chunk in response.body_iterator:
+                name, data = parse_frame(chunk)
+                yield name, data
+                if name == "hitl_pause" and run_id in RUNS:  # nobody here to approve: end the run at the checkpoint
+                    RUNS[run_id].stop.set()
+                    RUNS[run_id].release()
+        finally:  # however the consumer stops, the run is ended and its worktree and journal are settled
+            if run_id in RUNS:
                 RUNS[run_id].stop.set()
-                RUNS[run_id].release()
+            await response.body_iterator.aclose()

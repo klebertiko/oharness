@@ -3,17 +3,11 @@ import json
 import sys
 from pathlib import Path
 
-from .headless import Refusal
+from .headless import Refusal, parse_frame, run_graph
 from .validate import validate_path
 
 RUN_EVENT_SCHEMA = Path(__file__).resolve().parent / "schema" / "run-event.schema.json"
 EXIT_OK, EXIT_RUN_FAILED, EXIT_INVALID = 0, 1, 2
-
-
-def _frames(chunk: str) -> tuple[str, dict]:
-    """One engine frame (`event: x` / `data: {...}`) as (event, data)."""
-    event, _, rest = chunk.partition("\n")
-    return event.removeprefix("event: ").strip(), json.loads(rest.removeprefix("data: ").strip())
 
 
 class ContractError(RuntimeError):
@@ -40,8 +34,8 @@ async def _stream(bundle: dict, mode: str = "mock", workspace: str | None = None
 
     run_id = str(uuid.uuid4())
     control = RunControl(run_id)
-    async for chunk in execute_harness(bundle, "mock", control=control, run_id=run_id):
-        event, data = _frames(chunk)
+    async for chunk in execute_harness(run_graph(bundle), "mock", control=control, run_id=run_id):
+        event, data = parse_frame(chunk)
         yield event, data
         if event == "hitl_pause":
             control.stop.set()
@@ -76,8 +70,8 @@ def _run(path: Path, as_json: bool, mode: str = "mock", workspace: str | None = 
                 final = data["status"]
             if as_json:
                 print(json.dumps(line, ensure_ascii=False), flush=True)
-            elif event in ("node_start", "node_done", "node_error", "hitl_pause", "run_stopped", "harness_done"):
-                detail = data.get("error") or data.get("node_id") or data.get("at_node") or data.get("status", "")
+            elif event in ("node_start", "node_done", "node_error", "hitl_pause", "run_stopped", "harness_done", "error", "budget_warning"):
+                detail = data.get("error") or data.get("message") or data.get("node_id") or data.get("at_node") or data.get("status") or data.get("state", "")
                 print(f"{event}: {detail}", flush=True)
         return final
 
@@ -116,5 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": result.ok, "errors": result.errors}, indent=2))
         return 0 if result.ok else 1
     if args.cmd == "run":
+        if args.mode == "mock" and (args.workspace or args.worktree):
+            print("run refused: --workspace and --worktree need --mode live or local (mock runs touch no folder)", file=sys.stderr)
+            return EXIT_INVALID
         return _run(args.path, args.json, args.mode, args.workspace, args.worktree)
     return EXIT_INVALID

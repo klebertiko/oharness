@@ -170,3 +170,22 @@ def test_a_registered_workspace_becomes_the_folder_the_node_runs_in(tmp_path, ca
     anyio.run(register)
     code = main(["run", str(bundle(tmp_path)), "--json", "--mode", "live", "--workspace", str(folder)])
     assert code == 0 and seen["cwd"] == str(folder.resolve())
+
+
+def test_workspace_and_worktree_are_refused_in_mock_instead_of_quietly_ignored(tmp_path, capsys):
+    nodes = [{"id": "in", "type": "input", "data": {"prompt": "hi"}}]
+    code = main(["run", str(bundle(tmp_path, nodes, [])), "--json", "--worktree", "--workspace", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert code == 2 and "--mode" in captured.err and captured.out == ""
+
+
+def test_the_text_output_says_why_a_run_failed(tmp_path, capsys, monkeypatch):
+    from oharness import headless
+
+    async def load():
+        return {}, MemorySecrets()
+
+    monkeypatch.setattr(headless, "load_runtime", load)
+    code = main(["run", str(bundle(tmp_path)), "--mode", "live"])
+    out = capsys.readouterr().out
+    assert code == 1 and "node_error:" in out and "connect" in out.lower()
