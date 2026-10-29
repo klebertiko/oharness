@@ -15,8 +15,6 @@
       {
         "id": "edited-copy",
         "type": "agent",
-        "role": "agent",
-        "label": "Edited copy",
         "position": {
           "x": 120,
           "y": 100
@@ -30,7 +28,9 @@
         "measured": {
           "width": 212,
           "height": 100
-        }
+        },
+        "role": "agent",
+        "label": "Edited copy"
       }
     ],
     "edges": []

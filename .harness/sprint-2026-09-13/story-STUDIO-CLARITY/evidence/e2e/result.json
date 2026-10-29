@@ -1,42 +1,13 @@
 {
-  "result": "passed",
-  "startedAt": "2026-10-29T12:20:58.224Z",
-  "finishedAt": "2026-10-29T12:21:09.031Z",
-  "scope": "Browser UI and serialized execution request; sidecar HTTP and execution responses stubbed. No live provider calls.",
-  "executions": 1,
-  "validations": 1,
-  "responsive": [
-    {
-      "width": 320,
-      "overflow": [],
-      "railOverflow": 0,
-      "documentOverflow": false
-    },
-    {
-      "width": 375,
-      "overflow": [],
-      "railOverflow": 0,
-      "documentOverflow": false
-    },
-    {
-      "width": 414,
-      "overflow": [],
-      "railOverflow": 0,
-      "documentOverflow": false
-    },
-    {
-      "width": 768,
-      "overflow": [],
-      "railOverflow": 0,
-      "documentOverflow": false
-    },
-    {
-      "width": 1440,
-      "overflow": [],
-      "railOverflow": 0,
-      "documentOverflow": false
-    }
-  ],
+  "result": "failed",
+  "step": "Studio sample and draft preservation",
+  "startedAt": "2026-09-13T23:01:20.908Z",
+  "finishedAt": "2026-09-13T23:01:36.587Z",
+  "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.react-flow__node[data-id=\"impl\"]') to be visible\u001b[22m\n",
   "pageErrors": [],
-  "unexpectedRequests": []
+  "unexpectedRequests": [],
+  "browserLog": [
+    "%o\n\n%s ReferenceError: Play is not defined\n    at BaseNode (webpack-internal:///(app-pages-browser)/./src/components/canvas/nodes/BaseNode.tsx:194:35)\n    at react-stack-bottom-frame (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:23610:20)\n    at renderWithHooks (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:4646:22)\n    at updateFunctionComponent (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:8032:19)\n    at beginWork (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:9689:18)\n    at runWithFiberInDEV (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:544:16)\n    at performUnitOfWork (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15064:22)\n    at workLoopSync (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:14888:41)\n    at renderRootSync (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:14868:11)\n    at performWorkOnRoot (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:14394:44)\n    at performSyncWorkOnRoot (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15970:7)\n    at flushSyncWorkAcrossRoots_impl (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15830:21)\n    at processRootScheduleInMicrotask (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15864:7)\n    at eval (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15986:13) The above error occurred in the <BaseNode> component. It was handled by the <ReactDevOverlay> error boundary."
+  ],
+  "responsive": []
 }
