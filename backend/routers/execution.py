@@ -435,6 +435,7 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
         # reducer client-side after a reload.
         events: list[dict] = []
         run_cwd = cwd
+        tracker = None
         # The intake call already spent real tokens before any node ran.
         ceiling = HarnessCeiling(run_budget, routed.tokens if routed is not None and routed.engage_harness else 0)
         try:
@@ -468,7 +469,9 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                     events.append(ready_evt)
                     yield _sse(ready_evt["event"], ready_evt["data"])
                 # A run in its own worktree keeps its work through the rescue ref instead; the diff covers the shared folder.
-                tracker = TurnTracker(run_cwd, run_id) if run_cwd and isolation is None else None
+                # Mock runs never write to the folder, and a worktree run keeps its work as a rescue ref.
+                if run_cwd and isolation is None and body.mode != "mock":
+                    tracker = TurnTracker(run_cwd, run_id)
                 if tracker:
                     await tracker.begin()
                 async for chunk in execute_harness(
@@ -516,6 +519,10 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
             raise
         except Exception as exc:  # noqa: BLE001
             status = "error"
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None  # edits made before the failure stay reviewable
+            if failed_diff:
+                events.append({"event": "turn_diff", "data": failed_diff})
+                yield _sse("turn_diff", failed_diff)
             evt = {"event": "error", "data": failure_details(exc)}
             events.append(evt)
             yield _sse(evt["event"], evt["data"])
