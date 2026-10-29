@@ -1,0 +1,64 @@
+# ADR 0053 — Fábrica local: work item (modelo, armazenamento e contrato da API)
+
+Status: proposta (issue #244, pacote A). Contrato compartilhado com o pacote B (entrada e Factory MCP): mudanças aqui são combinadas com a sessão do B.
+
+Série da fábrica (pacote A): 0053 work item · 0054 foreman e agentes · 0055 estágios e checkpoints · 0056 definição como código · 0057 runner local e segredos · 0058 sala de controle e métricas.
+
+## Contexto
+O OHarness já tem runs duráveis (`RunRecord`/`RunEvent`, ADR 0017/0018/0044), worktree por run (0019), presets de permissão (0021), teto de tokens (0025/0040), hooks pré-ferramenta (0026/0041) e subagentes (0027). Falta a unidade de **trabalho** acima da run: uma tarefa que atravessa vários estágios e várias runs mantendo o contexto de origem. A fábrica é **local**: nenhum agente em nuvem, nenhuma execução hospedada.
+
+## Decisão
+Um **work item** é a linha persistente de uma tarefa. Mora no mesmo SQLite do sidecar (`database.py`, mesmo `Base`), em tabelas com prefixo `factory_`.
+
+### Campos
+| Campo | Regra |
+| --- | --- |
+| `id` | uuid gerado pelo sidecar. |
+| `factory_id` | fábrica dona (ADR 0056). |
+| `factory_version` | hash da versão da definição fixada **na criação**; o item termina na versão em que começou (rollback/canary não o alteram). |
+| `title` | até 200 caracteres, redigido. |
+| `source` | `{kind, ref, url?}`. `kind`: `github_issue`, `github_pr`, `conversation`, `schedule`, `webhook`, `manual`. `ref` é opaco para o sidecar (ex.: `owner/repo#12`). A chave `(factory_id, source.kind, source.ref)` deduplica: repetir a entrada devolve o item existente (`200`), não cria outro. |
+| `origin_context` | texto de origem + anexos por referência. **Imutável** e preservado do começo ao fim: estágios leem, nunca reescrevem; novas informações entram como eventos. Sempre `trust: "untrusted"`. Redigido na entrada (`redact_value`). Limite: 64 KB; excedente é truncado com marcador, nunca descartado em silêncio. |
+| `stage` | `triage`, `spec`, `implement`, `review`, `verify`, `monitor` (ADR 0055). |
+| `status` | `queued`, `running`, `awaiting_human`, `parked`, `done`, `cancelled`, `failed`. |
+| `column` | derivada (nunca gravada) de `stage`+`status` para o kanban: `new`, `triaged`, `planned`, `implementing`, `in_review`, `verifying`, `done`, `parked`. |
+| `spec` | texto da spec vigente + `spec_revision` (inteiro) + `approved_revision` (nulo até um humano aprovar). |
+| `cost` | tokens agregados das runs vinculadas (prompt/completion) e estimativa quando houver preço em `usage_tracking`. |
+| `created_at`, `updated_at`, `closed_at` | UTC. |
+
+### Tabelas auxiliares (todas append-only, exceto onde dito)
+- `factory_work_item_events`: histórico. `{work_item_id, sequence, type, actor, data_json, at}`. `actor.kind`: `human`, `foreman`, `agent`, `system`, `source`. Tipos: `created`, `stage_entered`, `stage_skipped`, `returned_to_review`, `spec_proposed`, `spec_edited`, `spec_approved`, `checkpoint_requested`, `checkpoint_resolved`, `run_linked`, `artifact_added`, `parked`, `resumed`, `cancelled`, `note`. `data_json` passa por `redact_value`.
+- `factory_work_item_runs`: vínculo `{work_item_id, run_id, stage, agent_id, role}`. A run em si continua no jornal existente; o work item **referencia**, não copia, eventos.
+- `factory_artifacts`: `{id, work_item_id, kind, ref, label, created_at}`; `kind`: `pr` (URL), `diff` (ref de resgate/intervalo git), `video` (arquivo local sob a pasta de dados da fábrica), `spec`, `report`. O sidecar guarda **referências**, não segredos nem binários grandes.
+
+### API do sidecar (rota `/factory`, mesmo token de sidecar de `security/sidecar_token.py`)
+```
+POST /factory/work-items                      cria (ou devolve o existente pela chave de dedup)
+GET  /factory/work-items?column=&stage=&status=&limit=&cursor=
+GET  /factory/work-items/{id}                 item + artefatos + runs vinculadas
+GET  /factory/work-items/{id}/events?after=   histórico paginado
+POST /factory/work-items/{id}/actions         {action, ...}
+GET  /factory/metrics?window=                 ADR 0058
+```
+`action`: `approve_spec {revision}`, `edit_spec {text, base_revision}`, `request_changes {note}`, `advance`, `park`, `resume`, `cancel`, `note`. Toda ação é um evento com `actor`. `edit_spec` com `base_revision` velha responde `409` (sem sobrescrever o que outra pessoa editou). Não existe ação `merge`, em nenhuma camada (ADR 0055).
+
+Corpo de criação (o que o pacote B envia):
+```json
+{"factory_id": "string", "title": "string",
+ "source": {"kind": "github_issue", "ref": "owner/repo#12", "url": "https://..."},
+ "origin_context": {"text": "string", "attachments": [{"label": "string", "ref": "string"}]}}
+```
+Os tipos acompanham o código: modelos Pydantic em `backend/factory/models.py` e espelho TypeScript em `frontend/src/factory/types.ts`, com teste de paridade (mesmo padrão de `RUN_BUDGET_RULES`).
+
+## Segurança
+- **Texto externo é dado, não instrução.** `origin_context`, títulos de issue e mensagens chegam como dado não confiável. Nunca entram no prompt de sistema; vão em bloco delimitado e escapado, rotulado "dado não confiável", como os resultados de ferramenta do ADR 0027. Nada nele concede ferramenta, permissão ou pula checkpoint.
+- Segredos: toda gravação passa por `redact_value` (`run_store.py`); nenhum campo guarda credencial.
+- O token de entrada de um conector (pacote B) mora no cofre (`secret_store`), nunca no work item.
+
+## Escolhas conservadoras
+- Sem exclusão física de itens neste corte: `cancelled` e `closed_at`. Exportar/apagar dados da fábrica é decisão do dono (soberania), tratada na sala de controle.
+- `column` derivada evita estado duplicado que diverge.
+- Sem tabela de fila separada: o estado `queued` + índice por `(factory_id, status)` basta para um sidecar local.
+
+## Fora de escopo
+Fontes de trabalho, webhooks, automações e Factory MCP (pacote B, ADRs 0059–0064); scorers (pacote C).

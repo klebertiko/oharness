@@ -1,0 +1,35 @@
+# ADR 0056 — Fábrica local: definição como código (schema, versões, canary, rollback)
+
+Status: proposta (issue #244, pacote A). Depende de 0054 e 0055. O desenho do formato é **próprio do OHarness** (as fontes públicas consultadas não detalham o formato).
+
+## Decisão
+
+### Layout versionado no repositório do projeto
+```
+.oharness/factory/
+  factory.yaml            # fábrica: nome, handle, repositórios, tiers, política, runners, estágios, automações
+  agents/<id>.yaml        # um arquivo por agente (ADR 0054)
+  skills/<id>/SKILL.md    # skills da fábrica
+  mcp/<id>.yaml           # servidores MCP permitidos (comando/URL; credenciais só por secretRef)
+```
+`factory.yaml` (resumo): `apiVersion: oharness.factory/v1`, `name`, `handle`, `repositories[]` (`{id, path, protectedBranches[]}`), `tiers{}`, `ceilings{tokensPerWorkItem, tokensPerRun}`, `policy{requireSpec, maxReviewReturns}`, `stages{}` (`enabled`/`required`), `runners{}` (ADR 0057), `automations[]` (esquema reservado; preenchido pelo pacote B).
+
+### Schema e validação
+JSON Schema em `backend/oharness/schema/factory.schema.json`, validado por `python -m oharness factory validate <dir>` (saída `0` válido, `2` inválido, como o `validate` existente) e pelo sidecar antes de qualquer ativação. A validação também checa referências cruzadas (agente→skill, agente→mcp, tier→modelo) e que nenhuma `path` escape do repositório.
+
+### Nunca segredo no arquivo
+Valores sensíveis são **referência opaca ao cofre**: `secretRef: "factory/<nome>"`, resolvida só em runtime pelo `secret_store` (ADR 0057). O validador **rejeita** o arquivo se achar (a) campo de nome sensível (`token`, `password`, `apiKey`, `secret`…) que não seja `secretRef`, ou (b) valor que case com os padrões de `studio_copilot/redaction.py`. Erros citam o caminho do campo, nunca o valor. Um teste de contrato percorre o schema e garante que nenhum campo aceita segredo literal.
+
+### Versões, diff, canary e rollback
+- **Versão** = hash SHA-256 da forma canônica da definição validada, mais `label` opcional. Ativar grava um **snapshot imutável** em `factory_versions {hash, definition_json, activated_at, activated_by, previous_hash, mode}`; runs em andamento e work items ficam fixados na versão em que nasceram (ADR 0053).
+- **Diff**: `GET /factory/definition/diff?from=&to=` compara snapshots (campo a campo, com segredos já ausentes por construção).
+- **Ativação é ação humana** (`POST /factory/definition/activate`), depois de validar. O sidecar lê a definição do checkout do projeto; nunca grava nele.
+- **Canary local**: `mode: canary` com `percent` (1–50) roteia novos work items para a versão candidata de forma determinística (hash do id do item), o restante segue na estável. As métricas (ADR 0058) são separadas por versão para comparar. `promote` torna a candidata estável; `abort` volta tudo para a estável.
+- **Rollback**: `POST /factory/definition/rollback` reativa o `previous_hash` (ou um hash escolhido). Só afeta itens novos; itens em curso continuam fixados.
+- **Teste da própria definição**: `factory validate --check` roda a definição contra work items de exemplo no modo mock (sem rede/provider), como o `oharness run` mock (ADR 0017).
+
+### Mudanças por PR
+Mudar a fábrica = mudar arquivos num branch e abrir PR. Agentes (inclusive o foreman) podem **propor** edição na definição, mas só pelo mesmo caminho de qualquer mudança de código: branch `factory/`, PR, revisão e merge por pessoa. A ativação continua uma ação humana separada do merge.
+
+## Escolhas conservadoras
+YAML restrito (sem tags, âncoras limitadas), tamanho máximo por arquivo 256 KB. Docker e outros runners entram no schema só quando existirem no runtime (ADR 0057).
