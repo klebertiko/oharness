@@ -62,16 +62,16 @@ Linear's settings put one status line and one action per integration, with the d
 
 ## After the redesign
 
-Same script, same nine states, same fixtures, against the screen of ADR 0035 (captures in [`providers-after/`](./providers-after), measurements in its `results.json`). Final captures used by the docs: `providers-connected`, `providers-key-rejected`, `providers-model-not-pulled`, `providers-sidecar-down`, `providers-testing` and `providers-empty` in both themes at 1280 and 375, and `providers-empty` also at 320 and 768.
+Same script, same nine states, same fixtures, against the screen of ADR 0035 (captures in [`providers-after/`](./providers-after), measurements in its `results.json`). All 40 captures are kept so the audit can be compared state by state: every state in both themes at 1280 and 375, and `providers-empty` also at 320 and 768.
 
 | Measure | Before | After |
 | --- | --- | --- |
 | axe violations (40 captures, both themes) | 0 | 0 |
 | Horizontal page scroll at 320, 375, 768, 1280 | none | none |
-| Controls under 44px with a touch pointer (`pointer: coarse`, e2e at 375) | all (7 of 7) | 0 |
+| Controls under 44px with a touch pointer (`pointer: coarse`) | all (7 of 7 at 375px) | 0, from the emulated-touch run in `e2e-providers.mjs`; `results.json` counts with a mouse pointer, so its `under44` is not this figure |
 | Primary buttons in view | up to 2 (header button and Store) | at most 1, in every state tested |
 | Status marks | 2 shapes (round shell dot, square tone dot) | 1 (`StatusMark`, 8px square) |
-| Arbitrary Tailwind values in the new screen files | 47 in 5 files | 14 in 5 files, all layout measures (reading width, pane width, column grid) |
+| Arbitrary Tailwind values in the new screen files (`ConnectionDetail`, `ConnectionPanel`, `ModelsPanel`, `ProvidersScreen`, `rows`) | 47 in 5 files | 15 in 5 files: 14 layout measures (reading width, pane width, column grid) and the drawn key redaction stripe in `ConnectionPanel.tsx` |
 | Languages | en | en and pt-BR |
 | Sidecar down | indistinguishable from a fresh install | its own notice, Retry, rows say "Can't check" |
 | Loading | rows shown as "Not connected" | skeleton at row height |
