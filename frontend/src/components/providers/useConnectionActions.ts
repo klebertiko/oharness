@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { specOf, useProviderStore, type Connection } from "./providerStore";
 import { nextStep, type NextStep } from "./nextStep";
 
@@ -21,7 +21,10 @@ const focusField = (el: HTMLElement | null) => {
  * field hands its value straight to `attachSecret` (ADR 0001).
  */
 export function useConnectionActions(c: Connection) {
-  const { probe, saveEndpoint, toggleEnabled } = useProviderStore();
+  const probe = useProviderStore((s) => s.probe);
+  const saveEndpoint = useProviderStore((s) => s.saveEndpoint);
+  const toggleEnabled = useProviderStore((s) => s.toggleEnabled);
+  const saving = useRef<Promise<boolean> | null>(null);
   const spec = specOf(c);
   const [draft, setDraft] = useState<{ id: string; value: string } | null>(null);
   const [endpointSave, setEndpointSave] = useState<{ id: string; state: "saving" | "saved" | "failed" } | null>(null);
@@ -32,13 +35,21 @@ export function useConnectionActions(c: Connection) {
   const endpointState = endpointSave?.id === c.id ? endpointSave.state : null;
 
   /** Save a pending endpoint edit; true when nothing is pending or it saved. */
-  const commitEndpoint = async (): Promise<boolean> => {
-    if (!spec.endpoint.editable || endpointValue.trim() === c.endpoint) return true;
+  const commitEndpoint = (): Promise<boolean> => {
+    // Blur and Test can both ask in one gesture; they share the one save in flight.
+    if (saving.current) return saving.current;
+    if (!spec.endpoint.editable || endpointValue.trim() === c.endpoint) return Promise.resolve(true);
     setEndpointSave({ id: c.id, state: "saving" });
-    const saved = await saveEndpoint(c.id, endpointValue);
-    setEndpointSave({ id: c.id, state: saved ? "saved" : "failed" });
-    if (saved) setDraft(null);
-    return saved;
+    const run = saveEndpoint(c.id, endpointValue).then((saved) => {
+      setEndpointSave({ id: c.id, state: saved ? "saved" : "failed" });
+      if (saved) setDraft(null);
+      return saved;
+    });
+    saving.current = run;
+    void run.finally(() => {
+      saving.current = null;
+    });
+    return run;
   };
 
   const test = async () => {

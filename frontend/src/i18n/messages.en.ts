@@ -60,6 +60,7 @@ export const en = {
   "offline.retry": "Retry",
   "detail.back": "Providers",
   "detail.offline": "Couldn't check this connection.",
+  "detail.offlineBody": "Key, endpoint, models and activity show here once the sidecar answers.",
   "detail.testing": "Testing the connection…",
   "action.test": "Test",
   "action.testAgain": "Test again",

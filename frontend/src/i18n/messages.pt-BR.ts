@@ -62,6 +62,7 @@ export const ptBR: Record<MessageKey, string> = {
   "offline.retry": "Tentar de novo",
   "detail.back": "Providers",
   "detail.offline": "Não foi possível verificar esta conexão.",
+  "detail.offlineBody": "Chave, endereço, modelos e atividade aparecem aqui quando o sidecar responder.",
   "detail.testing": "Testando a conexão…",
   "action.test": "Testar",
   "action.testAgain": "Testar de novo",

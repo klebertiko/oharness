@@ -55,6 +55,19 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
   useEffect(() => {
     if (savedId === c.id && c.secret) replaceButton.current?.focus();
   }, [savedId, c.id, c.secret]);
+  // Cancelling the confirmation re-mounts the Replace button; focus returns to it once it exists.
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!confirming && refocus.current) {
+      refocus.current = false;
+      replaceButton.current?.focus();
+    }
+  }, [confirming]);
+  const resetEntry = () => {
+    if (input.current) input.current.value = "";
+    setLen(0);
+    setPrefixOk(true);
+  };
 
   if (spec.credential.kind === "none") {
     return (
@@ -111,8 +124,8 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
             confirmLabel={t("key.remove.confirm")}
             busy={busy}
             onCancel={() => {
+              refocus.current = true;
               setConfirming(false);
-              replaceButton.current?.focus();
             }}
             onConfirm={async () => {
               setBusy(true);
@@ -159,7 +172,16 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
       label={t("key.label")}
       action={
         <>
-          {c.secret && <Button onClick={() => actions.setReplacing(false)}>{t("common.cancel")}</Button>}
+          {c.secret && (
+            <Button
+              onClick={() => {
+                resetEntry();
+                actions.setReplacing(false);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+          )}
           <Button variant="primary" onClick={() => void submit()} disabled={!len || !prefixOk || busy} loading={busy}>
             {t("key.save")}
           </Button>

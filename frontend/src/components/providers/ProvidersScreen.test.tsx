@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocaleStore } from "@/i18n/store";
@@ -75,6 +75,77 @@ describe("list", () => {
     show([router({ enabled: false, health: "setup", secret: null })]);
     expect(screen.getByText("Nothing is connected yet")).toBeTruthy();
     expect(screen.getByText("0 of 1 ready")).toBeTruthy();
+  });
+});
+
+describe("review fixes", () => {
+  it("holds the default connection once picked: it does not swap when that connection becomes ready", async () => {
+    show([conn({ health: "setup", defaultModel: "" }), router({ enabled: false, health: "setup", secret: null })], {}, "");
+    expect(screen.getByRole("heading", { level: 2, name: "Ollama local" })).toBeTruthy();
+    act(() => useProviderStore.setState({ connections: [conn({ health: "live", defaultModel: "gemma4:26b" }), router({ enabled: false, health: "setup", secret: null })] }));
+    expect(screen.getByRole("heading", { level: 2, name: "Ollama local" })).toBeTruthy();
+  });
+
+  it("Cancel on a replacement clears the entry, so Replace again starts clean", async () => {
+    show([router({ secret: sealed })]);
+    await userEvent.click(screen.getByRole("button", { name: "Replace" }));
+    await userEvent.type(screen.getByLabelText("Paste your OpenRouter key"), "sk-ant-x");
+    expect(screen.getByText(/keys begin sk-or-/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Replace" }));
+    expect(screen.queryByText(/keys begin sk-or-/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Save key" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("Cancel in the removal confirmation puts focus back on Remove's neighbour, Replace", async () => {
+    show([router({ secret: sealed })]);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Replace" })));
+  });
+
+  it("accepts a decimal comma in the budget and rejects exponent and hex forms", async () => {
+    vi.mocked(usageApi.setBudget).mockResolvedValue(undefined as never);
+    vi.mocked(usageApi.summary).mockResolvedValue({ byConnection: [], budget: { limitUsd: 15.5, state: "ok" } } as never);
+    show([router()]);
+    await userEvent.click(screen.getByRole("button", { name: "No budget. Set one" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Global budget in USD" }), { target: { value: "1e3" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/zero or a positive/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Global budget in USD" }), { target: { value: "15,50" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(usageApi.setBudget).toHaveBeenCalledWith(15.5));
+  });
+
+  it("a failed budget save shows its own message and not the stale-usage notice", async () => {
+    vi.mocked(usageApi.setBudget).mockRejectedValue(new Error("nope"));
+    show([router()]);
+    await userEvent.click(screen.getByRole("button", { name: "No budget. Set one" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Global budget in USD" }), { target: { value: "5" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/Couldn't save the budget/)).toBeTruthy();
+    expect(screen.queryByText(/Usage may be out of date/)).toBeNull();
+  });
+
+  it("Blur then Test share one endpoint save", async () => {
+    let release: (v: boolean) => void = () => {};
+    const saveEndpoint = vi.fn(() => new Promise<boolean>((r) => (release = r)));
+    const probe = vi.fn().mockResolvedValue(undefined);
+    show([conn({ defaultModel: "gemma4:26b" })], { saveEndpoint, probe });
+    const field = screen.getByRole("textbox", { name: "Ollama local endpoint" });
+    fireEvent.change(field, { target: { value: "http://127.0.0.1:11500/v1" } });
+    fireEvent.blur(field);
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    release(true);
+    await waitFor(() => expect(probe).toHaveBeenCalled());
+    expect(saveEndpoint).toHaveBeenCalledOnce();
+  });
+
+  it("offline, the panels that would read as evidence are not shown", () => {
+    show([router({ secret: null })], { loadState: "offline", hydrate: vi.fn() });
+    expect(screen.queryByLabelText("Paste your OpenRouter key")).toBeNull();
+    expect(screen.queryByText("No usage recorded yet.")).toBeNull();
+    expect(screen.getByText(/once the sidecar answers/)).toBeTruthy();
   });
 });
 

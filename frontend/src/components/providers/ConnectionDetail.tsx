@@ -99,9 +99,15 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             </p>
           )}
 
-          <ConnectionPanel c={c} actions={actions} />
-          {agentOnly ? <HandoffPanel /> : <ModelsPanel c={c} />}
-          <ActivityPanel c={c} usage={usage} />
+          {offline ? (
+            <Notice tone="info">{t("detail.offlineBody")}</Notice>
+          ) : (
+            <>
+              <ConnectionPanel c={c} actions={actions} />
+              {agentOnly ? <HandoffPanel /> : <ModelsPanel c={c} />}
+              <ActivityPanel c={c} usage={usage} />
+            </>
+          )}
 
           <Panel title={t("about.title", { vendor: spec.vendor })} titleId="oh-about" level={3}>
             <div className="space-y-3 p-3">

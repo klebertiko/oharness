@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Button, Notice } from "@/components/ui";
 import { useT } from "@/i18n/store";
 import { ConnectionDetail, DetailSkeleton } from "./ConnectionDetail";
@@ -24,7 +25,13 @@ export function ProvidersScreen() {
   const offline = loadState === "offline";
   const loading = loadState === "loading";
   const opened = connections.find((c) => c.id === selectedId);
-  const shown = opened ?? connections.find((c) => c.id === defaultConnectionId(connections));
+  // The default is chosen once the sidecar has answered and then held: a connection that becomes ready while the
+  // person works on it must not swap the pane for another one.
+  const [pinned, setPinned] = useState("");
+  useEffect(() => {
+    if (!pinned && (loadState === "ready" || loadState === "offline") && connections.length) setPinned(defaultConnectionId(connections));
+  }, [pinned, loadState, connections]);
+  const shown = opened ?? connections.find((c) => c.id === pinned) ?? connections.find((c) => c.id === defaultConnectionId(connections));
 
   return (
     <div className="@container flex h-full min-h-0 flex-col">

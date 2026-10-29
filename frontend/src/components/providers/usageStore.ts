@@ -5,8 +5,8 @@ import { usageApi, type UsageSummary } from "@/lib/usageApi";
 /**
  * Real usage + budget, read from the sidecar's ledger (backend/usage_
  * tracking.py via GET /usage/summary) — never computed here. Mirrors
- * providerStore.ts's hydrate-once pattern: ProvidersList (per-row cost) and
- * Dossier (per-connection detail + the global budget strip) both read this
+ * providerStore.ts's hydrate-once pattern: the Providers screen's spend card and
+ * its per-connection Activity panel both read this
  * one store so a budget change made in either place is instantly visible in
  * both, with one fetch instead of two independent ones.
  */
@@ -16,6 +16,8 @@ interface UsageState {
   hydrated: boolean;
   loading: boolean;
   error: string | null;
+  /** The last budget save that failed (invalid amount or the sidecar refused), kept apart from `error` so a budget problem never reads as stale usage. */
+  budgetError: string | null;
 
   /** Safe to call from every mounted consumer — only the first call fetches. */
   hydrate: () => Promise<void>;
@@ -42,6 +44,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   hydrated: false,
   loading: false,
   error: null,
+  budgetError: null,
 
   hydrate: async () => {
     if (get().hydrated) return;
@@ -55,14 +58,14 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
   setBudget: async (limitUsd) => {
     if (limitUsd !== null && (!Number.isFinite(limitUsd) || limitUsd < 0)) {
-      set({ error: "Budget must be zero or a positive USD amount." });
+      set({ budgetError: "Budget must be zero or a positive USD amount." });
       return false;
     }
     try {
       await usageApi.setBudget(limitUsd);
-      set({ error: null });
+      set({ error: null, budgetError: null });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Could not save the budget." });
+      set({ budgetError: err instanceof Error ? err.message : "Could not save the budget." });
       return false;
     }
     await load(set);
@@ -70,15 +73,13 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   },
 }));
 
-/** Completeness is backend evidence; a priced subtotal is not the total. */
-export function usageCostParts(usage: { costComplete?: boolean; estimatedCostUsd?: number | null }): { kind: "unknown" } | { kind: "amount"; amount: string } {
+/** Completeness is backend evidence; a priced subtotal is not the total. Amounts are USD, formatted for the interface language. */
+export function usageCostParts(
+  usage: { costComplete?: boolean; estimatedCostUsd?: number | null },
+  locale = "en-US",
+): { kind: "unknown" } | { kind: "amount"; amount: string } {
   const cost = usage.estimatedCostUsd;
   if (usage.costComplete !== true || typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return { kind: "unknown" };
-  if (cost === 0) return { kind: "amount", amount: "$0.00" };
-  return { kind: "amount", amount: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 4 }).format(cost) };
-}
-
-export function usageCostLabel(usage: { costComplete?: boolean; estimatedCostUsd?: number | null }): string {
-  const parts = usageCostParts(usage);
-  return parts.kind === "unknown" ? "cost unknown" : `${parts.amount} estimated`;
+  const fmt = new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumSignificantDigits: cost === 0 ? undefined : 4 });
+  return { kind: "amount", amount: fmt.format(cost) };
 }

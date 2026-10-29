@@ -1,6 +1,6 @@
 "use client";
 import { Notice, Panel } from "@/components/ui";
-import { useT } from "@/i18n/store";
+import { useLocaleStore, useT } from "@/i18n/store";
 import type { ConnectionUsage } from "@/lib/usageApi";
 import { ProbeTrace } from "./atoms";
 import { Row, Rows } from "./rows";
@@ -13,12 +13,13 @@ const FACT_TEXT = { warn: "text-warn-text", fault: "text-fault-text", signal: "t
 /** Reachability, what the vendor said about the account at the last test, and what this connection has spent. Measured numbers only: with no test or no usage the row says so. */
 export function ActivityPanel({ c, usage }: { c: Connection; usage: ConnectionUsage | undefined }) {
   const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
   const readiness = providerReadiness(c);
   const ok = c.probes.filter((p) => p.ok);
   const median = ok.length ? [...ok].sort((a, b) => a.ms - b.ms)[Math.floor(ok.length / 2)].ms : null;
   const used = usage && usage.tokensTotal > 0;
-  const cost = used ? usageCostParts(usage) : null;
-  const when = c.lastProbe ? new Date(c.lastProbe).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const cost = used ? usageCostParts(usage, locale) : null;
+  const when = c.lastProbe ? new Date(c.lastProbe).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) : "";
   return (
     <Panel title={t("activity.title")} titleId="oh-activity" level={3}>
       <Rows label={t("activity.title")}>
@@ -34,13 +35,13 @@ export function ActivityPanel({ c, usage }: { c: Connection; usage: ConnectionUs
             </p>
           )}
         </Row>
-        {c.facts.map((f) => (
-          <Row key={f.k} label={f.k}>
+        {c.facts.map((f, i) => (
+          <Row key={`${f.k}-${i}`} label={f.k}>
             <p className={`t-meta wrap-anywhere ${FACT_TEXT[f.tone ?? "dim"]}`}>{f.v}</p>
           </Row>
         ))}
         <Row label={t("activity.tokens")}>
-          <p className="t-meta text-ink">{used ? usage.tokensTotal.toLocaleString() : "—"}</p>
+          <p className="t-meta text-ink">{used ? usage.tokensTotal.toLocaleString(locale) : "—"}</p>
           {!used && <p className="t-body mt-0.5 text-ink-mute">{t("activity.none")}</p>}
         </Row>
         {used && cost && (

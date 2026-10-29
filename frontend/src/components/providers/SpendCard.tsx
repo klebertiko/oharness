@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button, Input, Notice, StatusMark, type StatusTone } from "@/components/ui";
-import { useT } from "@/i18n/store";
+import { useLocaleStore, useT } from "@/i18n/store";
 import { usageCostParts, useUsageStore } from "./usageStore";
 
 const TONE: Record<string, StatusTone> = { unset: "idle", ok: "ok", warning: "warn" };
@@ -12,6 +12,8 @@ export function SpendCard() {
   const summary = useUsageStore((s) => s.summary);
   const loading = useUsageStore((s) => s.loading);
   const error = useUsageStore((s) => s.error);
+  const budgetError = useUsageStore((s) => s.budgetError);
+  const locale = useLocaleStore((s) => s.locale);
   const hydrate = useUsageStore((s) => s.hydrate);
   const refresh = useUsageStore((s) => s.refresh);
   const setBudget = useUsageStore((s) => s.setBudget);
@@ -19,27 +21,24 @@ export function SpendCard() {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const [failed, setFailed] = useState(false);
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
   const budget = summary?.budget;
   const tone: StatusTone = budget ? (TONE[budget.state] ?? "fault") : "idle";
-  const cost = summary ? usageCostParts(summary) : null;
+  const cost = summary ? usageCostParts(summary, locale) : null;
   const spent = !cost ? "—" : cost.kind === "unknown" ? t("spend.unknown") : t("spend.estimated", { amount: cost.amount });
 
   const save = async () => {
     if (saving) return;
-    const text = draft.trim();
+    const text = draft.trim().replace(",", ".");
+    if (text !== "" && !/^\d+(\.\d+)?$/.test(text)) return setInvalid(true);
     const n = text === "" ? null : Number(text);
-    if (n !== null && (!Number.isFinite(n) || n < 0)) return setInvalid(true);
     setInvalid(false);
-    setFailed(false);
     setSaving(true);
     try {
       if (await setBudget(n)) setEditing(false);
-      else setFailed(true);
     } finally {
       setSaving(false);
     }
@@ -57,7 +56,7 @@ export function SpendCard() {
         <StatusMark tone={tone} />
         <span>{spent}</span>
       </p>
-      {error && (
+      {error && !budgetError && (
         <Notice tone="warn" className="mt-2">
           {t("spend.error")}
         </Notice>
@@ -80,7 +79,7 @@ export function SpendCard() {
               if (e.key === "Escape") setEditing(false);
             }}
           />
-          {failed && (
+          {budgetError && (
             <p role="alert" className="t-body text-fault-text">
               {t("spend.saveFailed")}
             </p>
@@ -94,7 +93,11 @@ export function SpendCard() {
             <Button variant="primary" size="sm" loading={saving} onClick={() => void save()}>
               {t("spend.save")}
             </Button>
-            <Button size="sm" disabled={saving} onClick={() => setEditing(false)}>
+            <Button size="sm" disabled={saving} onClick={() => {
+                setEditing(false);
+                setInvalid(false);
+              }}
+            >
               {t("common.cancel")}
             </Button>
           </div>
@@ -110,7 +113,7 @@ export function SpendCard() {
             setEditing(true);
           }}
         >
-          {budget?.limitUsd != null ? t("spend.budget.of", { limit: `$${budget.limitUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }) : t("spend.budget.set")}
+          {budget?.limitUsd != null ? t("spend.budget.of", { limit: `$${budget.limitUsd.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }) : t("spend.budget.set")}
         </Button>
       )}
     </section>

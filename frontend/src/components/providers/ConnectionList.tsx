@@ -44,7 +44,7 @@ export function ConnectionList({
 }) {
   const t = useT();
   const groups = groupViews(connections, offline);
-  const ready = connections.filter((c) => groups.some((g) => g.group === "ready" && g.views.some((v) => v.connection.id === c.id))).length;
+  const ready = groups.find((g) => g.group === "ready")?.views.length ?? 0;
   const nothing = !loading && !offline && ready === 0;
   return (
     <div className="flex h-full min-h-0 flex-col" aria-busy={loading || undefined}>
