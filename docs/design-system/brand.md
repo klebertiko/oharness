@@ -26,3 +26,24 @@ Nilo, the scholar owl, is the OHarness identity: the title-bar mark, the app ico
 ## Where she may appear
 
 A surface earns Nilo only when her state is true of it: waiting on Studio's empty canvas, idle on a quiet Chats home, thinking and working during a live run. Dense spec-sheet screens (Providers, Harnesses lists) carry none. The assistant is named **Nilo**; the word "Copilot" never appears.
+
+## Nilo in the run and chat states
+
+Which pose a surface may wear, for the states the roadmap added. "Shipped" is wired in the app today; "Specified" is the rule for when the state gets a pose, not code yet. A state with no row has no sprite: the words and shapes in `components/run-surfaces.md` carry it.
+
+| State | Pose | Where | Status |
+| --- | --- | --- | --- |
+| Chats home, nothing running | `idle`, 6px cell, interactive | Chat welcome | Shipped |
+| A turn is running, waiting on the provider | `thinking`, face crop, 2px cell | `ThinkingStatus` in the chat | Shipped |
+| A human gate holds the run | `waiting`, face crop | `ThinkingStatus` above the gate card | Shipped |
+| A tool or subagent is running | `working` (types on the laptop) | `ThinkingStatus`. Its `working` verbs exist, but `AgentStage` passes only `thinking` and `waiting`, so this pose is wired nowhere yet | Specified |
+| Studio's empty canvas, a draft being described | `waiting` | Studio welcome | Specified in this file since the first version |
+| 90 s without input on an interactive Nilo | `sleeping` | Any interactive Nilo | Shipped |
+| Plan awaiting approval, queue paused, budget exceeded, Needs action, Model not pulled, turn diff, subagent tree | none | Decision and spec surfaces | By rule |
+
+Notes that keep the rule honest:
+
+- The subagent tree names its parent **Nilo** in text (`t-label`); the children are plain rows. No sprite per child: a dozen owls is decoration.
+- A finished run does not hop. `success` and `error` are for a moment the person is looking at Nilo herself (a click reaction, a Studio draft that just landed); the transcript's own word ("complete", "faulted", "Budget exceeded") says how a run ended.
+- A pose never replaces the words. `ThinkingStatus` keeps one stable `role="status"` line for assistive tech whatever she is doing.
+- Reduced motion: one still pose per state, as everywhere. The reference page `reference/Nilo/preview.html` shows each of these poses beside the surface that wears it.

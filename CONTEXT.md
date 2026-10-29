@@ -84,6 +84,36 @@ _Avoid_: plugin, callback
 A registered LLM backend (cloud or local) with credentials. Agents and Skills bind **1..N** Providers (primary + fallbacks; optional task routing).
 _Avoid_: wallet, model host, adapter (UI copy — adapter remains an internal runtime term)
 
+### Chat and runs
+
+**Permission mode**:
+How much a chat may do on its own, one of Plan, Read-only, Ask, Auto, Workspace write, Full. Per conversation, enforced by the sidecar, never a bypass.
+_Avoid_: access level, safe mode, YOLO
+
+**Needs action**:
+The group in the chat's model picker for connections that cannot answer yet, each with the one step that fixes it, in the same words as Providers.
+_Avoid_: unavailable list, broken providers
+
+**Queue**:
+Messages typed while a turn runs; they run after it, in order. A turn that stops or fails pauses the queue.
+_Avoid_: backlog, pending messages
+
+**Subagent**:
+A task the model hands to a child run during a turn. Each child can be cancelled alone.
+_Avoid_: worker, thread
+
+**Turn diff**:
+The files a turn changed in the workspace, each with its own one-time revert.
+_Avoid_: undo all, changeset
+
+**Token ceiling**:
+The token total at which a run stops with the status Budget exceeded.
+_Avoid_: budget (as a field label), limit
+
+**Activity**:
+The list of every run, wherever it started, with Continue as a new run for an interrupted one.
+_Avoid_: history log, executions
+
 ### Assistant and places
 
 **Nilo**:
