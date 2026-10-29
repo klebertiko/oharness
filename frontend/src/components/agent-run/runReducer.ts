@@ -315,7 +315,7 @@ export function runReducer(state: RunState, action: Action): RunState {
           ...(call.hooks ?? []),
           {
             hookId: String(action.data.hook_id ?? ""),
-            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            decision: action.data.decision === "allow" ? "allow" : action.data.decision === "skipped" ? "skipped" : ("block" as const),
             reason: String(action.data.reason ?? ""),
           },
         ],
@@ -552,6 +552,9 @@ export function runReducer(state: RunState, action: Action): RunState {
         endedAt: Date.now(),
         notices: [...state.notices, String(action.data.error ?? "Stream error")],
       };
+
+    case "plan_error":
+      return { ...state, planNotSaved: true };
 
     case "plan_proposed": {
       const planId = typeof d.plan_id === "string" ? d.plan_id : "";

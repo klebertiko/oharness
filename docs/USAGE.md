@@ -26,6 +26,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 | Full | Commands run without asking, inside and outside the workspace. High-risk commands, and commands that name a secret file, still ask. Choosing it needs a confirmation, and `Shift+Tab` never lands on it. |
 
   Reading a path that holds a secret always asks. The exact policy is in [`backend/sandbox/permission.py`](../backend/sandbox/permission.py).
+- **Tool hooks** (composer, *Tool hooks*): register a program that must exit 0 before a tool runs. If it fails or takes longer than its timeout (1 to 10 seconds), the tool does not run and the tool card says which hook blocked it. A hook runs without a shell and without your secrets, only ever vetoes (it cannot approve a command), and is stored by the sidecar, never read from a workspace. Edit changes a hook in place; a stored hook that no longer validates blocks every tool until you remove it and register it again. A simulated (mock) run starts no hook; the tool card says it was not run.
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)).
 
 ## Studio
