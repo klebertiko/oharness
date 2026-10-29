@@ -127,3 +127,70 @@ def test_a_continuation_whose_parent_kept_no_inputs_is_refused_and_stays_startab
         refused = client.post(f"/execute/logs/{child}/start")
         assert refused.status_code == 409 and refused.json()["detail"]["code"] == "inputs_unavailable"
         assert client.get(f"/execute/logs/{child}").json()["status"] == "pending"  # not left half-started
+
+
+def seed_journal(run_id, events):
+    """Write a run's journal by hand: (event, data) pairs, sequence from 1."""
+    import anyio
+
+    from models import ExecutionLog, RunEvent, RunLink, RunRecord
+
+    async def go():
+        async with SessionLocal() as db:
+            db.add(ExecutionLog(id=run_id, harness_id="adhoc", harness_name="H", status="interrupted"))
+            db.add(RunRecord(id=run_id, source="harness", last_sequence=len(events)))
+            await db.flush()
+            for n, (event, data) in enumerate(events, 1):
+                db.add(RunEvent(run_id=run_id, sequence=n, event_type=event, data_json=json.dumps(data)))
+            await db.commit()
+
+    anyio.run(go)
+
+
+def link(child, parent):
+    import anyio
+
+    from models import RunLink
+
+    async def go():
+        async with SessionLocal() as db:
+            db.add(RunLink(child_id=child, parent_id=parent, parent_sequence=1))
+            await db.commit()
+
+    anyio.run(go)
+
+
+def test_a_gate_that_sent_the_run_back_is_not_restored_and_nothing_after_it_is_read():
+    from run_store import resume_seed
+
+    seed_journal("gate-run", [
+        ("node_done", {"node_id": "a", "output": "draft"}),
+        ("node_done", {"node_id": "g", "output": "FAIL"}),
+        ("gate_retry", {"node_id": "g", "attempt": 1, "cap": 3, "target": "a"}),
+        ("node_done", {"node_id": "a", "output": "second draft"}),
+    ])
+    import anyio
+
+    async def go():
+        async with SessionLocal() as db:
+            return await resume_seed(db, "gate-run")
+
+    with TestClient(app):
+        assert anyio.run(go) == {"a": "draft"}  # the failed check runs again; the retry's own work was not finished
+
+
+def test_a_continuation_that_stopped_early_still_hands_down_what_its_parents_finished():
+    import anyio
+
+    from run_store import resume_seed
+
+    seed_journal("grand", [("node_done", {"node_id": "a", "output": "A1"}), ("node_done", {"node_id": "b", "output": "B1"})])
+    seed_journal("child", [("node_restored", {"node_id": "a", "output": "A1"})])
+    link("child", "grand")
+
+    async def go():
+        async with SessionLocal() as db:
+            return await resume_seed(db, "child")
+
+    with TestClient(app):
+        assert anyio.run(go) == {"a": "A1", "b": "B1"}

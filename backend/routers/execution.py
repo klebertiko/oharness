@@ -309,6 +309,7 @@ class ResumeSeed:
     run_id: str
     outputs: dict[str, str]
     sequence: int
+    base_ref: str | None = None  # a worktree run starts from the rescue ref that kept the earlier run's edits
 
 
 @router.post("/")
@@ -335,7 +336,7 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
     require_workspace(body.worktree, cwd)
-    isolation = RunWorktree(cwd) if body.worktree else None
+    isolation = RunWorktree(cwd, ref=(resume.base_ref if resume else None) or "HEAD") if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
     # routing call just below (it already invokes a real adapter). "mock" is
@@ -954,7 +955,7 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
     return {
         **metadata(record),
         **await lineage(db, log_id),
-        "resumable": is_resumable(lg, record),
+        "resumable": is_resumable(lg, record, await db.get(RunInput, log_id)),
         "id": lg.id,
         "harness_id": lg.harness_id,
         "harness_name": lg.harness_name,
@@ -983,8 +984,10 @@ async def start_continued_run(log_id: str, request: Request, db: AsyncSession = 
             raise HTTPException(409, {"code": "inputs_unavailable", "message": "the run this continues was saved before its harness was kept; it cannot be continued"})
         outputs = await resume_seed(db, link.parent_id)
         record = await db.get(RunRecord, log_id)
+        if record is None:
+            raise HTTPException(409, {"code": "inputs_unavailable", "message": "this continuation has no saved journal"})
         body = ExecuteRequest(graph_json=json.loads(inputs.graph_json), mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree)
-        return await _execute_run(body, request, db, ResumeSeed(log_id, outputs, record.last_sequence))
+        return await _execute_run(body, request, db, ResumeSeed(log_id, outputs, record.last_sequence, inputs.base_ref))
     except BaseException:
         await release_start(db, log_id)
         raise

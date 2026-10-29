@@ -30,11 +30,13 @@ def redact_value(value):
 
 # The one rule for "can this run be continued": the journal exists (a RunRecord), it is not complete, and nothing is still writing to it.
 # The API computes `resumable` from it and the UI only reads that flag.
+MAX_LINEAGE = 50  # a chain of continuations deeper than this is not followed any further
 RESUMABLE_STATUSES = frozenset({'interrupted', 'stopped', 'failed', 'error'})
 
 
-def is_resumable(log, record):
-    return record is not None and record.coverage != 'complete' and log.status in RESUMABLE_STATUSES
+def is_resumable(log, record, inputs):
+    """Also needs the inputs the run was started with: without them there is no harness to run again (direct turns, runs saved earlier)."""
+    return record is not None and inputs is not None and record.coverage != 'complete' and log.status in RESUMABLE_STATUSES
 
 
 async def lineage(db, run_id):
@@ -51,7 +53,8 @@ async def continue_run(db, parent_id):
     """Create a run linked to ``parent_id`` and journal why. The parent's events are only read. None: not resumable."""
     log = await db.get(ExecutionLog, parent_id)
     record = await db.get(RunRecord, parent_id)
-    if log is None or not is_resumable(log, record):
+    inputs = await db.get(RunInput, parent_id)
+    if log is None or not is_resumable(log, record, inputs):
         return None
     child_id = str(uuid.uuid4())
     # One transaction: the run, its link and its first journal event exist together or not at all.
@@ -60,25 +63,42 @@ async def continue_run(db, parent_id):
     db.add(RunRecord(id=child_id, source=record.source, last_sequence=1))
     await db.flush()
     db.add(RunLink(child_id=child_id, parent_id=parent_id, parent_sequence=record.last_sequence))
-    inputs = await db.get(RunInput, parent_id)
-    if inputs is not None:  # the continuation runs the same harness the same way
-        db.add(RunInput(run_id=child_id, graph_json=inputs.graph_json, mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree))
+    # The continuation runs the same harness the same way. A worktree run resumes from the rescue ref that kept the earlier edits.
+    db.add(RunInput(run_id=child_id, graph_json=inputs.graph_json, mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree,
+                    base_ref=await _rescue_ref(db, parent_id) or inputs.base_ref))
     db.add(RunEvent(run_id=child_id, sequence=1, event_type='run_continued',
                     data_json=json.dumps({'from_run_id': parent_id, 'from_sequence': record.last_sequence})))
     await db.commit()
     return {'id': child_id, 'continued_from': parent_id, 'parent_sequence': record.last_sequence, 'status': 'pending'}
 
 
-async def resume_seed(db, run_id):
-    """The outputs a continued run starts from: what ``run_id``'s journal says each finished node produced (the last one per node).
+async def _rescue_ref(db, run_id):
+    """The rescue ref that kept a worktree run's edits, from its ``worktree_closed`` event (None: it left nothing, or had no worktree)."""
+    row = await db.scalar(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.event_type == 'worktree_closed')
+                          .order_by(RunEvent.sequence.desc()))
+    ref = json.loads(row.data_json).get('rescue_ref') if row else None
+    return ref if isinstance(ref, str) else None
 
-    Journals are redacted when they are written, so a restored output never carries a credential the journal had already hidden.
+
+async def resume_seed(db, run_id, _depth=0):
+    """The outputs a continued run starts from: what the journals along ``run_id``'s lineage say each finished node produced.
+
+    - The lineage is followed, so a continuation that stopped early still hands down what its own parents had finished.
+    - A Gate that sent the run back (``gate_retry``) is not restored, and nothing after it is read: the Gate is evaluated again on the
+      restored outputs before it, so a failed check is never skipped by a restart.
+    - Journals are redacted when they are written, so a restored output never carries a credential the journal had already hidden.
     """
-    rows = (await db.scalars(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.event_type.in_(('node_done', 'node_restored')))
-                            .order_by(RunEvent.sequence))).all()
     outputs = {}
+    link = await db.get(RunLink, run_id)
+    if link is not None and _depth < MAX_LINEAGE:
+        outputs.update(await resume_seed(db, link.parent_id, _depth + 1))
+    rows = (await db.scalars(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.event_type.in_(('node_done', 'node_restored', 'gate_retry')))
+                            .order_by(RunEvent.sequence))).all()
     for row in rows:
         data = json.loads(row.data_json)
+        if row.event_type == 'gate_retry':
+            outputs.pop(data.get('node_id'), None)
+            break
         if isinstance(data.get('node_id'), str) and isinstance(data.get('output'), str):
             outputs[data['node_id']] = data['output']
     return outputs

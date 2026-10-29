@@ -113,3 +113,23 @@ it("has no axe violations with the continue control and the continued run's tran
   await screen.findByRole("status");
   expect(await axeViolations(container)).toEqual([]);
 });
+
+it("keeps what the continued run showed when the connection drops mid-run, and says so", async () => {
+  const start = { run_id: "r2", mode: "mock", order: [{ node_id: "a", type: "llm", label: "Agent A", adapter: "mock", model: "", intrinsic: false }] };
+  const frame = new TextEncoder().encode(
+    `event: run_start\ndata: ${JSON.stringify(start)}\n\nevent: node_restored\ndata: ${JSON.stringify({ node_id: "a", output: "kept text" })}\n\n`,
+  );
+  const reads = [async () => ({ done: false, value: frame }), async () => { throw new Error("network down"); }];
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "r2", continued_from: "r1", parent_sequence: 3, status: "pending" }) })
+      .mockResolvedValueOnce({ ok: true, body: { getReader: () => ({ read: () => (reads.shift() ?? (async () => ({ done: true })))() }) } }),
+  );
+  render(<RunEvidence detail={resumable} />);
+  fireEvent.click(screen.getByRole("button", { name: "Continue as a new run" }));
+  expect(await screen.findByText(/kept text/)).toBeTruthy();
+  expect((await screen.findByRole("alert")).textContent).toMatch(/dropped/);
+  expect(screen.getByText(/kept text/)).toBeTruthy();
+});

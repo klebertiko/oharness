@@ -46,6 +46,8 @@ class RunInput(Base):
     mode: Mapped[str] = mapped_column(String(16), nullable=False, default="mock")
     cwd: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     worktree: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A continued worktree run starts from the rescue ref that kept the earlier run's edits (None: the repository's HEAD).
+    base_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class RunLink(Base):
