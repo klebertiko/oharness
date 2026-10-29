@@ -42,6 +42,13 @@ Studio is where you design a harness: overview, canvas, inspector.
 
 ## Providers
 
+Providers (`Alt+3`) lists your connections on the left and opens one on the right. On a narrow window the list is the screen: pick a connection to open it, and use **Providers** at the top to come back. Each connection shows one status word and, when something is missing, one button that fixes it (paste a key, turn on, choose a model, copy `ollama serve`, open billing, sign in). Under it, **Connection** holds the key, the endpoint and the on/off switch; **Models** holds the default model, with a filter for long lists; **Activity** shows the last tests and the spend.
+
+- **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
+- **Remove a key.** **Remove** asks first, with **Cancel** selected.
+- **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
+- **Language.** The Providers screen is in English and Brazilian Portuguese. It follows the browser language; `Mod+K`, then "Language", switches it. The rest of the app is still English.
+
 | Vendor | Connects through |
 | --- | --- |
 | Anthropic | Local `claude` CLI (`claude login`); chat only, tools disabled |
