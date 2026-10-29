@@ -6,10 +6,10 @@ import uuid
 from datetime import datetime, timezone
 
 import anyio
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 
 from database import SessionLocal
-from models import ExecutionLog, RunRecord, RunEvent, RunArtifact, RunLink
+from models import ExecutionLog, RunRecord, RunEvent, RunArtifact, RunLink, RunInput
 from studio_copilot.redaction import redact
 
 
@@ -60,10 +60,41 @@ async def continue_run(db, parent_id):
     db.add(RunRecord(id=child_id, source=record.source, last_sequence=1))
     await db.flush()
     db.add(RunLink(child_id=child_id, parent_id=parent_id, parent_sequence=record.last_sequence))
+    inputs = await db.get(RunInput, parent_id)
+    if inputs is not None:  # the continuation runs the same harness the same way
+        db.add(RunInput(run_id=child_id, graph_json=inputs.graph_json, mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree))
     db.add(RunEvent(run_id=child_id, sequence=1, event_type='run_continued',
                     data_json=json.dumps({'from_run_id': parent_id, 'from_sequence': record.last_sequence})))
     await db.commit()
     return {'id': child_id, 'continued_from': parent_id, 'parent_sequence': record.last_sequence, 'status': 'pending'}
+
+
+async def resume_seed(db, run_id):
+    """The outputs a continued run starts from: what ``run_id``'s journal says each finished node produced (the last one per node).
+
+    Journals are redacted when they are written, so a restored output never carries a credential the journal had already hidden.
+    """
+    rows = (await db.scalars(select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.event_type.in_(('node_done', 'node_restored')))
+                            .order_by(RunEvent.sequence))).all()
+    outputs = {}
+    for row in rows:
+        data = json.loads(row.data_json)
+        if isinstance(data.get('node_id'), str) and isinstance(data.get('output'), str):
+            outputs[data['node_id']] = data['output']
+    return outputs
+
+
+async def claim_start(db, run_id):
+    """Atomically turn a ``pending`` continuation into ``running``. True for exactly one caller; a second start (a double click, a retry) gets False."""
+    claimed = await db.execute(update(ExecutionLog).where(ExecutionLog.id == run_id, ExecutionLog.status == 'pending').values(status='running'))
+    await db.commit()
+    return claimed.rowcount == 1
+
+
+async def release_start(db, run_id):
+    """Put a claimed continuation back to ``pending`` when the run could not begin (a refused budget, say)."""
+    await db.execute(update(ExecutionLog).where(ExecutionLog.id == run_id, ExecutionLog.status == 'running').values(status='pending'))
+    await db.commit()
 
 
 def now():
@@ -92,9 +123,9 @@ def artifact_view(artifact, *, content=False):
 
 class RunWriter:
     """One writer per execution. Sequence allocation is committed with each event."""
-    def __init__(self, run_id):
+    def __init__(self, run_id, sequence=0):
         self.run_id = run_id
-        self.sequence = 0
+        self.sequence = sequence  # a continued run starts after the event that opened its journal
 
     async def append(self, event):
         safe = redact_value(event)

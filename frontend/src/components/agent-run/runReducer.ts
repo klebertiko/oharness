@@ -378,6 +378,18 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
     }
 
+    case "node_restored":
+      return patch(state, String(d.node_id), (s) => ({
+        ...s,
+        state: "done",
+        restored: true,
+        phase: "",
+        phaseDetail: "",
+        blocks: action.data.output ? [{ kind: "text", text: String(action.data.output) }] : [],
+        output: String(action.data.output ?? ""),
+        tokens: 0,
+      }));
+
     case "node_error": {
       const previous = state.plan.find((s) => s.nodeId === String(d.node_id))?.tokens ?? 0;
       const supplied = Number(action.data.tokens ?? previous);
