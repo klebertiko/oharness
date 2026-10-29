@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import re
 import time
 import uuid
@@ -780,6 +781,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 async with SessionLocal() as plan_session:
                                     plan = await propose_plan(plan_session, tool_options.thread_id, output)
                             except Exception:  # noqa: BLE001 - the answer was already delivered; only the approval card is missing
+                                logging.getLogger(__name__).exception("plan not saved (run %s)", run_id)
                                 yield emit("plan_error", {"node_id": node_id, "code": "plan_not_saved"})
                             else:
                                 yield emit("plan_proposed", {"node_id": node_id, **plan})

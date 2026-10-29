@@ -184,7 +184,9 @@ def test_when_the_plan_cannot_be_saved_the_run_says_so_and_nothing_is_left_waiti
         raise RuntimeError('database is locked')
     monkeypatch.setattr(execution, 'propose_plan', broken)
     set_mode(client, 'plan')
-    events = run(client, tmp_path)
+    response = client.post('/execute/direct', json={'instruction': 'Plan it', 'mode': 'mock', 'cwd': str(tmp_path),
+                                                    'tools': {'enabled': False, 'thread_id': THREAD}})
+    events = sse(response)
     assert plan_event(events) is None
     error = next(e['data'] for e in events if e['event'] == 'plan_error')
     assert error['code'] == 'plan_not_saved' and 'database is locked' not in json.dumps(error)  # no internals leak to the screen
@@ -192,3 +194,18 @@ def test_when_the_plan_cannot_be_saved_the_run_says_so_and_nothing_is_left_waiti
     assert done['status'] == 'complete'  # the answer was delivered; only the approval card is missing
     assert current(client)['plan'] is None
     assert set_mode(client, 'ask').status_code == 200  # nothing blocks leaving Plan
+    history = client.get('/execute/logs/' + response.headers['x-execution-id']).json()
+    assert 'plan_error' in [e['event'] for e in history['result']['events']]
+
+
+def test_a_failed_save_leaves_the_plan_that_was_already_waiting(client, tmp_path, monkeypatch):
+    from routers import execution
+    set_mode(client, 'plan')
+    first = plan_event(run(client, tmp_path))
+
+    async def broken(*_args, **_kwargs):
+        raise RuntimeError('boom')
+    monkeypatch.setattr(execution, 'propose_plan', broken)
+    run(client, tmp_path, instruction='Again')
+    assert current(client)['plan']['plan_id'] == first['plan_id']
+    assert set_mode(client, 'ask').status_code == 409  # the earlier plan still waits for approval

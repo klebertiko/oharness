@@ -109,3 +109,11 @@ def test_model_tool_schema_is_the_exact_published_contract():
             },
         },
     ]
+
+
+def test_the_command_description_names_every_mode_that_changes_what_runs_unasked():
+    from sandbox.permission import MODE_TABLE
+    from sandbox.schemas import RUN_COMMAND_DESCRIPTION as published
+    for mode in MODE_TABLE['modes']:
+        if mode['id'] != 'ask':  # Ask is the default the description starts from: a command needs approval
+            assert mode['label'] in published, mode['label']
