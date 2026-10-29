@@ -113,4 +113,4 @@ Counts are for the files in scope (everything except `providers/`, tests and `ap
 
 ## Checks run
 
-`npm run typecheck`, `npm run lint`, `npx vitest run` (160 files, 1278 tests) and `npm run build` from `frontend/`, and `node scripts/design-tokens.mjs --check` and `node scripts/check-contrast.mjs` from the root. The contrast table is unchanged: `edge-selected` is an existing `signal` on a `sub-200` fill, a pair already required at 3:1.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (161 files, 1280 tests) and `npm run build` from `frontend/`, and `node scripts/design-tokens.mjs --check` and `node scripts/check-contrast.mjs` from the root. The contrast table is unchanged: `edge-selected` is an existing `signal` on a `sub-200` fill, a pair already required at 3:1.

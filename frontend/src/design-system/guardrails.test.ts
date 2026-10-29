@@ -64,6 +64,10 @@ describe("design-system guardrails", () => {
     expect(offenders(/(?<![-\w])(?:hover:|focus:)?text-(?:warn|fault|signal)(?![-\w])/, /\.tsx$/)).toEqual([]);
   });
 
+  it("puts fault-ink, not signal-ink, on a fault fill (signal-ink is dark in Graphite: 3.7:1)", () => {
+    expect(offenders(/(?:bg-fault(?![-\w])|var\(--fault\)).*signal-ink|signal-ink.*(?:bg-fault(?![-\w])|var\(--fault\))/, /\.tsx$/)).toEqual([]);
+  });
+
   it("only sets a control edge with line-strong (no border-line-soft on inputs)", () => {
     const inputs = offenders(/<(?:input|textarea|select)\b[^>]*border-line-soft/, /\.tsx$/);
     expect(inputs).toEqual([]);

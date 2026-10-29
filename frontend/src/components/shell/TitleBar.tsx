@@ -58,7 +58,7 @@ function WindowButton({
       onClick={onClick}
       className={[
         "grid h-titlebar w-11 place-items-center text-ink-mute transition-colors",
-        danger ? "hover:bg-fault hover:text-signal-ink" : "hover:bg-sub-300 hover:text-ink",
+        danger ? "hover:bg-fault hover:text-fault-ink" : "hover:bg-sub-300 hover:text-ink",
       ].join(" ")}
     >
       {children}

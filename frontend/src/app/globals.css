@@ -26,6 +26,7 @@
   --color-warn-text: var(--warn-text);
   --color-fault: var(--fault);
   --color-fault-text: var(--fault-text);
+  --color-fault-ink: var(--fault-ink);
 
   --color-role-input: var(--role-input);
   --color-role-llm: var(--role-llm);
@@ -172,6 +173,7 @@
      three near-misses that almost match. */
   --warn: oklch(0.620 0.120 80);
   --fault: oklch(0.550 0.160 28);
+  --fault-ink: oklch(0.985 0.005 82);
   /* warn and fault are fills, markers and borders; text uses these. */
   --warn-text: oklch(0.670 0.120 80);
   --fault-text: oklch(0.680 0.120 28);
