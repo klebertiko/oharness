@@ -16,7 +16,7 @@ from typing import Callable
 
 from sandbox.secrets import redact
 
-SECRET_REF_PREFIX = "oharness/factory/"
+SECRET_REF_PREFIX = "factory/"
 DEFAULT_MAX_BODY_BYTES = 256 * 1024
 
 

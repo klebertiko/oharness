@@ -132,7 +132,7 @@ def test_log_lines_are_single_line_short_and_redacted():
 
 
 def test_secret_refs_are_opaque_names_under_one_prefix():
-    assert secret_ref("github-token") == "oharness/factory/github-token"
+    assert secret_ref("github-token") == "factory/github-token"
     for bad in ("", "../x", "a b", "a/b"):
         with pytest.raises(ValueError):
             secret_ref(bad)

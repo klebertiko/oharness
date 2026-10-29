@@ -15,7 +15,7 @@ O trabalho chega à fábrica por muitos caminhos (GitHub e outros trackers, webh
 - **Conector plugável** (`connector.py`): `verify`, `parse(delivery, rules) -> [WorkItemDraft]`, `reply(ref, text)`, `required_scopes()`. Um conector não executa comando, não lê repositório e não decide o que a fábrica pode fazer.
 - **Classes de credencial.** Entrada e MCP usam a classe **agente/integração** do ADR 0055: podem criar, consultar, comentar, cancelar, assumir (`claim`) e devolver (`release`). Aprovar spec, responder pergunta, `confirm_merged` e ativar/reverter definição são **só da classe humana**: nenhum endpoint, ferramenta MCP ou comando da CLI de B os expõe. Não existe ação de merge.
 - **Caixa de entrada.** O que precisa de decisão humana é `status = awaiting_human` (`list(state="awaiting_human")`); a UI da caixa de entrada é do Pacote A. B só a expõe como filtro.
-- **Cofre.** Credenciais (token de API, segredo de webhook, tokens de cliente) vivem só no `SecretsStore`, sob `oharness/factory/<nome>`. Definições e config guardam a referência, nunca o valor; nada vai para log, erro ou resposta.
+- **Cofre.** Credenciais (token de API, segredo de webhook, tokens de cliente) vivem só no `SecretsStore`, sob `factory/<nome>`. Definições e config guardam a referência, nunca o valor; nada vai para log, erro ou resposta.
 
 ## Modelo de ameaça: todo texto de fora é dado não confiável
 Título, corpo, comentário, label, nome de branch, mensagem de Slack, corpo de webhook: tudo pode ser injeção de prompt.
