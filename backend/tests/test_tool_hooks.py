@@ -223,3 +223,36 @@ def test_hook_that_leaves_a_child_holding_its_pipes_is_blocked_by_the_timeout(tm
     argv = script(tmp_path, "import subprocess, sys; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])")
     d = decide(hook(argv, timeout_s=0.7), tmp_path)
     assert not d.allowed and d.reason == 'timeout'
+
+
+# -- round 2: the gate is the same in mock runs ---------------------------------
+def mock_events(tmp_path, hooks, name='exec', args=None):
+    control = RunControl('hook-mock')
+    broker = ToolBroker(str(tmp_path), 'mock', control, ToolsRequest(enabled=True), permission_mode='ask', hooks=hooks)
+
+    async def go():
+        return [e async for e in broker.call(name, args or {'argv': ['git', '--version']}, origin='model')]
+    return asyncio.run(go())
+
+
+def test_blocking_hook_also_blocks_a_simulated_exec(tmp_path):
+    events = mock_events(tmp_path, [hook(script(tmp_path, 'raise SystemExit(1)'), hook_id='guard')])
+    assert [e['kind'] for e in events] == ['tool_call', 'tool_hook_decision', 'tool_denied']
+    assert events[1]['hook_id'] == 'guard' and events[2]['reason'] == 'hook'
+
+
+def test_allowing_hook_is_journaled_before_the_simulation(tmp_path):
+    events = mock_events(tmp_path, [hook(script(tmp_path, 'pass'), hook_id='ok1')])
+    assert [e['kind'] for e in events] == ['tool_call', 'tool_hook_decision', 'tool_result']
+    assert events[-1]['simulated'] is True
+
+
+def test_plan_mode_refusal_comes_before_any_hook_runs(tmp_path):
+    control = RunControl('plan')
+    marker = tmp_path / 'hook-ran'
+    h = hook(script(tmp_path, f'open({str(marker)!r}, "w")'))
+    broker = ToolBroker(str(tmp_path), 'ollama', control, ToolsRequest(enabled=True), permission_mode='plan', hooks=[h])
+
+    async def go():
+        return [e['kind'] async for e in broker.call('exec', {'argv': ['git', '--version']}, origin='model')]
+    assert asyncio.run(go()) == ['tool_call', 'tool_denied'] and not marker.exists()

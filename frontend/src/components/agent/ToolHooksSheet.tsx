@@ -12,6 +12,7 @@ export function ToolHooksButton() {
   const [rows, setRows] = useState<ToolHookRow[] | null>(null);
   const [draft, setDraft] = useState<HookDraft>(EMPTY);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
   const uid = useId();
 
   const load = useCallback(() => {
@@ -28,6 +29,7 @@ export function ToolHooksButton() {
     try {
       await toolHooksApi.put(check.id, check.body);
       setDraft(EMPTY);
+      setEditing(null);
       setError("");
       load();
     } catch (e) {
@@ -41,6 +43,12 @@ export function ToolHooksButton() {
     } catch {
       setError("Could not remove the hook.");
     }
+  };
+  const edit = (row: ToolHookRow) => {
+    const [program = "", ...args] = row.argv;
+    setDraft({ id: row.id, program, args: args.join("\n"), timeoutS: String(row.timeout_s), tools: [...row.tools] });
+    setEditing(row.id);
+    setError("");
   };
   const toggleTool = (tool: string) =>
     setDraft((d) => ({ ...d, tools: d.tools.includes(tool) ? d.tools.filter((t) => t !== tool) : [...d.tools, tool] }));
@@ -61,13 +69,15 @@ export function ToolHooksButton() {
                 <span className="min-w-0 flex-1 truncate">
                   <strong className="text-ink">{row.id}</strong> · {row.tools.join(", ")} · {row.timeout_s}s{row.invalid ? " · blocks every tool until replaced" : ""}
                 </span>
+                <Button size="sm" onClick={() => edit(row)} aria-label={`Edit hook ${row.id}`}>Edit</Button>
                 <Button size="sm" onClick={() => remove(row.id)} aria-label={`Remove hook ${row.id}`}>Remove</Button>
               </li>
             ))}
           </ul>
           <div className="flex flex-col gap-2">
+            {editing && <p className="text-body text-ink-mute">{`Editing ${editing}. Saving replaces it.`}</p>}
             <label htmlFor={`${uid}-id`} className="text-body text-ink-dim">Hook id</label>
-            <input id={`${uid}-id`} className={field} value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
+            <input id={`${uid}-id`} className={field} value={draft.id} readOnly={Boolean(editing)} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
             <label htmlFor={`${uid}-prog`} className="text-body text-ink-dim">Program (full path)</label>
             <input id={`${uid}-prog`} className={field} value={draft.program} onChange={(e) => setDraft({ ...draft, program: e.target.value })} />
             <label htmlFor={`${uid}-args`} className="text-body text-ink-dim">Arguments (one per line)</label>
@@ -83,7 +93,10 @@ export function ToolHooksButton() {
               ))}
             </fieldset>
             {error && <p role="alert" className="text-body text-fault-text">{error}</p>}
-            <div><Button variant="primary" onClick={save}>Save hook</Button></div>
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={save}>Save hook</Button>
+              {editing && <Button onClick={() => { setDraft(EMPTY); setEditing(null); setError(""); }}>Cancel edit</Button>}
+            </div>
           </div>
         </div>
       </Sheet>

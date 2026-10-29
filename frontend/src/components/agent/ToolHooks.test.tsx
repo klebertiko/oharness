@@ -81,6 +81,23 @@ describe("ToolHooksButton", () => {
     expect(remove).toHaveBeenCalledWith("old");
   });
 
+  it("edits an existing hook in place: fields filled, id fixed, saved under the same id", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(toolHooksApi, "list").mockResolvedValue([{ id: "old", argv: ["/usr/bin/audit", "--strict", "-v"], timeout_s: 3, tools: ["read", "exec"], invalid: false }]);
+    const put = vi.spyOn(toolHooksApi, "put").mockResolvedValue();
+    render(<ToolHooksButton />);
+    await user.click(screen.getByRole("button", { name: "Tool hooks" }));
+    await user.click(await screen.findByRole("button", { name: "Edit hook old" }));
+    expect((screen.getByLabelText("Hook id") as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText("Program (full path)") as HTMLInputElement).value).toBe("/usr/bin/audit");
+    expect((screen.getByLabelText("Arguments (one per line)") as HTMLTextAreaElement).value).toBe("--strict\n-v");
+    await user.clear(screen.getByLabelText("Timeout (seconds)"));
+    await user.type(screen.getByLabelText("Timeout (seconds)"), "8");
+    await user.click(screen.getByRole("button", { name: "Save hook" }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith("old", { argv: ["/usr/bin/audit", "--strict", "-v"], timeout_s: 8, tools: ["read", "exec"] }));
+    expect(screen.queryByText(/Editing old/)).toBeNull();
+  });
+
   it("has no axe violations when open", async () => {
     vi.spyOn(toolHooksApi, "list").mockResolvedValue([]);
     const user = userEvent.setup();

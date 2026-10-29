@@ -87,6 +87,12 @@ class ToolBroker:
                     yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': note, 'mode': self.permission_mode}
                     return
                 if self.mock:
+                    blocked = False
+                    async for event in self._hook_gate(call_id, name, args):  # the same gate as a real run
+                        yield event
+                        blocked = event['kind'] == 'tool_denied'
+                    if blocked:
+                        return
                     self.last_result = redact('[mock] would run: ' + json.dumps(action.argv))[0]
                     yield {'kind': 'tool_result', 'call_id': call_id, 'ok': True, 'simulated': True,
                            'result': self.last_result, 'duration_ms': 0, 'truncated': False, 'redactions': 0,
@@ -108,17 +114,12 @@ class ToolBroker:
                 target = resolve_in_root(self.root, action.path)
                 if requires_approval(target) or requires_approval(self.root / action.path):
                     approval_reason = 'secret_pattern'
-            for hook in (await self.hooks_loader() if self.hooks_loader else self.hooks):
-                if name not in hook.tools:
-                    continue
-                verdict = await run_hook(hook, {'call_id': call_id, 'tool': name, 'args': args}, self.root)
-                yield {'kind': 'tool_hook_decision', 'call_id': call_id, 'hook_id': hook.id,
-                       'decision': 'allow' if verdict.allowed else 'block', 'reason': verdict.reason,
-                       'duration_ms': verdict.duration_ms}
-                if not verdict.allowed:
-                    self.last_result = f'blocked by hook {hook.id}'
-                    yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'hook', 'note': self.last_result}
-                    return
+            blocked = False
+            async for event in self._hook_gate(call_id, name, args):
+                yield event
+                blocked = event['kind'] == 'tool_denied'
+            if blocked:
+                return
             if approval_reason:
                 self.control.tool_approval.begin(call_id)
                 try:
@@ -163,6 +164,20 @@ class ToolBroker:
             self.last_result = 'Unable to start or read the requested local resource.'
             yield {'kind': 'tool_result', 'call_id': call_id, 'ok': False, 'result': self.last_result,
                    'duration_ms': 0, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0}
+
+    async def _hook_gate(self, call_id, name, args):
+        """Run every hook that names this tool, in order: yields each decision, and ends with `tool_denied` at the first block."""
+        for hook in (await self.hooks_loader() if self.hooks_loader else self.hooks):
+            if name not in hook.tools:
+                continue
+            verdict = await run_hook(hook, {'call_id': call_id, 'tool': name, 'args': args}, self.root)
+            yield {'kind': 'tool_hook_decision', 'call_id': call_id, 'hook_id': hook.id,
+                   'decision': 'allow' if verdict.allowed else 'block', 'reason': verdict.reason,
+                   'duration_ms': verdict.duration_ms}
+            if not verdict.allowed:
+                self.last_result = f'blocked by hook {hook.id}'
+                yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'hook', 'note': self.last_result}
+                return
 
     def budget(self):
         return {'kind': 'tool_budget', 'calls_used': self.calls_used, 'calls_max': 8,
