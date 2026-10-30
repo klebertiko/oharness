@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { create } from "zustand";
 import { detectLocale, isLocale, LOCALE_KEY, type Locale } from "./locale";
 import { formatDate, formatNumber, translate, translatePlural, type MessageKey, type PluralKey, type Vars } from "./translate";
@@ -44,7 +45,7 @@ export const tr = (key: MessageKey, vars?: Vars): string => translate(useLocaleS
 
 export function useT(): (key: MessageKey, vars?: Vars) => string {
   const locale = useLocaleStore((s) => s.locale);
-  return (key, vars) => translate(locale, key, vars);
+  return useMemo(() => (key, vars) => translate(locale, key, vars), [locale]);
 }
 
 /** Plural message outside React: `trn("status.nodes", 3)` reads `status.nodes.one` / `.other`. */
@@ -57,11 +58,14 @@ export const fmtDate = (d: Date | number, options?: Intl.DateTimeFormatOptions):
 /** Everything a component needs: the message, the plural form, and locale-aware numbers and dates. Re-renders when the language changes. */
 export function useI18n() {
   const locale = useLocaleStore((s) => s.locale);
-  return {
-    locale,
-    t: (key: MessageKey, vars?: Vars) => translate(locale, key, vars),
-    plural: (key: PluralKey, count: number, vars?: Vars) => translatePlural(locale, key, count, vars),
-    number: (n: number, options?: Intl.NumberFormatOptions) => formatNumber(locale, n, options),
-    date: (d: Date | number, options?: Intl.DateTimeFormatOptions) => formatDate(locale, d, options),
-  };
+  return useMemo(
+    () => ({
+      locale,
+      t: (key: MessageKey, vars?: Vars) => translate(locale, key, vars),
+      plural: (key: PluralKey, count: number, vars?: Vars) => translatePlural(locale, key, count, vars),
+      number: (n: number, options?: Intl.NumberFormatOptions) => formatNumber(locale, n, options),
+      date: (d: Date | number, options?: Intl.DateTimeFormatOptions) => formatDate(locale, d, options),
+    }),
+    [locale],
+  );
 }

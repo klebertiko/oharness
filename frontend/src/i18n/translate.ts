@@ -19,8 +19,8 @@ export type PluralKey = MessageKey extends infer K ? (K extends `${infer B}.othe
 /** The plural form of `key` for `count` in `locale` (`Intl.PluralRules`); `{n}` is the formatted count, other `vars` fill as usual. Falls back to `.other`. */
 export function translatePlural(locale: Locale, key: PluralKey, count: number, vars?: Vars): string {
   const rule = new Intl.PluralRules(locale).select(count);
-  const pick = (k: string) => (k in CATALOG[locale] || k in en ? (k as MessageKey) : null);
-  const resolved = pick(`${key}.${rule}`) ?? (`${key}.other` as MessageKey);
+  const form = `${key}.${rule}` as MessageKey;
+  const resolved = form in CATALOG[locale] ? form : (`${key}.other` as MessageKey);
   return translate(locale, resolved, { ...vars, n: formatNumber(locale, count) });
 }
 

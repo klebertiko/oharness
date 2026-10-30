@@ -130,7 +130,7 @@ export function TitleBar({
           aria-haspopup="dialog"
           aria-expanded={paletteOpen}
           aria-label={t("shell.title.searchAria")}
-          title={`Search and commands (${caps.join("+")})`}
+          title={t("shell.title.searchTooltip", { keys: caps.join("+") })}
           className="oh-focus-inner flex h-control-lg items-center gap-2 rounded-control px-2 text-ink-mute transition-colors hover:bg-sub-200 hover:text-ink"
         >
           <Search size={15} aria-hidden="true" />

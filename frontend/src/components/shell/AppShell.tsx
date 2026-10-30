@@ -13,6 +13,7 @@ import { shellNavCommands, type Command } from "./commands";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
 import { useLocaleStore, useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 
 /**
  * Split handle. 5px hit area over a 1px visual rule — the standard trick, but
@@ -85,10 +86,10 @@ function Resizer({
 }
 
 /** What the header calls each destination. */
-const DESTINATION: Record<RailSection, string> = {
-  chats: "Chats",
-  studio: "Harness Studio",
-  providers: "Providers",
+const DESTINATION: Record<RailSection, MessageKey> = {
+  chats: "shell.rail.chats",
+  studio: "shell.title.studio",
+  providers: "shell.rail.providers",
 };
 
 interface Props {
@@ -279,7 +280,7 @@ export function AppShell({
         harnessName={harnessName}
         onHarnessNameChange={onHarnessNameChange}
         mode={shellMode === "agent" ? "Agent" : "Studio"}
-        destination={DESTINATION[shell.section]}
+        destination={t(DESTINATION[shell.section])}
         running={running}
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
