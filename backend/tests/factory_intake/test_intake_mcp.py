@@ -180,7 +180,7 @@ def test_the_cli_entrypoint_speaks_mcp_over_stdio():
     env = {**os.environ, "OH_FACTORY_PORT": "factory_intake.memory:MemoryFactory"}
     msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "t"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "factory_submit", "arguments": {"title": "hello"}}}]
-    done = subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); from oharness.cli import main; raise SystemExit(main(['factory', 'mcp']))", str(BACKEND)],
+    done = subprocess.run([sys.executable, "-I", "-c",  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit "import sys; sys.path.insert(0, sys.argv[1]); from oharness.cli import main; raise SystemExit(main(['factory', 'mcp']))", str(BACKEND)],
                           input="\n".join(json.dumps(m) for m in msgs) + "\n", capture_output=True, text=True, env=env, cwd=BACKEND, timeout=60)
     assert done.returncode == 0, done.stderr
     replies = [json.loads(x) for x in done.stdout.splitlines()]
