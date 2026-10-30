@@ -45,6 +45,7 @@ class WorkItem(Base):
     spec_revision: Mapped[int] = mapped_column(Integer, default=0)
     approved_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     claim_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parked_from: Mapped[str | None] = mapped_column(String(16), nullable=True)
     cost_tokens: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
@@ -54,7 +55,8 @@ class WorkItem(Base):
         UniqueConstraint('factory_id', 'source_kind', 'idempotency_key', name='uq_factory_item_idempotency'),
         # One open item per source reference; a closed one lets the same reference start a new item.
         Index('uq_factory_item_open_source', 'factory_id', 'source_kind', 'source_ref', unique=True,
-              sqlite_where=text("status NOT IN ('done', 'cancelled', 'failed')")),
+              sqlite_where=text("status NOT IN ('done', 'cancelled', 'failed')"),
+              postgresql_where=text("status NOT IN ('done', 'cancelled', 'failed')")),
         Index('ix_factory_item_status', 'factory_id', 'status'),
     )
 

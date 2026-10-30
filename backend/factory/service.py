@@ -5,6 +5,7 @@ Text from outside (issue bodies, messages) is stored as data and is never an ins
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select, tuple_
@@ -56,20 +57,22 @@ async def create(db: AsyncSession, body: WorkItemCreate, actor: tuple[str, str |
     """Returns (item, created, replay). replay: the same idempotency key was delivered before. Neither: an open item
     already holds this source reference, and the caller adds its message as a note."""
     src = body.source
+    # Stored and looked-up values are the same (redacted) strings, so de-duplication compares what was written.
+    ref = redact_value(src.ref)
     if body.idempotency_key:
         same = await db.scalar(select(WorkItem).where(WorkItem.factory_id == body.factory_id, WorkItem.source_kind == src.kind,
                                                       WorkItem.idempotency_key == body.idempotency_key))
         if same:
             return same, False, True
-    open_item = await _open_by_source(db, body)
+    open_item = await _open_by_source(db, body.factory_id, src.kind, ref)
     if open_item:
         return open_item, False, False
     previous = await db.scalar(select(WorkItem).where(WorkItem.factory_id == body.factory_id, WorkItem.source_kind == src.kind,
-                                                      WorkItem.source_ref == src.ref).order_by(WorkItem.created_at.desc()).limit(1))
+                                                      WorkItem.source_ref == ref).order_by(WorkItem.created_at.desc()).limit(1))
     text, truncated = _clip(redact_value(body.origin_context.text))
     item = WorkItem(factory_id=body.factory_id, title=redact_value(body.title), source_kind=src.kind, source_subtype=src.subtype,
-                    source_ref=redact_value(src.ref), source_url=redact_value(src.url) if src.url else None,
-                    thread_ref=src.thread_ref, origin_text=text, origin_truncated=truncated,
+                    source_ref=ref, source_url=redact_value(src.url) if src.url else None,
+                    thread_ref=redact_value(src.thread_ref) if src.thread_ref else None, origin_text=text, origin_truncated=truncated,
                     origin_attachments_json=json.dumps(redact_value([a.model_dump() for a in body.origin_context.attachments])),
                     labels_json=json.dumps(redact_value(body.labels)), requested_by=redact_value(body.requested_by) if body.requested_by else None,
                     idempotency_key=body.idempotency_key, reopens=previous.id if previous else None, agent=body.agent, automation=body.automation,
@@ -84,7 +87,7 @@ async def create(db: AsyncSession, body: WorkItemCreate, actor: tuple[str, str |
                                                         WorkItem.idempotency_key == body.idempotency_key)) if body.idempotency_key else None
         if winner:
             return winner, False, True
-        winner = await _open_by_source(db, body)
+        winner = await _open_by_source(db, body.factory_id, src.kind, ref)
         if winner:
             return winner, False, False
         raise
@@ -93,9 +96,9 @@ async def create(db: AsyncSession, body: WorkItemCreate, actor: tuple[str, str |
     return item, True, False
 
 
-async def _open_by_source(db: AsyncSession, body: WorkItemCreate) -> WorkItem | None:
-    return await db.scalar(select(WorkItem).where(WorkItem.factory_id == body.factory_id, WorkItem.source_kind == body.source.kind,
-                                                  WorkItem.source_ref == body.source.ref, WorkItem.status.not_in(CLOSED_STATUSES)))
+async def _open_by_source(db: AsyncSession, factory_id: str, kind: str, ref: str) -> WorkItem | None:
+    return await db.scalar(select(WorkItem).where(WorkItem.factory_id == factory_id, WorkItem.source_kind == kind,
+                                                  WorkItem.source_ref == ref, WorkItem.status.not_in(CLOSED_STATUSES)))
 
 
 async def get(db: AsyncSession, item_id: str) -> WorkItem:
@@ -162,7 +165,7 @@ async def link_run(db: AsyncSession, item: WorkItem, run_id: str, stage: str, ac
 
 
 async def enter_stage(db: AsyncSession, item: WorkItem, stage: str, actor: tuple[str, str | None], status: str = 'queued',
-                      reason: str = '') -> None:
+                      reason: str = '', cause: str = '') -> None:
     """Move along the stage table. Skipped stages are recorded; a move the table does not allow is an error, not an adjustment."""
     if item.status in CLOSED_STATUSES:
         raise FactoryError('closed')
@@ -173,7 +176,7 @@ async def enter_stage(db: AsyncSession, item: WorkItem, stage: str, actor: tuple
         for skipped in order[order.index(item.stage) + 1:order.index(stage)]:
             await add_event(db, item, 'stage_skipped', actor, {'stage': skipped, 'reason': reason})
     elif stage == 'implement':
-        await add_event(db, item, 'verify_failed' if item.stage == 'verify' else 'returned_to_implement', actor, {'reason': reason})
+        await add_event(db, item, 'verify_failed' if cause == 'verify_failed' else 'returned_to_implement', actor, {'reason': reason})
     _move(item, stage, status)
     await add_event(db, item, 'stage_entered', actor, {'stage': stage, 'status': status})
 
@@ -181,8 +184,9 @@ async def enter_stage(db: AsyncSession, item: WorkItem, stage: str, actor: tuple
 async def request_checkpoint(db: AsyncSession, item: WorkItem, actor: tuple[str, str | None], kind: str, question: str = '',
                              question_id: str | None = None) -> None:
     """Pause for a person: `spec`, `question` or `handoff`. Only a human-class action resolves it."""
+    # Every checkpoint carries an id, so a resolution always names what it resolves.
     _move(item, item.stage, 'awaiting_human')
-    await add_event(db, item, 'checkpoint_requested', actor, {'kind': kind, 'question': question, 'question_id': question_id})
+    await add_event(db, item, 'checkpoint_requested', actor, {'kind': kind, 'question': question, 'question_id': question_id or str(uuid.uuid4())})
 
 
 async def _open_question(db: AsyncSession, item: WorkItem) -> WorkItemEvent | None:
@@ -213,11 +217,14 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         if item.status in ('parked', 'claimed'):
             raise FactoryError('cannot_park')
         await add_event(db, item, 'parked', actor, {'from_status': item.status})
+        item.parked_from = item.status
         _move(item, item.stage, 'parked')
     elif a == 'resume':
         if item.status != 'parked':
             raise FactoryError('not_parked')
-        _move(item, item.stage, 'queued')
+        # A pending human checkpoint survives a park: resume restores what was waiting, it never clears it.
+        _move(item, item.stage, item.parked_from if item.parked_from in ('awaiting_human', 'waiting_merge') else 'queued')
+        item.parked_from = None
         await add_event(db, item, 'resumed', actor)
     elif a == 'edit_spec':
         if body.text is None or body.base_revision is None:
@@ -239,7 +246,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         await enter_stage(db, item, 'implement', actor)
     elif a == 'answer':
         question = await _open_question(db, item)
-        if question is None or not body.text:
+        if question is None or not body.text or item.status != 'awaiting_human':
             raise FactoryError('no_open_question')
         if body.question_id and body.question_id != json.loads(question.data_json).get('question_id'):
             raise FactoryError('no_open_question')
@@ -250,7 +257,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         if item.stage not in ('review', 'handoff', 'verify'):
             raise FactoryError('stage_not_allowed')
         await add_event(db, item, 'changes_requested', actor, {'note': body.note})
-        await enter_stage(db, item, 'implement', actor, reason=body.note or '')
+        await enter_stage(db, item, 'implement', actor, reason=body.note or '', cause='changes_requested')
     elif a == 'confirm_merged':
         if item.stage != 'handoff' or item.status != 'waiting_merge':
             raise FactoryError('not_waiting_merge')
@@ -258,7 +265,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         _move(item, item.stage, 'done')
         await add_event(db, item, 'completed', actor)
     elif a == 'advance':
-        if item.status == 'claimed' or await _open_question(db, item):
+        if item.status in ('claimed', 'parked') or await _open_question(db, item):
             raise FactoryError('cannot_advance')
         target = {'intake': 'triage', 'triage': 'spec', 'spec': 'implement', 'implement': 'review', 'review': 'handoff',
                   'verify': 'review'}.get(item.stage)
@@ -269,7 +276,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         await add_event(db, item, 'advanced', actor)
         await enter_stage(db, item, target, actor, status='waiting_merge' if target == 'handoff' else 'queued')
     elif a == 'claim':
-        if item.status in ('claimed', 'parked') or not body.holder:
+        if item.status == 'claimed' or not body.holder:
             raise FactoryError('cannot_claim')
         item.claim_json = json.dumps({'holder': redact_value(body.holder), 'from_status': item.status})
         _move(item, item.stage, 'claimed')
@@ -277,15 +284,23 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
     elif a == 'release':
         if item.status != 'claimed' or body.status is None:
             raise FactoryError('not_claimed')
+        prior = json.loads(item.claim_json or '{}').get('from_status') or 'queued'
+        pending = prior in ('awaiting_human', 'waiting_merge', 'parked')
+        # A release never completes the item and never clears a human checkpoint. Finished local work goes to review, but only from a
+        # stage where implementation happens and with no checkpoint pending; abandoned work gets its earlier status back.
+        if body.status == 'needs_review' and (pending or item.stage not in ('implement', 'review', 'verify')):
+            raise FactoryError('release_not_allowed', detail='use status abandoned, or resolve the pending checkpoint first')
         item.claim_json = None
         if body.branch:
             await add_artifact(db, item, 'diff', body.branch, 'released branch', actor)
         await add_event(db, item, 'released', actor, {'summary': body.summary, 'status': body.status})
-        # A release never completes the item: finished local work goes to review, abandoned work goes back to the queue.
         if body.status == 'needs_review':
-            item.stage = 'review'
-            await add_event(db, item, 'stage_entered', actor, {'stage': 'review', 'status': 'queued'})
-        _move(item, item.stage, 'queued')
+            if item.stage != 'review':
+                await enter_stage(db, item, 'review', actor, reason='released for review')
+            else:
+                _move(item, 'review', 'queued')
+        else:
+            _move(item, item.stage, prior)
     await db.commit()
     return item
 

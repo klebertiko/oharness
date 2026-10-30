@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -59,7 +60,11 @@ async def vocabulary():
 @router.post('/work-items')
 async def create_work_item(body: WorkItemCreate, request: Request, db: AsyncSession = Depends(get_db)):
     from fastapi.responses import JSONResponse
-    item, created, replay = await service.create(db, body, actor_for(request))
+    try:
+        item, created, replay = await service.create(db, body, actor_for(request))
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail={'code': 'conflict', 'message': 'A concurrent request changed this item; retry.'})
     # 201: new item. 200: the item that already exists (idempotent replay or an open item for the same reference).
     return JSONResponse(_item_json(item) | {'created': created, 'replay': replay}, status_code=201 if created else 200)
 
@@ -106,4 +111,7 @@ async def post_action(item_id: str, body: ActionBody, request: Request, db: Asyn
     except service.FactoryError as exc:
         await db.rollback()
         raise _http(exc)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail={'code': 'conflict', 'message': 'A concurrent request changed this item; retry.'})
     return _item_json(item)

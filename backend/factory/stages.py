@@ -32,7 +32,10 @@ def pairs_for_column(column: str) -> list[tuple[str, str]]:
 
 
 def may_enter(current: str, target: str) -> bool:
-    """Forward moves (a skipped stage is allowed) and the one way back: review or verify returns work to implement."""
-    if current in ('review', 'verify') and target == 'implement':
+    """Forward moves (a skipped stage is allowed) and the few ways back."""
+    # Back moves: work returns to implement from review, verify or handoff; a passed verify goes on to review.
+    if current in ('review', 'verify', 'handoff') and target == 'implement':
+        return True
+    if current == 'verify' and target == 'review':
         return True
     return STAGES.index(target) > STAGES.index(current)

@@ -189,6 +189,7 @@ def test_request_changes_returns_to_implement(client):
 
 def test_claim_and_release_never_complete(client):
     item = _make(client)
+    _force(item['id'], 'implement', 'running')
     claimed = _act(client, item['id'], action='claim', holder='local-session').json()
     assert claimed['status'] == 'claimed' and claimed['claim']['holder'] == 'local-session' and claimed['column'] == 'claimed'
     assert _act(client, item['id'], action='claim', holder='other').status_code == 409
@@ -265,3 +266,84 @@ def test_frontend_types_mirror_the_vocabulary():
     assert const('FACTORY_STAGES') == stages.STAGES
     assert const('FACTORY_STATUSES') == stages.STATUSES
     assert const('FACTORY_COLUMNS') == stages.COLUMNS
+
+
+def test_a_question_without_an_id_still_resolves(client):
+    item = _make(client)
+
+    async def ask():
+        from factory import service
+        async with SessionLocal() as db:
+            row = await db.get(WorkItem, item['id'])
+            await service.request_checkpoint(db, row, ('foreman', None), 'question', 'Which db?')
+            await db.commit()
+    anyio.run(ask)
+    assert _act(client, item['id'], True, action='answer', text='pg').json()['status'] == 'queued'
+    assert _act(client, item['id'], True, action='advance').json()['stage'] == 'triage'
+
+
+def test_verify_can_advance_and_handoff_can_return_to_implement(client):
+    item = _make(client)
+    _force(item['id'], 'verify', 'queued')
+    assert _act(client, item['id'], True, action='advance').json()['stage'] == 'review'
+    _force(item['id'], 'handoff', 'waiting_merge')
+    back = _act(client, item['id'], True, action='request_changes', note='nope').json()
+    assert (back['stage'], back['status']) == ('implement', 'queued')
+
+
+def test_verify_failure_is_not_blamed_on_a_human_request(client):
+    item = _make(client)
+    _force(item['id'], 'verify', 'queued')
+    _act(client, item['id'], True, action='request_changes')
+    types = [e['type'] for e in client.get(f"/factory/work-items/{item['id']}/events").json()['events']]
+    assert 'verify_failed' not in types and 'returned_to_implement' in types
+
+
+def test_park_and_claim_cannot_clear_a_human_checkpoint(client):
+    item = _make(client)
+    _force(item['id'], 'spec', 'awaiting_human')
+    _act(client, item['id'], action='park')
+    assert _act(client, item['id'], action='resume').json()['status'] == 'awaiting_human'
+    _act(client, item['id'], action='claim', holder='h')
+    assert _act(client, item['id'], action='release', status='needs_review', summary='x').status_code == 409
+    back = _act(client, item['id'], action='release', status='abandoned', summary='x').json()
+    assert (back['stage'], back['status']) == ('spec', 'awaiting_human')
+    _force(item['id'], 'handoff', 'waiting_merge')
+    _act(client, item['id'], action='claim', holder='h')
+    assert _act(client, item['id'], action='release', status='needs_review', summary='x').status_code == 409
+
+
+def test_release_for_review_cannot_skip_stages(client):
+    item = _make(client)  # intake
+    _act(client, item['id'], action='claim', holder='h')
+    assert _act(client, item['id'], action='release', status='needs_review', summary='x').status_code == 409
+    _force(item['id'], 'implement', 'claimed')
+    assert _act(client, item['id'], action='release', status='needs_review', summary='x').json()['stage'] == 'review'
+
+
+def test_answer_and_advance_do_not_unpark(client):
+    item = _make(client)
+    _act(client, item['id'], action='park')
+    assert _act(client, item['id'], True, action='advance').status_code == 409
+    assert _act(client, item['id'], True, action='answer', text='x').status_code == 409
+    assert client.get(f"/factory/work-items/{item['id']}").json()['status'] == 'parked'
+
+
+def test_secret_in_reference_still_deduplicates_and_thread_ref_is_redacted(client):
+    secret = 'sk-ant-' + 'c' * 30
+    first = _make(client, source={'kind': 'slack', 'ref': f'chan/{secret}', 'thread_ref': f'ts/{secret}'})
+    assert secret not in str(first)
+    again = client.post('/factory/work-items', json=_body(source={'kind': 'slack', 'ref': f'chan/{secret}'}))
+    assert again.status_code == 200 and again.json()['id'] == first['id']
+
+
+def test_a_database_conflict_is_a_structured_409(client, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+    from factory import service
+
+    async def boom(*a, **k):
+        raise IntegrityError('x', {}, Exception('dup'))
+    monkeypatch.setattr(service, 'apply_action', boom)
+    item = _make(client)
+    resp = _act(client, item['id'], action='note', text='x')
+    assert resp.status_code == 409 and resp.json()['detail']['code'] == 'conflict'
