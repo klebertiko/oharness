@@ -4,6 +4,7 @@ import type { MessageKey } from "./messages.en";
 export const ptBR: Record<MessageKey, string> = {
   "common.cancel": "Cancelar",
 
+  "ui.pickerAria": "Seletor de {label}",
   "ui.loading": "Carregando…",
   "ui.loadError": "Não foi possível carregar a lista.",
   "ui.empty": "Nada para escolher ainda.",

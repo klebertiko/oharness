@@ -2,6 +2,7 @@
 export const en = {
   "common.cancel": "Cancel",
 
+  "ui.pickerAria": "{label} picker",
   "ui.loading": "Loading…",
   "ui.loadError": "Couldn't load the list.",
   "ui.empty": "Nothing to choose yet.",

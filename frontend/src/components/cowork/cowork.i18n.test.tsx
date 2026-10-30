@@ -8,7 +8,7 @@ vi.mock("@/lib/coworkApi", () => ({ coworkApi: { list: async () => ({ projects: 
 
 afterEach(() => act(() => useLocaleStore.getState().setLocale("en")));
 
-describe("cowork and pickers in pt-BR", () => {
+describe("cowork, model details and pickers in pt-BR", () => {
   it("translates the cowork panel", async () => {
     act(() => useLocaleStore.getState().setLocale("pt-BR"));
     render(<CoworkPanel />);

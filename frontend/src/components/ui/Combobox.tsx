@@ -177,7 +177,7 @@ export function Combobox({
     const rows = searchable && filter
       ? filter(options, query)
       : needle
-      ? options.filter((o) => [o.label, o.detail ?? "", o.id].some((t) => t.toLowerCase().includes(needle)))
+      ? options.filter((o) => [o.label, o.detail ?? "", o.id].some((text) => text.toLowerCase().includes(needle)))
       : options;
     const typed = query.trim();
     if (searchable && allowCustom && typed && !options.some((o) => o.id === typed)) {
@@ -384,7 +384,7 @@ export function Combobox({
         data-combobox-popover=""
         // A landmark, so the portalled list is not "content outside any region" for assistive tech.
         role="region"
-        aria-label={`${label} picker`}
+        aria-label={t("ui.pickerAria", { label })}
         onKeyDown={onPopKeyDown}
         onBlur={(e) => {
           const next = e.relatedTarget as Node | null;
