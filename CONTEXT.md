@@ -102,18 +102,6 @@ _Avoid_: unavailable list, broken providers
 Messages typed while a turn runs; they run after it, in order. A turn that stops or fails pauses the queue.
 _Avoid_: backlog, pending messages
 
-**Subagent**:
-A task the model hands to a child run during a turn. Each child can be cancelled alone.
-_Avoid_: worker, thread
-
-**Turn diff**:
-The files a turn changed in the workspace, each with its own one-time revert.
-_Avoid_: undo all, changeset
-
-**Token ceiling**:
-The token total at which a run stops with the status Budget exceeded.
-_Avoid_: budget (as a field label), limit
-
 **Activity**:
 The list of every run, wherever it started, with Continue as a new run for an interrupted one.
 _Avoid_: history log, executions

@@ -30,9 +30,6 @@ Two rules shape every word below:
 | **Permission mode** | How much a chat may do on its own: Plan, Read-only, Ask, Auto, Workspace write, Full. |
 | **Needs action** | The model picker's group of connections one step from working, with that step. |
 | **Queue** | Messages typed during a turn; they run after it, in order. |
-| **Subagent** | A task the model hands to a child run; each child cancels on its own. |
-| **Turn diff** | The files a turn changed, each with a one-time revert. |
-| **Token ceiling** | The token total at which a run stops as Budget exceeded. |
 | **Activity** | Every run in one list, with Continue as a new run. |
 | **Design system** | The tokens, components and rules the interface follows: [`docs/design-system/`](design-system/README.md). |
 | **Nilo** | The OHarness assistant. |
