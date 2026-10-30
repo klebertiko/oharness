@@ -2,6 +2,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
+import { useT } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
 
@@ -37,6 +38,7 @@ export function Sheet({
   /* Radix returns focus only to a Dialog.Trigger. These sheets are opened from
      store state, so remember what had focus as the sheet takes it and hand it
      back on close. */
+  const t = useT();
   const opener = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -65,7 +67,7 @@ export function Sheet({
           <Dialog.Title className={hideTitle ? "sr-only" : "t-title flex-none border-b border-line-soft px-3 py-2 text-ink"}>{title}</Dialog.Title>
           {showClose && (
             <Dialog.Close asChild>
-              <Button iconOnly size="sm" variant="ghost" aria-label="Close" className="absolute right-1 top-1 z-10" icon={<X size={14} aria-hidden />} />
+              <Button iconOnly size="sm" variant="ghost" aria-label={t("ui.close")} className="absolute right-1 top-1 z-10" icon={<X size={14} aria-hidden />} />
             </Dialog.Close>
           )}
           {children}
