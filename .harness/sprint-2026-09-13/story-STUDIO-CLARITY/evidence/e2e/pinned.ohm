@@ -2,7 +2,7 @@
   "schemaVersion": "1.1.0",
   "manifest": {
     "id": "oharness.default.agile",
-    "name": "Agile Harness",
+    "name": "OHarness Agile (skills-framework)",
     "version": "0.1.0",
     "description": "Authoring fidelity",
     "license": "MIT",
@@ -23,8 +23,7 @@
           "label": "Writer",
           "providerIds": [
             "anthropic"
-          ],
-          "status": "idle"
+          ]
         },
         "measured": {
           "width": 212,
@@ -45,8 +44,7 @@
           "label": "Reviewer",
           "providerIds": [
             "openai"
-          ],
-          "status": "idle"
+          ]
         },
         "measured": {
           "width": 212,
