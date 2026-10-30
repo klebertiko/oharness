@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 import {
   Boxes,
   Keyboard,
@@ -22,14 +24,14 @@ import { appliedTheme, applyTheme, type Theme } from "@/lib/theme";
  * One flat set of destinations — no modes, no reshuffling. Every item opens a
  * real place in the main stage. Chords are Alt+1..6, stable everywhere.
  */
-type NavItem = { id: RailSection; label: string; icon: LucideIcon; chord: string };
+type NavItem = { id: RailSection; label: MessageKey; icon: LucideIcon; chord: string };
 
 /* Order = how often you reach for it. Everyday work first, then the thing you
    set up once and rarely revisit. */
 const NAV: NavItem[] = [
-  { id: "chats", label: "Chats", icon: MessagesSquare, chord: "Alt+1" },
-  { id: "studio", label: "Studio", icon: Boxes, chord: "Alt+2" },
-  { id: "providers", label: "Providers", icon: Plug, chord: "Alt+3" },
+  { id: "chats", label: "shell.rail.chats", icon: MessagesSquare, chord: "Alt+1" },
+  { id: "studio", label: "shell.rail.studio", icon: Boxes, chord: "Alt+2" },
+  { id: "providers", label: "shell.rail.providers", icon: Plug, chord: "Alt+3" },
 ];
 
 /** A hairline before the set-up-once group (Providers). Harnesses lives inside
@@ -79,6 +81,7 @@ export function ActivityRail({
   /** The resize handle, rendered inside the landmark so it is not stray content. */
   edge?: React.ReactNode;
 }) {
+  const t = useT();
   const mac = useIsMac();
   const section = useShellStore((s) => s.section);
   const setSection = useShellStore((s) => s.setSection);
@@ -100,7 +103,7 @@ export function ActivityRail({
 
   return (
     <nav
-      aria-label="Destinations"
+      aria-label={t("shell.rail.destinations")}
       style={
         collapsed
           ? { width: RAIL_COLLAPSED, minWidth: RAIL_COLLAPSED }
@@ -113,7 +116,7 @@ export function ActivityRail({
           {item.id === DIVIDER_BEFORE && <div className="my-1.5 h-px bg-line-soft" aria-hidden />}
           <RailButton
             icon={item.icon}
-            label={item.label}
+            label={t(item.label)}
             hint={chordCaps(item.chord, mac).join(" ")}
             active={section === item.id}
             onClick={() => setSection(item.id)}
@@ -129,13 +132,13 @@ export function ActivityRail({
 
       <RailButton
         icon={theme === "dark" ? Sun : Moon}
-        label={theme === "dark" ? "Use light theme" : "Use dark theme"}
+        label={theme === "dark" ? t("shell.rail.useLight") : t("shell.rail.useDark")}
         onClick={toggleTheme}
       />
-      <RailButton icon={Keyboard} label="Keyboard map" hint="?" onClick={() => setKeymapOpen(true)} />
+      <RailButton icon={Keyboard} label={t("shell.rail.keymap")} hint="?" onClick={() => setKeymapOpen(true)} />
       <RailButton
         icon={leftOpen ? PanelLeftClose : PanelLeftOpen}
-        label={leftOpen ? "Hide panel" : "Show panel"}
+        label={leftOpen ? t("shell.rail.hidePanel") : t("shell.rail.showPanel")}
         hint={chordCaps("Mod+B", mac).join(" ")}
         onClick={toggleLeft}
       />

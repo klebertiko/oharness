@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 import { LOCALES, LOCALE_NAME } from "@/i18n/locale";
-import { useLocaleStore } from "@/i18n/store";
+import { tr, useLocaleStore } from "@/i18n/store";
 import { StudioOverview } from "@/components/studio/StudioOverview";
 import { StudioActionsBar } from "@/components/studio/StudioActionsBar";
 import { newStudioHarness, openStudioPreset } from "@/lib/studio";
@@ -254,8 +254,8 @@ export default function Home() {
           ...insert,
           {
             id: "toggle-right",
-            label: "Toggle inspector",
-            group: "View",
+            label: tr("shell.cmd.toggleInspector"),
+            group: tr("shell.cmd.group.view"),
             icon: PanelRight,
             chord: "Mod+Alt+B",
             run: toggleRight,
@@ -264,8 +264,8 @@ export default function Home() {
 
     const languages: Command[] = LOCALES.filter((l) => l !== locale).map((l) => ({
       id: `language:${l}`,
-      label: `Language: ${LOCALE_NAME[l]}`,
-      group: "View",
+      label: tr("shell.cmd.language", { name: LOCALE_NAME[l] }),
+      group: tr("shell.cmd.group.view"),
       icon: Languages,
       run: () => useLocaleStore.getState().setLocale(l),
     }));
@@ -275,16 +275,16 @@ export default function Home() {
       ...languages,
       {
         id: "toggle-left",
-        label: "Toggle left panel",
-        group: "View",
+        label: tr("shell.cmd.toggleLeft"),
+        group: tr("shell.cmd.group.view"),
         icon: PanelLeft,
         chord: "Mod+B",
         run: toggleLeft,
       },
       {
         id: "keymap",
-        label: "Show keyboard map",
-        group: "View",
+        label: tr("shell.cmd.showKeymap"),
+        group: tr("shell.cmd.group.view"),
         icon: Keyboard,
         run: () => setKeymapOpen(true),
       },
