@@ -9,7 +9,7 @@ import { newStudioHarness, openBundledHarness, openStudioExample, openStudioPres
 import { fetchStudioExamples, type StudioExample } from "@/lib/studioExamples";
 import { HARNESS_PRESETS } from "@/lib/templates";
 import { discardStudioChanges, flushAutosave, hasStudioDraft, openSavedHarness, removeSavedHarness, useStudioDocsStore } from "@/lib/studioDocuments";
-import { formatRelativeTime } from "@/lib/time";
+import { formatRelativeTime, relativeKind } from "@/lib/time";
 import { chordCaps, useIsMac } from "@/components/shell/keys";
 import { KbdChord } from "@/components/ui";
 import { COPILOT_ENABLED } from "@/lib/features";
@@ -28,9 +28,10 @@ const DRAFT_ROW = "__draft__";
 function edited(iso: string | null | undefined): string {
   const utc = iso && !/(z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso + "Z" : iso;
   const rel = formatRelativeTime(utc);
-  if (rel === tr("time.justNow")) return tr("studio.edited.justNow");
-  if (rel === "—") return tr("studio.edited.unknown");
-  return tr("studio.edited.ago", { rel });
+  const kind = relativeKind(utc);
+  if (kind === "now") return tr("studio.edited.justNow");
+  if (kind === "unknown") return tr("studio.edited.unknown");
+  return tr(kind === "future" ? "studio.edited.future" : "studio.edited.ago", { rel });
 }
 
 /** A row in "Your harnesses": a document name with one line of state beneath it. */
@@ -218,7 +219,7 @@ export function StudioOverview() {
                         onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(DRAFT_ROW); }}>
                         <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">{t("studio.ov.deleteDraftBody", { name: harnessMeta.name })}</p>
                         <div className="flex gap-2">
-                          <Button autoFocus onClick={() => cancelDelete(DRAFT_ROW)}>{t("studio.ov.cancel")}</Button>
+                          <Button autoFocus onClick={() => cancelDelete(DRAFT_ROW)}>{t("common.cancel")}</Button>
                           <Button variant="danger" onClick={() => void discardDraft()}>{t("studio.ov.deleteTitle")}</Button>
                         </div>
                       </div>
@@ -249,7 +250,7 @@ export function StudioOverview() {
                           onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(item.id); }}>
                           <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">{t("studio.ov.deleteBody", { name: item.name })}</p>
                           <div className="flex gap-2">
-                            <Button autoFocus onClick={() => cancelDelete(item.id)}>{t("studio.ov.cancel")}</Button>
+                            <Button autoFocus onClick={() => cancelDelete(item.id)}>{t("common.cancel")}</Button>
                             <Button variant="danger" onClick={() => void remove(item.id)}>{t("studio.ov.deleteTitle")}</Button>
                           </div>
                         </div>

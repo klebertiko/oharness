@@ -6,7 +6,7 @@ import { composeBundleFromCanvas, isOHarnessBundle, mockBundle, validateBundle, 
 import { saveOhmFile } from "@/lib/ohmFile";
 import { openStudioBundle } from "@/lib/studio";
 import { VIEW_EDGE_KEYS, VIEW_NODE_KEYS } from "@/lib/studioDocuments";
-import { tr, useT } from "@/i18n/store";
+import { tr, trn, useT } from "@/i18n/store";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore, type HarnessBundle } from "@/store/harnessSessionStore";
 type DockStatus = "idle" | "working" | "ok" | "error";
@@ -65,7 +65,7 @@ export function ValidateDock() {
       } else {
         const result = await mockBundle(bundle); if (!current()) return;
         setStatus(result.ok ? "ok" : "error");
-        setMessage(result.ok ? tr("studio.dock.simOk", { n: result.steps.length }) : tr("studio.dock.simRejected"));
+        setMessage(result.ok ? trn("studio.dock.simOk", result.steps.length) : tr("studio.dock.simRejected"));
         setErrors(result.errors ?? []); setSteps(result.steps ?? []);
       }
     } catch (error) { if (current()) fail(error); }

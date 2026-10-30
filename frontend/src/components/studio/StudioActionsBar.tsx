@@ -51,7 +51,7 @@ export function StudioActionsBar() {
       : saveState === "error" ? t("studio.bar.saveError")
         : dirty ? t("studio.bar.unsaved")
           : harnessMeta.id ? t("studio.bar.saved") : t("studio.bar.notSavedYet");
-  const unsaved = status !== t("studio.bar.saved");
+  const unsaved = saveState === "saving" || saveState === "error" || dirty || !harnessMeta.id;
 
   const run = async (action: () => Promise<unknown>, done?: string) => {
     setBusy(true);
