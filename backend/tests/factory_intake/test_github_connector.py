@@ -185,7 +185,7 @@ def poll_handler(comment, issue, labeled_issue, calls):
                 {"id": 2, "event": "labeled", "label": {"name": "factory"}, "created_at": "2026-01-01T10:00:00Z", "actor": {"login": "maintainer", "type": "User"}}])
         if path.endswith("/issues"):
             return httpx.Response(200, json=[{**labeled_issue, "id": 77, "created_at": "2025-12-01T00:00:00Z", "user": {"login": "outsider", "type": "User"}}])
-        pytest.fail(path)
+        raise AssertionError(path)
     return handler
 
 
