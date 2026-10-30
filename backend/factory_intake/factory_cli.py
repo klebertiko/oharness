@@ -144,12 +144,12 @@ def run(args: argparse.Namespace, port) -> int:
                 except Exception as exc:  # no worktree, no claim: the factory keeps running its own work
                     _fail("worktree_failed", f"could not make the worktree ({type(exc).__name__}); nothing was claimed", as_json)
                     return EXIT_FAILED
+            claimed = None
             try:
                 claimed = port.claim(args.id, holder, made[0] if made else None)
-            except BaseException:
-                if made and not _drop_worktree(args.worktree, made[0]):
+            finally:  # also on an interrupt: a claim that did not happen must not leave a worktree
+                if claimed is None and made and not _drop_worktree(args.worktree, made[0]):
                     print(f"note: a worktree was left at {_plain(made[1])}; remove it with the workspace manager", file=sys.stderr)
-                raise
             item = _item(claimed)
             _emit(name, {"item": item, "worktree": None if made is None else {"id": made[0], "path": made[1]}}, as_json,
                   lambda: [_line(item)] + ([f"worktree: {_plain(made[1])}  (detached: create a branch there, e.g. git switch -c factory/{args.id})"] if made else [])
