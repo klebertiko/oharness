@@ -40,6 +40,10 @@ class WorkItemDraft(BaseModel):
     labels: tuple[Annotated[str, StringConstraints(max_length=100)], ...] = Field(default=(), max_length=50)
     requested_by: str = Field(default="", max_length=200, description="opaque author id as the source reports it; never an authorization")
     idempotency_key: str = Field(min_length=1, max_length=200)
+    agent: str | None = Field(default=None, max_length=100, description="the agent an automation routes this to (owner-set, not from the source)")
+    automation: str | None = Field(default=None, max_length=100, description="id of the automation that created the draft")
+    instructions: str = Field(default="", max_length=MAX_BODY, description="TRUSTED: the owner's automation prompt; `body` stays untrusted source text")
+    token_ceiling: int | None = Field(default=None, ge=1, description="token ceiling for the item's runs, from the automation's limits")
     is_reply: bool = Field(default=False, description="a message in an existing thread (a comment): if the thread's item is open it is added there as a comment")
 
 

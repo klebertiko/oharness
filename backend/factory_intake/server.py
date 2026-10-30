@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from typing import Callable
 
@@ -16,6 +17,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from .automations import AutomationEngine, github_event, webhook_event
 from .config import WebhookConfig
 from .connector import Delivery, TriggerRules
 from .connectors.github import ConnectorError, GitHubConnector
@@ -82,7 +84,7 @@ def authenticate_webhook(cfg: WebhookConfig, secrets_store, headers: dict, body:
 
 
 def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConfig], log: DeliveryLog, *,
-               generic_handler: GenericHandler | None = None, max_body: int = DEFAULT_MAX_BODY_BYTES) -> FastAPI:
+               generic_handler: GenericHandler | None = None, automations: AutomationEngine | None = None, max_body: int = DEFAULT_MAX_BODY_BYTES) -> FastAPI:
     """Handlers are plain ``def`` (run in the threadpool): the secrets store, the port and the delivery log do blocking I/O, and one slow
     call must not stall every other request. Only the body read, which needs the event loop, is ``async`` (a dependency)."""
     app = FastAPI(title="OHarness factory intake", docs_url=None, redoc_url=None, openapi_url=None)
@@ -139,7 +141,10 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
         connector = GitHubConnector(gh.repos, secrets_store, self_logins=gh.self_logins, webhook_secret_ref=cfg.secret_ref)
         rules = TriggerRules(handle=gh.handle, labels=gh.labels, allowed_authors=gh.allowed_authors)
         trigger = f"delivery-{headers.get('x-github-delivery') or key[:32]}"
-        return [deliver(port, draft).item.id for draft in connector.parse_event(headers.get("x-github-event", ""), payload, trigger, rules)]
+        ids = [deliver(port, draft).item.id for draft in connector.parse_event(headers.get("x-github-event", ""), payload, trigger, rules)]
+        if automations is not None and (event := github_event(headers.get("x-github-event", ""), payload, trigger)) is not None:
+            ids += automations.handle(event)  # automations add to the default mention/label behaviour; they never replace its checks
+        return ids
 
     @app.post("/hooks/{name}")
     def receive(name: str, context: tuple = Depends(hook_context)):
@@ -166,7 +171,7 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
                 return JSONResponse({"delivery_id": key, "duplicate": True}, status_code=202)
             raise
         try:
-            items = github_items(cfg, headers, payload, key) if cfg.scheme == "github" else (generic_handler(cfg, headers, payload, key) if generic_handler else [])
+            items = github_items(cfg, headers, payload, key) if cfg.scheme == "github" else (generic_handler(cfg, headers, payload, key) if generic_handler else automations.handle(webhook_event(cfg.name, payload, key)) if automations else [])
         except Exception:
             replay.forget(guard_key)  # handling failed: let the sender retry this delivery
             raise
@@ -300,7 +305,25 @@ def serve(host: str, port_number: int, directory, allow_remote: bool = False) ->
 
     data = Path(os.environ.get("OH_DATA_DIR") or Path.home() / ".oharness")
     data.mkdir(parents=True, exist_ok=True)
-    app = create_app(factory_port, store, webhooks, DeliveryLog(data / "factory_intake.db"))
+    from .automations import AutomationError, load_automations
+
+    try:
+        automations = AutomationEngine(factory_port, load_automations(directory), data / "factory_intake.db")
+    except AutomationError as exc:
+        print(f"serve refused: {exc}", file=sys.stderr)
+        return 2
+    import threading
+
+    def schedule_loop() -> None:
+        while True:
+            time.sleep(30)
+            try:
+                automations.tick()
+            except Exception as error:  # a failing tick must not end the loop; the history records what failed per automation
+                print(f"automation tick failed: {type(error).__name__}", file=sys.stderr)
+
+    threading.Thread(target=schedule_loop, daemon=True, name="factory-schedule").start()
+    app = create_app(factory_port, store, webhooks, DeliveryLog(data / "factory_intake.db"), automations=automations)
     print(f"factory intake listening on {host}:{port_number} ({len(webhooks)} webhook(s))", file=sys.stderr)
     uvicorn.run(app, host=host.strip("[]"), port=port_number, log_level="warning")
     return 0
