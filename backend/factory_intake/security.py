@@ -5,6 +5,7 @@ does not make it safe to obey, which is why the factory never grants permissions
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import math
@@ -45,6 +46,28 @@ def verify_hmac_sha256(secret: bytes, body: bytes, signature: str | None, prefix
         raise Rejected("bad_signature", "signature does not match", 401)
 
 
+def verify_standard_webhooks(secret: str, headers: dict, body: bytes, now: float | None = None, tolerance: float = 300.0) -> None:
+    """Standard Webhooks (Svix-compatible): signature = base64(HMAC-SHA256(key, "<id>.<timestamp>.<body>")) in ``webhook-signature`` as
+    ``v1,<sig>`` (several, space separated); key = base64 of the secret after an optional ``whsec_`` prefix. Timestamps older than five
+    minutes (or in the future) are refused."""
+    if not secret:
+        raise Rejected("no_secret", "no webhook secret is configured", 503)
+    msg_id, stamp, sig = headers.get("webhook-id"), headers.get("webhook-timestamp"), headers.get("webhook-signature")
+    if not (msg_id and stamp and sig):
+        raise Rejected("bad_signature", "missing signature headers", 401)
+    try:
+        issued = float(stamp)
+        key = base64.b64decode(secret.removeprefix("whsec_"), validate=True)
+    except ValueError:
+        raise Rejected("bad_signature", "malformed signature headers", 401) from None
+    if not math.isfinite(issued) or abs((time.time() if now is None else now) - issued) > tolerance:
+        raise Rejected("stale", "signature timestamp is outside the accepted window", 401)
+    expected = base64.b64encode(hmac.new(key, f"{msg_id}.{stamp}.".encode() + body, hashlib.sha256).digest()).decode()
+    candidates = [part[3:] for part in sig.split() if part.startswith("v1,")]
+    if not any(hmac.compare_digest(c.encode("utf-8", "replace"), expected.encode()) for c in candidates):
+        raise Rejected("bad_signature", "signature does not match", 401)
+
+
 def verify_bearer(expected: str, header: str | None) -> None:
     """Constant-time check of ``Authorization: Bearer <token>`` against a token read from the secrets store."""
     if not expected:
@@ -64,6 +87,11 @@ class ReplayGuard:
         self.ttl, self.max_entries, self._clock = ttl, max_entries, clock
         self._seen: OrderedDict[str, float] = OrderedDict()
         self._lock = threading.Lock()
+
+    def forget(self, delivery_id: str) -> None:
+        """Let a delivery be retried: used when handling it failed after it was recorded."""
+        with self._lock:
+            self._seen.pop(delivery_id, None)
 
     def check(self, delivery_id: str, timestamp: float | None = None) -> None:
         now = self._clock()
@@ -132,3 +160,6 @@ def secret_ref(name: str) -> str:
     if not name or not all(ch.isalnum() or ch in "-_." for ch in name):
         raise ValueError("secret names use letters, digits, '-', '_' and '.'")
     return SECRET_REF_PREFIX + name
+
+
+vault_key = secret_ref  # the name of an entry in the secrets store: a label, not a credential
