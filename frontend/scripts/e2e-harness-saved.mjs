@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
@@ -33,6 +34,7 @@ const browser = await chromium.launch(launch);
 const failures = [];
 
 async function axe(page, label) {
+  await settleForAxe(page);
   await page.addScriptTag({ content: axeSource });
   const violations = await page.evaluate(async () => {
     const r = await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });

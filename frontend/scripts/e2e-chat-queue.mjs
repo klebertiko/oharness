@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const fixture = JSON.parse(readFileSync("src/lib/fixtures/ohm-roundtrip.json", "utf8"));
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
@@ -86,6 +87,8 @@ for (const theme of ["dark", "light"]) {
     await page.getByText("Third message", { exact: true }).waitFor();
     await page.waitForTimeout(300);
     note(turns.length === 1, label("queued messages do not start while the turn is active"), JSON.stringify(turns));
+
+    await settleForAxe(page);
 
     await page.addScriptTag({ content: axeSource });
     const violations = await page.evaluate(async () => {
