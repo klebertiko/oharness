@@ -20,6 +20,12 @@ describe("subagent state in the run", () => {
     expect(s.status).not.toBe("stopped");
   });
 
+  it("tells the person when the provider could not offer subagents", () => {
+    const s = sse(emptyRun, "subagent_unavailable", { reason: "provider" });
+    expect(s.notices).toEqual(["Subagents are not available with this provider, so the turn ran without them."]);
+    expect(sse(s, "subagent_unavailable", { reason: "provider" }).notices).toHaveLength(1); // not repeated
+  });
+
   it("settles running children when the run stops, so none is left looking live", () => {
     let s = sse(emptyRun, "subagent_start", { child_id: "c1", parent_call_id: "k0", task: "alpha", state: "running" });
     s = sse(s, "run_stopped", {});
@@ -73,6 +79,19 @@ describe("SubagentTree", () => {
     expect(await axeViolations(container)).toEqual([]);
     rerender(<SubagentTree runId="r1" runLive={false} status="complete" subagents={children} />);
     expect(screen.queryByRole("button", { name: /Cancel subagent/ })).toBeNull();
+  });
+
+  it("speaks the chosen language", async () => {
+    const { useLocaleStore } = await import("@/i18n/store");
+    useLocaleStore.setState({ locale: "pt-BR" });
+    try {
+      render(<SubagentTree runId="r1" runLive status="running" subagents={children} />);
+      expect(screen.getByRole("region", { name: "Subagentes" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Cancelar o subagente alpha" })).toBeTruthy();
+      expect(screen.getByText("concluído")).toBeTruthy();
+    } finally {
+      useLocaleStore.setState({ locale: "en" });
+    }
   });
 
   it("renders nothing without children", () => {
