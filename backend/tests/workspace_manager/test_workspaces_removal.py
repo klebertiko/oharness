@@ -444,3 +444,27 @@ def test_the_administrative_directory_is_reconfirmed_before_it_is_deleted(svc, r
         svc.remove(str(repo.path), info["id"], report["confirmation_token"])
     assert caught.value.code == "inspection_failed"
     assert len(calls) == 1 and admin.is_dir() and neighbour_admin.is_dir() and Path(neighbour["path"]).is_dir()
+
+
+def test_rescue_scratch_index_keeps_the_source_index_mtime(svc, repo, monkeypatch):
+    """Racy git: git trusts an entry as clean only if it is older than its index file, so a copy that gets a fresh mtime lets a
+    same-size edit made in the same timestamp tick slip past ``add`` and the rescue keeps the stale blob (flaky 'differs from the bytes on disk')."""
+    repo.commit("a.txt", "payload\n")
+    info = svc.create(str(repo.path), "main", branch="racy-rescue")
+    path = Path(info["path"])
+    (path / "a.txt").write_text("changed\n", encoding="utf-8")
+    index = Path(repo.out("-C", str(path), "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    os.utime(index, ns=(1_000_000_000_000_000_000, 1_000_000_000_000_000_000))
+    seen: list[int] = []
+    real = svc.runner.run
+
+    def spy(cwd, args, **kw):
+        if "add" in args and kw.get("env", {}).get("GIT_INDEX_FILE"):
+            seen.append(os.stat(kw["env"]["GIT_INDEX_FILE"]).st_mtime_ns)
+        return real(cwd, args, **kw)
+
+    monkeypatch.setattr(svc.runner, "run", spy)
+    report = svc.removal_check(str(repo.path), info["id"])
+    result = svc.remove(str(repo.path), info["id"], report["confirmation_token"])
+    assert seen == [1_000_000_000_000_000_000]
+    assert repo.out("show", f"{result['rescue']['ref']}:a.txt") == "changed"

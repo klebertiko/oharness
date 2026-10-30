@@ -493,6 +493,9 @@ class RemovalMixin:
                 target = Path(scratch) / name
                 if source_index.is_file():
                     shutil.copyfile(source_index, target)
+                    # same mtime: git trusts an entry as clean only if older than its index (racy-git)
+                    source_stat = source_index.stat()
+                    os.utime(target, ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns))
                 else:
                     run(cwd, ["read-tree", entry.head], env={"GIT_INDEX_FILE": str(target)})
                 return {**base_env, "GIT_INDEX_FILE": str(target)}
