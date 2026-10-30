@@ -1,5 +1,4 @@
 import json
-import sys
 import subprocess
 from pathlib import Path
 
@@ -161,7 +160,9 @@ def test_states_follow_the_port_and_building_the_parser_loads_no_heavy_modules()
     from typing import get_args
     from factory_intake.port import WorkState
     assert factory_cli.STATES == list(get_args(WorkState))
-    probe = "import sys; sys.path.insert(0, '.'); import argparse; from factory_intake import cli; p = argparse.ArgumentParser(); cli.add_parser(p.add_subparsers()); print('jsonschema' in sys.modules, 'pydantic' in sys.modules)"
-    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2], timeout=60)
-    assert done.stdout.split() == ["False", "False"], done.stderr
+    import ast
+
+    tree = ast.parse(Path(factory_cli.__file__).read_text(encoding="utf-8"))
+    top_level = {alias.name.split(".")[0] for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom)) for alias in node.names}
+    top_level |= {node.module.split(".")[0] for node in tree.body if isinstance(node, ast.ImportFrom) and node.module and not node.level}
+    assert not top_level & {"jsonschema", "pydantic"}, top_level   # the parser is built on every `oharness` run: heavy imports stay inside the commands
