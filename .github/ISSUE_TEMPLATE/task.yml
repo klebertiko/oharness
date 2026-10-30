@@ -1,0 +1,28 @@
+name: Tarefa
+description: Uma entrega de 1 PR. Mantenha curto.
+labels: ["type:task", "status:backlog"]
+body:
+  - type: input
+    id: goal
+    attributes:
+      label: Objetivo
+      description: Uma frase.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Pronto quando
+      description: Critérios verificáveis, em lista.
+    validations:
+      required: true
+  - type: input
+    id: deps
+    attributes:
+      label: Depende de
+      description: Números de issues, se houver.
+  - type: textarea
+    id: ctx
+    attributes:
+      label: Contexto
+      description: Links para ADR, arquivos ou PRs. Sem texto longo.

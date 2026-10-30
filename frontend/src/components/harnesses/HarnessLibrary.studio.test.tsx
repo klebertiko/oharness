@@ -10,7 +10,7 @@ afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
   useHarnessSessionStore.setState({ activeBundle: builtin, enabled: false });
-  useHarnessLibraryStore.setState({ hydrated: true, entries: [{ id: DEFAULT_BUNDLE_ID, name: "Agile", isDefault: true, bundle: builtin, addedAt: 0 }] });
+  useHarnessLibraryStore.setState({ hydrated: true, entries: [{ id: DEFAULT_BUNDLE_ID, name: "Agile", isDefault: true, source: "bundled", bundle: builtin, addedAt: 0 }] });
 });
 it("opens an imported copy with the default ID instead of substituting the built-in bundle", async () => {
   const edited = { ...builtin, manifest: { ...builtin.manifest, name: "Edited copy" }, graph: { nodes: [{ id: "my-edit", role: "agent" }], edges: [] } };
@@ -34,4 +34,11 @@ it("retains the standalone library Use action", async () => {
   await userEvent.setup().click(screen.getByRole("button", { name: "Use Agile" }));
   expect(useHarnessSessionStore.getState().activeBundle).toEqual(builtin);
   expect(useHarnessSessionStore.getState().enabled).toBe(true);
+});
+
+it("leaves harnesses saved in Studio to Studio's own overview", async () => {
+  const saved = { id: "s1", name: "Saved In Studio", isDefault: false, source: "saved" as const, bundle: { manifest: { id: "s1", name: "Saved In Studio" } }, addedAt: 1 };
+  useHarnessLibraryStore.setState({ entries: [...useHarnessLibraryStore.getState().entries, saved] });
+  render(<HarnessLibrary onPicked={vi.fn()} />);
+  expect(screen.queryByText("Saved In Studio")).toBeNull();
 });
