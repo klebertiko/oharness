@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .automations import AutomationEngine, github_event, webhook_event
 from .config import WebhookConfig
-from .connector import Delivery, TriggerRules
+from .connector import TriggerRules
 from .connectors.github import ConnectorError, GitHubConnector
 from .deliveries import DeliveryLog
 from .pipeline import deliver

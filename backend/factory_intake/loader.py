@@ -24,7 +24,9 @@ def load_port(target: str | None = None) -> FactoryPort:
     if module_name.split(".")[0] not in ALLOWED_PACKAGES:  # the target comes from the environment: only the factory's own packages are importable
         raise FoundationMissing(f"{target} is not in an allowed package ({', '.join(sorted(ALLOWED_PACKAGES))})")
     try:
-        module = importlib.import_module(module_name)  # nosemgrep: opengrep-rules.python.lang.security.audit.non-literal-import (allow-listed package, owner-set env)
+        # the module name was checked against ALLOWED_PACKAGES above
+        # nosemgrep: opengrep-rules.python.lang.security.audit.non-literal-import
+        module = importlib.import_module(module_name)  # nosemgrep: opengrep-rules.python.lang.security.audit.non-literal-import
         port = getattr(module, attr)()
     except (ImportError, AttributeError, TypeError):
         raise FoundationMissing(f"the factory foundation is not available here ({target} not found); install it or set OH_FACTORY_PORT=module:callable") from None
