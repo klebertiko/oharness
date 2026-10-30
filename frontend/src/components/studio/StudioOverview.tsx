@@ -15,6 +15,7 @@ import { KbdChord } from "@/components/ui";
 import { COPILOT_ENABLED } from "@/lib/features";
 import { startCopilotFromOverview } from "@/lib/copilotEntry";
 import { Badge, Button, EmptyState, Notice, SkeletonRows } from "@/components/ui";
+import { tr, useT } from "@/i18n/store";
 import { ScrollRail } from "./ScrollRail";
 
 // One card for every rail in the overview: fixed width so a row of them reads as a rhythm,
@@ -27,7 +28,9 @@ const DRAFT_ROW = "__draft__";
 function edited(iso: string | null | undefined): string {
   const utc = iso && !/(z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso + "Z" : iso;
   const rel = formatRelativeTime(utc);
-  return rel === "just now" || rel === "—" ? `Edited ${rel}` : `Edited ${rel} ago`;
+  if (rel === tr("time.justNow")) return tr("studio.edited.justNow");
+  if (rel === "—") return tr("studio.edited.unknown");
+  return tr("studio.edited.ago", { rel });
 }
 
 /** A row in "Your harnesses": a document name with one line of state beneath it. */
@@ -47,6 +50,7 @@ function DocumentLine({ name, status, live }: { name: string; status: string; li
 }
 
 export function StudioOverview() {
+  const t = useT();
   const mac = useIsMac();
   const { harnessMeta, nodes, edges, isRunning } = useCanvasStore();
   const { setStudioView, setLibraryOpen } = useShellStore();
@@ -75,7 +79,7 @@ export function StudioOverview() {
 
   const openSaved = async (id: string) => {
     setRowError("");
-    try { await openSavedHarness(id); } catch (e) { setRowError((e as Error).message || "Could not open this harness."); }
+    try { await openSavedHarness(id); } catch (e) { setRowError((e as Error).message || t("studio.ov.openFailed")); }
   };
   const remove = async (id: string) => {
     setRowError("");
@@ -103,7 +107,7 @@ export function StudioOverview() {
     try {
       await openBundledHarness(controller.signal);
     } catch {
-      if (!controller.signal.aborted) setError("Could not load the bundled harness. Check that the local engine is available, then try again.");
+      if (!controller.signal.aborted) setError(t("studio.ov.bundledFailed"));
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -119,7 +123,7 @@ export function StudioOverview() {
     try {
       await startCopilotFromOverview(description);
     } catch (err) {
-      setCopilotError((err as Error).message || "Nilo could not start.");
+      setCopilotError((err as Error).message || t("studio.ov.niloFailed"));
     } finally {
       setDrafting(false);
     }
@@ -134,12 +138,12 @@ export function StudioOverview() {
   const startDisabled = loading || isRunning;
   const newHarness = (
     <Button size="lg" variant={COPILOT_ENABLED ? "secondary" : "primary"} onClick={() => void startFresh(newStudioHarness)} disabled={startDisabled} icon={<Plus size={14} aria-hidden />}>
-      New harness
+      {t("studio.ov.newHarness")}
     </Button>
   );
   const openOhm = (
     <Button size="lg" variant={COPILOT_ENABLED ? "ghost" : "secondary"} onClick={() => setLibraryOpen(true)} disabled={startDisabled} icon={<FolderOpen size={14} aria-hidden />}>
-      Open .ohm
+      {t("studio.ov.openOhm")}
     </Button>
   );
   const hasRows = items.length > 0 || unsavedDraft;
@@ -149,10 +153,10 @@ export function StudioOverview() {
       <div className="mx-auto w-full max-w-[1040px]">
         {COPILOT_ENABLED ? (
           <header className="max-w-[760px]">
-            <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">Harness Studio</h1>
-            <p className="mt-2 text-title leading-6 text-ink-mute">Say what the harness should do. Nilo drafts the graph; you review every change.</p>
+            <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">{t("studio.ov.title")}</h1>
+            <p className="mt-2 text-title leading-6 text-ink-mute">{t("studio.ov.heroCopilot")}</p>
             <form onSubmit={(e) => void draftWithCopilot(e)} className="oh-agent-composer mt-5">
-              <label htmlFor="studio-describe" className="sr-only">Describe the harness you want</label>
+              <label htmlFor="studio-describe" className="sr-only">{t("studio.ov.describeLabel")}</label>
               <textarea
                 id="studio-describe"
                 value={prompt}
@@ -160,16 +164,16 @@ export function StudioOverview() {
                 onKeyDown={onPromptKey}
                 maxLength={PROMPT_LIMIT}
                 rows={3}
-                placeholder="Describe the harness you want… e.g. research a topic, draft a brief, then a review gate before a person approves."
+                placeholder={t("studio.ov.describePlaceholder")}
                 aria-describedby={copilotError ? "studio-describe-error" : undefined}
                 className="block min-h-22 w-full resize-y rounded-t-composer bg-transparent px-4 pb-2 pt-4 text-reading text-ink placeholder:text-ink-mute focus-visible:outline-hidden"
               />
               <div className="flex flex-wrap items-center gap-2 px-2.5 pb-2.5 pt-1">
                 <div className="flex flex-wrap gap-2">{newHarness}{openOhm}</div>
                 <div className="ml-auto flex items-center gap-3">
-                  <span className="flex items-center gap-1.5 text-meta text-ink-mute max-sm:hidden"><KbdChord caps={chordCaps("Mod+Enter", mac)} /> to draft</span>
-                  <Button type="submit" size="lg" variant="primary" disabled={!canDraft} loading={drafting} title={!canDraft && !drafting ? "Describe the harness to draft it" : undefined} icon={<ArrowRight size={14} aria-hidden />}>
-                    {drafting ? "Drafting…" : "Draft with Nilo"}
+                  <span className="flex items-center gap-1.5 text-meta text-ink-mute max-sm:hidden"><KbdChord caps={chordCaps("Mod+Enter", mac)} /> {t("studio.ov.toDraft")}</span>
+                  <Button type="submit" size="lg" variant="primary" disabled={!canDraft} loading={drafting} title={!canDraft && !drafting ? t("studio.ov.describeFirst") : undefined} icon={<ArrowRight size={14} aria-hidden />}>
+                    {drafting ? t("studio.ov.drafting") : t("studio.ov.draftWithNilo")}
                   </Button>
                 </div>
               </div>
@@ -179,43 +183,43 @@ export function StudioOverview() {
         ) : (
           <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
             <div className="min-w-0 max-w-[560px]">
-              <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">Harness Studio</h1>
-              <p className="mt-2 text-title leading-6 text-ink-mute">Design a workflow. Connect its agents. Share it as OHM.</p>
+              <h1 id="studio-heading" className="t-display text-display text-ink wrap-anywhere">{t("studio.ov.title")}</h1>
+              <p className="mt-2 text-title leading-6 text-ink-mute">{t("studio.ov.heroPlain")}</p>
             </div>
             <div className="flex flex-wrap gap-2">{newHarness}{openOhm}</div>
           </header>
         )}
 
-        {isRunning && <Notice className="mt-5">A run is in progress. Continue editing to inspect or stop it before opening another harness.</Notice>}
+        {isRunning && <Notice className="mt-5">{t("studio.ov.running")}</Notice>}
 
         <div className="mt-8 grid grid-cols-1 gap-10 border-t border-line pt-8">
           <section aria-labelledby="your-harnesses" className="relative min-w-0 [&>p]:pr-20">
             <div className="flex items-baseline gap-2">
-              <h2 id="your-harnesses" className="t-title text-ink">Your harnesses</h2>
+              <h2 id="your-harnesses" className="t-title text-ink">{t("studio.ov.yours")}</h2>
               {items.length > 0 && <span className="t-meta text-ink-mute">{items.length}</span>}
             </div>
-            <p className="mt-1 text-body leading-5 text-ink-mute">Saved on this device as you edit. Export an OHM file to share a copy.</p>
+            <p className="mt-1 text-body leading-5 text-ink-mute">{t("studio.ov.yoursNote")}</p>
             {listError && (
-              <Notice tone="fault" className="mt-4" title="Couldn't load your harnesses" action={<Button size="sm" onClick={() => void refresh()}>Retry</Button>}>
+              <Notice tone="fault" className="mt-4" title={t("studio.ov.listFailed")} action={<Button size="sm" onClick={() => void refresh()}>{t("studio.ov.retry")}</Button>}>
                 {listError}
               </Notice>
             )}
             {rowError && <Notice tone="fault" className="mt-3">{rowError}</Notice>}
-            {!loaded && !listError && <SkeletonRows rows={1} label="Loading your harnesses" className="mt-4 *:h-38 *:w-68" />}
+            {!loaded && !listError && <SkeletonRows rows={1} label={t("studio.ov.loadingList")} className="mt-4 *:h-38 *:w-68" />}
             {loaded && !listError && !hasRows && (
-              <EmptyState className="mt-4" title="Nothing saved yet">A new harness is saved here as soon as you edit it.</EmptyState>
+              <EmptyState className="mt-4" title={t("studio.ov.emptyTitle")}>{t("studio.ov.emptyBody")}</EmptyState>
             )}
             {hasRows && (
               <ScrollRail as="ul" labelledBy="your-harnesses" className="mt-4">
                 {unsavedDraft && (
                   <li className={`${railCard} border-line-strong`}>
                     {confirmId === DRAFT_ROW ? (
-                      <div role="group" aria-label={`Delete ${harnessMeta.name}`} className="flex w-full flex-col gap-3"
+                      <div role="group" aria-label={t("studio.ov.deleteAria", { name: harnessMeta.name })} className="flex w-full flex-col gap-3"
                         onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(DRAFT_ROW); }}>
-                        <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">Delete the draft “{harnessMeta.name}”? It hasn’t been saved, so it’s gone for good.</p>
+                        <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">{t("studio.ov.deleteDraftBody", { name: harnessMeta.name })}</p>
                         <div className="flex gap-2">
-                          <Button autoFocus onClick={() => cancelDelete(DRAFT_ROW)}>Cancel</Button>
-                          <Button variant="danger" onClick={() => void discardDraft()}>Delete</Button>
+                          <Button autoFocus onClick={() => cancelDelete(DRAFT_ROW)}>{t("studio.ov.cancel")}</Button>
+                          <Button variant="danger" onClick={() => void discardDraft()}>{t("studio.ov.deleteTitle")}</Button>
                         </div>
                       </div>
                     ) : (
@@ -223,13 +227,13 @@ export function StudioOverview() {
                         <DocumentLine
                           name={harnessMeta.name}
                           live
-                          status={!dirty ? "Open now · it's saved here once you change it." : saveState === "error" ? "Not saved yet — the local engine is unreachable. It saves as soon as it can." : "Saving…"}
+                          status={!dirty ? t("studio.ov.openNowSaved") : saveState === "error" ? t("studio.ov.draftUnreachable") : t("studio.ov.draftSaving")}
                         />
                         <div className="mt-auto flex w-full items-center justify-between gap-2">
-                          <Button aria-label={`Continue editing ${harnessMeta.name}`} onClick={() => setStudioView("editor")} icon={<ArrowRight size={14} aria-hidden />} className="flex-row-reverse">
-                            Continue editing
+                          <Button aria-label={t("studio.ov.continueAria", { name: harnessMeta.name })} onClick={() => setStudioView("editor")} icon={<ArrowRight size={14} aria-hidden />} className="flex-row-reverse">
+                            {t("studio.ov.continue")}
                           </Button>
-                          <Button iconOnly variant="ghost" data-delete-for={DRAFT_ROW} aria-label={`Delete ${harnessMeta.name}`} title="Delete draft" disabled={isRunning}
+                          <Button iconOnly variant="ghost" data-delete-for={DRAFT_ROW} aria-label={t("studio.ov.deleteAria", { name: harnessMeta.name })} title={t("studio.bar.deleteDraft")} disabled={isRunning}
                             onClick={() => setConfirmId(DRAFT_ROW)} icon={<Trash2 size={14} aria-hidden />} />
                         </div>
                       </>
@@ -241,12 +245,12 @@ export function StudioOverview() {
                   return (
                     <li key={item.id} className={`${railCard} transition-colors ${open ? "border-line-strong" : "hover:bg-sub-200"}`}>
                       {confirmId === item.id ? (
-                        <div role="group" aria-label={`Delete ${item.name}`} className="flex w-full flex-col gap-3"
+                        <div role="group" aria-label={t("studio.ov.deleteAria", { name: item.name })} className="flex w-full flex-col gap-3"
                           onKeyDown={(e) => { if (e.key === "Escape") cancelDelete(item.id); }}>
-                          <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">Delete “{item.name}” from this device? This can’t be undone.</p>
+                          <p className="min-w-0 flex-1 text-title leading-6 text-ink wrap-anywhere">{t("studio.ov.deleteBody", { name: item.name })}</p>
                           <div className="flex gap-2">
-                            <Button autoFocus onClick={() => cancelDelete(item.id)}>Cancel</Button>
-                            <Button variant="danger" onClick={() => void remove(item.id)}>Delete</Button>
+                            <Button autoFocus onClick={() => cancelDelete(item.id)}>{t("studio.ov.cancel")}</Button>
+                            <Button variant="danger" onClick={() => void remove(item.id)}>{t("studio.ov.deleteTitle")}</Button>
                           </div>
                         </div>
                       ) : (
@@ -254,13 +258,13 @@ export function StudioOverview() {
                           <DocumentLine
                             name={item.name}
                             live={open}
-                            status={open ? (saveState === "saving" ? "Open · saving…" : saveState === "error" ? "Open · last changes not saved" : "Open now") : edited(item.updated_at)}
+                            status={open ? (saveState === "saving" ? t("studio.ov.statusSaving") : saveState === "error" ? t("studio.ov.statusError") : t("studio.ov.statusOpen")) : edited(item.updated_at)}
                           />
                           <div className="mt-auto flex w-full items-center justify-between gap-2">
-                            <Button aria-label={`${open ? "Continue editing" : "Open"} ${item.name}`} disabled={isRunning && !open} onClick={() => (open ? setStudioView("editor") : void openSaved(item.id))} icon={<ArrowRight size={14} aria-hidden />} className="flex-row-reverse">
-                              {open ? "Continue editing" : "Open"}
+                            <Button aria-label={t(open ? "studio.ov.continueAria" : "studio.ov.openAria", { name: item.name })} disabled={isRunning && !open} onClick={() => (open ? setStudioView("editor") : void openSaved(item.id))} icon={<ArrowRight size={14} aria-hidden />} className="flex-row-reverse">
+                              {open ? t("studio.ov.continue") : t("studio.ov.open")}
                             </Button>
-                            <Button iconOnly variant="ghost" data-delete-for={item.id} aria-label={`Delete ${item.name}`} title="Delete" disabled={isRunning && open}
+                            <Button iconOnly variant="ghost" data-delete-for={item.id} aria-label={t("studio.ov.deleteAria", { name: item.name })} title={t("studio.ov.deleteTitle")} disabled={isRunning && open}
                               onClick={() => setConfirmId(item.id)} icon={<Trash2 size={14} aria-hidden />} />
                           </div>
                         </>
@@ -273,50 +277,50 @@ export function StudioOverview() {
           </section>
 
           <aside aria-labelledby="starting-points" className="relative min-w-0 [&>p]:pr-20">
-            <h2 id="starting-points" className="t-title text-ink">Starting points</h2>
-            <p className="mt-1 text-body leading-5 text-ink-mute">Open a bundled harness, such as the Agile Harness, as an editable copy. Your work stays saved.</p>
+            <h2 id="starting-points" className="t-title text-ink">{t("studio.ov.starts")}</h2>
+            <p className="mt-1 text-body leading-5 text-ink-mute">{t("studio.ov.startsNote")}</p>
             <ScrollRail labelledBy="starting-points" className="mt-4">
               <article className={railCard}>
 
                 <div className="flex items-center gap-2">
                   <Workflow size={14} strokeWidth={1.6} aria-hidden className="flex-none text-ink-mute" />
-                  <Badge>Bundled harness</Badge>
+                  <Badge>{t("studio.ov.bundledBadge")}</Badge>
                 </div>
                 <div className="min-w-0">
-                  <h3 className="t-title text-ink">Agent + review</h3>
-                  <p className="mt-1 text-body leading-5 text-ink-mute">Agent → review gate → human approval. Three nodes, configured for mock runs.</p>
+                  <h3 className="t-title text-ink">{t("studio.ov.gateTitle")}</h3>
+                  <p className="mt-1 text-body leading-5 text-ink-mute">{t("studio.ov.gateBody")}</p>
                 </div>
-                <Button disabled={startDisabled} aria-label="Open harness: Agent + review" className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />} onClick={() => {
+                <Button disabled={startDisabled} aria-label={t("studio.ov.openHarnessAria", { name: t("studio.ov.gateTitle") })} className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />} onClick={() => {
                   const sample = HARNESS_PRESETS.find((p) => p.id === "minimal-gate");
                   if (sample) void startFresh(() => openStudioPreset(sample));
-                }}>Open harness</Button>
+                }}>{t("studio.ov.openHarness")}</Button>
               </article>
               <article className={railCard}>
                 <div className="flex items-center gap-2">
                   <Workflow size={14} strokeWidth={1.6} aria-hidden className="flex-none text-ink-mute" />
-                  <Badge>Bundled harness</Badge>
+                  <Badge>{t("studio.ov.bundledBadge")}</Badge>
                 </div>
                 <div className="min-w-0">
                   <h3 className="t-title text-ink">Agile Harness</h3>
-                  <p className="mt-1 text-body leading-5 text-ink-mute">Includes agent profiles and harness guidance. The graph is adapted from the skills-framework workflow, not the complete workflow.</p>
+                  <p className="mt-1 text-body leading-5 text-ink-mute">{t("studio.ov.agileBody")}</p>
                 </div>
-                <Button disabled={startDisabled} loading={loading} aria-label="Open harness: Agile Harness" className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />} onClick={() => void startFresh(openFramework)}>
-                  {loading ? "Opening…" : "Open harness"}
+                <Button disabled={startDisabled} loading={loading} aria-label={t("studio.ov.openHarnessAria", { name: "Agile Harness" })} className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />} onClick={() => void startFresh(openFramework)}>
+                  {loading ? t("studio.ov.opening") : t("studio.ov.openHarness")}
                 </Button>
               </article>
               {extraExamples.map((ex) => (
                 <article key={ex.id} className={railCard}>
                   <div className="flex items-center gap-2">
                     <Workflow size={14} strokeWidth={1.6} aria-hidden className="flex-none text-ink-mute" />
-                    <Badge>Bundled harness</Badge>
+                    <Badge>{t("studio.ov.bundledBadge")}</Badge>
                   </div>
                   <div className="min-w-0">
                     <h3 title={ex.name} className="t-title text-ink">{ex.name}</h3>
                     {ex.description && <p title={ex.description} className="mt-1 line-clamp-3 text-body leading-5 text-ink-mute">{ex.description}</p>}
                   </div>
-                  <Button disabled={startDisabled} aria-label={`Open harness: ${ex.name}`} className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />}
+                  <Button disabled={startDisabled} aria-label={t("studio.ov.openHarnessAria", { name: ex.name })} className="mt-auto flex-row-reverse" icon={<ArrowRight size={14} aria-hidden />}
                     onClick={() => void startFresh(() => openStudioExample(ex))}>
-                    Open harness
+                    {t("studio.ov.openHarness")}
                   </Button>
                 </article>
               ))}

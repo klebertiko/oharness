@@ -1,3 +1,5 @@
+import { tr } from "@/i18n/store";
+
 /** Compact relative-time labels ("2mo", "3d", "just now") for real ISO timestamps. */
 export function formatRelativeTime(iso: string | undefined | null): string {
   if (!iso) return "—";
@@ -8,17 +10,20 @@ export function formatRelativeTime(iso: string | undefined | null): string {
   const abs = Math.abs(diffSec);
   const future = diffSec < 0;
 
-  const label = (n: number, unit: string) => `${future ? "in " : ""}${n}${unit}${future ? "" : ""}`;
+  const label = (key: "chat.time.minutes" | "chat.time.hours" | "chat.time.days" | "time.months" | "time.years", n: number) => {
+    const text = tr(key, { n });
+    return future ? tr("time.future", { value: text }) : text;
+  };
 
-  if (abs < 60) return "just now";
+  if (abs < 60) return tr("time.justNow");
   const min = Math.round(abs / 60);
-  if (min < 60) return label(min, "m");
+  if (min < 60) return label("chat.time.minutes", min);
   const hr = Math.round(min / 60);
-  if (hr < 24) return label(hr, "h");
+  if (hr < 24) return label("chat.time.hours", hr);
   const day = Math.round(hr / 24);
-  if (day < 30) return label(day, "d");
+  if (day < 30) return label("chat.time.days", day);
   const month = Math.round(day / 30);
-  if (month < 12) return label(month, "mo");
+  if (month < 12) return label("time.months", month);
   const year = Math.round(month / 12);
-  return label(year, "y");
+  return label("time.years", year);
 }
