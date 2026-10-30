@@ -1,0 +1,18 @@
+{
+ "action": "create",
+ "type": "Comment",
+ "data": {
+  "id": "c1",
+  "body": "@payments take this",
+  "issue": {
+   "id": "i1",
+   "identifier": "ENG-12",
+   "title": "Slow query"
+  },
+  "user": {
+   "name": "Alice"
+  }
+ },
+ "url": "https://linear.app/x/issue/ENG-12",
+ "webhookTimestamp": 1700000000000
+}

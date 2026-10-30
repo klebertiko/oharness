@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+from .factory_cli import COMMANDS
+
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
 
 
@@ -31,6 +33,21 @@ def add_parser(sub) -> argparse.ArgumentParser:
     actions.add_parser("check", help="whether a client with this name exists").add_argument("name")
     revoke = actions.add_parser("revoke")
     revoke.add_argument("name")
+    from . import factory_cli
+
+    factory_cli.add_commands(group)
+    group.add_parser("mcp", help="Factory MCP over stdio, for a local coding agent (ADR 0063)")
+
+    auto = group.add_parser("automation", help="scheduled and event automations (ADR 0062)")
+    auto.add_argument("--dir", type=Path, default=Path(".oharness/factory"))
+    verbs = auto.add_subparsers(dest="auto_cmd", required=True)
+    verbs.add_parser("list", help="automations with their triggers and paused state")
+    for verb in ("pause", "resume"):
+        verbs.add_parser(verb).add_argument("id")
+    history = verbs.add_parser("history", help="what fired, what was skipped and why")
+    history.add_argument("id", nargs="?")
+    history.add_argument("--limit", type=int, default=50)
+    verbs.add_parser("tick", help="start the schedule slots that came due since the last tick (for an external cron/launchd; `serve` ticks by itself)")
     return factory
 
 
@@ -56,6 +73,36 @@ def run(args: argparse.Namespace) -> int:
         from .server import serve
 
         return serve(args.host, args.port, args.dir, args.allow_remote)
+    if args.factory_cmd in COMMANDS:
+        from . import factory_cli
+        from .loader import FoundationMissing, load_port
+
+        try:
+            port = load_port()
+        except FoundationMissing as exc:
+            factory_cli._fail("no_factory", str(exc), args.json)
+            return EXIT_USAGE
+        return factory_cli.run(args, port)
+    if args.factory_cmd == "mcp":
+        from .loader import FoundationMissing, load_port
+        from .mcp import serve_stdio
+
+        try:
+            port = load_port()
+        except FoundationMissing as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        for stream, options in ((sys.stdin, {"encoding": "utf-8", "errors": "replace", "newline": "\n"}), (sys.stdout, {"encoding": "utf-8", "newline": "\n"})):
+            if hasattr(stream, "reconfigure"):  # UTF-8 and "\n" on every platform; undecodable bytes are replaced, never a crash
+                stream.reconfigure(**options)
+        protocol = sys.stdout
+        sys.stdout = sys.stderr  # stdout is the protocol channel: a stray print from anything else must not corrupt it
+        try:
+            return serve_stdio(port, sys.stdin, protocol)
+        finally:
+            sys.stdout = protocol
+    if args.factory_cmd == "automation":
+        return _automation(args)
     if args.factory_cmd == "token":
         from .tokens import ClientTokens
 
@@ -94,3 +141,40 @@ def run(args: argparse.Namespace) -> int:
             print(json.dumps({"revoked": ok}))
             return EXIT_OK if ok else EXIT_FAILED
     return EXIT_USAGE
+
+
+def _automation(args: argparse.Namespace) -> int:
+    from .automations import AutomationEngine, AutomationError, load_automations
+    from .loader import FoundationMissing, load_port
+
+    try:
+        found = load_automations(args.dir)
+        port = load_port()
+    except (AutomationError, FoundationMissing) as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    data = Path(os.environ.get("OH_DATA_DIR") or Path.home() / ".oharness")
+    data.mkdir(parents=True, exist_ok=True)
+    engine = AutomationEngine(port, found, data / "factory_intake.db")
+    try:
+        if args.auto_cmd == "list":
+            print(json.dumps({"automations": [{"id": a.id, "title": a.title, "agent": a.agent, "enabled": a.enabled, "paused": engine.is_paused(a.id),
+                                               "triggers": [f"{t.provider}/{t.name or t.event}" for t in a.triggers]} for a in found.values()]}))
+            return EXIT_OK
+        if args.auto_cmd in ("pause", "resume"):
+            try:
+                engine.set_paused(args.id, args.auto_cmd == "pause")
+            except KeyError:
+                print("refused: no such automation", file=sys.stderr)
+                return EXIT_USAGE
+            print(json.dumps({"id": args.id, "paused": args.auto_cmd == "pause"}))
+            return EXIT_OK
+        if args.auto_cmd == "history":
+            print(json.dumps({"history": engine.history(args.id, max(1, min(args.limit, 500)))}))
+            return EXIT_OK
+        if args.auto_cmd == "tick":
+            print(json.dumps({"started": engine.tick()}))
+            return EXIT_OK
+        return EXIT_USAGE
+    finally:
+        engine.close()
