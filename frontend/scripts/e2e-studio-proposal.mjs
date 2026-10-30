@@ -28,6 +28,7 @@ const stubs = {
   "GET /providers/connections": { connections: [] },
   "GET /bundles/examples": { examples: [] },
   "GET /harnesses/": [],
+  "GET /flow/config": { enabled: false },
   "GET /usage/summary": { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" }, byConnection: [], bySource: [] },
   "POST /studio/copilot/plan": plan,
 };

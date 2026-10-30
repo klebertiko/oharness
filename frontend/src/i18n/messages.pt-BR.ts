@@ -199,6 +199,11 @@ export const ptBR: Record<MessageKey, string> = {
   "provider.openrouter.summary": "Uma chave, vários fornecedores. Escolha o modelo desta conexão; o OpenRouter o encaminha a um fornecedor que o ofereça.",
   "provider.openrouter.caveat": "Preços e disponibilidade são definidos pelo fornecedor de origem e mudam sem aviso.",
 
+  "flow.toggle.on": "Flow ligado",
+  "flow.toggle.off": "Flow desligado",
+  "flow.toggle.title": "Registra um conselho de Flow a cada passo da run do harness. É só conselho e nunca muda o que roda.",
+  "flow.toggle.error": "Não foi possível falar com o sidecar. O Flow mantém a última configuração.",
+
   "run.ceiling.label": "Teto de tokens",
   "run.ceiling.aria": "Teto de tokens desta execução",
   "run.ceiling.none": "nenhum",

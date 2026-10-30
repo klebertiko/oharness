@@ -28,6 +28,8 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 
 from adapters import get_adapter, AdapterConfig
 from adapters.base import ProbeResult
+from flow.advice import OutputTrail, advice_event, run_facts
+from flow.policy import advise_facts
 from providers.resolution import (
     FailoverAttempt,
     ProviderResolutionError,
@@ -341,6 +343,7 @@ async def execute_harness(
     enforce_budget: Callable[[str | None, str | None], Awaitable[None]] | None = None,
     decision_transport: httpx.BaseTransport | None = None,
     resume_outputs: dict[str, str] | None = None,
+    flow_advice: bool = False,
 ) -> AsyncIterator[str]:
     """
     `enforce_budget`, when given, is called as `await enforce_budget(model,
@@ -371,6 +374,12 @@ async def execute_harness(
     restored node runs it for real (it is restored only once). `None` (the
     default) leaves every existing caller unchanged.
 
+    `flow_advice` (ADR 0065), off by default: when on, each node's checkpoint
+    -- the one that reads `control.stop` -- also emits a `flow_advice` event
+    built from structured run facts only. It is evidence: nothing in this
+    function reads it back, so gates and the terminal status are the same on
+    or off. Off computes nothing and emits nothing.
+
     Stream of SSE events:
 
       run_start         {run_id, mode, order:[node_view], unreachable}
@@ -393,6 +402,8 @@ async def execute_harness(
       node_token_warning {node_id, tokens, limit, pct} — this node's own usage crossed 80% of its
                                                           configured `tokenLimit`; non-blocking
       node_skipped      {node_id, reason}             — a PASS/FAIL branch this run didn't take
+      flow_advice       {node_id, action, reason, takes_step, authority, facts}
+                                                     — Flow switch on only; evidence, never a gate (ADR 0065)
       gate_retry        {node_id, attempt, cap, target} — a Gate's `fail` port looped back;
                                                           `target` is where execution resumed
       hitl_pause        {node_id, label, question, context}
@@ -409,7 +420,7 @@ async def execute_harness(
     control = control or RunControl(run_id or str(uuid.uuid4()))
 
     node_map = {n["id"]: n for n in nodes}
-    outputs: dict[str, str] = {}
+    outputs: dict[str, str] = OutputTrail() if flow_advice else {}
     steering: list[str] = []
     total_tokens = 0
     run_tokens_estimated = False  # any node count derived from output length
@@ -478,6 +489,22 @@ async def execute_harness(
         node = node_map.get(node_id)
         if not node:
             continue
+
+        if flow_advice:
+            trail = outputs.history  # type: ignore[attr-defined]  # OutputTrail whenever the switch is on
+            yield _sse(
+                "flow_advice",
+                advice_event(
+                    node_id,
+                    run_facts(
+                        node_data=node.get("data", {}),
+                        stop=control.stop.is_set(),
+                        last_output=trail[-1] if trail else "",
+                        previous_output=trail[-2] if len(trail) > 1 else "",
+                    ),
+                    advise_facts,
+                ),
+            )
 
         if control.stop.is_set():
             status, stopped_at = STATUS_STOPPED, node_id

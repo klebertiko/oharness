@@ -197,6 +197,11 @@ export const en = {
   "provider.openrouter.summary": "One key, many vendors. Pick the model this connection runs; OpenRouter routes it to a vendor that serves it.",
   "provider.openrouter.caveat": "Prices and availability are set by the upstream vendor and move without notice.",
 
+  "flow.toggle.on": "Flow on",
+  "flow.toggle.off": "Flow off",
+  "flow.toggle.title": "Records flow advice at each step of a harness run. It is advice only and never changes what runs.",
+  "flow.toggle.error": "Could not reach the sidecar. Flow keeps its last setting.",
+
   "run.ceiling.label": "Token ceiling",
   "run.ceiling.aria": "Token ceiling for this run",
   "run.ceiling.none": "none",

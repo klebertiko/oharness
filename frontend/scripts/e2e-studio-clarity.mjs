@@ -77,6 +77,7 @@ try {
     const responses = {
       "GET /bundles/default": bundled,
       "GET /health": { status: "ok" },
+      "GET /flow/config": { enabled: false },
       "GET /cowork/projects": { projects: [] },
       "GET /providers/connections": { connections },
       "GET /bundles/examples": { examples: [] },
