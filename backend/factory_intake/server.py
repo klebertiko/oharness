@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .config import WebhookConfig
-from .connector import Delivery, TriggerRules
+from .connector import TriggerRules
 from .connectors.github import ConnectorError, GitHubConnector
 from .deliveries import DeliveryLog
 from .pipeline import deliver
