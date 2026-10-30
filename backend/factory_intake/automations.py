@@ -23,7 +23,7 @@ from sandbox.secrets import redact
 from .cron import Cron, CronError, parse_cron
 from .matching import PatternError, check_pattern, match_field, match_payload
 from .pipeline import deliver
-from .port import MAX_BODY, TERMINAL, FactoryPort, SourceRef, WorkItemDraft, clamp_draft
+from .port import MAX_BODY, TERMINAL, FactoryPort, SourceRef, clamp_draft
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 MAX_FILE_BYTES = 256 * 1024

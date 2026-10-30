@@ -1,12 +1,12 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
 from ruamel.yaml import YAML
 
-from factory_intake.automations import (AutomationEngine, AutomationError, Event, github_event, load_automations, parse_automation, webhook_event)
+from factory_intake.automations import (AutomationEngine, AutomationError, github_event, load_automations, parse_automation, webhook_event)
 from factory_intake.cron import CronError, parse_cron
 from factory_intake.matching import PatternError, check_pattern, match_field, match_payload
 from factory_intake.memory import MemoryFactory
