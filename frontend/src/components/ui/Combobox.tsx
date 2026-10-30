@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import { Check, Search } from "lucide-react";
 
+import { useT } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -136,9 +137,9 @@ export function Combobox({
   searchPlaceholder,
   allowCustom = false,
   status = "ready",
-  loadingText = "Loading…",
-  errorText = "Couldn't load the list.",
-  emptyText = "Nothing to choose yet.",
+  loadingText,
+  errorText,
+  emptyText,
   header,
   panel,
   footer,
@@ -148,6 +149,7 @@ export function Combobox({
   width = 300,
   disabled = false,
 }: ComboboxProps) {
+  const t = useT();
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
   const setOpen = useCallback(
@@ -179,10 +181,10 @@ export function Combobox({
       : options;
     const typed = query.trim();
     if (searchable && allowCustom && typed && !options.some((o) => o.id === typed)) {
-      return [...rows, { id: typed, label: `Use “${typed}”`, detail: "Not in the list — sent as typed" }];
+      return [...rows, { id: typed, label: t("ui.useTyped", { typed }), detail: t("ui.sentAsTyped") }];
     }
     return rows;
-  }, [options, query, searchable, allowCustom, filter]);
+  }, [options, query, searchable, allowCustom, filter, t]);
 
   const firstEnabled = useCallback(
     (from: number, dir: 1 | -1) => {
@@ -366,11 +368,11 @@ export function Combobox({
 
   const message =
     status === "loading" ? (
-      <p role="status" className="px-3 py-2 text-body text-ink-mute">{loadingText}</p>
+      <p role="status" className="px-3 py-2 text-body text-ink-mute">{loadingText ?? t("ui.loading")}</p>
     ) : status === "error" ? (
-      <p role="alert" className="px-3 py-2 text-body text-fault-text">{errorText}</p>
+      <p role="alert" className="px-3 py-2 text-body text-fault-text">{errorText ?? t("ui.loadError")}</p>
     ) : visible.length === 0 ? (
-      <p className="px-3 py-2 text-body text-ink-mute">{emptyText}</p>
+      <p className="px-3 py-2 text-body text-ink-mute">{emptyText ?? t("ui.empty")}</p>
     ) : null;
 
   const popover =
@@ -398,13 +400,13 @@ export function Combobox({
             <input
               ref={inputRef}
               role="combobox"
-              aria-label={`Filter ${label}`}
+              aria-label={t("ui.filterAria", { label })}
               aria-expanded
               aria-controls={listId}
               aria-autocomplete="list"
               aria-activedescendant={activeId}
               value={query}
-              placeholder={searchPlaceholder ?? (allowCustom ? "Filter or type a name" : "Filter")}
+              placeholder={searchPlaceholder ?? (allowCustom ? t("ui.filterOrType") : t("ui.filter"))}
               spellCheck={false}
               autoComplete="off"
               onChange={(e) => setQuery(e.target.value)}

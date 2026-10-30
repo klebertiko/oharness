@@ -7,7 +7,7 @@ import { tr, useT } from "@/i18n/store";
 import { specOf, type Connection, type ModelInfo } from "./providerStore";
 
 const money = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
-const ctx = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k context` : n > 0 ? `${n} context` : "");
+const ctx = (n: number) => (n >= 1000 ? tr("models.ctx.k", { n: Math.round(n / 1000) }) : n > 0 ? tr("models.ctx", { n }) : "");
 
 export function modelDetail(m: ModelInfo): string {
   return [m.via, ctx(m.ctx), m.size, m.price ? `${money(m.price[0])} → ${money(m.price[1])} / Mtok` : ""]
@@ -35,7 +35,7 @@ export function ModelPicker({
   connection,
   value,
   onChange,
-  label = "Model",
+  label,
   inheritLabel,
   inheritDetail,
   triggerClassName,
@@ -54,6 +54,7 @@ export function ModelPicker({
   disabled?: boolean;
 }) {
   const t = useT();
+  const shownLabel = label ?? t("sidebar.props.model");
   const options: ComboOption[] = (connection?.models ?? []).map((m) => ({ id: m.id, label: m.id, detail: modelDetail(m) }));
   if (inheritLabel !== undefined) options.unshift({ id: "", label: inheritLabel, detail: inheritDetail });
   // A saved value the list no longer contains still shows as the selection.
@@ -64,8 +65,8 @@ export function ModelPicker({
   const shown = value || inheritLabel || t("model.none");
   return (
     <Combobox
-      label={label}
-      triggerLabel={`${label}: ${shown}`}
+      label={shownLabel}
+      triggerLabel={`${shownLabel}: ${shown}`}
       describedBy={describedBy}
       value={value}
       options={options}
