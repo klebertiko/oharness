@@ -17,12 +17,13 @@ class Delivered:
 
 
 def deliver(port: FactoryPort, draft: WorkItemDraft) -> Delivered:
-    """Create the item, or add the draft as a comment on the open item for the same thread, or do nothing for a repeated delivery."""
+    """Create the item; for a reply in the thread of an open item add it there as a comment; do nothing for a repeated delivery (or for a
+    second trigger on an item that already exists, such as a label added to an issue the factory already took)."""
     result = port.submit(draft)
     if result.created:
         return Delivered("created", result.item)
     if result.replay:
         return Delivered("replay", result.item)
-    if draft.body.strip():
+    if draft.is_reply and draft.body.strip():
         port.comment(result.item.id, draft.body, draft.requested_by or draft.source.kind)
     return Delivered("followup", result.item)

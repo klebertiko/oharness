@@ -34,11 +34,13 @@ def test_a_closed_item_does_not_swallow_a_new_request_for_the_same_ref():
 def test_deliver_creates_then_comments_then_ignores_replays():
     f = MemoryFactory()
     d1 = WorkItemDraft(source=SourceRef(kind="github", ref="a/b#1"), title="t", body="first", requested_by="alice", idempotency_key="i:item")
-    d2 = WorkItemDraft(source=SourceRef(kind="github", ref="a/b#1"), title="t", body="@f more", requested_by="bob", idempotency_key="i:comment:2")
+    d2 = WorkItemDraft(source=SourceRef(kind="github", ref="a/b#1"), title="t", body="@f more", requested_by="bob", idempotency_key="i:comment:2", is_reply=True)
     assert deliver(f, d1).outcome == "created"
     out = deliver(f, d2)
     assert out.outcome == "followup" and f.comments[out.item.id] == [("bob", "@f more")]
     assert deliver(f, d2).outcome == "replay" and len(f.comments[out.item.id]) == 1
+    label_later = WorkItemDraft(source=SourceRef(kind="github", ref="a/b#1"), title="t", body="body", idempotency_key="i:item:label-9")
+    assert deliver(f, label_later).outcome == "followup" and len(f.comments[out.item.id]) == 1  # a second trigger on an existing item adds no comment
 
 
 def test_claim_then_release_goes_to_review_not_done():
