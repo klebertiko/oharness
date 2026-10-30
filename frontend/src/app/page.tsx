@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 import { LOCALES, LOCALE_NAME } from "@/i18n/locale";
-import { useLocaleStore } from "@/i18n/store";
+import { tr, useLocaleStore } from "@/i18n/store";
 import { StudioOverview } from "@/components/studio/StudioOverview";
 import { StudioActionsBar } from "@/components/studio/StudioActionsBar";
 import { newStudioHarness, openStudioPreset } from "@/lib/studio";
@@ -125,8 +125,8 @@ export default function Home() {
   const commands = useMemo<Command[]>(() => {
     const insert: Command[] = NODE_TEMPLATES.map((t) => ({
       id: `insert:${t.type}`,
-      label: `Add ${t.label}`,
-      group: "Insert node",
+      label: tr("shell.cmd.add", { label: t.label }),
+      group: tr("shell.cmd.group.insert"),
       icon: ROLE_ICON[t.type as NodeType],
       meta: t.type,
       role: ROLE_VAR[t.type as NodeType],
@@ -166,8 +166,8 @@ export default function Home() {
       : [
           {
             id: "run",
-            label: "Run harness",
-            group: "Run",
+            label: tr("shell.cmd.run"),
+            group: tr("shell.cmd.group.run"),
             icon: Play,
             chord: "Mod+Enter",
             meta: executionMode,
@@ -176,8 +176,8 @@ export default function Home() {
           },
           {
             id: "stop",
-            label: "Stop run",
-            group: "Run",
+            label: tr("shell.cmd.stop"),
+            group: tr("shell.cmd.group.run"),
             icon: Square,
             disabled: !isRunning,
             run: () => {
@@ -188,8 +188,8 @@ export default function Home() {
           },
           {
             id: "mode",
-            label: "Cycle execution mode",
-            group: "Run",
+            label: tr("shell.cmd.cycleMode"),
+            group: tr("shell.cmd.group.run"),
             icon: Shuffle,
             chord: "Mod+Shift+M",
             meta: executionMode,
@@ -198,31 +198,31 @@ export default function Home() {
           },
           {
             id: "save",
-            label: "Save harness",
-            group: "File",
+            label: tr("shell.cmd.save"),
+            group: tr("shell.cmd.group.file"),
             icon: Save,
             chord: "Mod+S",
             run: actions.save,
           },
           {
             id: "export",
-            label: "Export graph JSON (advanced)",
-            group: "File",
+            label: tr("shell.cmd.export"),
+            group: tr("shell.cmd.group.file"),
             icon: Download,
             chord: "Mod+Shift+E",
             run: actions.exportJson,
           },
           {
             id: "import",
-            label: "Import graph JSON (advanced)",
-            group: "File",
+            label: tr("shell.cmd.import"),
+            group: tr("shell.cmd.group.file"),
             icon: Upload,
             run: actions.importJson,
           },
           {
             id: "copilot",
-            label: "Ask Nilo",
-            group: "Studio",
+            label: tr("shell.cmd.askNilo"),
+            group: tr("shell.cmd.group.studio"),
             icon: Sparkles,
             chord: "Mod+I",
             keywords: "assistant ai build graph",
@@ -231,20 +231,20 @@ export default function Home() {
           },
           {
             id: "arrange",
-            label: "Auto-arrange graph",
-            group: "Edit",
+            label: tr("shell.cmd.arrange"),
+            group: tr("shell.cmd.group.edit"),
             icon: Network,
             chord: ARRANGE_CHORD,
             keywords: "layout tidy organize organizar layers align clean up",
             disabled: studioView !== "editor" || isRunning || nodes.length < 2,
             run: arrangeGraph,
           },
-          { id: "undo", label: "Undo", group: "Edit", icon: Undo2, chord: "Mod+Z", run: undo },
-          { id: "redo", label: "Redo", group: "Edit", icon: Redo2, chord: "Mod+Shift+Z", run: redo },
+          { id: "undo", label: tr("shell.cmd.undo"), group: tr("shell.cmd.group.edit"), icon: Undo2, chord: "Mod+Z", run: undo },
+          { id: "redo", label: tr("shell.cmd.redo"), group: tr("shell.cmd.group.edit"), icon: Redo2, chord: "Mod+Shift+Z", run: redo },
           {
             id: "delete",
-            label: "Delete selected node",
-            group: "Edit",
+            label: tr("shell.cmd.delete"),
+            group: tr("shell.cmd.group.edit"),
             icon: Trash2,
             meta: selectedNodeId ?? undefined,
             disabled: !selectedNodeId,
@@ -254,8 +254,8 @@ export default function Home() {
           ...insert,
           {
             id: "toggle-right",
-            label: "Toggle inspector",
-            group: "View",
+            label: tr("shell.cmd.toggleInspector"),
+            group: tr("shell.cmd.group.view"),
             icon: PanelRight,
             chord: "Mod+Alt+B",
             run: toggleRight,
@@ -264,8 +264,8 @@ export default function Home() {
 
     const languages: Command[] = LOCALES.filter((l) => l !== locale).map((l) => ({
       id: `language:${l}`,
-      label: `Language: ${LOCALE_NAME[l]}`,
-      group: "View",
+      label: tr("shell.cmd.language", { name: LOCALE_NAME[l] }),
+      group: tr("shell.cmd.group.view"),
       icon: Languages,
       run: () => useLocaleStore.getState().setLocale(l),
     }));
@@ -275,16 +275,16 @@ export default function Home() {
       ...languages,
       {
         id: "toggle-left",
-        label: "Toggle left panel",
-        group: "View",
+        label: tr("shell.cmd.toggleLeft"),
+        group: tr("shell.cmd.group.view"),
         icon: PanelLeft,
         chord: "Mod+B",
         run: toggleLeft,
       },
       {
         id: "keymap",
-        label: "Show keyboard map",
-        group: "View",
+        label: tr("shell.cmd.showKeymap"),
+        group: tr("shell.cmd.group.view"),
         icon: Keyboard,
         run: () => setKeymapOpen(true),
       },

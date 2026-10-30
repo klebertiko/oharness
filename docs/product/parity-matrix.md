@@ -1,6 +1,6 @@
 # Matriz de paridade: referências → OHarness → backlog
 
-Consolidada em 2026-10-29 sobre a `main` @ `72045e6`. Junta o que cinco referências fazem, o que o OHarness já tem, o que está em voo e o que falta, e liga cada lacuna a uma issue. Substitui como visão atual as três pesquisas anteriores, que continuam como histórico: `docs/research/chat-parity.md` (2026-10-10), `docs/product/competitive-gaps-2026-09-10.md` e `docs/product/gauntlet-automate/bar-cursor.md`. Os conceitos de fábrica vêm da issue #244.
+Consolidada em 2026-10-29 sobre a `origin/main` @ `72045e6`. Junta o que cinco referências fazem, o que o OHarness já tem, o que está em voo e o que falta, e liga cada lacuna a uma issue. Substitui como visão atual as três pesquisas anteriores, que continuam como histórico: `docs/research/chat-parity.md` (2026-10-10), `docs/product/competitive-gaps-2026-09-10.md` e `docs/product/gauntlet-automate/bar-cursor.md`. Os conceitos de fábrica vêm da issue #244.
 
 ## Como ler
 
@@ -34,7 +34,8 @@ Cada célula resume em palavras próprias o que a página descreve; nenhum trech
 | A2 | DS ✓, CL ?, CU ?, CX ? | Ação atual ao vivo (nó, fase, tool corrente) | **issue #297.** `ThinkingStatus` recebe um detalhe fixo. | `agent/AgentStage.tsx` |
 | A3 | CL ✓ (modos de transcrição com raciocínio e verbose), DS ✓, CU ?, CX ? | Raciocínio do modelo visível | **main** no frontend (bloco `Reasoning`); falta alimentá-lo: **issue #301** (provedores HTTP) e **#302** (CLI). | `Transcript.tsx`, `adapters/openai_compatible.py` |
 | A4 | DS ✓ (tempo, TTFT, tok/s), CL ◐ (uso da sessão), CU ?, CX ? | Tempo, tokens e custo por passo | **main** para latência por nó, tokens e rollup com proveniência. **issue #300** para custo, tokens de entrada/saída e TTFT por passo. | `agent-run/rollup.ts`, `routers/usage.py` |
-| A5 | — (interno) | Avisos e retries que o backend já emite (`gate_retry`, `node_token_warning`, `budget_warning`, `runtime_selected`, `node_skipped.reason`) | **issue #298.** O reducer os descarta. | `agent-run/runReducer.ts`, `engine.py` |
+| A5 | — (interno) | Avisos e retries que o backend já emite (`gate_retry`, `node_token_warning`, `budget_warning`, `runtime_selected`, o `reason` de `node_skipped`) | **issue #298.** O reducer ignora os quatro primeiros e descarta o `reason` de `node_skipped` (o evento em si já marca o passo como pulado). | `agent-run/runReducer.ts`, `engine.py` |
+| A6 | DS ✓, CL ✓ (modo Thinking mostra o raciocínio) | Provedores HTTP emitindo o raciocínio do modelo | **issue #301.** Só o adapter mock alimenta o bloco. | `adapters/openai_compatible.py` |
 | A7 | DS ✓ (nativo), CX ? (schema da CLI, não do app) | Eventos estruturados das CLIs (comando, arquivo, raciocínio, plano) como eventos do contrato | **issue #302.** `cli_codex` guarda só `agent_message`. | `adapters/cli_codex.py` |
 | A8 | CU ◐ (planejamento), DS ✓, CL ?, CX ? | To-do do agente com progresso | **issue #303** (depende de #302). `RunLadder` é o plano do grafo, não do modelo. | `agent-run/RunLadder.tsx` |
 | A9 | CL ✓ (verificar e liberar contexto), DS ✓, CU ?, CX ? | Medidor de contexto e compactação | **main** para o evento de compactação (ADR 0025). **issue #304** para o medidor. | `routers/execution.py`, `runReducer.ts` |
@@ -56,7 +57,7 @@ Cada célula resume em palavras próprias o que a página descreve; nenhum trech
 | B8 | CU ✓ (busca em transcritos, índice local), CL ?, CX ? | Buscar no conteúdo das conversas | **issue #310.** A busca filtra só o título. | `agent/ThreadsSidebar.tsx` |
 | B9 | CL ✓ (pergunta lateral), CU ✓ (`/side`) | Pergunta lateral sem interromper | **issue #311.** | — |
 | B10 | CX ✓ (`/goal`, pausar e retomar), CU ✓ (`/goal`) | Meta de longa duração | **issue #312.** | — |
-| B11 | DS ✓ (copiar e ramificar), CL ?, CU ?, CX ? | Copiar, tentar de novo e ramificar por mensagem | **main** para copiar, reusar e mover para novo chat (ADR 0047). **issue #313** para tentar de novo e ramificar. | `agent/MessageActions.tsx` |
+| B11 | DS ✓ (copiar e ramificar), CL ?, CU ?, CX ? | Copiar, tentar de novo e ramificar por mensagem | **main** para copiar, reusar e mover para novo chat (ADR 0047, ainda "proposta, reversível"). **issue #313** para tentar de novo e ramificar. | `agent/MessageActions.tsx` |
 | B12 | CL ✓, CX ✓ (trocar de chat), DS ? | Retomar sessão e histórico | **main** (ADR 0018 e 0044; barra de chats; Activity). | `agent-run/RunsPanel.tsx` |
 
 ## C. Controle, permissão e revisão
@@ -75,7 +76,7 @@ Cada célula resume em palavras próprias o que a página descreve; nenhum trech
 
 | # | Fontes | Recurso | Estado no OHarness | Onde |
 | --- | --- | --- | --- | --- |
-| D1 | CL ✓ (sessão em worktree próprio), CU ✓, CX ? | Worktree por run | **main** no backend (ADR 0019 e 0046); **PR #294** e **issue #275** para a UI. | `backend/workspaces/` |
+| D1 | CL ✓ (sessão em worktree próprio), CU ✓, CX ? | Worktree por run | **main** no backend (ADR 0019; a UI é a ADR 0046); **PR #294** e **issue #275** para a UI. | `backend/workspaces/` |
 | D2 | CU ✓ (CLI headless), WF ✓ (CLI e API), CL ? | Execução headless e CLI | **main** (`oharness run`, ADR 0017 e 0045). CLI da fábrica: **issue #268.** | `backend/oharness/cli.py` |
 | D3 | CL ✓ (tarefas em segundo plano), CU ✓ (agentes em paralelo), CX ✓ (projetos em paralelo) | Gerenciar várias runs ao mesmo tempo | **main** para a lista de runs (Activity). Várias runs vivas no chat: ?. Sala de controle: **issue #261.** | `agent-run/RunsPanel.tsx` |
 | D4 | CL ✓ (nuvem, SSH, Dispatch), CU ✓ (agentes na nuvem, máquinas próprias, celular), WF ✓ (execução hospedada) | Agentes e execução em nuvem; sessões remotas | **fora de escopo** (decisão da #244: tudo local ou em infraestrutura própria). | — |
@@ -126,7 +127,7 @@ Escopo e pacotes na #244. Aqui só o mapa conceito → issue; o desenho é do OH
 
 Do gap audit de 2026-09-10, estes itens já estão na `main`: histórico de runs (Activity), indicador de pensamento com tempo, adaptadores de Cursor e OpenRouter, modos de permissão, diff por turno, gasto e orçamento (Providers), workspace do chat, comandos `/`, hooks, subagentes, fila. A tela de Pull requests e a de Automations deixaram de existir na UI. O botão sem ação de Providers saiu com a tela refeita. Continua aberto o nó Delegate (#318).
 
-Da pesquisa de chat de 2026-10-10, as linhas 9, 12, 14, 15, 21 e 23 estão entregues; as demais viraram as issues acima.
+Da pesquisa de chat de 2026-10-10, as linhas 9 (subagentes), 12 (resumo de atividade), 15 (interromper), 21 (retomar) e 23 (permissões) estão entregues; a 14 está em parte (a fila sim; o steer é a issue #305). As demais viraram as issues acima.
 
 ## Limites
 
