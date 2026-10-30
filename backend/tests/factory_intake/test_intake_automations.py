@@ -255,3 +255,94 @@ def test_a_failing_port_is_recorded_and_does_not_stop_the_others(rig):
     row = engine.history("deploys")[0]
     assert row["outcome"] == "error" and "hunter2" not in json.dumps(row)
     port.submit = original
+
+
+@pytest.mark.parametrize("flt", ["repos: acme/payments", "repos: {inn: [a]}", "repos: [1]", "skip_bots: maybe", "labels: {in: abc}", "webhooks: x"])
+def test_filter_shapes_are_validated(flt):
+    text = f"---\ntriggers:\n  - provider: github\n    event: issues\n    filter: {{{flt}}}\n---\nx"
+    with pytest.raises(AutomationError):
+        parse_automation("x", text)
+    with pytest.raises(AutomationError):
+        parse_automation("x", "---\ntriggers:\n  - {provider: webhook, event: received, filter: {webhooks: deploy-prod}}\n---\nx")
+
+
+def test_unreadable_files_are_a_refusal_not_a_traceback(tmp_path):
+    folder = tmp_path / "automations" / "bad"
+    folder.mkdir(parents=True)
+    (folder / "automation.md").write_bytes(b"\xff\xfe---")
+    with pytest.raises(AutomationError):
+        load_automations(tmp_path)
+    (folder / "automation.md").write_bytes(b"x" * (256 * 1024 + 1))
+    with pytest.raises(AutomationError):
+        load_automations(tmp_path)
+
+
+def test_non_ascii_digits_in_cron_are_a_cron_error():
+    for bad in ("² * * * *", "*/٣ * * * *", "٣ * * * *"):
+        with pytest.raises(CronError):
+            parse_cron(bad, "UTC")
+
+
+def test_without_a_timezone_the_system_zone_is_used_per_instant(monkeypatch):
+    monkeypatch.setenv("TZ", "America/New_York")
+    __import__("time").tzset()
+    c = parse_cron("0 3 * * *")
+    assert c.matches(dt(2026, 1, 15, 8, 0)) and c.matches(dt(2026, 7, 15, 7, 0))  # 03:00 local in winter (UTC-5) and in summer (UTC-4)
+    assert not c.matches(dt(2026, 7, 15, 8, 0))
+
+
+def test_a_failed_slot_is_retried_on_the_next_tick(rig):
+    engine, port, _ = rig
+    engine.tick(dt(2026, 10, 18, 12))
+    original = port.submit
+    port.submit = lambda draft: (_ for _ in ()).throw(RuntimeError("down"))
+    assert engine.tick(dt(2026, 10, 25, 4)) == [] and engine.history("cleanup")[0]["outcome"] == "error"
+    port.submit = original
+    assert len(engine.tick(dt(2026, 10, 25, 5))) == 1  # the same 03:00 slot, not lost
+
+
+def test_closed_items_stop_counting_and_a_busy_history_cannot_forget_open_ones(rig):
+    engine, port, _ = rig
+    engine.tick(dt(2026, 10, 18, 12))
+    engine.tick(dt(2026, 10, 25, 4))
+    with engine._db:  # more history rows than the table keeps
+        engine._db.executemany("INSERT INTO automation_history (at, automation, trigger, outcome, item, reason) VALUES (0,'cleanup','x','skipped_paused',NULL,'')", [()] * 5100)
+    engine._log("cleanup", "x", "skipped_paused")  # one more insert triggers the pruning
+    assert engine._open_items("cleanup") == 1
+    port.cancel(port.list()[0].id)
+    assert engine._open_items("cleanup") == 0
+
+
+def test_github_automations_respect_the_connector_checks_and_replace_default_routing(tmp_path):
+    from intake_client import TestClient
+    from factory_intake.config import parse_webhook
+    from factory_intake.deliveries import DeliveryLog
+    from factory_intake.server import create_app
+    from secret_store.memory import MemorySecrets
+    import hashlib
+    import hmac
+
+    port, secrets = MemoryFactory(), MemorySecrets()
+    secrets.put("factory/gh", "s")
+    hooks = {"gh": parse_webhook("gh", "authMode: signature\nsignatureScheme: github\nsecretRef: factory/gh\ngithub:\n  repos: [acme/payments]\n  handle: '@payments'\n  allowedAuthors: [alice]\n")}
+    engine = AutomationEngine(port, {"review": parse_automation("review", REVIEW)}, tmp_path / "a.db")
+    client = TestClient(create_app(port, secrets, hooks, DeliveryLog(tmp_path / "d.db"), automations=engine))
+
+    def post(payload, delivery):
+        body = json.dumps(payload).encode()
+        sig = "sha256=" + hmac.new(b"s", body, hashlib.sha256).hexdigest()
+        return client.post("/hooks/gh", content=body, headers={"x-github-event": "pull_request", "x-github-delivery": delivery, "x-hub-signature-256": sig})
+
+    # outside the allowed authors / repo: the automation does not start either
+    assert post(github_payload(sender={"login": "mallory", "type": "User"}), "d1").status_code == 202
+    assert post(github_payload(repository={"full_name": "acme/payments2"}), "d2").status_code == 202
+    assert port.list() == []
+    # an allowed author's PR that mentions the handle: the automation's item replaces the default one
+    pr = {**github_payload()["pull_request"], "body": "@payments please look"}
+    assert post(github_payload(pull_request=pr), "d3").status_code == 202
+    [item] = port.list()
+    assert port.drafts[item.id].automation == "review" and item.source.thread_ref == "acme/payments#9"
+    # paused: still matched, so the default routing does not quietly take over
+    engine.set_paused("review", True)
+    assert post(github_payload(pull_request={**pr, "number": 10}), "d4").status_code == 202
+    assert len(port.list()) == 1

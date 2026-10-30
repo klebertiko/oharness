@@ -115,8 +115,16 @@ def _trigger(where: str, raw) -> Trigger:
     allowed = {"github": GITHUB_FILTERS, "webhook": WEBHOOK_FILTERS, "schedule": set()}[provider]
     if set(flt) - allowed:
         raise AutomationError(f"{where}: {provider} filters are {', '.join(sorted(allowed)) or 'none'}")
-    if provider == "webhook" and not flt.get("webhooks"):
+    if provider == "webhook" and not (isinstance(flt.get("webhooks"), list) and flt["webhooks"]):
         raise AutomationError(f"{where}: a webhook trigger needs webhooks: [names]")
+    for key, rule in flt.items():
+        if key == "payload":
+            continue
+        if key == "skip_bots":
+            if rule not in ("all", "none"):
+                raise AutomationError(f"{where}: skip_bots is 'all' or 'none'")
+        elif not _string_rule(rule):
+            raise AutomationError(f"{where}: filter {key} takes a list of strings, or an object with in/not_in lists of strings")
     try:
         if "payload" in flt:
             check_pattern(flt["payload"])
@@ -139,6 +147,13 @@ def _trigger(where: str, raw) -> Trigger:
     return Trigger(provider, event, flt, sched["name"], cron)
 
 
+def _string_rule(rule) -> bool:
+    lst = lambda v: isinstance(v, list) and all(isinstance(x, str) and x for x in v)  # noqa: E731
+    if isinstance(rule, list):
+        return lst(rule)
+    return isinstance(rule, dict) and bool(rule) and set(rule) <= {"in", "not_in"} and all(lst(v) for v in rule.values())
+
+
 def load_automations(directory: Path) -> dict[str, Automation]:
     root = Path(directory) / "automations"
     found: dict[str, Automation] = {}
@@ -149,7 +164,13 @@ def load_automations(directory: Path) -> dict[str, Automation]:
                 raise AutomationError(f"automations/{folder.name}: missing automation.md")
             if file.is_symlink() or folder.is_symlink():
                 raise AutomationError(f"automations/{folder.name}: symbolic links are not followed")
-            found[folder.name] = parse_automation(folder.name, file.read_text(encoding="utf-8"))
+            try:
+                if file.stat().st_size > MAX_FILE_BYTES:
+                    raise AutomationError(f"automations/{folder.name}/automation.md: file is too large")
+                text = file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                raise AutomationError(f"automations/{folder.name}/automation.md: cannot be read as UTF-8 text") from None
+            found[folder.name] = parse_automation(folder.name, text)
     return found
 
 
@@ -177,6 +198,7 @@ class AutomationEngine:
         with self._db:
             self._db.execute("CREATE TABLE IF NOT EXISTS automation_paused (id TEXT PRIMARY KEY)")
             self._db.execute("CREATE TABLE IF NOT EXISTS automation_checked (name TEXT PRIMARY KEY, at REAL)")
+            self._db.execute("CREATE TABLE IF NOT EXISTS automation_items (automation TEXT, item TEXT, at REAL, closed INTEGER DEFAULT 0, PRIMARY KEY (automation, item))")
             self._db.execute("CREATE TABLE IF NOT EXISTS automation_history (id INTEGER PRIMARY KEY, at REAL, automation TEXT, trigger TEXT, outcome TEXT, item TEXT, reason TEXT)")
 
     # pause / resume / history
@@ -204,49 +226,57 @@ class AutomationEngine:
         return [dict(zip(("at", "automation", "trigger", "outcome", "item", "reason"), r)) for r in rows]
 
     # firing
-    def _fire(self, auto: Automation, trigger: Trigger, event: Event) -> str | None:
+    def _fire(self, auto: Automation, trigger: Trigger, event: Event) -> tuple[str | None, bool]:
+        """(item id or None, handled). ``handled`` is False only for an error worth retrying; skips and replays are handled outcomes."""
         label = f"{trigger.provider}/{trigger.name or trigger.event}"
         if not auto.enabled or self.is_paused(auto.id):
             self._log(auto.id, label, "skipped_paused", reason="paused" if auto.enabled else "disabled")
-            return None
-        if self._open_items(auto.id) >= auto.max_open and trigger.provider == "schedule":
+            return None, True
+        if trigger.provider == "schedule" and self._open_items(auto.id) >= auto.max_open:  # only schedules do not stack: events are separate threads
             self._log(auto.id, label, "skipped_open", reason=f"{auto.max_open} item(s) from this automation still open")
-            return None
+            return None, True
         if auto.tokens_per_day is not None and self._spent_today(auto.id) >= auto.tokens_per_day:
             self._log(auto.id, label, "skipped_budget", reason="tokensPerDay reached")
-            return None
-        kind = {"schedule": "schedule", "webhook": "webhook", "github": "github"}[trigger.provider]
-        thread = event.ref if kind == "github" else None
+            return None, True
+        kind = trigger.provider
+        # a GitHub automation gets an item of its own on the thread (so its agent, prompt and ceiling apply even if the thread already has an
+        # item); replies still go to the thread through thread_ref
+        ref = f"{event.ref}~{auto.id}" if kind == "github" else event.ref
         try:
-            draft = clamp_draft(SourceRef(kind=kind, ref=event.ref[:200], url=event.url, thread_ref=thread), event.title or auto.title, event.body, [], f"automation:{auto.id}",
-                                f"auto:{auto.id}:{event.key}"[:200])
+            draft = clamp_draft(SourceRef(kind=kind, ref=ref[:200], url=event.url, thread_ref=event.ref if kind == "github" else None), event.title or auto.title, event.body, [],
+                                f"automation:{auto.id}", f"auto:{auto.id}:{event.key}"[:200])
             draft = draft.model_copy(update={"agent": auto.agent, "automation": auto.id, "instructions": auto.prompt, "token_ceiling": auto.tokens_per_run})
             delivered = deliver(self.port, draft)
         except Exception as exc:  # one failing delivery must not stop the others; the reason is recorded without request content
             self._log(auto.id, label, "error", reason=type(exc).__name__)
-            return None
+            return None, False
         if delivered.outcome == "replay":
-            return None
+            return None, True
+        with self._lock, self._db:
+            self._db.execute("INSERT OR IGNORE INTO automation_items (automation, item, at) VALUES (?,?,?)", (auto.id, delivered.item.id, self._clock()))
         self._log(auto.id, label, "fired" if delivered.outcome == "created" else "followup", delivered.item.id)
-        return delivered.item.id
-
-    def _item_ids(self, auto_id: str, since: float = 0.0) -> list[str]:
-        with self._lock:
-            rows = self._db.execute("SELECT DISTINCT item FROM automation_history WHERE automation = ? AND item IS NOT NULL AND at >= ?", (auto_id, since)).fetchall()
-        return [r[0] for r in rows]
+        return delivered.item.id, True
 
     def _open_items(self, auto_id: str) -> int:
+        with self._lock:
+            rows = self._db.execute("SELECT item FROM automation_items WHERE automation = ? AND closed = 0", (auto_id,)).fetchall()
         count = 0
-        for item_id in self._item_ids(auto_id):
+        for (item_id,) in rows:
             try:
-                count += self.port.get(item_id).state not in TERMINAL
+                if self.port.get(item_id).state in TERMINAL:
+                    with self._lock, self._db:
+                        self._db.execute("UPDATE automation_items SET closed = 1 WHERE automation = ? AND item = ?", (auto_id, item_id))
+                else:
+                    count += 1
             except Exception:
                 continue
         return count
 
     def _spent_today(self, auto_id: str) -> int:
+        with self._lock:
+            rows = self._db.execute("SELECT item FROM automation_items WHERE automation = ? AND at >= ?", (auto_id, self._clock() - 86400)).fetchall()
         total = 0
-        for item_id in self._item_ids(auto_id, self._clock() - 86400):
+        for (item_id,) in rows:
             try:
                 total += self.port.get(item_id).cost_tokens
             except Exception:
@@ -255,14 +285,21 @@ class AutomationEngine:
 
     def handle(self, event: Event) -> list[str]:
         """Fire every enabled automation whose trigger matches the event. Returns the ids of the items it started."""
-        started = []
+        return self.dispatch(event)[0]
+
+    def dispatch(self, event: Event) -> tuple[list[str], bool]:
+        """(started item ids, whether any automation matched). A match counts even when the automation was paused or over budget: the
+        owner routed this kind of event to it, so the default routing must not quietly take over."""
+        started, matched = [], False
         for auto in self.automations.values():
             for trigger in auto.triggers:
                 if trigger_matches(trigger, event):
-                    if (item := self._fire(auto, trigger, event)):
+                    matched = True
+                    item, _ = self._fire(auto, trigger, event)
+                    if item:
                         started.append(item)
                     break  # one fire per automation per event, however many of its triggers match
-        return started
+        return started, matched
 
     def explain(self, event: Event) -> list[dict]:
         """Test filter: what each automation would do with this event, with nothing created or logged."""
@@ -284,17 +321,15 @@ class AutomationEngine:
                 name = f"{auto.id}/{trigger.name}"
                 with self._lock:
                     row = self._db.execute("SELECT at FROM automation_checked WHERE name = ?", (name,)).fetchone()
-                    with self._db:
+                handled = True
+                if row is not None and (slot := trigger.cron.latest(datetime.fromtimestamp(row[0], timezone.utc), now)) is not None:
+                    stamp = slot.strftime("%Y-%m-%dT%H:%MZ")
+                    item, handled = self._fire(auto, trigger, Event("schedule", "cron_fired", {"schedule": trigger.name}, key=f"{trigger.name}@{stamp}", ref=f"{auto.id}@{stamp}", title=auto.title))
+                    if item:
+                        started.append(item)
+                if handled:  # on an error the floor stays, so the next tick retries this slot (the slot's key makes a retry safe)
+                    with self._lock, self._db:
                         self._db.execute("INSERT OR REPLACE INTO automation_checked VALUES (?,?)", (name, now.timestamp()))
-                if row is None:
-                    continue
-                slot = trigger.cron.latest(datetime.fromtimestamp(row[0], timezone.utc), now)
-                if slot is None:
-                    continue
-                stamp = slot.strftime("%Y-%m-%dT%H:%MZ")
-                item = self._fire(auto, trigger, Event("schedule", "cron_fired", {"schedule": trigger.name}, key=f"{trigger.name}@{stamp}", ref=f"{auto.id}@{stamp}", title=auto.title))
-                if item:
-                    started.append(item)
         return started
 
     def close(self) -> None:

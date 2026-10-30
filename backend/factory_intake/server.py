@@ -141,10 +141,11 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
         connector = GitHubConnector(gh.repos, secrets_store, self_logins=gh.self_logins, webhook_secret_ref=cfg.secret_ref)
         rules = TriggerRules(handle=gh.handle, labels=gh.labels, allowed_authors=gh.allowed_authors)
         trigger = f"delivery-{headers.get('x-github-delivery') or key[:32]}"
-        ids = [deliver(port, draft).item.id for draft in connector.parse_event(headers.get("x-github-event", ""), payload, trigger, rules)]
-        if automations is not None and (event := github_event(headers.get("x-github-event", ""), payload, trigger)) is not None:
-            ids += automations.handle(event)  # automations add to the default mention/label behaviour; they never replace its checks
-        return ids
+        if automations is not None and connector.accepts(payload, rules) and (event := github_event(headers.get("x-github-event", ""), payload, trigger)) is not None:
+            started, matched = automations.dispatch(event)
+            if matched:
+                return started  # an automation the owner wrote for this kind of event replaces the default mention/label routing
+        return [deliver(port, draft).item.id for draft in connector.parse_event(headers.get("x-github-event", ""), payload, trigger, rules)]
 
     @app.post("/hooks/{name}")
     def receive(name: str, context: tuple = Depends(hook_context)):
@@ -171,7 +172,12 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
                 return JSONResponse({"delivery_id": key, "duplicate": True}, status_code=202)
             raise
         try:
-            items = github_items(cfg, headers, payload, key) if cfg.scheme == "github" else (generic_handler(cfg, headers, payload, key) if generic_handler else automations.handle(webhook_event(cfg.name, payload, key)) if automations else [])
+            if cfg.scheme == "github":
+                items = github_items(cfg, headers, payload, key)
+            else:
+                items = generic_handler(cfg, headers, payload, key) if generic_handler else []
+                if automations is not None:
+                    items = [*items, *automations.handle(webhook_event(cfg.name, payload, key))]
         except Exception:
             replay.forget(guard_key)  # handling failed: let the sender retry this delivery
             raise
