@@ -400,3 +400,21 @@ it("reset cancels the current stream and returns an idle run", () => {
   expect(result.current.run.runId).toBeNull();
   expect(result.current.run.plan).toEqual([]);
 });
+
+it("asks for the run's own worktree only for a harness run that has a folder and the switch on", async () => {
+  const { useRunWorktreeStore } = await import("@/store/runWorktreeStore");
+  startRunMock.mockReset().mockReturnValue(vi.fn());
+  startDirectRunMock.mockReset().mockReturnValue(vi.fn());
+  useRunWorktreeStore.setState({ enabled: true });
+  const harness = renderHook(() => useRunStream({ graph: emptyGraph, harnessEnabled: true }));
+  act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false, cwd: "D:/work" }));
+  expect(startRunMock.mock.calls.at(-1)?.[0]).toMatchObject({ cwd: "D:/work", worktree: true });
+  act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false }));
+  expect(startRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("worktree"); // no folder: nothing to branch from
+  const direct = renderHook(() => useRunStream({ graph: emptyGraph, harnessEnabled: false }));
+  act(() => direct.result.current.start({ instruction: "hi", mode: "live", step: false, cwd: "D:/work" }));
+  expect(startDirectRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("worktree"); // a direct chat turn has no harness to isolate
+  useRunWorktreeStore.setState({ enabled: false });
+  act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false, cwd: "D:/work" }));
+  expect(startRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("worktree");
+});

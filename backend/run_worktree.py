@@ -34,6 +34,7 @@ class RunWorktree:
         self.workspace_id: str | None = None
         self.path: str | None = None
         self.closed_id: str | None = None  # set once the worktree is really gone
+        self.closed_rescue: str | None = None  # the rescue ref that kept its changes, once it is gone
 
     async def open(self) -> str:
         try:
@@ -57,4 +58,5 @@ class RunWorktree:
                 log.warning("run worktree %s was not removed: %s", workspace_id, exc)
                 return None
             self.closed_id = workspace_id
-            return (removed.get("rescue") or {}).get("ref")
+            self.closed_rescue = (removed.get("rescue") or {}).get("ref")
+            return self.closed_rescue

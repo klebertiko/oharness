@@ -6,6 +6,7 @@ import { useProviderStore } from "@/components/providers/providerStore";
 import { useUsageStore } from "@/components/providers/usageStore";
 import { emptyRun, runReducer } from "./runReducer";
 import { useRunBudgetStore } from "@/store/runBudgetStore";
+import { useRunWorktreeStore } from "@/store/runWorktreeStore";
 import { sendControl, startDirectRun, startRun, type DirectRunPayload } from "./runClient";
 import type { RunState } from "./types";
 
@@ -145,7 +146,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
       // In Plan mode the turn is answered directly and ends in a plan: the harness graph runs after approval.
       if (harnessEnabledRef.current && !tools?.preset && tools?.permission_mode !== "plan") {
         abortRef.current = startRun(
-          { graph_json: graphRef.current, mode, step, instruction, cwd, ...maxTokensPayload() },
+          { graph_json: graphRef.current, mode, step, instruction, cwd, ...(cwd && useRunWorktreeStore.getState().enabled ? { worktree: true } : {}), ...maxTokensPayload() },
           onEvent,
           onClose
         );
