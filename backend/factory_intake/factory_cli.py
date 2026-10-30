@@ -14,16 +14,16 @@ import sys
 import uuid
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
-from pydantic import ValidationError
-
-from .pipeline import deliver
-from .port import FactoryError, FactoryPort, ReleaseResult, SourceRef, WorkItemDraft
+import functools
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "oharness" / "schema" / "factory.schema.json"
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
-_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069\u200b-\u200f]")  # controls, line separators, bidi overrides, zero-width marks
+COMMANDS = ("submit", "list", "inbox", "status", "comment", "cancel", "claim", "release", "metrics")
 STATES = ["queued", "running", "awaiting_human", "waiting_merge", "claimed", "parked", "done", "cancelled", "failed"]
+
+
+# stdlib only above this line: the parser is built on every `oharness` run, the factory's dependencies load only when a factory command runs
 
 
 class ContractError(RuntimeError):
@@ -45,17 +45,16 @@ def add_commands(group) -> None:
     command("status", "one work item", ("id", {}))
     command("comment", "tell the factory something about an item", ("id", {}), ("text", {}))
     command("cancel", "cancel an item", ("id", {}))
-    claim = command("claim", "take an item to work on locally (the factory's own run is suspended)", ("id", {}),
+    command("claim", "take an item to work on locally (the factory's own run is suspended)", ("id", {}),
                     ("--holder", {"help": "who holds it (default: cli/<your user>)"}),
                     ("--worktree", {"type": Path, "metavar": "REPO", "help": "also make a managed git worktree of this repository and record it on the claim"}))
-    claim.set_defaults(command_name="claim")
     command("release", "give a claimed item back; it goes to review, never to done", ("id", {}), ("--summary", {"required": True}),
             ("--status", {"choices": ("needs_review", "abandoned"), "default": "needs_review"}), ("--branch", {"help": "the branch you pushed"}))
     command("metrics", "throughput and cost figures", ("--window-days", {"type": int, "default": 7}))
 
 
 def _item(view) -> dict:
-    return json.loads(view.model_dump_json())
+    return view.model_dump(mode="json")
 
 
 def _plain(text) -> str:
@@ -63,10 +62,20 @@ def _plain(text) -> str:
 
 
 def _line(item: dict) -> str:
-    return f"{item['id']}  {item['state']:<14} {item['source']['kind']:<9} {_plain(item['title'])}"
+    return f"{_plain(item['id'])}  {_plain(item['state']):<14} {_plain(item['source']['kind']):<9} {_plain(item['title'])}"
 
 
-def _validator() -> Draft202012Validator:
+def _user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:  # a uid with no passwd entry and no USER variable
+        return "unknown"
+
+
+@functools.cache
+def _validator():
+    from jsonschema import Draft202012Validator
+
     return Draft202012Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
 
@@ -85,22 +94,31 @@ def _make_worktree(repo: Path):
     return info["id"], info["path"]
 
 
-def _drop_worktree(repo: Path, workspace_id: str) -> None:
+def _drop_worktree(repo: Path, workspace_id: str) -> bool:
     from workspaces.service import WorkspaceService
 
     try:
         service = WorkspaceService()
         service.remove(str(repo), workspace_id, service.removal_check(str(repo), workspace_id)["confirmation_token"])
+        return True
     except Exception:  # best effort: a leftover is listed as an orphaned workspace by the manager
-        pass
+        return False
 
 
-def run(args: argparse.Namespace, port: FactoryPort) -> int:
+def run(args: argparse.Namespace, port) -> int:
+    from pydantic import ValidationError
+
+    from .pipeline import deliver
+    from .port import FactoryError, ReleaseResult, SourceRef, WorkItemDraft
+
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):  # a title with an emoji must not crash a command that already took effect
+            stream.reconfigure(encoding="utf-8", errors="replace")
     name, as_json = args.factory_cmd, args.json
     try:
         if name == "submit":
             ref = args.ref or uuid.uuid4().hex
-            draft = WorkItemDraft(source=SourceRef(kind="cli", ref=f"cli:{ref}"[:200]), title=args.title, body=args.note, requested_by=f"cli:{getpass.getuser()}"[:200],
+            draft = WorkItemDraft(source=SourceRef(kind="cli", ref=f"cli:{ref}"[:200]), title=args.title, body=args.note, requested_by=f"cli:{_user()}"[:200],
                                   idempotency_key=f"cli:{ref}"[:200], is_reply=True)
             result = deliver(port, draft)
             item = _item(result.item)
@@ -112,42 +130,41 @@ def run(args: argparse.Namespace, port: FactoryPort) -> int:
             item = _item(port.get(args.id))
             _emit(name, {"item": item}, as_json, lambda: [_line(item), f"stage: {item.get('stage')}  cost_tokens: {item['cost_tokens']}  pr: {_plain(item.get('pr_url') or '-')}"])
         elif name == "comment":
-            port.comment(args.id, args.text, f"cli:{getpass.getuser()}")
+            port.comment(args.id, args.text, f"cli:{_user()}")
             _emit(name, {"ok": True}, as_json, lambda: ["comment added"])
         elif name == "cancel":
             item = _item(port.cancel(args.id))
             _emit(name, {"item": item}, as_json, lambda: [_line(item)])
         elif name == "claim":
-            holder = (args.holder or f"cli/{getpass.getuser()}")[:100]
+            holder = (args.holder or f"cli/{_user()}")[:100]
             made = None
             if args.worktree is not None:
                 try:
                     made = _make_worktree(args.worktree)
                 except Exception as exc:  # no worktree, no claim: the factory keeps running its own work
-                    print(f"refused: could not make the worktree ({type(exc).__name__}); nothing was claimed", file=sys.stderr)
+                    _fail("worktree_failed", f"could not make the worktree ({type(exc).__name__}); nothing was claimed", as_json)
                     return EXIT_FAILED
             try:
                 claimed = port.claim(args.id, holder, made[0] if made else None)
-            except Exception:
-                if made:
-                    _drop_worktree(args.worktree, made[0])
+            except BaseException:
+                if made and not _drop_worktree(args.worktree, made[0]):
+                    print(f"note: a worktree was left at {_plain(made[1])}; remove it with the workspace manager", file=sys.stderr)
                 raise
             item = _item(claimed)
             _emit(name, {"item": item, "worktree": None if made is None else {"id": made[0], "path": made[1]}}, as_json,
-                  lambda: [_line(item)] + ([f"worktree: {made[1]}"] if made else []) + ["push your branch, then: oharness factory release " + args.id])
+                  lambda: [_line(item)] + ([f"worktree: {_plain(made[1])}  (detached: create a branch there, e.g. git switch -c factory/{args.id})"] if made else [])
+                  + [f"when done: push your branch, then oharness factory release {args.id} --summary ... --branch <branch>"])
         elif name == "release":
             item = _item(port.release(args.id, ReleaseResult(summary=args.summary, branch=args.branch, status=args.status)))
             _emit(name, {"item": item}, as_json, lambda: [_line(item)])
         elif name == "metrics":
             figures = port.metrics(max(1, min(args.window_days, 365)))
             _emit(name, {"metrics": figures}, as_json, lambda: [json.dumps(figures, indent=2)])
-        else:
-            return EXIT_USAGE
     except FactoryError as exc:
         _fail(exc.code, exc.message, as_json)
         return EXIT_FAILED
-    except ContractError as exc:
-        print(str(exc), file=sys.stderr)
+    except ContractError as exc:  # the command already took effect; say so rather than look like a failed request
+        _fail("contract_error", f"the command ran but its output did not match the schema ({exc}); check the item with `status`", as_json)
         return EXIT_FAILED
     except ValidationError:  # a bad branch name, an over-long title...
         _fail("invalid_argument", "an argument is not acceptable", as_json)
@@ -156,4 +173,4 @@ def run(args: argparse.Namespace, port: FactoryPort) -> int:
 
 
 def _fail(code: str, message: str, as_json: bool) -> None:
-    print(json.dumps({"error": {"code": code, "message": message}}) if as_json else f"{code}: {message}", file=sys.stderr)
+    print(json.dumps({"error": {"code": code, "message": message}}) if as_json else f"{_plain(code)}: {_plain(message)}", file=sys.stderr)

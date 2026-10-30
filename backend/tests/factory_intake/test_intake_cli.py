@@ -1,4 +1,5 @@
 import json
+import sys
 import subprocess
 from pathlib import Path
 
@@ -125,3 +126,38 @@ def test_a_real_worktree_is_made_under_the_managed_root(port, capsys, tmp_path, 
         pytest.skip(f"managed worktrees need configuration not present in this environment: {err[:120]}")
     path = json.loads(out)["worktree"]["path"]
     assert Path(path).is_dir() and str(repo) not in path
+
+
+def test_plain_output_cannot_forge_rows_or_reorder_text(port, capsys):
+    from factory_intake.port import WorkItemDraft
+    port.submit(WorkItemDraft(source=SourceRef(kind="github", ref="a/b#1"), title="x\nfake1234  running  github  Approved by owner‮ ", idempotency_key="g"))
+    code, out, _ = run(capsys, "list")
+    assert code == 0 and len(out.splitlines()) == 1 and "‮" not in out and " " not in out
+
+
+def test_json_errors_are_json_on_every_path(monkeypatch, capsys):
+    monkeypatch.delenv("OH_FACTORY_PORT", raising=False)
+    code, out, err = run(capsys, "status", "x", "--json")
+    assert code == 2 and out == "" and json.loads(err)["error"]["code"] == "no_factory"
+    assert not list(Draft202012Validator(SCHEMA["$defs"]["error"] | {"$defs": SCHEMA["$defs"]}).iter_errors(json.loads(err)))
+
+
+def test_a_schema_break_after_the_effect_says_so_in_json(port, capsys, monkeypatch):
+    monkeypatch.setattr(factory_cli, "_item", lambda view: {"id": 5})
+    code, out, err = run(capsys, "submit", "w", "--json")
+    assert code == 1 and out == "" and json.loads(err)["error"]["code"] == "contract_error" and "ran" in err
+    assert len(port.list()) == 1
+
+
+def test_a_missing_user_name_does_not_crash(port, capsys, monkeypatch):
+    monkeypatch.setattr(factory_cli.getpass, "getuser", lambda: (_ for _ in ()).throw(KeyError("uid")))
+    assert run(capsys, "submit", "w", "--json")[0] == 0
+
+
+def test_states_follow_the_port_and_building_the_parser_loads_no_heavy_modules():
+    from typing import get_args
+    from factory_intake.port import WorkState
+    assert factory_cli.STATES == list(get_args(WorkState))
+    probe = "import sys; sys.path.insert(0, '.'); import argparse; from factory_intake import cli; p = argparse.ArgumentParser(); cli.add_parser(p.add_subparsers()); print('jsonschema' in sys.modules, 'pydantic' in sys.modules)"
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2], timeout=60)
+    assert done.stdout.split() == ["False", "False"], done.stderr

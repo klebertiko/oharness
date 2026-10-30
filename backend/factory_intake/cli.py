@@ -8,8 +8,9 @@ import os
 import sys
 from pathlib import Path
 
+from .factory_cli import COMMANDS
+
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
-FACTORY_COMMANDS = {"submit", "list", "inbox", "status", "comment", "cancel", "claim", "release", "metrics"}
 
 
 def add_parser(sub) -> argparse.ArgumentParser:
@@ -72,14 +73,14 @@ def run(args: argparse.Namespace) -> int:
         from .server import serve
 
         return serve(args.host, args.port, args.dir, args.allow_remote)
-    if args.factory_cmd in FACTORY_COMMANDS:
+    if args.factory_cmd in COMMANDS:
         from . import factory_cli
         from .loader import FoundationMissing, load_port
 
         try:
             port = load_port()
         except FoundationMissing as exc:
-            print(f"refused: {exc}", file=sys.stderr)
+            factory_cli._fail("no_factory", str(exc), args.json)
             return EXIT_USAGE
         return factory_cli.run(args, port)
     if args.factory_cmd == "mcp":
