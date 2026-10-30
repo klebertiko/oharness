@@ -33,12 +33,6 @@ export const TONE_TEXT: Record<ChatProviderTone, string> = {
   unconfigured: "text-ink-mute",
 };
 
-/** One readiness dot. Hollow when nothing is configured, filled once there is
-    something to report — the same filled/hollow grammar as the residence mark. */
-export function ToneDot({ tone }: { tone: ChatProviderTone }) {
-  return <span aria-hidden className={`h-[7px] w-[7px] flex-none rounded-none ${TONE_DOT[tone]}`} />;
-}
-
 /* ── Monogram ─────────────────────────────────────────────────────────────────
    Vendor identity as a two-letter mono tile, in grey.
 
@@ -90,49 +84,10 @@ export function ResidenceMark({ residence }: { residence: Residence }) {
     <span
       aria-hidden
       className={[
-        "h-[6px] w-[6px] flex-none rounded-none",
+        "h-1.5 w-1.5 flex-none rounded-none",
         residence === "local" ? "bg-ink-dim" : "border border-ink-mute",
       ].join(" ")}
     />
-  );
-}
-
-/* ── Fact ─────────────────────────────────────────────────────────────────────
-   One line of the dossier's spec sheet: a sentence-case term, its value and an
-   optional note, as `dt`/`dd` inside the parent `dl`. Each fact is ruled on top
-   rather than on the left, so the sheet can reflow into as many columns as the
-   dossier is wide — one column on a phone, five on a desktop — instead of
-   squeezing fixed columns until their text overlaps. */
-const FACT_TONE = {
-  ink: "text-ink",
-  warn: "text-warn-text",
-  fault: "text-fault-text",
-} as const;
-
-export function Fact({
-  term,
-  value,
-  mark,
-  tone = "ink",
-  note,
-}: {
-  term: string;
-  value: string;
-  mark?: React.ReactNode;
-  tone?: keyof typeof FACT_TONE;
-  note?: string;
-}) {
-  return (
-    <div className="min-w-0 border-t border-line-soft pt-2">
-      <dt className="t-body text-ink-mute">{term}</dt>
-      <dd
-        className={`t-title mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 wrap-anywhere ${FACT_TONE[tone]}`}
-      >
-        {mark}
-        {value}
-      </dd>
-      {note && <dd className="t-body mt-0.5 text-ink-mute wrap-anywhere">{note}</dd>}
-    </div>
   );
 }
 
@@ -178,51 +133,8 @@ export function StateRule({ tone, tall }: { tone: ChatProviderTone; tall?: boole
   return (
     <span
       aria-hidden
-      className={`w-[2px] flex-none rounded-none ${tall ? "h-[26px]" : "h-[18px]"} ${TONE_DOT[tone]}`}
+      className={`w-0.5 flex-none rounded-none ${tall ? "h-6.5" : "h-4.5"} ${TONE_DOT[tone]}`}
     />
-  );
-}
-
-/* ── Chip ─────────────────────────────────────────────────────────────────────
-   Squared, hairline, mono. Not a pill — design.md caps controls at 7px. */
-const CHIP_TONE = {
-  dim: "text-ink-dim",
-  signal: "text-signal-text",
-  warn: "text-warn-text",
-  fault: "text-fault-text",
-} as const;
-
-export function Chip({
-  children,
-  tone = "dim",
-  onClick,
-  title,
-  active,
-}: {
-  children: React.ReactNode;
-  tone?: keyof typeof CHIP_TONE;
-  onClick?: () => void;
-  title?: string;
-  active?: boolean;
-}) {
-  const Tag = onClick ? "button" : "span";
-  return (
-    <Tag
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      title={title}
-      aria-pressed={onClick && active !== undefined ? active : undefined}
-      className={[
-        "t-meta inline-flex h-[19px] items-center gap-1.5 whitespace-nowrap rounded-control border px-1.5 transition-colors",
-        CHIP_TONE[tone],
-        active ? "border-signal-deep bg-sub-300" : "border-line bg-sub-200",
-        onClick
-          ? "hover:border-ink-faint hover:bg-sub-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
-          : "",
-      ].join(" ")}
-    >
-      {children}
-    </Tag>
   );
 }
 

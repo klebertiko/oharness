@@ -1,0 +1,27 @@
+{
+ "action": "opened",
+ "pull_request": {
+  "number": 9,
+  "title": "Add retry",
+  "body": "@payments review this",
+  "html_url": "https://github.com/acme/payments/issues/9",
+  "labels": [],
+  "user": {
+   "login": "alice",
+   "type": "User"
+  },
+  "pull_request": {
+   "url": "x"
+  },
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z",
+  "id": 1009
+ },
+ "sender": {
+  "login": "alice",
+  "type": "User"
+ },
+ "repository": {
+  "full_name": "acme/payments"
+ }
+}

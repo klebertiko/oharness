@@ -492,3 +492,19 @@ describe("runReducer plan_error", () => {
     expect(runReducer(flagged, { type: "reset", mode: "live", step: false }).planNotSaved).toBeUndefined();
   });
 });
+
+describe("worktree events", () => {
+  it("tells the person the run works in its own worktree and where its changes were kept", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "live", step: false });
+    state = runReducer(state, { type: "sse", event: "worktree_ready", data: { workspace_id: "ws-1" } });
+    expect(state.notices).toContain("This run works in its own worktree; your folder is not touched.");
+    state = runReducer(state, { type: "sse", event: "worktree_closed", data: { workspace_id: "ws-1", rescue_ref: "refs/openharness/rescue/ws-1" } });
+    expect(state.notices.at(-1)).toBe("The worktree was removed. Its changes are kept on refs/openharness/rescue/ws-1.");
+  });
+
+  it("says nothing was left behind when the worktree was clean", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "live", step: false });
+    state = runReducer(state, { type: "sse", event: "worktree_closed", data: { workspace_id: "ws-1", rescue_ref: null } });
+    expect(state.notices.at(-1)).toBe("The worktree was removed. It had no changes to keep.");
+  });
+});
