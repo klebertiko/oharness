@@ -116,7 +116,7 @@ def test_a_failing_worktree_means_no_claim(port, capsys, tmp_path, monkeypatch):
 def test_a_real_worktree_is_made_under_the_managed_root(port, capsys, tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
-    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     git("init", "-q", "-b", "main")
     git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
     monkeypatch.setenv("OH_WORKSPACES_ROOT", str(tmp_path / "managed"))
@@ -159,5 +159,5 @@ def test_states_follow_the_port_and_building_the_parser_loads_no_heavy_modules()
     from factory_intake.port import WorkState
     assert factory_cli.STATES == list(get_args(WorkState))
     probe = "import sys; sys.path.insert(0, '.'); import argparse; from factory_intake import cli; p = argparse.ArgumentParser(); cli.add_parser(p.add_subparsers()); print('jsonschema' in sys.modules, 'pydantic' in sys.modules)"
-    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2], timeout=60)
+    done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2], timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert done.stdout.split() == ["False", "False"], done.stderr
