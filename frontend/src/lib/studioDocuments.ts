@@ -2,9 +2,11 @@
 import { create } from "zustand";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useShellStore } from "@/components/shell/shellStore";
+import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
 import { useHarnessSessionStore, type HarnessBundle } from "@/store/harnessSessionStore";
 import { api } from "./api";
 import { composeBundleFromCanvas } from "./bundlesApi";
+import { bundleFromSavedRecord } from "./savedHarnessBundle";
 import type { HarnessGraph, HarnessMeta, HarnessNode } from "./types";
 
 /**
@@ -86,6 +88,26 @@ export const useStudioDocsStore = create<DocsState>((set) => ({
     }
   },
 }));
+
+
+// Studio saves, renames and deletes land in its document list; the chat's picker follows without a reload.
+useStudioDocsStore.subscribe((state, prev) => {
+  if (state.items === prev.items || state.error) return;
+  useHarnessLibraryStore.getState().applySaved(state.items);
+  // The harness in use (loaded by the chat picker) was saved again: run what is on disk, not the copy loaded earlier.
+  const active = useHarnessSessionStore.getState().activeBundle;
+  const meta = active && state.items.find((m) => m.id === active.manifest.id);
+  if (meta && active.manifest.updatedAt && active.manifest.updatedAt !== meta.updated_at) {
+    void api.harnesses.get(meta.id).then(
+      (record) => {
+        if (useHarnessSessionStore.getState().activeBundle?.manifest.id === meta.id) {
+          useHarnessSessionStore.getState().replaceBundle(bundleFromSavedRecord(record));
+        }
+      },
+      () => undefined,
+    );
+  }
+});
 
 /*
  * Saving model. Each harness open in the canvas is one "document session"

@@ -47,8 +47,11 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
   const failed = libraryFailed || sessionError;
   const listProblem = libraryHydrated && savedFailed;
   const retry = () => {
-    setSessionError(false);
-    void hydrateSession().catch(() => setSessionError(true));
+    // Only the saved list failed: just ask for the library again.
+    if (failed) {
+      setSessionError(false);
+      void hydrateSession().catch(() => setSessionError(true));
+    }
     void hydrateLibrary().catch(() => undefined);
   };
 

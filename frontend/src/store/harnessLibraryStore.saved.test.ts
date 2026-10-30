@@ -29,7 +29,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
   server.updated = "2026-01-01T00:00:00";
-  useHarnessLibraryStore.setState({ entries: [], imports: [], saved: [], hydrated: false, failed: false, savedFailed: false, activateFailed: null });
+  useHarnessLibraryStore.setState({ entries: [], imports: [], saved: [], hydrated: false, failed: false, savedFailed: false, activateFailed: null, activating: null });
   useStudioDocsStore.setState({ items: [], loaded: false, error: "" });
   useHarnessSessionStore.setState({ enabled: false, activeBundle: null, hydrated: true });
 });
@@ -193,5 +193,39 @@ describe("activate", () => {
     await useHarnessLibraryStore.getState().hydrate();
     void useHarnessLibraryStore.getState().activate("i1");
     expect(useHarnessSessionStore.getState().activeBundle?.manifest.id).toBe("i1");
+  });
+
+  it("choosing something else cancels a load in flight, and clears an earlier failure", async () => {
+    let release: (r: Response) => void = () => undefined;
+    serve({ list: () => Response.json([meta("s1", "Mine")]), get: () => new Promise<Response>((r) => { release = r; }) });
+    await useHarnessLibraryStore.getState().hydrate();
+    const pending = useHarnessLibraryStore.getState().activate("s1");
+    expect(useHarnessLibraryStore.getState().activating).toBe("s1");
+    useHarnessLibraryStore.getState().cancelActivation();
+    release(Response.json({ ...meta("s1", "Mine"), graph_json: { nodes: [node], edges: [] } }));
+    expect(await pending).toBe(false);
+    expect(useHarnessSessionStore.getState().activeBundle).toBeNull();
+    expect(useHarnessLibraryStore.getState()).toMatchObject({ activating: null, activateFailed: null });
+  });
+
+  it("does not refetch a harness Studio put in use (no updatedAt) when the list changes", async () => {
+    const fetchMock = serve({ list: () => Response.json([meta("s1", "Mine")]) });
+    await useHarnessLibraryStore.getState().hydrate();
+    useHarnessSessionStore.setState({ activeBundle: { manifest: { id: "s1", name: "Mine" } } as never });
+    fetchMock.mockClear();
+    useStudioDocsStore.setState({ items: [meta("s1", "Mine", "2026-03-03T00:00:00")] });
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a Studio save that lands while the library is still loading", async () => {
+    let release: (r: Response) => void = () => undefined;
+    serve({ list: () => new Promise<Response>((r) => { release = r; }) });
+    const loading = useHarnessLibraryStore.getState().hydrate();
+    await vi.waitFor(() => expect(release).not.toBe(undefined));
+    useStudioDocsStore.setState({ items: [meta("s1", "Saved meanwhile")] });
+    release(Response.json([]));
+    await loading;
+    expect(useHarnessLibraryStore.getState().entries.map((e) => e.name)).toEqual(["Agile", "Saved meanwhile"]);
   });
 });

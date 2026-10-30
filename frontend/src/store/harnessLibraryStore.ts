@@ -5,7 +5,6 @@ import { create } from "zustand";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/apiBase";
 import { bundleFromSavedRecord, stubBundleFromMeta } from "@/lib/savedHarnessBundle";
-import { useStudioDocsStore } from "@/lib/studioDocuments";
 import type { HarnessMeta } from "@/lib/types";
 import {
   useHarnessSessionStore,
@@ -52,6 +51,8 @@ export interface HarnessLibraryState {
   savedFailed: boolean;
   /** The saved harness whose graph could not be loaded when it was chosen. */
   activateFailed: { id: string; name: string } | null;
+  /** The saved harness whose graph is being fetched right now. */
+  activating: string | null;
   hydrate: () => Promise<void>;
   /** Studio's saved list changed (a save, rename or delete): follow it without a reload. */
   applySaved: (items: HarnessMeta[]) => void;
@@ -59,6 +60,8 @@ export interface HarnessLibraryState {
   importBundle: (bundle: HarnessBundle) => void;
   /** Activate → replaceBundle + setEnabled(true). Resolves false when a saved harness couldn't be loaded. */
   activate: (id: string) => Promise<boolean>;
+  /** The person chose something else: a load still in flight must not apply. */
+  cancelActivation: () => void;
   /** Remove an imported entry. Saved harnesses are deleted from Studio, not here. */
   remove: (id: string) => void;
 }
@@ -148,6 +151,8 @@ export function mergeLibrary(
 let inflight: Promise<void> | null = null;
 /** The newest activation wins when picks overlap. */
 let activation = 0;
+/** Bumped by every Studio list update, so a hydrate that raced one keeps the newer list. */
+let savedRev = 0;
 
 export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => {
   const rebuild = (patch: Partial<HarnessLibraryState> = {}) => {
@@ -171,10 +176,12 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
   failed: false,
   savedFailed: false,
   activateFailed: null,
+  activating: null,
 
   hydrate: () => {
     inflight ??= (async () => {
       try {
+        const rev = savedRev;
         const [res, saved] = await Promise.all([
           fetch(apiUrl("/bundles/default"), { cache: "no-store" }),
           fetchSaved().then((list) => ({ list }), () => null),
@@ -188,7 +195,7 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
         }
 
         const imports = readPersistedImports();
-        const list = saved ? saved.list : get().saved;
+        const list = saved && rev === savedRev ? saved.list : get().saved;
         set({
           entries: mergeLibrary(bundle, list, imports),
           imports,
@@ -196,6 +203,7 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
           hydrated: true,
           failed: false,
           savedFailed: !saved,
+          activateFailed: null,
         });
         writePersisted(imports);
       } catch (err) {
@@ -209,7 +217,9 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
   },
 
   applySaved: (items) => {
+    savedRev += 1;
     if (get().hydrated) rebuild({ saved: items, savedFailed: false });
+    else set({ saved: items });
   },
 
   importBundle: (bundle) => {
@@ -237,20 +247,27 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
     if (!entry) return false;
     const mine = ++activation;
     let bundle = entry.bundle;
+    set({ activateFailed: null });
     if (entry.source === "saved") {
+      set({ activating: id });
       try {
         bundle = bundleFromSavedRecord(await api.harnesses.get(id));
       } catch {
-        if (mine === activation) set({ activateFailed: { id, name: entry.name } });
+        if (mine === activation) set({ activateFailed: { id, name: entry.name }, activating: null });
         return false;
       }
       if (mine !== activation) return false;
+      set({ activating: null });
     }
-    set({ activateFailed: null });
     const session = useHarnessSessionStore.getState();
     session.replaceBundle(bundle);
     session.setEnabled(true);
     return true;
+  },
+
+  cancelActivation: () => {
+    activation += 1;
+    set({ activating: null, activateFailed: null });
   },
 
   remove: (id) => {
@@ -260,23 +277,4 @@ export const useHarnessLibraryStore = create<HarnessLibraryState>((set, get) => 
     writePersisted(imports);
   },
   };
-});
-
-// Studio saves, renames and deletes land in its document list; the chat's picker follows without a reload.
-useStudioDocsStore.subscribe((state, prev) => {
-  if (state.items === prev.items || state.error) return;
-  useHarnessLibraryStore.getState().applySaved(state.items);
-  // The harness in use was saved again: run what is on disk, not the copy loaded earlier.
-  const active = useHarnessSessionStore.getState().activeBundle;
-  const meta = active && state.items.find((m) => m.id === active.manifest.id);
-  if (meta && active.manifest.updatedAt !== meta.updated_at) {
-    void api.harnesses.get(meta.id).then(
-      (record) => {
-        if (useHarnessSessionStore.getState().activeBundle?.manifest.id === meta.id) {
-          useHarnessSessionStore.getState().replaceBundle(bundleFromSavedRecord(record));
-        }
-      },
-      () => undefined,
-    );
-  }
 });

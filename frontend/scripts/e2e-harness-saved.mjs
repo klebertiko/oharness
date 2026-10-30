@@ -130,9 +130,9 @@ for (const theme of ["dark", "light"]) {
     assert.equal(await list.getByText("Your harnesses", { exact: true }).count(), 1);
     await axe(page, label("picker with saved harnesses"));
 
-    // Choose a saved one: its graph is fetched, and the run carries it.
-    await page.getByRole("option", { name: /^Review copy/ }).click();
-    await page.getByRole("button", { name: "Harness: Review copy" }).waitFor();
+    // Choose a saved one that is not the open one: its graph is fetched, and the run carries it.
+    await page.getByRole("option", { name: /^Agent \+ review/ }).click();
+    await page.getByRole("button", { name: "Harness: Agent + review" }).waitFor();
     assert.ok(state.gets.length >= 1, "the saved graph was fetched");
     await page.getByRole("textbox", { name: "Message OHarness" }).fill("Run the saved one");
     await page.getByRole("button", { name: "Send message" }).click();

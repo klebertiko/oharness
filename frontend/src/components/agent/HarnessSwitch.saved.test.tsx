@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocaleStore } from "@/i18n/store";
 import { axeViolations } from "@/test/axe";
@@ -8,6 +8,7 @@ import { useHarnessRecentStore } from "@/store/harnessRecentStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useThreadStore } from "@/store/threadStore";
 import { HarnessSwitch } from "./HarnessSwitch";
+import { useChatHarness } from "./useChatHarness";
 
 const bundle = (id: string, name: string) => ({ manifest: { id, name } });
 const entry = (id: string, name: string, source: "bundled" | "saved" | "imported", description?: string) => ({
@@ -104,6 +105,17 @@ describe("harness selector with saved harnesses", () => {
     await waitFor(() => expect(activate).toHaveBeenCalled());
     expect(useThreadStore.getState().threads[0].harness).toEqual({ kind: "none" });
     expect(useHarnessRecentStore.getState().ids).toEqual([]);
+  });
+
+  it("blocks sending until the saved harness the chat points at is the one loaded", () => {
+    seed([agile, mine]);
+    const id = useThreadStore.getState().createThread("Chat", { kind: "harness", id: "s1", name: "Triage" });
+    useThreadStore.setState({ activeThreadId: id });
+    const { result, rerender } = renderHook(() => useChatHarness());
+    expect(result.current.canSend).toBe(false);
+    useHarnessSessionStore.setState({ enabled: true, activeBundle: bundle("s1", "Triage") as never });
+    rerender();
+    expect(result.current.canSend).toBe(true);
   });
 
   it("speaks Portuguese from the catalog", async () => {

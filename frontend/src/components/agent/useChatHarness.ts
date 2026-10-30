@@ -91,7 +91,8 @@ export function useChatHarness(sync = false) {
       }
       return;
     }
-    if (sessionKey !== settled.key) {
+    // A saved harness is still loading: the session has not moved on its own.
+    if (sessionKey !== settled.key && !useHarnessLibraryStore.getState().activating) {
       // The session moved under an open chat: that is the person's pick.
       settled.key = sessionKey;
       if (thread) setThreadHarness(thread.id, sessionBinding, binding);
@@ -103,6 +104,7 @@ export function useChatHarness(sync = false) {
       if (next.kind === "harness") useHarnessRecentStore.getState().push(next.id);
       if (thread) setThreadHarness(thread.id, next, binding);
     };
+    useHarnessLibraryStore.getState().cancelActivation();
     if (next.kind === "none") setEnabled(false);
     else if (next.id === activeId) setEnabled(true);
     else {
@@ -118,5 +120,7 @@ export function useChatHarness(sync = false) {
     settle();
   };
 
-  return { binding, status, choose, canSend: sessionReady && (status.state === "none" || status.state === "ready") };
+  // A saved harness is run from its fetched graph: until the session holds it (or if it couldn't be loaded) the chat would run something else.
+  const notLoaded = binding.kind === "harness" && activeId !== binding.id && entries.some((e) => e.id === binding.id && e.source === "saved");
+  return { binding, status, choose, canSend: sessionReady && !notLoaded && (status.state === "none" || status.state === "ready") };
 }
