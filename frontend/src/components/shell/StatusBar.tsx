@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui";
 import { useShellStore } from "./shellStore";
@@ -28,28 +29,27 @@ interface Props {
   backendOk: boolean;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 export function StatusBar({ mode, running, nodeCount, edgeCount, selectedId, backendOk }: Props) {
+  const { t, plural } = useI18n();
   const setKeymapOpen = useShellStore((s) => s.setKeymapOpen);
 
   return (
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: this footer is the page-level contentinfo landmark, which accepts a label
-    <footer aria-label="Status" className="flex h-statusbar flex-none items-stretch bg-sub-100 shadow-[inset_0_1px_0_var(--line)]">
+    <footer aria-label={t("shell.status.aria")} className="flex h-statusbar flex-none items-stretch bg-sub-100 shadow-[inset_0_1px_0_var(--line)]">
       <Cell>
         <span className={cn("h-1.5 w-1.5 rounded-none", running ? "bg-signal" : "bg-ink-mute")} aria-hidden />
-        <span className="text-ink-dim" role="status">{running ? "Running" : "Ready"}</span>
+        <span className="text-ink-dim" role="status">{running ? t("shell.status.running") : t("shell.status.ready")}</span>
       </Cell>
-      <Cell className="max-sm:hidden">{mode} runs</Cell>
+      <Cell className="max-sm:hidden">{t("shell.status.modeRuns", { mode })}</Cell>
       <Cell className="max-sm:hidden">
-        {plural(nodeCount, "node", "nodes")} · {plural(edgeCount, "connection", "connections")}
+        {plural("shell.status.nodes", nodeCount)} · {plural("shell.status.connections", edgeCount)}
       </Cell>
-      {selectedId && <Cell className="min-w-0 max-sm:hidden"><span className="truncate">Selected {selectedId}</span></Cell>}
+      {selectedId && <Cell className="min-w-0 max-sm:hidden"><span className="truncate">{t("shell.status.selected", { id: selectedId })}</span></Cell>}
 
       <span className="flex-1" />
 
       <Cell tone={backendOk ? "dim" : "fault"} className="border-l border-r-0">
-        <span role="status">{backendOk ? "Engine connected" : "Engine offline"}</span>
+        <span role="status">{backendOk ? t("shell.status.engineOn") : t("shell.status.engineOff")}</span>
       </Cell>
       <button
         type="button"
@@ -57,7 +57,7 @@ export function StatusBar({ mode, running, nodeCount, edgeCount, selectedId, bac
         className="oh-focus-inner t-meta flex items-center gap-1.5 px-2.5 text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink-dim max-sm:hidden"
       >
         <Kbd>?</Kbd>
-        Shortcuts
+        {t("shell.status.shortcuts")}
       </button>
     </footer>
   );

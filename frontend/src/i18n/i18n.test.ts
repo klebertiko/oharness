@@ -3,7 +3,7 @@ import { en } from "./messages.en";
 import { ptBR } from "./messages.pt-BR";
 import { detectLocale, LOCALE_KEY } from "./locale";
 import { useLocaleStore, tr } from "./store";
-import { translate } from "./translate";
+import { formatDate, formatNumber, translate, translatePlural } from "./translate";
 
 const holes = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
@@ -71,5 +71,28 @@ describe("locale store", () => {
     localStorage.setItem(LOCALE_KEY, "pt-BR");
     useLocaleStore.getState().hydrate();
     expect(useLocaleStore.getState().locale).toBe("pt-BR");
+  });
+});
+
+describe("plural and Intl", () => {
+  it("picks the plural form per locale and formats the count", () => {
+    expect(translatePlural("en", "shell.status.nodes", 1)).toBe("1 node");
+    expect(translatePlural("en", "shell.status.nodes", 3)).toBe("3 nodes");
+    expect(translatePlural("pt-BR", "shell.status.nodes", 2)).toBe("2 nós");
+    expect(translatePlural("pt-BR", "shell.status.connections", 1)).toBe("1 conexão");
+    expect(translatePlural("en", "shell.palette.results", 1200)).toBe("1,200 results");
+    expect(translatePlural("pt-BR", "shell.palette.results", 1200)).toBe("1.200 resultados");
+  });
+
+  it("formats numbers and dates in the chosen language", () => {
+    expect(formatNumber("en", 1234.5)).toBe("1,234.5");
+    expect(formatNumber("pt-BR", 1234.5)).toBe("1.234,5");
+    const d = new Date(Date.UTC(2026, 9, 30, 12));
+    expect(formatDate("en", d, { dateStyle: "long", timeZone: "UTC" })).toBe("October 30, 2026");
+    expect(formatDate("pt-BR", d, { dateStyle: "long", timeZone: "UTC" })).toBe("30 de outubro de 2026");
+  });
+
+  it("gives every plural message an `other` form for each `one`", () => {
+    for (const k of Object.keys(en)) if (k.endsWith(".one")) expect(en, k).toHaveProperty(`${k.slice(0, -4)}.other`);
   });
 });
