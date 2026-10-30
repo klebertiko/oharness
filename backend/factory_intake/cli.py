@@ -31,6 +31,8 @@ def add_parser(sub) -> argparse.ArgumentParser:
     actions.add_parser("check", help="whether a client with this name exists").add_argument("name")
     revoke = actions.add_parser("revoke")
     revoke.add_argument("name")
+    group.add_parser("mcp", help="Factory MCP over stdio, for a local coding agent (ADR 0063)")
+
     auto = group.add_parser("automation", help="scheduled and event automations (ADR 0062)")
     auto.add_argument("--dir", type=Path, default=Path(".oharness/factory"))
     verbs = auto.add_subparsers(dest="auto_cmd", required=True)
@@ -66,6 +68,24 @@ def run(args: argparse.Namespace) -> int:
         from .server import serve
 
         return serve(args.host, args.port, args.dir, args.allow_remote)
+    if args.factory_cmd == "mcp":
+        from .loader import FoundationMissing, load_port
+        from .mcp import serve_stdio
+
+        try:
+            port = load_port()
+        except FoundationMissing as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        for stream, options in ((sys.stdin, {"encoding": "utf-8", "errors": "replace", "newline": "\n"}), (sys.stdout, {"encoding": "utf-8", "newline": "\n"})):
+            if hasattr(stream, "reconfigure"):  # UTF-8 and "\n" on every platform; undecodable bytes are replaced, never a crash
+                stream.reconfigure(**options)
+        protocol = sys.stdout
+        sys.stdout = sys.stderr  # stdout is the protocol channel: a stray print from anything else must not corrupt it
+        try:
+            return serve_stdio(port, sys.stdin, protocol)
+        finally:
+            sys.stdout = protocol
     if args.factory_cmd == "automation":
         return _automation(args)
     if args.factory_cmd == "token":

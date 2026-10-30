@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 # Vocabulary of the foundation (package A, ADR 0053): `source.kind` is the connector, `status` the item's lifecycle. `done` is set only by an observed
 # merge or a person's confirmation, never by intake; a release returns an item to review, not to done.
@@ -86,8 +86,15 @@ class WorkItemView(BaseModel):
 class ReleaseResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    @field_validator("branch")
+    @classmethod
+    def _safe_ref(cls, value):
+        if value is not None and (".." in value or "//" in value or value.endswith((".lock", "/", "."))):
+            raise ValueError("not a valid branch name")
+        return value
+
     summary: str = Field(max_length=MAX_COMMENT)
-    branch: str | None = Field(default=None, max_length=200)
+    branch: str | None = Field(default=None, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")  # a plain ref name: never starts with "-", no spaces or shell characters
     status: Literal["needs_review", "abandoned"]  # a release never completes an item: review is a person's checkpoint, abandoning re-queues it
 
 
