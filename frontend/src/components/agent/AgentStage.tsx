@@ -18,6 +18,7 @@ import { PERMISSION_LABEL, isPermissionMode, type PermissionMode } from "@/lib/p
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
 import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
+import { WorktreeToggle } from "@/components/agent/WorktreeToggle";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
 import { useChatProviderStore } from "@/store/chatProviderStore";
@@ -566,6 +567,7 @@ export function AgentStage() {
             <SubagentToggle />
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
+            {enabled && workspace?.rootPath && <WorktreeToggle disabled={live} />}
             <RunBudgetField />
             <ToolHooksButton />
             </fieldset>
