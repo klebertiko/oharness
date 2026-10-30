@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from sandbox.turn_diff import RevertRefused
-from sandbox.turn_diff_store import revert_change
+from sandbox.turn_diff_store import change_states, revert_change
 
 router = APIRouter(prefix="/execute", tags=["turn-diff"])
 
@@ -23,3 +23,8 @@ async def revert_one(run_id: str, body: dict, db: AsyncSession = Depends(get_db)
         # A path that leaves the workspace can only come from a tampered row: report it as unknown.
         code = 404 if exc.code == 'path_escapes_root' else 409
         return JSONResponse({'error': exc.code}, status_code=code)
+
+
+@router.get('/{run_id}/turn-diff')
+async def turn_diff_state(run_id: str, db: AsyncSession = Depends(get_db)):
+    return {'files': await change_states(db, run_id)}
