@@ -6,6 +6,7 @@ import { composeBundleFromCanvas, isOHarnessBundle, mockBundle, validateBundle, 
 import { saveOhmFile } from "@/lib/ohmFile";
 import { openStudioBundle } from "@/lib/studio";
 import { VIEW_EDGE_KEYS, VIEW_NODE_KEYS } from "@/lib/studioDocuments";
+import { tr, trn, useT } from "@/i18n/store";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useHarnessSessionStore, type HarnessBundle } from "@/store/harnessSessionStore";
 type DockStatus = "idle" | "working" | "ok" | "error";
@@ -24,6 +25,7 @@ function draftKey() {
   });
 }
 export function ValidateDock() {
+  const t = useT();
   const fileRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   useEffect(() => () => { requestId.current++; }, []);
@@ -51,54 +53,54 @@ export function ValidateDock() {
     // settling while the file is validated (autosave, view sync) must not silently drop the import.
     return (draftBound = true) => ticket === requestId.current && (!draftBound || stamp === draftKey());
   }
-  function fail(error: unknown) { setStatus("error"); setMessage(error instanceof Error ? error.message : "Operation failed"); }
+  function fail(error: unknown) { setStatus("error"); setMessage(error instanceof Error ? error.message : tr("studio.dock.failed")); }
   async function inspect(kind: "validate" | "mock") {
     if (useCanvasStore.getState().isRunning) return;
-    const current = begin(kind === "validate" ? "Validating…" : "Planning simulation…");
+    const current = begin(kind === "validate" ? tr("studio.dock.validating") : tr("studio.dock.planning"));
     try {
       const bundle = compose();
       if (kind === "validate") {
         const result = await validateBundle(bundle); if (!current()) return;
-        setStatus(result.ok ? "ok" : "error"); setMessage(result.ok ? "Bundle valid" : "Validation failed"); setErrors(result.errors ?? []);
+        setStatus(result.ok ? "ok" : "error"); setMessage(result.ok ? tr("studio.dock.valid") : tr("studio.dock.invalid")); setErrors(result.errors ?? []);
       } else {
         const result = await mockBundle(bundle); if (!current()) return;
         setStatus(result.ok ? "ok" : "error");
-        setMessage(result.ok ? "Simulation plan · " + result.steps.length + " step(s) · no provider called" : "Simulation rejected");
+        setMessage(result.ok ? trn("studio.dock.simOk", result.steps.length) : tr("studio.dock.simRejected"));
         setErrors(result.errors ?? []); setSteps(result.steps ?? []);
       }
     } catch (error) { if (current()) fail(error); }
   }
   async function onExport() {
-    const current = begin("Exporting…");
+    const current = begin(tr("studio.dock.exporting"));
     try {
       const result = await saveOhmFile(compose());
       if (!current()) return;
       if (result.status === "cancelled") { setStatus("idle"); setMessage(""); return; }
-      setStatus("ok"); setMessage(result.native ? "Saved to " + result.name : "Downloaded .ohm");
+      setStatus("ok"); setMessage(result.native ? tr("studio.dock.savedTo", { name: result.name }) : tr("studio.dock.downloaded"));
     } catch (error) { if (current()) fail(error); }
   }
   async function onImportFile(file: File) {
     if (useCanvasStore.getState().isRunning) return;
-    const current = begin("Importing " + file.name + "…");
+    const current = begin(tr("studio.dock.importing", { name: file.name }));
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const result = await validateBundle(parsed);
       if (!current(false) || useCanvasStore.getState().isRunning) return;
-      if (!result.ok) { setStatus("error"); setMessage("Import failed validation"); setErrors(result.errors ?? []); return; }
-      if (!isOHarnessBundle(parsed)) { setStatus("error"); setMessage("Not a recognizable .ohm bundle"); return; }
+      if (!result.ok) { setStatus("error"); setMessage(tr("studio.dock.importInvalid")); setErrors(result.errors ?? []); return; }
+      if (!isOHarnessBundle(parsed)) { setStatus("error"); setMessage(tr("studio.dock.notBundle")); return; }
       openStudioBundle(parsed as unknown as HarnessBundle);
-      setImported(true); setStatus("ok"); setMessage("Imported · " + parsed.manifest.id);
+      setImported(true); setStatus("ok"); setMessage(tr("studio.dock.imported", { id: parsed.manifest.id }));
     } catch (error) { if (current()) fail(error); }
   }
-  return <section aria-label="Bundle" className="flex flex-none flex-col border-t border-line bg-sub-100">
+  return <section aria-label={t("studio.dock.title")} className="flex flex-none flex-col border-t border-line bg-sub-100">
     <div className="flex min-h-control-lg flex-wrap items-center gap-1 border-b border-line-soft px-2 py-1">
-      <span className="t-label mr-1 text-ink-mute" aria-hidden>Bundle</span>
-      <DockAction icon={CheckCircle2} label="Validate" onClick={() => void inspect("validate")} disabled={busy || running} />
-      <DockAction icon={FlaskConical} label="Plan simulation" onClick={() => void inspect("mock")} disabled={busy || running} />
+      <span className="t-label mr-1 text-ink-mute" aria-hidden>{t("studio.dock.title")}</span>
+      <DockAction icon={CheckCircle2} label={t("studio.dock.validate")} onClick={() => void inspect("validate")} disabled={busy || running} />
+      <DockAction icon={FlaskConical} label={t("studio.dock.simulate")} onClick={() => void inspect("mock")} disabled={busy || running} />
       <span className="mx-1 h-4 w-px bg-line-soft max-sm:hidden" aria-hidden />
-      <DockAction icon={Download} label="Export .ohm" onClick={() => void onExport()} disabled={busy} />
-      <DockAction icon={Upload} label="Import .ohm" onClick={() => fileRef.current?.click()} disabled={busy || running} />
-      <input ref={fileRef} type="file" accept=".ohm,.oharness,application/json" className="hidden" disabled={running} aria-label="Import .ohm file" tabIndex={-1}
+      <DockAction icon={Download} label={t("studio.dock.export")} onClick={() => void onExport()} disabled={busy} />
+      <DockAction icon={Upload} label={t("studio.dock.import")} onClick={() => fileRef.current?.click()} disabled={busy || running} />
+      <input ref={fileRef} type="file" accept=".ohm,.oharness,application/json" className="hidden" disabled={running} aria-label={t("studio.dock.importAria")} tabIndex={-1}
         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void onImportFile(file); }} />
       <span className="flex-1" />
       {fresh && message && <span role="status" className={"text-body min-w-0 truncate " + (status === "error" ? "text-fault-text" : status === "ok" ? "text-signal-text" : "text-ink-mute")} title={message}>{message}</span>}

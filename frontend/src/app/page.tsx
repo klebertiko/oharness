@@ -25,7 +25,6 @@ import { tr, useLocaleStore } from "@/i18n/store";
 import { StudioOverview } from "@/components/studio/StudioOverview";
 import { StudioActionsBar } from "@/components/studio/StudioActionsBar";
 import { newStudioHarness, openStudioPreset } from "@/lib/studio";
-import { BUNDLED_HARNESS_COMMAND_GROUP } from "@/lib/studioExamples";
 import { hasStudioDraft, startAutosave } from "@/lib/studioDocuments";
 import { Button, EmptyState } from "@/components/ui";
 import { AppShell } from "@/components/shell/AppShell";
@@ -149,7 +148,7 @@ export default function Home() {
     const presets: Command[] = HARNESS_PRESETS.map((p) => ({
       id: `preset:${p.id}`,
       label: p.name,
-      group: BUNDLED_HARNESS_COMMAND_GROUP,
+      group: tr("studio.group.bundled"),
       disabled: isRunning,
       icon: LayoutTemplate,
       meta: p.id,

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useT } from "@/i18n/store";
 import { cardSpan, nextCardIndex, pageTarget, parseInset, railState, revealTarget, wheelToScroll, type RailState } from "@/lib/scrollRail";
 
 const IDLE: RailState = { canPrev: false, canNext: false, fadeStart: false, fadeEnd: false };
@@ -106,6 +107,7 @@ export function ScrollRail({ labelledBy, as: Tag = "div", className = "", childr
     }
   };
 
+  const t = useT();
   const fades = `${state.fadeStart ? " oh-rail-fade-start" : ""}${state.fadeEnd ? " oh-rail-fade-end" : ""}`;
   const scrollable = state.canPrev || state.canNext;
 
@@ -113,8 +115,8 @@ export function ScrollRail({ labelledBy, as: Tag = "div", className = "", childr
     <>
       {scrollable && (
         <div className="absolute right-0 top-0 flex gap-1.5">
-          <Button iconOnly size="sm" id={prevId} aria-label="Previous" aria-labelledby={`${prevId} ${labelledBy}`} disabled={!state.canPrev} onClick={() => page("prev")} icon={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />} />
-          <Button iconOnly size="sm" id={nextId} aria-label="Next" aria-labelledby={`${nextId} ${labelledBy}`} disabled={!state.canNext} onClick={() => page("next")} icon={<ChevronRight size={14} strokeWidth={1.8} aria-hidden />} />
+          <Button iconOnly size="sm" id={prevId} aria-label={t("studio.rail.prev")} aria-labelledby={`${prevId} ${labelledBy}`} disabled={!state.canPrev} onClick={() => page("prev")} icon={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />} />
+          <Button iconOnly size="sm" id={nextId} aria-label={t("studio.rail.next")} aria-labelledby={`${nextId} ${labelledBy}`} disabled={!state.canNext} onClick={() => page("next")} icon={<ChevronRight size={14} strokeWidth={1.8} aria-hidden />} />
         </div>
       )}
       <Tag
