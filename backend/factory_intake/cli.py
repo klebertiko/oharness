@@ -74,7 +74,7 @@ def run(args: argparse.Namespace) -> int:
         store = _vault()
         if store is None:
             return EXIT_USAGE
-        tokens = ClientTokens(store)
+        clients = ClientTokens(store)
         if args.token_cmd == "create":
             try:
                 descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # first: a taken path must not cost a token
@@ -83,13 +83,13 @@ def run(args: argparse.Namespace) -> int:
                 return EXIT_USAGE
             created = False
             try:
-                value = tokens.create(args.name, args.scope, args.kind)
+                value = clients.create(args.name, args.scope, args.kind)
                 created = True
                 with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
                     handle.write(value + "\n")
             except Exception as exc:  # a refused or failed creation leaves neither a token file nor a client behind
                 if created:
-                    tokens.revoke(args.name)
+                    clients.revoke(args.name)
                 else:
                     os.close(descriptor)
                 args.out.unlink(missing_ok=True)
@@ -98,10 +98,10 @@ def run(args: argparse.Namespace) -> int:
             print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))
             return EXIT_OK
         if args.token_cmd == "list":
-            print(json.dumps({"clients": tokens.names()}))
+            print(json.dumps({"clients": clients.names()}))
             return EXIT_OK
         if args.token_cmd == "revoke":
-            ok = tokens.revoke(args.name)
+            ok = clients.revoke(args.name)
             print(json.dumps({"revoked": ok}))
             return EXIT_OK if ok else EXIT_FAILED
     return EXIT_USAGE
