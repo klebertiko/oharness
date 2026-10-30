@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,6 +125,7 @@ for (const theme of ["dark", "light"]) {
         await page.waitForTimeout(500);
       }
       await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
+      await settleForAxe(page);
       await page.addScriptTag({ content: axeSource });
       const axe = await page.evaluate(async () => {
         const r = await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });

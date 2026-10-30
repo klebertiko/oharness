@@ -20,6 +20,7 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
@@ -112,6 +113,8 @@ for (const theme of ["dark", "light"]) {
       note(fonts.some((f) => f.includes("sora")), `${label}: Sora loaded`, fonts.join(","));
       // Faces load when text first uses them; Chats at 390px shows no machine data yet.
       if (s.id !== "chats") note(fonts.some((f) => f.includes("plex")), `${label}: IBM Plex Mono loaded`, fonts.join(","));
+
+      await settleForAxe(page);
 
       await page.addScriptTag({ content: axeSource });
       const violations = await page.evaluate(async () => {
