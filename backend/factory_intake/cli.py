@@ -77,7 +77,15 @@ def run(args: argparse.Namespace) -> int:
         except FoundationMissing as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return EXIT_USAGE
-        return serve_stdio(port)
+        for stream, options in ((sys.stdin, {"encoding": "utf-8", "errors": "replace", "newline": "\n"}), (sys.stdout, {"encoding": "utf-8", "newline": "\n"})):
+            if hasattr(stream, "reconfigure"):  # UTF-8 and "\n" on every platform; undecodable bytes are replaced, never a crash
+                stream.reconfigure(**options)
+        protocol = sys.stdout
+        sys.stdout = sys.stderr  # stdout is the protocol channel: a stray print from anything else must not corrupt it
+        try:
+            return serve_stdio(port, sys.stdin, protocol)
+        finally:
+            sys.stdout = protocol
     if args.factory_cmd == "automation":
         return _automation(args)
     if args.factory_cmd == "token":

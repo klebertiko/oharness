@@ -14,9 +14,13 @@ import uuid
 from typing import IO
 
 from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 
 from .port import MAX_BODY, MAX_COMMENT, MAX_TITLE, FactoryError, FactoryPort, ReleaseResult, SourceRef, WorkItemDraft
 from .pipeline import deliver
+from sandbox.secrets import redact
+
+from .port import TERMINAL
 from .security import RateLimiter, fence_untrusted
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -47,28 +51,37 @@ TOOLS: dict[str, tuple[str, dict]] = {
                       "this server changes no files, run them yourself. Push your branch before releasing.",
                       _schema({"id": _ID_PROP, "holder": {"type": "string", "minLength": 1, "maxLength": 60}}, ("id", "holder"))),
     "factory_release": ("Give a claimed item back with a summary and the pushed branch. 'needs_review' sends it to review (never to done); 'abandoned' puts it back in the queue.",
-                        _schema({"id": _ID_PROP, "summary": {"type": "string", "minLength": 1, "maxLength": MAX_COMMENT}, "branch": {"type": "string", "maxLength": 200}, "status": {"enum": ["needs_review", "abandoned"]}}, ("id", "summary", "status"))),
+                        _schema({"id": _ID_PROP, "summary": {"type": "string", "minLength": 1, "maxLength": MAX_COMMENT}, "branch": {"type": "string", "maxLength": 200, "pattern": r"^[A-Za-z0-9][A-Za-z0-9._/-]*$"}, "status": {"enum": ["needs_review", "abandoned"]}}, ("id", "summary", "status"))),
 }
 _VALIDATORS = {name: Draft202012Validator(schema) for name, (_, schema) in TOOLS.items()}
 
 
 def _view(item) -> dict:
+    """The item for a model: ids and states as they are; every string a source could have written goes under ``untrusted``, fenced and redacted."""
     data = json.loads(item.model_dump_json())
-    data["title"] = fence_untrusted(item.source.kind, item.title, 400)  # a title can come from anywhere: quoted as data, with secrets redacted
+    kind = item.source.kind
+    fenced = {"title": item.title, "ref": item.source.ref, "url": item.source.url, "thread_ref": item.source.thread_ref, "pr_url": item.pr_url,
+              "holder": item.claim.holder if item.claim else None}
+    for key in ("title", "pr_url", "claim", "source"):
+        data.pop(key, None)
+    data["source_kind"] = kind
+    data["claimed"] = item.claim is not None
+    data["untrusted"] = {key: fence_untrusted(kind, value, 400) for key, value in fenced.items() if value}
     return data
 
 
 def _worktree_commands(item_id: str) -> list[str]:
     if not _ID.match(item_id):
         return []
-    return ["git fetch origin", f"git worktree add ../factory-{item_id} -b factory/{item_id} origin/HEAD", f"cd ../factory-{item_id}",
-            f"# when done: git push -u origin factory/{item_id}, then call factory_release"]
+    return ["git fetch --all --prune", f"git worktree add ../factory-{item_id} -b factory/{item_id} origin/HEAD",
+            f"# assumes remote 'origin' with a default branch; if factory/{item_id} already exists (a previous release), use: git worktree add ../factory-{item_id} factory/{item_id}",
+            f"cd ../factory-{item_id}", f"# when done: git push -u origin factory/{item_id}, then call factory_release with branch factory/{item_id}"]
 
 
 class FactoryMcp:
     def __init__(self, port: FactoryPort):
         self.port = port
-        self.client = "client"
+        self.client = ""   # set by initialize; tools refuse to run before it
         self.rate = RateLimiter(per_second=10.0, burst=30)
 
     # -- protocol ------------------------------------------------------------------------------------------------------------------
@@ -93,6 +106,8 @@ class FactoryMcp:
         if method == "tools/list":
             return self._result(ident, {"tools": [{"name": n, "description": d, "inputSchema": s} for n, (d, s) in TOOLS.items()]})
         if method == "tools/call":
+            if not self.client:
+                return self._error(ident, -32002, "send initialize first")
             return self._result(ident, self._call(params.get("name"), params.get("arguments") or {}))
         return self._error(ident, -32601, "method not found")
 
@@ -109,7 +124,7 @@ class FactoryMcp:
         def reply(payload, error: bool = False) -> dict:
             return {"content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}], "isError": error}
 
-        if name not in TOOLS or not isinstance(args, dict):
+        if not isinstance(name, str) or name not in TOOLS or not isinstance(args, dict):
             return reply({"code": "unknown_tool", "message": "no such tool"}, True)
         problems = sorted(e.message for e in _VALIDATORS[name].iter_errors(args))
         if problems:
@@ -118,6 +133,8 @@ class FactoryMcp:
             return reply({"code": "rate_limited", "message": "too many calls; slow down"}, True)
         try:
             return reply(getattr(self, name)(**args))
+        except ValidationError:
+            return reply({"code": "invalid_arguments", "message": "an argument is not acceptable"}, True)
         except FactoryError as exc:
             return reply({"code": exc.code, "message": exc.message}, True)
         except Exception:  # never a traceback or request content to the client
@@ -127,9 +144,12 @@ class FactoryMcp:
         return item.source.kind == "mcp" and item.source.ref.startswith(f"mcp:{self.client}:")
 
     def factory_submit(self, title, note="", ref=None):
-        draft = WorkItemDraft(source=SourceRef(kind="mcp", ref=f"mcp:{self.client}:{ref or uuid.uuid4().hex}"[:200]), title=title, body=note,
-                              requested_by=f"mcp:{self.client}", idempotency_key=f"mcp:{self.client}:{ref or uuid.uuid4().hex}"[:200])
+        ref = ref or uuid.uuid4().hex
+        draft = WorkItemDraft(source=SourceRef(kind="mcp", ref=f"mcp:{self.client}:{ref}"[:200]), title=title, body=note, requested_by=f"mcp:{self.client}",
+                              idempotency_key=f"mcp:{self.client}:{ref}"[:200], is_reply=True)  # a second note on a still-open ref becomes a comment
         result = deliver(self.port, draft)
+        if result.outcome == "replay" and result.item.state in TERMINAL:  # the same ref after that work finished is new work, not a replay
+            result = deliver(self.port, draft.model_copy(update={"idempotency_key": f"mcp:{self.client}:{ref}:{uuid.uuid4().hex[:8]}"[:200]}))
         return {"outcome": result.outcome, "item": _view(result.item)}
 
     def factory_list(self, state=None, limit=20):
@@ -142,8 +162,9 @@ class FactoryMcp:
         return {"item": _view(self.port.get(id))}
 
     def factory_search(self, text):
-        needle = text.lower()
-        return {"items": [_view(i) for i in self.port.list(None, None, 200) if needle in i.title.lower()][:20]}
+        needle, newest = text.lower(), self.port.list(None, None, 200)
+        found = [_view(i) for i in newest if needle in redact(i.title)[0].lower()][:20]  # matched on the redacted title: a search cannot probe a hidden secret
+        return {"items": found, "searched_newest": len(newest), "complete": len(newest) < 200}
 
     def factory_comment(self, id, text):
         self.port.comment(id, text, f"mcp:{self.client}")
@@ -173,16 +194,22 @@ def serve_stdio(port: FactoryPort, stdin: IO[str] | None = None, stdout: IO[str]
     for line in iter(lambda: stdin.readline(MAX_LINE + 1), ""):
         if not line.strip():
             continue
+        response = None
         if len(line) > MAX_LINE:
             response = FactoryMcp._error(None, -32600, "message too large")
             while line and not line.endswith("\n"):  # drop the rest of the oversized line
                 line = stdin.readline(MAX_LINE)
         else:
             try:
-                response = server.handle(json.loads(line))
-            except ValueError:
+                message = json.loads(line)
+            except (ValueError, RecursionError):
                 response = FactoryMcp._error(None, -32700, "parse error")
+            else:
+                try:
+                    response = server.handle(message)
+                except Exception:  # one bad message never ends the session
+                    response = FactoryMcp._error(message.get("id") if isinstance(message, dict) else None, -32603, "internal error")
         if response is not None:
-            stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+            stdout.write(json.dumps(response) + "\n")  # ASCII-only JSON: nothing in a title can break the encoding
             stdout.flush()
     return 0
