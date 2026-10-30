@@ -120,7 +120,6 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
         if cfg is None or not cfg.enabled:
             return _error("not_found", "no such webhook", 404)
         headers = {k.lower(): v for k, v in request.headers.items()}
-        body, delivery_id = b"", "-"
         if not hook_rate.allow(name):
             log.record(name, "-", "rejected_rate", 0)
             raise Rejected("rate_limited", "too many deliveries", 429)

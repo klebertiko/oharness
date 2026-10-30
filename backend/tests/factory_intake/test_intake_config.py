@@ -75,7 +75,9 @@ def test_loader_explains_a_missing_foundation_and_loads_a_named_port(monkeypatch
     monkeypatch.setenv("OH_FACTORY_PORT", "factory_intake.memory:MemoryFactory")
     assert isinstance(load_port(), MemoryFactory)
     with pytest.raises(FoundationMissing):
-        load_port("json:dumps")
+        load_port("factory_intake.memory:nothing_here")
+    with pytest.raises(FoundationMissing):
+        load_port("os:getcwd")  # outside the allowed packages
 
 
 def test_loopback_detection():
@@ -90,11 +92,15 @@ def test_cli_token_commands_refuse_an_in_memory_store_and_work_with_a_file_store
     assert main(["factory", "token", "list"]) == 2
     monkeypatch.setenv("OH_SECRETS", "file")
     monkeypatch.setenv("OH_SECRETS_DIR", str(tmp_path / "vault"))
-    assert main(["factory", "token", "create", "agent-a", "--scope", "work:read"]) == 0
-    created = __import__("json").loads(capsys.readouterr().out)
-    assert created["token"].startswith("ohf_")
+    out = tmp_path / "agent-a.token"
+    assert main(["factory", "token", "create", "agent-a", "--scope", "work:read", "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    token = out.read_text().strip()
+    assert token.startswith("ohf_") and token not in printed and oct(out.stat().st_mode & 0o777) == "0o600"
     assert main(["factory", "token", "list"]) == 0 and "agent-a" in capsys.readouterr().out
-    assert main(["factory", "token", "create", "agent-a", "--scope", "work:read"]) == 2
+    assert main(["factory", "token", "create", "agent-a", "--scope", "work:read", "--out", str(tmp_path / "again.token")]) == 2
+    assert not (tmp_path / "again.token").exists()  # a refused creation leaves no file behind
+    assert main(["factory", "token", "create", "agent-b", "--scope", "work:read", "--out", str(out)]) == 2  # never overwrites a file
     assert main(["factory", "token", "revoke", "agent-a"]) == 0 and main(["factory", "token", "revoke", "agent-a"]) == 1
 
 

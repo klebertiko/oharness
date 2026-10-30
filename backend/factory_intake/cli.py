@@ -26,6 +26,7 @@ def add_parser(sub) -> argparse.ArgumentParser:
     create = actions.add_parser("create", help="create a token; it is printed once")
     create.add_argument("name")
     create.add_argument("--scope", action="append", choices=("work:read", "work:write", "work:claim"), required=True)
+    create.add_argument("--out", type=Path, required=True, help="file the token is written to (mode 0600, must not exist); it is never printed")
     create.add_argument("--kind", choices=("cli", "mcp", "webhook", "manual"), default="cli", help="the source.kind its work is recorded under")
     actions.add_parser("list", help="client names")
     revoke = actions.add_parser("revoke")
@@ -64,11 +65,20 @@ def run(args: argparse.Namespace) -> int:
         tokens = ClientTokens(store)
         if args.token_cmd == "create":
             try:
+                descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # before creating: a taken path must not cost a token
+            except OSError as exc:
+                print(f"refused: cannot create {args.out}: {exc.strerror}", file=sys.stderr)
+                return EXIT_USAGE
+            try:
                 value = tokens.create(args.name, args.scope, args.kind)
             except ValueError as exc:
+                os.close(descriptor)
+                args.out.unlink()
                 print(f"refused: {exc}", file=sys.stderr)
                 return EXIT_USAGE
-            print(json.dumps({"name": args.name, "token": value, "scopes": sorted(set(args.scope)), "kind": args.kind, "note": "shown once; only its hash is stored"}))
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(value + "\n")
+            print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))
             return EXIT_OK
         if args.token_cmd == "list":
             print(json.dumps({"clients": tokens.names()}))
