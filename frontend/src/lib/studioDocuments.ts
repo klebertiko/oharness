@@ -257,6 +257,8 @@ function loadIntoCanvas(graph: HarnessGraph, meta: { id: string | null; name: st
     canvas.setHarnessMeta(meta);
     // Chat's "Use in chat" composes from this bundle; keep it about this harness.
     const bundle = composeBundleFromCanvas(null, { nodes: graph.nodes, edges: graph.edges, harnessMeta: meta });
+    // A saved harness keeps its record id, so the chat picker sees one harness, not a saved row plus a "From Studio" copy.
+    if (meta.id) bundle.manifest.id = meta.id;
     useHarnessSessionStore.getState().replaceBundle(bundle as unknown as HarnessBundle);
   });
 }
