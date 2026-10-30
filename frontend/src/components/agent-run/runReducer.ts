@@ -1,3 +1,4 @@
+import { tr } from "@/i18n/store";
 import type { NodeType } from "@/lib/types";
 import type { Block, FailoverAttempt, RunState, Segment, Subagent, ToolCall } from "./types";
 
@@ -480,6 +481,12 @@ export function runReducer(state: RunState, action: Action): RunState {
           { text: String(action.data.text ?? ""), atNode: String(action.data.at_node ?? "") },
         ],
       };
+
+    case "subagent_unavailable":
+      {
+        const notice = tr("subagents.unavailable");
+        return state.notices.includes(notice) ? state : { ...state, notices: [...state.notices, notice] };
+      }
 
     case "subagent_start":
       return {
