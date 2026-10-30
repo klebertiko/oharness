@@ -25,6 +25,7 @@ Two rules shape every word below:
 | **Hook** | A program you register that must exit 0 before a tool runs. An error or a timeout blocks the tool, and the run records which hook decided. |
 | **Provider** | A registered LLM backend with credentials (shown on Providers). |
 | **Workspace** | The folder on this device a chat's tools read and run in. |
+| **Turn diff** | The files a turn changed in the workspace, each with its diff. **Revert** restores one file on its own. |
 | **Studio, Chats, Providers** | The three destinations of the app. |
 | **Permission mode** | How much a chat may do on its own: Plan, Read-only, Ask, Auto, Workspace write, Full. |
 | **Needs action** | The model picker's group of connections one step from working, with that step. |
