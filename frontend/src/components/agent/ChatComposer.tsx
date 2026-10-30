@@ -61,7 +61,7 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
   const selected = Math.min(cursor, Math.max(0, options.length - 1));
   const optionId = (index: number) => id + "-command-" + index;
   const noWorkspace = tools !== undefined && !tools.workspace;
-  const slashPreset = useMemo(() => presetFromSlashText(value), [value]);
+  const slashPreset = useMemo(() => presetFromSlashText(value), [value, locale]);
   useEffect(() => {
     if (open) listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
   }, [open, selected, query]);
