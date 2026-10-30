@@ -113,3 +113,30 @@ def test_cli_serve_refuses_remote_binding_without_the_flag_and_memory_secrets(tm
     monkeypatch.setenv("OH_SECRETS", "memory")
     assert main(["factory", "serve", "--dir", str(tmp_path)]) == 2
     assert "OH_SECRETS" in capsys.readouterr().err
+
+
+def test_trailing_newlines_and_yml_files_are_rejected_loudly(tmp_path):
+    with pytest.raises(ConfigError):
+        parse_webhook("a", "secretRef: factory/x\ndeliveryIdHeader: |\n  x-id\n")
+    with pytest.raises(ConfigError):
+        parse_webhook("a", "secretRef: |\n  factory/x\n")
+    (tmp_path / "webhooks").mkdir()
+    (tmp_path / "webhooks" / "ci.yml").write_text("secretRef: factory/ci\n")
+    with pytest.raises(ConfigError):
+        load_webhooks(tmp_path)
+
+
+def test_token_create_leaves_nothing_behind_when_the_store_fails(tmp_path, monkeypatch):
+    from oharness.cli import main
+
+    monkeypatch.setenv("OH_SECRETS", "file")
+    monkeypatch.setenv("OH_SECRETS_DIR", str(tmp_path / "vault"))
+    import secret_store.file_store as fs
+
+    def boom(self, ref, value):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(fs.FileSecrets, "put", boom)
+    out = tmp_path / "t.token"
+    assert main(["factory", "token", "create", "x", "--scope", "work:read", "--out", str(out)]) == 1
+    assert not out.exists()

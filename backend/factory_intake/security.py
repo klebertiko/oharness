@@ -134,12 +134,6 @@ class RateLimiter:
             self._buckets[key] = (tokens - 1.0 if allowed else tokens, now)
             return allowed
 
-    def blocked(self, key: str) -> bool:
-        """True when ``key`` has no token left, without spending one (used for the failed-authentication budget)."""
-        with self._lock:
-            tokens, last = self._buckets.get(key, (float(self.burst), self._clock()))
-            return self._refilled(tokens, last, self._clock()) < 1.0
-
     def require(self, key: str) -> None:
         if not self.allow(key):
             raise Rejected("rate_limited", "too many requests", 429)

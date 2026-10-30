@@ -65,19 +65,24 @@ def run(args: argparse.Namespace) -> int:
         tokens = ClientTokens(store)
         if args.token_cmd == "create":
             try:
-                descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # before creating: a taken path must not cost a token
+                descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # first: a taken path must not cost a token
             except OSError as exc:
                 print(f"refused: cannot create {args.out}: {exc.strerror}", file=sys.stderr)
                 return EXIT_USAGE
+            created = False
             try:
                 value = tokens.create(args.name, args.scope, args.kind)
-            except ValueError as exc:
-                os.close(descriptor)
-                args.out.unlink()
-                print(f"refused: {exc}", file=sys.stderr)
-                return EXIT_USAGE
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(value + "\n")
+                created = True
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    handle.write(value + "\n")
+            except Exception as exc:  # a refused or failed creation leaves neither a token file nor a client behind
+                if created:
+                    tokens.revoke(args.name)
+                else:
+                    os.close(descriptor)
+                args.out.unlink(missing_ok=True)
+                print(f"refused: {exc}" if isinstance(exc, ValueError) else "failed: the token could not be stored", file=sys.stderr)
+                return EXIT_USAGE if isinstance(exc, ValueError) else EXIT_FAILED
             print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))
             return EXIT_OK
         if args.token_cmd == "list":

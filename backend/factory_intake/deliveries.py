@@ -12,8 +12,8 @@ from pathlib import Path
 
 from sandbox.secrets import redact
 
-OUTCOMES = ("accepted", "duplicate", "rejected_auth", "rejected_json", "rejected_size", "rejected_rate")
-KEEP, DAYS, MAX_PAYLOAD = 50, 7, 64 * 1024
+OUTCOMES = ("accepted", "duplicate", "rejected_auth", "rejected_json", "rejected_size")
+KEEP, DAYS, MAX_PAYLOAD, MAX_ROWS = 50, 7, 64 * 1024, 5000  # MAX_ROWS: a flood inside the window cannot grow the table without bound
 
 
 class DeliveryLog:
@@ -30,6 +30,7 @@ class DeliveryLog:
             self._db.execute("INSERT INTO deliveries (webhook, delivery_id, outcome, size, at, payload, items) VALUES (?,?,?,?,?,?,?)",
                              (webhook, delivery_id[:200], outcome, size, self._clock(), stored, json.dumps(items or [])))
             self._db.execute("DELETE FROM deliveries WHERE at < ? AND id NOT IN (SELECT id FROM deliveries ORDER BY id DESC LIMIT ?)", (self._clock() - DAYS * 86400, KEEP))
+            self._db.execute("DELETE FROM deliveries WHERE id NOT IN (SELECT id FROM deliveries ORDER BY id DESC LIMIT ?)", (MAX_ROWS,))
 
     def recent(self, webhook: str, limit: int = 50) -> list[dict]:
         with self._lock:

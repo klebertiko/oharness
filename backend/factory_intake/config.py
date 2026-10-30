@@ -65,7 +65,7 @@ def _strings(where: str, value, required: bool = False) -> list[str]:
 
 def parse_webhook(name: str, text: str) -> WebhookConfig:
     where = f"webhooks/{name}.yaml"
-    if not _NAME.match(name):
+    if not _NAME.fullmatch(name):
         raise ConfigError(f"{where}: the file name must be lowercase letters, digits and '-'")
     if len(text.encode("utf-8")) > MAX_FILE_BYTES:
         raise ConfigError(f"{where}: file is too large")
@@ -83,13 +83,13 @@ def parse_webhook(name: str, text: str) -> WebhookConfig:
     if mode == "token" and scheme is not None:
         raise ConfigError(f"{where}: signatureScheme only applies to authMode signature")
     ref = data.get("secretRef")
-    if not isinstance(ref, str) or not _SECRET_REF.match(ref):
+    if not isinstance(ref, str) or not _SECRET_REF.fullmatch(ref):
         raise ConfigError(f"{where}: secretRef must be a reference like factory/<name>")
     enabled = data.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ConfigError(f"{where}: enabled must be true or false")
     header = data.get("deliveryIdHeader")
-    if header is not None and not (isinstance(header, str) and _HEADER.match(header)):
+    if header is not None and not (isinstance(header, str) and _HEADER.fullmatch(header)):
         raise ConfigError(f"{where}: deliveryIdHeader must be a header name")
     github = None
     if "github" in data:
@@ -115,6 +115,9 @@ def load_webhooks(directory: Path) -> dict[str, WebhookConfig]:
     folder = Path(directory) / "webhooks"
     found: dict[str, WebhookConfig] = {}
     if folder.is_dir():
+        stray = sorted(p.name for p in folder.glob("*.yml"))
+        if stray:
+            raise ConfigError(f"webhooks/{stray[0]}: use the .yaml extension (a .yml file would be silently ignored)")
         for path in sorted(folder.glob("*.yaml")):
             if path.is_symlink() or not path.is_file():
                 raise ConfigError(f"webhooks/{path.name}: symbolic links are not followed")

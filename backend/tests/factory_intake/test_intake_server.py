@@ -154,6 +154,8 @@ def test_failed_credentials_have_their_own_budget(env):
     codes = [client.post("/hooks/ci", content=b"{}", headers={"authorization": "Bearer bad"}).status_code for _ in range(22)]
     assert codes[0] == 401 and codes[-1] == 429
     assert client.post("/hooks/gen", content=b"{}", headers={"x-oharness-signature": "x"}).status_code == 401  # another webhook is unaffected
+    ok = client.post("/hooks/ci", content=b'{"real":1}', headers={"authorization": "Bearer tok-secret"})
+    assert ok.status_code == 202  # a correct credential is never locked out by someone else's failures
 
 
 # -- integration API ---------------------------------------------------------------------------------------------------------------------
@@ -183,7 +185,7 @@ def test_api_lifecycle_create_status_comment_claim_release_cancel(env):
     assert client.post(f"/api/work-items/{item['id']}/comments", json={"text": "more context"}, headers=h).status_code == 201
     assert port.comments[item["id"]] == [("client:agent-a", "more context")]
     claimed = client.post(f"/api/work-items/{item['id']}/claim", json={"holder": "claude-code"}, headers=h).json()
-    assert claimed["state"] == "claimed" and claimed["claim"]["holder"] == "claude-code"
+    assert claimed["state"] == "claimed" and claimed["claim"]["holder"] == "agent-a/claude-code"
     assert client.post(f"/api/work-items/{item['id']}/claim", json={"holder": "codex"}, headers=h).status_code == 409
     released = client.post(f"/api/work-items/{item['id']}/release", json={"summary": "done locally", "branch": "fix/rounding", "status": "needs_review"}, headers=h).json()
     assert released["state"] == "awaiting_human"
@@ -217,3 +219,50 @@ def test_revoked_tokens_stop_working_and_only_a_hash_is_stored(env):
     assert client.get("/api/work-items", headers={"authorization": f"Bearer {raw}"}).status_code == 200
     assert raw not in secrets.get("factory/api-tokens")
     assert tokens.revoke("temp") and client.get("/api/work-items", headers={"authorization": f"Bearer {raw}"}).status_code == 401
+
+
+def test_replay_keys_are_per_webhook_and_a_forged_github_delivery_header_does_not_help(env):
+    client, port, *_ = env
+    body = b'{"same":"body"}'
+    assert client.post("/hooks/ci", content=body, headers={"authorization": "Bearer tok-secret"}).status_code == 202
+    gen = client.post("/hooks/gen", content=body, headers={"x-oharness-signature": sig(b"gen-secret", body), "x-event-id": "e1"})
+    assert gen.status_code == 202 and "duplicate" not in gen.json()  # same body, other webhook: not a replay
+
+    gh_body = (GH_FIX / "issues_opened_with_mention.json").read_bytes()
+
+    def post(delivery_id):
+        return client.post("/hooks/gh", content=gh_body, headers={"x-github-event": "issues", "x-github-delivery": delivery_id, "x-hub-signature-256": sig(b"gh-secret", gh_body)})
+
+    assert post("real-1").status_code == 202
+    again = post("fresh-forged-id")  # the delivery header is unsigned; the signed body is what identifies the delivery
+    assert again.json().get("duplicate") is True and len(port.list()) == 1
+
+
+def test_clients_of_one_kind_cannot_collide_read_or_cancel_each_other(env):
+    client, port, *_ = env
+    a, b = token(env, name="agent-a"), token(env, name="agent-b")
+    first = client.post("/api/work-items", json={"title": "A's", "idempotency_key": "k", "ref": "r"}, headers=a).json()
+    second = client.post("/api/work-items", json={"title": "B's", "idempotency_key": "k", "ref": "r"}, headers=b).json()
+    assert first["outcome"] == second["outcome"] == "created" and first["item"]["id"] != second["item"]["id"]
+    assert client.post(f"/api/work-items/{first['item']['id']}/cancel", headers=b).status_code == 403
+    gh = port.submit(__import__("factory_intake.port", fromlist=["x"]).WorkItemDraft(source=__import__("factory_intake.port", fromlist=["x"]).SourceRef(kind="github", ref="a/b#1"), title="gh", idempotency_key="g")).item
+    assert client.post(f"/api/work-items/{gh.id}/cancel", headers=a).status_code == 403
+
+
+def test_only_the_claiming_client_can_release(env):
+    client, *_ = env
+    a, b = token(env, name="agent-a"), token(env, name="agent-b")
+    item = client.post("/api/work-items", json={"title": "t"}, headers=a).json()["item"]
+    client.post(f"/api/work-items/{item['id']}/claim", json={"holder": "dev"}, headers=a)
+    body = {"summary": "x", "status": "abandoned"}
+    assert client.post(f"/api/work-items/{item['id']}/release", json=body, headers=b).status_code == 409
+    assert client.post(f"/api/work-items/{item['id']}/release", json=body, headers=a).json()["state"] == "queued"
+
+
+def test_an_unreadable_token_map_is_503_not_an_empty_one(env):
+    client, _, _, secrets, _ = env
+    secrets.put("factory/api-tokens", "{not json")
+    assert client.get("/api/work-items", headers={"authorization": "Bearer ohf_x"}).status_code == 503
+    with pytest.raises(Exception):
+        ClientTokens(secrets).create("new", ["work:read"])
+    assert secrets.get("factory/api-tokens") == "{not json"  # nothing was overwritten

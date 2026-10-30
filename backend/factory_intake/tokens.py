@@ -18,6 +18,10 @@ STORE_NAME = "api-tokens"
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
+class TokenStoreError(RuntimeError):
+    """The stored token map cannot be read."""
+
+
 @dataclass(frozen=True)
 class Client:
     name: str
@@ -39,17 +43,21 @@ class ClientTokens:
 
     def _load(self) -> dict:
         raw = self._store.get(secret_ref(STORE_NAME))
+        if not raw:
+            return {}
         try:
-            data = json.loads(raw) if raw else {}
+            data = json.loads(raw)
         except ValueError:
-            data = {}
-        return data if isinstance(data, dict) else {}
+            data = None
+        if not isinstance(data, dict):  # never treat an unreadable map as empty: the next create would silently revoke every client
+            raise TokenStoreError("the client token map in the secrets store is unreadable")
+        return data
 
     def _save(self, data: dict) -> None:
         self._store.put(secret_ref(STORE_NAME), json.dumps(data))
 
     def create(self, name: str, scopes: list[str], source_kind: str = "cli") -> str:
-        if not _NAME.match(name) or source_kind not in CLIENT_KINDS or not scopes or any(s not in SCOPES for s in scopes):
+        if not _NAME.fullmatch(name) or source_kind not in CLIENT_KINDS or not scopes or any(s not in SCOPES for s in scopes):
             raise ValueError("invalid client name, scope or source kind")
         data = self._load()
         if name in data:
@@ -72,7 +80,11 @@ class ClientTokens:
     def authenticate(self, header: str | None) -> Client:
         presented = header[7:].strip() if header and header.lower().startswith("bearer ") else ""
         digest, found = _digest(presented), None
-        for name, entry in self._load().items():  # compare against every entry: no early exit that leaks which one matched
+        try:
+            entries = self._load()
+        except TokenStoreError:
+            raise Rejected("unavailable", "client tokens are unavailable", 503) from None
+        for name, entry in entries.items():  # compare against every entry: no early exit that leaks which one matched
             if isinstance(entry, dict) and hmac.compare_digest(digest, str(entry.get("sha256", ""))) and presented:
                 found = Client(name, frozenset(entry.get("scopes", [])), str(entry.get("kind", "cli")))
         if found is None:

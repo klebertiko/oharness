@@ -11,8 +11,9 @@ import json
 import uuid
 from typing import Callable
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .config import WebhookConfig
@@ -22,7 +23,7 @@ from .deliveries import DeliveryLog
 from .pipeline import deliver
 from .port import MAX_BODY, MAX_COMMENT, MAX_TITLE, FactoryError, FactoryPort, ReleaseResult, SourceRef, WorkItemDraft, WorkState
 from .security import DEFAULT_MAX_BODY_BYTES, RateLimiter, Rejected, ReplayGuard, verify_bearer, verify_hmac_sha256, verify_standard_webhooks
-from .tokens import ClientTokens
+from .tokens import Client, ClientTokens
 
 # (webhook, headers, payload, delivery id) -> work item ids it started. Automations (ADR 0062) plug in here; with none, a generic webhook
 # starts nothing on its own, as in the ADR: a delivery is recorded and an automation has to subscribe to it.
@@ -82,11 +83,13 @@ def authenticate_webhook(cfg: WebhookConfig, secrets_store, headers: dict, body:
 
 def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConfig], log: DeliveryLog, *,
                generic_handler: GenericHandler | None = None, max_body: int = DEFAULT_MAX_BODY_BYTES) -> FastAPI:
+    """Handlers are plain ``def`` (run in the threadpool): the secrets store, the port and the delivery log do blocking I/O, and one slow
+    call must not stall every other request. Only the body read, which needs the event loop, is ``async`` (a dependency)."""
     app = FastAPI(title="OHarness factory intake", docs_url=None, redoc_url=None, openapi_url=None)
     clients = ClientTokens(secrets_store)
     replay = ReplayGuard()
     hook_rate = RateLimiter(per_second=1.0, burst=60)            # 60 deliveries per minute per webhook
-    failed_auth = RateLimiter(per_second=0.1, burst=20)          # its own budget for bad credentials
+    failed_auth = RateLimiter(per_second=0.1, burst=20)          # its own budget: past it, a bad credential is answered 429, a good one still passes
     api_rate = RateLimiter(per_second=10.0, burst=30)
 
     @app.exception_handler(Rejected)
@@ -106,68 +109,85 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
         return _error("internal_error", "unexpected error", 500)
 
     # -- webhooks ------------------------------------------------------------------------------------------------------------------
-    def github_items(cfg: WebhookConfig, headers: dict, body: bytes) -> list[str]:
-        gh = cfg.github
-        if gh is None:
-            return []
-        connector = GitHubConnector(gh.repos, secrets_store, self_logins=gh.self_logins, webhook_secret_ref=cfg.secret_ref)
-        rules = TriggerRules(handle=gh.handle, labels=gh.labels, allowed_authors=gh.allowed_authors)
-        return [deliver(port, draft).item.id for draft in connector.parse(Delivery(headers, body), rules)]
-
-    @app.post("/hooks/{name}")
-    async def receive(name: str, request: Request):
+    async def hook_context(name: str, request: Request) -> tuple[WebhookConfig, dict, bytes]:
         cfg = webhooks.get(name)
         if cfg is None or not cfg.enabled:
-            return _error("not_found", "no such webhook", 404)
-        headers = {k.lower(): v for k, v in request.headers.items()}
-        if not hook_rate.allow(name):
-            log.record(name, "-", "rejected_rate", 0)
+            raise Rejected("not_found", "no such webhook", 404)
+        if not hook_rate.allow(name):  # in-memory only: a flood must not turn into disk writes
             raise Rejected("rate_limited", "too many deliveries", 429)
-        if failed_auth.blocked(name):
-            raise Rejected("rate_limited", "too many failed attempts", 429)
         try:
             body = await _read_body(request, max_body)
         except Rejected:
-            declared = headers.get("content-length", "")
-            log.record(name, "-", "rejected_size", int(declared) if declared.isdigit() else 0)
+            declared = request.headers.get("content-length", "")
+            await run_in_threadpool(log.record, name, "-", "rejected_size", int(declared) if declared.isdigit() else 0)
             raise
-        id_header = (cfg.delivery_id_header or {"github": "x-github-delivery", "standard": "webhook-id"}.get(cfg.scheme or "", "")).lower()
-        delivery_id = (headers.get(id_header) if id_header else None) or hashlib.sha256(body).hexdigest()  # no sender id: identical bodies are duplicates
+        return cfg, {k.lower(): v for k, v in request.headers.items()}, body
+
+    def delivery_key(cfg: WebhookConfig, headers: dict, body: bytes) -> str:
+        """What makes two deliveries the same. GitHub's id header is not covered by its signature, so GitHub deliveries are keyed by the signed
+        body; Standard Webhooks ids are signed; otherwise the configured header, else the body (identical bodies are duplicates)."""
+        digest = hashlib.sha256(body).hexdigest()
+        if cfg.scheme == "github":
+            return digest
+        id_header = (cfg.delivery_id_header or ("webhook-id" if cfg.scheme == "standard" else "")).lower()
+        return (headers.get(id_header) if id_header else None) or digest
+
+    def github_items(cfg: WebhookConfig, headers: dict, payload, key: str) -> list[str]:
+        gh = cfg.github
+        if gh is None or not isinstance(payload, dict):
+            return []
+        connector = GitHubConnector(gh.repos, secrets_store, self_logins=gh.self_logins, webhook_secret_ref=cfg.secret_ref)
+        rules = TriggerRules(handle=gh.handle, labels=gh.labels, allowed_authors=gh.allowed_authors)
+        trigger = f"delivery-{headers.get('x-github-delivery') or key[:32]}"
+        return [deliver(port, draft).item.id for draft in connector.parse_event(headers.get("x-github-event", ""), payload, trigger, rules)]
+
+    @app.post("/hooks/{name}")
+    def receive(name: str, context: tuple = Depends(hook_context)):
+        cfg, headers, body = context
         try:
             authenticate_webhook(cfg, secrets_store, headers, body)
-        except Rejected:
-            failed_auth.allow(name)
+        except Rejected as exc:
+            if not failed_auth.allow(name):
+                raise Rejected("rate_limited", "too many failed attempts", 429) from None
             log.record(name, "-", "rejected_auth", len(body))
-            raise
+            raise exc
+        key = delivery_key(cfg, headers, body)
         try:
             payload = json.loads(body)
         except (ValueError, UnicodeDecodeError):
-            log.record(name, delivery_id, "rejected_json", len(body))
+            log.record(name, key, "rejected_json", len(body))
             raise Rejected("bad_json", "body is not valid JSON", 400) from None
+        guard_key = f"{name}:{key}"  # per webhook: another webhook's identical body or id is not a replay of this one
         try:
-            replay.check(delivery_id)
+            replay.check(guard_key)
         except Rejected as exc:
             if exc.code == "replay":
-                log.record(name, delivery_id, "duplicate", len(body))
-                return JSONResponse({"delivery_id": delivery_id, "duplicate": True}, status_code=202)
+                log.record(name, key, "duplicate", len(body))
+                return JSONResponse({"delivery_id": key, "duplicate": True}, status_code=202)
             raise
         try:
-            items = github_items(cfg, headers, body) if cfg.scheme == "github" else (generic_handler(cfg, headers, payload, delivery_id) if generic_handler else [])
+            items = github_items(cfg, headers, payload, key) if cfg.scheme == "github" else (generic_handler(cfg, headers, payload, key) if generic_handler else [])
         except Exception:
-            replay.forget(delivery_id)  # handling failed: let the sender retry this delivery
+            replay.forget(guard_key)  # handling failed: let the sender retry this delivery
             raise
-        log.record(name, delivery_id, "accepted", len(body), body.decode("utf-8", "replace"), items)
-        return JSONResponse({"delivery_id": delivery_id}, status_code=202)
+        log.record(name, key, "accepted", len(body), body.decode("utf-8", "replace"), items)
+        return JSONResponse({"delivery_id": key}, status_code=202)
 
     # -- integration API ----------------------------------------------------------------------------------------------------------
-    def authorize(request: Request, scope: str):
-        client = clients.authenticate(request.headers.get("authorization"))
-        api_rate.require(client.name)
-        client.require(scope)
-        return client
+    def api(scope: str):
+        """Dependency: authenticate and authorize first, then read the (size-limited) body."""
+        async def dependency(request: Request) -> tuple[Client, bytes]:
+            def check() -> Client:
+                client = clients.authenticate(request.headers.get("authorization"))
+                api_rate.require(client.name)
+                client.require(scope)
+                return client
 
-    async def parsed(request: Request, model):
-        raw = await _read_body(request, max_body)
+            client = await run_in_threadpool(check)
+            return client, await _read_body(request, max_body)
+        return dependency
+
+    def parsed(raw: bytes, model):
         try:
             return model.model_validate_json(raw or b"{}")
         except ValidationError:
@@ -176,53 +196,59 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
     def view(item) -> dict:
         return json.loads(item.model_dump_json())
 
+    def owned(client: Client, item) -> bool:
+        return item.source.kind == client.source_kind and item.source.ref.startswith(f"{client.name}:")
+
     @app.post("/api/work-items")
-    async def create(request: Request):
-        client = authorize(request, "work:write")
-        data = await parsed(request, CreateBody)
-        draft = WorkItemDraft(source=SourceRef(kind=client.source_kind, ref=data.ref or f"api:{uuid.uuid4().hex}"), title=data.title, body=data.body,
+    def create(ctx: tuple = Depends(api("work:write"))):
+        client, raw = ctx
+        data = parsed(raw, CreateBody)
+        # refs and keys are namespaced per client: two clients of one kind cannot collide, replay or answer into each other's items
+        draft = WorkItemDraft(source=SourceRef(kind=client.source_kind, ref=f"{client.name}:{data.ref or uuid.uuid4().hex}"[:200]), title=data.title, body=data.body,
                               labels=tuple(label[:100] for label in data.labels), requested_by=f"client:{client.name}",
-                              idempotency_key=data.idempotency_key or uuid.uuid4().hex)
+                              idempotency_key=f"{client.name}:{data.idempotency_key or uuid.uuid4().hex}"[:200])
         result = deliver(port, draft)
         return JSONResponse({"outcome": result.outcome, "item": view(result.item)}, status_code=201 if result.outcome == "created" else 200)
 
     @app.get("/api/work-items")
-    async def list_items(request: Request, state: WorkState | None = None, limit: int = 50):
-        authorize(request, "work:read")
+    def list_items(state: WorkState | None = None, limit: int = 50, ctx: tuple = Depends(api("work:read"))):
         return {"items": [view(i) for i in port.list(state, None, max(1, min(limit, 200)))]}
 
     @app.get("/api/work-items/{item_id}")
-    async def get_item(item_id: str, request: Request):
-        authorize(request, "work:read")
+    def get_item(item_id: str, ctx: tuple = Depends(api("work:read"))):
         return view(port.get(item_id))
 
     @app.post("/api/work-items/{item_id}/comments")
-    async def comment(item_id: str, request: Request):
-        client = authorize(request, "work:write")
-        data = await parsed(request, CommentBody)
+    def comment(item_id: str, ctx: tuple = Depends(api("work:write"))):
+        client, raw = ctx
+        data = parsed(raw, CommentBody)
         port.comment(item_id, data.text, f"client:{client.name}")
         return JSONResponse({"ok": True}, status_code=201)
 
     @app.post("/api/work-items/{item_id}/cancel")
-    async def cancel(item_id: str, request: Request):
-        authorize(request, "work:write")
+    def cancel(item_id: str, ctx: tuple = Depends(api("work:write"))):
+        client, _ = ctx
+        if not owned(client, port.get(item_id)):  # an integration cancels what it created, not GitHub's or another client's work
+            raise Rejected("forbidden", "this token can only cancel items it created", 403)
         return view(port.cancel(item_id))
 
     @app.post("/api/work-items/{item_id}/claim")
-    async def claim(item_id: str, request: Request):
-        authorize(request, "work:claim")
-        data = await parsed(request, ClaimBody)
-        return view(port.claim(item_id, data.holder))
+    def claim(item_id: str, ctx: tuple = Depends(api("work:claim"))):
+        client, raw = ctx
+        data = parsed(raw, ClaimBody)
+        return view(port.claim(item_id, f"{client.name}/{data.holder}"[:100]))
 
     @app.post("/api/work-items/{item_id}/release")
-    async def release(item_id: str, request: Request):
-        authorize(request, "work:claim")
-        data = await parsed(request, ReleaseResult)
+    def release(item_id: str, ctx: tuple = Depends(api("work:claim"))):
+        client, raw = ctx
+        data = parsed(raw, ReleaseResult)
+        item = port.get(item_id)
+        if item.claim is None or not item.claim.holder.startswith(f"{client.name}/"):  # only the client that claimed it can give it back
+            raise Rejected("not_holder", "this token does not hold the claim on this item", 409)
         return view(port.release(item_id, data))
 
     @app.get("/api/metrics")
-    async def metrics(request: Request, window_days: int = 7):
-        authorize(request, "work:read")
+    def metrics(window_days: int = 7, ctx: tuple = Depends(api("work:read"))):
         return port.metrics(max(1, min(window_days, 365)))
 
     return app
