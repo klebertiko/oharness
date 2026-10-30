@@ -1,11 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tr } from "@/i18n/store";
 import { chatToolsApi } from "@/lib/chatToolsApi";
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, nextPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import { usePermissionStore } from "@/store/permissionStore";
 
-const SAVE_FAILED = "Couldn't save the permission mode; the previous mode still applies.";
-const PLAN_WAITING = "A plan is waiting for approval. Approve or discard it before changing the mode.";
 
 /**
  * The conversation's permission mode. The sidecar holds and enforces the
@@ -46,7 +45,7 @@ export function usePermissionMode(threadId: string | null) {
       await chatToolsApi.setPermission(threadId, next);
     } catch (failure) {
       usePermissionStore.getState().setMode(threadId, previous);
-      setError((failure as { code?: string } | null)?.code === "plan_not_approved" ? PLAN_WAITING : SAVE_FAILED);
+      setError((failure as { code?: string } | null)?.code === "plan_not_approved" ? tr("chat.permission.planWaiting") : tr("chat.permission.saveFailed"));
     }
   }, [threadId]);
 
@@ -67,7 +66,7 @@ export function usePermissionMode(threadId: string | null) {
       return chosen;
     } catch {
       usePermissionStore.getState().setMode(newThreadId, DEFAULT_PERMISSION_MODE);
-      setError(SAVE_FAILED);
+      setError(tr("chat.permission.saveFailed"));
       return DEFAULT_PERMISSION_MODE;
     }
   }, []);

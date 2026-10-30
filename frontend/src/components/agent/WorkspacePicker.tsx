@@ -6,6 +6,8 @@ import { Folder, FolderPlus } from "lucide-react";
 import { ComboAction, Combobox, type ComboOption } from "@/components/ui/Combobox";
 
 import { chosenWorkspace, useWorkspaceStore } from "@/store/workspaceStore";
+import { useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 import { nativeDialogAvailable, pickFolder } from "@/lib/nativeDialog";
 
 /**
@@ -28,6 +30,7 @@ import { nativeDialogAvailable, pickFolder } from "@/lib/nativeDialog";
  * silently doing nothing).
  */
 export function WorkspacePicker() {
+  const t = useT();
   const projects = useWorkspaceStore((s) => s.projects);
   const chosenId = useWorkspaceStore((s) => s.chosenProjectId);
   const setChosen = useWorkspaceStore((s) => s.setChosen);
@@ -40,21 +43,21 @@ export function WorkspacePicker() {
   }, [hydrate]);
 
   const [adding, setAdding] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<MessageKey | null>(null);
 
   /** "" is "No folder" — a project id is never empty. */
   const options = useMemo<ComboOption[]>(
     () => [
-      { id: "", label: "No folder", detail: "runs in a scratch directory" },
-      ...projects.map((p) => ({ id: p.id, label: p.name, detail: p.rootPath || "(no path set)" })),
+      { id: "", label: t("chat.workspace.none"), detail: t("chat.workspace.noneDetail") },
+      ...projects.map((p) => ({ id: p.id, label: p.name, detail: p.rootPath || t("chat.workspace.noPath") })),
     ],
-    [projects],
+    [projects, t],
   );
 
   const onAddFolder = async (close: (refocus?: boolean) => void) => {
     setNotice(null);
     if (!nativeDialogAvailable()) {
-      setNotice("Available in the desktop app");
+      setNotice("chat.workspace.desktopOnly");
       return;
     }
     const path = await pickFolder();
@@ -66,16 +69,16 @@ export function WorkspacePicker() {
     if (id) {
       close();
     } else {
-      setNotice("Couldn't add that folder — try again");
+      setNotice("chat.workspace.addFailed");
     }
   };
 
-  const label = chosen ? chosen.name : "No folder";
+  const label = chosen ? chosen.name : t("chat.workspace.none");
 
   return (
     <Combobox
-      label="Chat working folder"
-      triggerLabel={`Working folder: ${label}`}
+      label={t("chat.workspace.label")}
+      triggerLabel={t("chat.workspace.trigger", { name: label })}
       value={chosenId ?? ""}
       options={options}
       onChange={(id) => setChosen(id || null)}
@@ -92,11 +95,11 @@ export function WorkspacePicker() {
         <>
           <ComboAction onClick={() => void onAddFolder(close)} disabled={adding}>
             <FolderPlus size={13} strokeWidth={1.8} className="flex-none" aria-hidden />
-            {adding ? "Adding…" : "Add folder…"}
+            {adding ? t("chat.workspace.adding") : t("chat.workspace.add")}
           </ComboAction>
           {notice && (
             <p role="status" className="px-2 pb-1 text-meta text-ink-mute">
-              {notice}
+              {t(notice)}
             </p>
           )}
         </>

@@ -96,3 +96,14 @@ describe("plural and Intl", () => {
     for (const k of Object.keys(en)) if (k.endsWith(".one")) expect(en, k).toHaveProperty(`${k.slice(0, -4)}.other`);
   });
 });
+
+describe("permission modes", () => {
+  it("English catalog text equals the shared permission table, so the two cannot drift", async () => {
+    const table = (await import("../lib/permissionModes.json")).default.modes;
+    for (const m of table) {
+      expect(en[`chat.perm.${m.id}.label` as keyof typeof en], m.id).toBe(m.label);
+      expect(en[`chat.perm.${m.id}.hint` as keyof typeof en], m.id).toBe(m.hint);
+      expect(en[`chat.perm.${m.id}.summary` as keyof typeof en], m.id).toBe(m.summary);
+    }
+  });
+});
