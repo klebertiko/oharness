@@ -491,20 +491,23 @@ async def execute_harness(
             continue
 
         if flow_advice:
-            trail = outputs.history  # type: ignore[attr-defined]  # OutputTrail whenever the switch is on
-            yield _sse(
-                "flow_advice",
-                advice_event(
+            # Evidence must never cost the run: a failure to build it is dropped, not raised.
+            try:
+                last_output, previous_output = outputs.last_two()  # type: ignore[attr-defined]  # OutputTrail whenever the switch is on
+                advice = advice_event(
                     node_id,
                     run_facts(
-                        node_data=node.get("data", {}),
+                        node_data=node.get("data") or {},
                         stop=control.stop.is_set(),
-                        last_output=trail[-1] if trail else "",
-                        previous_output=trail[-2] if len(trail) > 1 else "",
+                        last_output=last_output,
+                        previous_output=previous_output,
                     ),
                     advise_facts,
-                ),
-            )
+                )
+            except Exception:  # noqa: BLE001
+                advice = None
+            if advice is not None:
+                yield _sse("flow_advice", advice)
 
         if control.stop.is_set():
             status, stopped_at = STATUS_STOPPED, node_id

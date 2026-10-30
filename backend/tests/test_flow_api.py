@@ -87,3 +87,13 @@ def test_the_global_default_applies_unless_the_run_overrides_it(client: TestClie
     client.put("/flow/config", json={"enabled": True})
     assert _execute(client).count("flow_advice") == 2
     assert "flow_advice" not in _execute(client, flow=False)
+
+
+def test_flow_config_needs_the_sidecar_token() -> None:
+    import httpx
+    from starlette.testclient import TestClient as RawClient
+
+    raw = RawClient(app)
+    raw.request = httpx.Client.request.__get__(raw, RawClient)  # bypass the suite's auto-auth patch
+    assert raw.get("/flow/config").status_code == 401
+    assert raw.put("/flow/config", json={"enabled": True}).status_code == 401

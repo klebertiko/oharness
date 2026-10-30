@@ -43,15 +43,36 @@ def _graph(**middle_data) -> dict:
     }
 
 
-def _run(graph: dict, *, flow=None, stop_first: bool = False) -> list[tuple[str, dict]]:
+def _run(graph: dict, *, flow=None, stop_first: bool = False, resume_outputs=None, step: bool = False) -> list[tuple[str, dict]]:
     async def go() -> list[str]:
-        control = RunControl("flow-t")
+        control = RunControl("flow-t", step=step)
         if stop_first:
             control.stop.set()
         kwargs = {} if flow is None else {"flow_advice": flow}
-        return [c async for c in execute_harness(graph, execution_mode="mock", control=control, run_id="flow-t", **kwargs)]
+        chunks: list[str] = []
+        async for c in execute_harness(graph, execution_mode="mock", control=control, run_id="flow-t", resume_outputs=resume_outputs, **kwargs):
+            chunks.append(c)
+            if c.startswith("event: awaiting_step"):
+                control.release()
+        return chunks
 
     return _events(asyncio.run(go()))
+
+
+def _gate_loop_graph() -> dict:
+    # Agent -> Gate -[pass]-> Out, with Gate -[fail]-> Agent: fails twice, then passes.
+    return {
+        "nodes": [
+            {"id": "agent", "type": "agent", "data": {"label": "Agent", "adapter": "mock"}},
+            {"id": "gate", "type": "gate", "data": {"label": "Gate", "mockOutcome": ["fail", "fail", "pass"]}},
+            {"id": "out", "type": "output", "data": {"label": "Out"}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "agent", "target": "gate", "sourceHandle": "out"},
+            {"id": "e2", "source": "gate", "target": "out", "sourceHandle": "pass"},
+            {"id": "e3", "source": "gate", "target": "agent", "sourceHandle": "fail"},
+        ],
+    }
 
 
 def _contract(events: list[tuple[str, dict]]) -> dict:
@@ -63,6 +84,10 @@ def _contract(events: list[tuple[str, dict]]) -> dict:
         "status": next(d["status"] for n, d in events if n == "harness_done"),
         "nodes_run": next(d["nodes_run"] for n, d in events if n == "harness_done"),
         "stopped_at": [d.get("at_node") for n, d in events if n == "run_stopped"],
+        "restored": [d["node_id"] for n, d in events if n == "node_restored"],
+        "outputs": {d["node_id"]: d["output"] for n, d in events if n in ("node_done", "node_restored")},
+        "total_tokens": next(d["total_tokens"] for n, d in events if n == "harness_done"),
+        "sequence": [n for n, _ in events if n != "flow_advice"],
     }
 
 
@@ -78,6 +103,8 @@ def test_switch_off_computes_nothing_and_emits_nothing(monkeypatch: pytest.Monke
         raise AssertionError("the advisor ran with the switch off")
 
     monkeypatch.setattr(engine, "advise_facts", boom)
+    monkeypatch.setattr(engine, "run_facts", boom)
+    monkeypatch.setattr(engine, "OutputTrail", boom)
     for flow in (None, False):
         events = _run(_graph(), flow=flow)
         assert not [n for n, _ in events if n == "flow_advice"]
@@ -135,3 +162,35 @@ def test_repeated_last_result_reads_as_no_progress_signal() -> None:
     by_node = {d["node_id"]: d for n, d in events if n == "flow_advice"}
     # mock output of two different nodes is not identical -> no repetition fact
     assert by_node["gate"]["facts"]["repeated"] is False
+
+
+def test_gate_retry_loop_is_identical_with_the_advice_on_and_sees_the_repeat() -> None:
+    off = _run(_gate_loop_graph())
+    on = _run(_gate_loop_graph(), flow=True)
+    assert _contract(on) == _contract(off)
+    assert len(_contract(off)["retries"]) == 2
+    # the agent handed back the same text on its retry: that is the repetition fact
+    assert any(d["facts"]["repeated"] for n, d in on if n == "flow_advice")
+
+
+def test_resumed_run_is_identical_with_the_advice_on() -> None:
+    resume = {"in": "build it", "work": "done before"}
+    off = _run(_graph(), resume_outputs=resume)
+    on = _run(_graph(), flow=True, resume_outputs=resume)
+    assert _contract(on) == _contract(off)
+    assert _contract(off)["restored"] == ["in", "work"]
+
+
+def test_step_mode_run_is_identical_with_the_advice_on() -> None:
+    assert _contract(_run(_graph(), flow=True, step=True)) == _contract(_run(_graph(), step=True))
+
+
+def test_a_failure_building_the_advice_never_costs_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    def explode(*_a, **_k):
+        raise RuntimeError("advisor bug")
+
+    off = _contract(_run(_graph()))
+    monkeypatch.setattr(engine, "advise_facts", explode)
+    events = _run(_graph(), flow=True)
+    assert not [n for n, _ in events if n == "flow_advice"]
+    assert _contract(events) == off

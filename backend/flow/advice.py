@@ -15,17 +15,30 @@ AUTHORITY = "advisory"
 
 
 class OutputTrail(dict):
-    """`outputs` that also remembers the order results arrived in, including a
-    node's repeated result (a plain dict keeps one slot per node)."""
+    """`outputs` that also remembers the last result and what its node produced before.
+
+    A plain dict keeps one slot per node, so a node re-run by a Gate retry that
+    hands back the same text overwrites the slot and the repetition is lost.
+    Nothing but the last write is kept, so memory stays bounded.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.history: list[str] = []
+        self._last: tuple[str, str] = ("", "")
 
     def __setitem__(self, key: str, value: str) -> None:
+        before = self.get(key)
         super().__setitem__(key, value)
-        if value:
-            self.history.append(value)
+        if isinstance(value, str) and value:
+            self._last = (value, before if isinstance(before, str) else "")
+
+    def last_two(self) -> tuple[str, str]:
+        """(last result, what the same node produced the time before, else "").
+
+        Repetition is a node handing back what it already handed back; two
+        different nodes passing the same text along is not a lack of progress.
+        """
+        return self._last
 
 
 def _norm(text: str) -> str:
@@ -36,7 +49,7 @@ def run_facts(*, node_data: dict, stop: bool, last_output: str, previous_output:
     last = _norm(last_output)
     goal = node_data.get("goal")
     goal_met = isinstance(goal, str) and bool(_norm(goal)) and _norm(goal) in last
-    repeated = bool(last) and last == _norm(previous_output)
+    repeated = bool(last) and bool(previous_output) and last == _norm(previous_output)
     return Facts(
         band="no_signal" if repeated else "matched",
         stop=stop,

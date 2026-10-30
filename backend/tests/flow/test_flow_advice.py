@@ -1,7 +1,7 @@
-"""Perception from structured run facts only (ADR 0062)."""
+"""Perception from structured run facts only (ADR 0065)."""
 from __future__ import annotations
 
-from flow.advice import advice_event, run_facts
+from flow.advice import OutputTrail, advice_event, run_facts
 
 
 def _facts(**over):
@@ -49,3 +49,22 @@ def test_only_a_literal_true_marks_a_step_unsafe() -> None:
 def test_the_operator_stop_closes() -> None:
     event = advice_event("n1", _facts(stop=True))
     assert (event["action"], event["reason"], event["takes_step"]) == ("close", "operator said to stop", False)
+
+
+def test_trail_sees_a_node_repeat_itself_but_not_two_nodes_passing_text_along() -> None:
+    trail = OutputTrail()
+    trail["in"] = "text"
+    trail["out"] = "text"  # a different node carrying the same text: not a repetition
+    assert trail.last_two() == ("text", "")
+    trail["agent"] = "attempt"
+    trail["gate"] = "fail"
+    trail["agent"] = "attempt"  # the same node, same result, after a retry
+    assert trail.last_two() == ("attempt", "attempt")
+
+
+def test_trail_keeps_the_dict_behaviour_and_ignores_empty_results() -> None:
+    trail = OutputTrail()
+    trail["a"] = "x"
+    trail["a"] = ""
+    assert trail["a"] == "" and trail.last_two() == ("x", "")
+    assert dict(trail) == {"a": ""}
