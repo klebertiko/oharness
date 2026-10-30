@@ -12,7 +12,8 @@ import { Sheet } from "@/components/ui";
 import { shellNavCommands, type Command } from "./commands";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
-import { useLocaleStore } from "@/i18n/store";
+import { useLocaleStore, useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 
 /**
  * Split handle. 5px hit area over a 1px visual rule — the standard trick, but
@@ -34,6 +35,7 @@ function Resizer({
   max: number;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   const dragging = useRef(false);
   const el = useRef<HTMLDivElement>(null);
 
@@ -57,7 +59,7 @@ function Resizer({
       ref={el}
       role="separator"
       aria-orientation="vertical"
-      aria-label={side === "left" ? "Resize navigation panel" : "Resize inspector"}
+      aria-label={side === "left" ? t("shell.resize.nav") : t("shell.resize.inspector")}
       aria-valuenow={value}
       aria-valuemin={min}
       aria-valuemax={max}
@@ -84,10 +86,10 @@ function Resizer({
 }
 
 /** What the header calls each destination. */
-const DESTINATION: Record<RailSection, string> = {
-  chats: "Chats",
-  studio: "Harness Studio",
-  providers: "Providers",
+const DESTINATION: Record<RailSection, MessageKey> = {
+  chats: "shell.rail.chats",
+  studio: "shell.title.studio",
+  providers: "shell.rail.providers",
 };
 
 interface Props {
@@ -127,6 +129,8 @@ export function AppShell({
   onDismissRight,
 }: Props) {
   const mac = useIsMac();
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
   const shell = useShellStore();
   const shellMode = useModeStore((s) => s.mode);
   const hydrateProviders = useProviderStore((s) => s.hydrate);
@@ -175,7 +179,7 @@ export function AppShell({
   const leftOpen = leftPref && !narrow.left;
   const rightOpen = rightPref && !narrow.right;
 
-  const allCommands = useMemo(() => [...shellNavCommands(), ...commands], [commands]);
+  const allCommands = useMemo(() => [...shellNavCommands(), ...commands], [commands, locale]);
 
   const commandsRef = useRef(allCommands);
   commandsRef.current = allCommands;
@@ -276,7 +280,7 @@ export function AppShell({
         harnessName={harnessName}
         onHarnessNameChange={onHarnessNameChange}
         mode={shellMode === "agent" ? "Agent" : "Studio"}
-        destination={DESTINATION[shell.section]}
+        destination={t(DESTINATION[shell.section])}
         running={running}
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
@@ -298,7 +302,7 @@ export function AppShell({
 
         {rightOpen && !immersive && right && (
           <aside
-            aria-label="Inspector"
+            aria-label={t("shell.inspector")}
             className="relative min-h-0 flex-none border-l border-line"
             style={{ width: hydrated ? rightWidth : undefined, minWidth: RIGHT_MIN }}
           >
@@ -324,7 +328,7 @@ export function AppShell({
       <Sheet
         open={narrow.right && !immersive && Boolean(right) && Boolean(onDismissRight)}
         onOpenChange={(v) => !v && onDismissRight?.()}
-        title="Inspector"
+        title={t("shell.inspector")}
         hideTitle
         showClose
         className="h-[min(640px,calc(100dvh-var(--h-titlebar)-20px))] w-[min(520px,calc(100vw-24px))]"

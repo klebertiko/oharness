@@ -4,6 +4,7 @@ import { CornerDownLeft } from "lucide-react";
 import { matchCommands, type Command, type Match } from "./commands";
 import { chordCaps, useIsMac } from "./keys";
 import { Kbd, KbdChord, Sheet } from "@/components/ui";
+import { useI18n } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,6 +85,7 @@ function Row({
 }
 
 export function CommandPalette({ open, commands, onClose }: { open: boolean; commands: Command[]; onClose: () => void }) {
+  const { t, plural } = useI18n();
   const mac = useIsMac();
   const listId = useId();
   const [query, setQuery] = useState("");
@@ -126,7 +128,7 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
   const activeOption = matches.length ? optionId(Math.min(cursor, matches.length - 1)) : undefined;
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()} title="Command palette" hideTitle placement="top" className="h-fit max-h-[min(64vh,520px)]">
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()} title={t("shell.palette.title")} hideTitle placement="top" className="h-fit max-h-[min(64vh,520px)]">
       <div className="flex h-control-lg flex-none items-center gap-2.5 border-b border-line px-2.5">
         <span className="h-4 w-0.5 flex-none rounded-none bg-signal" aria-hidden />
         <input
@@ -136,12 +138,12 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
           spellCheck={false}
           autoComplete="off"
           role="combobox"
-          aria-label="Search commands"
+          aria-label={t("shell.palette.searchAria")}
           aria-expanded
           aria-controls={listId}
           aria-activedescendant={activeOption}
           aria-autocomplete="list"
-          placeholder="Run a command, add a node, open a harness"
+          placeholder={t("shell.palette.placeholder")}
           /* The tick to the left marks focus inside this context; a ring around
              the only field in a modal would say what is already known. */
           className="t-title h-full min-w-0 flex-1 bg-transparent text-ink outline-hidden focus-visible:outline-hidden placeholder:text-ink-mute"
@@ -149,13 +151,13 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
       </div>
 
       <p role="status" className="sr-only">
-        {matches.length === 0 ? "No results" : `${matches.length} ${matches.length === 1 ? "result" : "results"}`}
+        {matches.length === 0 ? t("shell.palette.noResults") : plural("shell.palette.results", matches.length)}
       </p>
 
-      <div id={listId} role="listbox" aria-label="Commands" className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div id={listId} role="listbox" aria-label={t("shell.palette.commands")} className="min-h-0 flex-1 overflow-y-auto py-1">
         {matches.length === 0 && (
           <p className="t-body px-3 py-6 text-center text-ink-mute">
-            Nothing matches <span className="t-meta text-ink-dim">{query}</span>. Try a shorter word.
+            {t("shell.palette.nothing", { query })}
           </p>
         )}
         {matches.map((m, i) => {
@@ -179,17 +181,17 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
         <span className="t-meta flex items-center gap-1 text-ink-mute">
           <Kbd>↑</Kbd>
           <Kbd>↓</Kbd>
-          move
+          {t("shell.palette.move")}
         </span>
         <span className="t-meta flex items-center gap-1 text-ink-mute">
           <Kbd>
             <CornerDownLeft size={10} strokeWidth={2} aria-hidden />
           </Kbd>
-          run
+          {t("shell.palette.run")}
         </span>
         <span className="t-meta flex items-center gap-1 text-ink-mute">
           <Kbd>Esc</Kbd>
-          close
+          {t("shell.palette.close")}
         </span>
       </div>
     </Sheet>
