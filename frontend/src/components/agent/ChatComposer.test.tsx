@@ -119,7 +119,7 @@ function ToolsComposer({ tools = workspaceTools, onPreset = vi.fn() }: { tools?:
 it("Typing slash shows Command, Skill and Tool sections", () => {
   render(<ToolsComposer />); type("/");
   expect(screen.getByRole("option", { name: /\/new/ }).textContent).toContain("Command");
-  expect(screen.getByRole("option", { name: /\/skill:harness/ }).textContent).toContain("inserir");
+  expect(screen.getByRole("option", { name: /\/skill:harness/ }).textContent).toContain("insert");
   expect(screen.getByRole("option", { name: /\/exec/ }).textContent).toContain("Tool");
 });
 it("Selecting a Skill inserts a draft and never executes", async () => {

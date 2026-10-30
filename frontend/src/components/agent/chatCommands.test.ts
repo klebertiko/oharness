@@ -45,7 +45,7 @@ describe("chatCommands with workspace tools", () => {
     const readSkill = vi.fn(async () => "# harness\nbody");
     const commands = chatCommands({}, { workspace, capabilities, items: discovered, readSkill });
     const skill = commands.find((c) => c.name === "skill:harness")!;
-    expect(skill.hint).toBe("inserir");
+    expect(skill.hint).toBe("insert");
     expect(skill.preset).toBeUndefined();
     expect(skill.run).toBeUndefined();
     await expect(skill.loadDraft!()).resolves.toBe("# harness\nbody");
@@ -60,7 +60,7 @@ describe("chatCommands with workspace tools", () => {
     const commands = chatCommands({}, { workspace, capabilities, items, readSkill });
     const command = commands.find((item) => item.name === "command:review")!;
     expect(command.kind).toBe("Skill");
-    expect(command.hint).toBe("inserir");
+    expect(command.hint).toBe("insert");
     expect(command.preset).toBeUndefined();
     await expect(command.loadDraft!()).resolves.toBe("Review this change");
     expect(readSkill).toHaveBeenCalledWith(".claude/commands/review.md");
@@ -69,7 +69,7 @@ describe("chatCommands with workspace tools", () => {
   it("Selecting a Tool starts a run with a preset", () => {
     const commands = chatCommands({}, { workspace, capabilities, items: discovered, readSkill: vi.fn() });
     const tool = commands.find((c) => c.name === "test" && c.kind === "Tool")!;
-    expect(tool.hint).toBe("executar");
+    expect(tool.hint).toBe("run");
     expect(tool.preset).toEqual({ name: "exec", argv: ["npm", "run", "test"], cwd: "frontend" });
     expect(tool.draft).toBeUndefined();
   });
@@ -78,14 +78,14 @@ describe("chatCommands with workspace tools", () => {
     const commands = chatCommands({}, { workspace, capabilities, items: discovered, readSkill: vi.fn() });
     expect(commands.filter((c) => c.kind === "Tool").map(({ id, name, hint, takesArgs, description, preset }) =>
       ({ id, name, hint, takesArgs, description, preset }))).toEqual([
-      { id: "ws-cmd:frontend/package.json:test", name: "test", hint: "executar", takesArgs: undefined,
+      { id: "ws-cmd:frontend/package.json:test", name: "test", hint: "run", takesArgs: undefined,
         description: "npm run test · frontend · package-scripts · asks for approval",
         preset: { name: "exec", argv: ["npm", "run", "test"], cwd: "frontend" } },
-      { id: "tool:exec", name: "exec", hint: "executar", takesArgs: true,
+      { id: "tool:exec", name: "exec", hint: "run", takesArgs: true,
         description: "Run a program in Development (no shell; approval required) · /exec npm run test", preset: undefined },
-      { id: "tool:read", name: "read", hint: "executar", takesArgs: true,
+      { id: "tool:read", name: "read", hint: "run", takesArgs: true,
         description: "Read a file from Development into the conversation · /read README.md", preset: undefined },
-      { id: "tool:ls", name: "ls", hint: "executar", takesArgs: undefined,
+      { id: "tool:ls", name: "ls", hint: "run", takesArgs: undefined,
         description: "List skills, commands and scripts found in Development", preset: { name: "discover" } },
     ]);
 
@@ -111,7 +111,7 @@ describe("chatCommands with workspace tools", () => {
     const skill = commands.find((c) => c.name === "skill:review")!;
     expect(skill.kind).toBe("Skill");
     expect(skill.draft).toBe("# review");
-    expect(skill.hint).toBe("inserir");
+    expect(skill.hint).toBe("insert");
   });
 });
 
