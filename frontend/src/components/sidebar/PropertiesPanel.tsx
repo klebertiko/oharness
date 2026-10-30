@@ -11,7 +11,7 @@ import { ASSISTABLE } from "@/lib/copilot/catalog";
 import type { AssistField } from "@/lib/copilot/contract";
 import { AssistRow, AssistToggle, useFieldAssist } from "./FieldAssist";
 import type { NodeData, AdapterType, NodeType } from "@/lib/types";
-import { tr, useT } from "@/i18n/store";
+import { fmtNumber, tr, useT } from "@/i18n/store";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import { providerReadiness } from "@/components/agent/chatProvider";
 import { ModelPicker } from "@/components/providers/ModelPicker";
@@ -139,7 +139,7 @@ function PortTable({ nodeId, type }: { nodeId: string; type: NodeType }) {
                 boxShadow: wired ? "none" : `inset 0 0 0 1px var(--line)`,
               }}
             />
-            <span className="t-meta w-6 flex-none text-ink-mute">{r.dir === "in" ? t("sidebar.props.in") : t("sidebar.props.out")}</span>
+            <span className="t-meta w-12 flex-none truncate text-ink-mute">{r.dir === "in" ? t("sidebar.props.in") : t("sidebar.props.out")}</span>
             <span className="t-meta w-14 flex-none truncate" style={{ color: tone }}>
               {r.port.label}
             </span>
@@ -580,7 +580,7 @@ export function PropertiesPanel() {
               />
             </AssistedField>
 
-            <Field label={t("sidebar.props.temperature", { value: d.temperature ?? 0.7 })}>
+            <Field label={t("sidebar.props.temperature", { value: fmtNumber(d.temperature ?? 0.7) })}>
               <input
                 type="range"
                 min={0}

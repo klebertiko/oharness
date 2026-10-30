@@ -24,4 +24,18 @@ describe("sidebar in pt-BR", () => {
     render(<PropertiesPanel />);
     expect(screen.getByText("Selecione um bloco")).toBeTruthy();
   });
+
+  it("translates a selected agent's settings, wiring and temperature", () => {
+    act(() => {
+      useCanvasStore.getState().addNode({ id: "agent-1", type: "agent", position: { x: 0, y: 0 }, data: { label: "Agent", temperature: 0.7, providerIds: ["x"] } } as never);
+      useCanvasStore.getState().setSelectedNode("agent-1");
+      useLocaleStore.getState().setLocale("pt-BR");
+    });
+    render(<PropertiesPanel />);
+    expect(screen.getAllByText("Ligações").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Configurações").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Temperatura — 0,7").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Conexões de reserva").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\{\w+\}/)).toBeNull();
+  });
 });
