@@ -57,7 +57,7 @@ async function stubbedContext(options, init) {
 async function axe(page, label) {
   await page.addScriptTag({ content: axeSource });
   const violations = await page.evaluate(async () => {
-    const r = await window.axe.run({ exclude: [["[aria-label=\"Run controls\"]"]] }, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });
+    const r = await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });
     return r.violations.map((v) => `${v.id}: ${v.nodes.slice(0, 2).map((n) => n.target.join(" ")).join(" | ")}`);
   });
   if (violations.length) failures.push(`${label}: axe ${violations.join("; ")}`);
