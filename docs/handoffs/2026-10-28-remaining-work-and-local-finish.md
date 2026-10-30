@@ -7,7 +7,7 @@ Data: 2026-10-28. Repositório: `klebertiko/oharness`, branch `main`. Para o **a
 - Tudo o que foi pedido até aqui está na `main`: design system, rebranding OHarness, redesign das telas, docs, site, correções de segurança e qualidade, Workspace Manager e os Dependabot.
 - **Commit para a tag `v0.0.1-alpha`: `f6ec5fea221ad2097a06f94a348dbfcb57cb90c8`** (inclui o header/hero do site corrigidos, #187, e a higiene do Gitleaks, #190). As cinco versões do projeto já são `0.0.1-alpha`, então o "version gate" do workflow passa.
 - **Não existe tag nem release ainda.** A nuvem não consegue criar tags (o proxy do ambiente devolve 403 em API de refs e em `git push` de tag); por isso é tarefa local.
-- O roadmap das próximas versões está sendo implementado por sessões de nuvem em PRs separados (seção 4). Eles **não** entram na `v0.0.1-alpha`: a tag é fixada no commit acima.
+- O roadmap das próximas versões foi entregue por sessões de nuvem em PRs separados, já na `main` (seção 4). Eles **não** entram na `v0.0.1-alpha`: a tag é fixada no commit acima.
 
 ## 1. Tag e release `v0.0.1-alpha` (você, agente local)
 
@@ -47,7 +47,7 @@ Relate: commit usado, saída JSON do `install-desktop.ps1` (smoke), versões de 
 - Revisar as decisões de design registradas como ADR "proposta, reversível" em `docs/adr/` (Studio agentic, seletor de harness, combo de modelos).
 - O histórico do git ainda contém o nome de usuário do Windows em caminhos antigos de evidências (removido da árvore no #184). Reescrever histórico é decisão sua; não faça sem pedido explícito.
 
-## 4. Roadmap em andamento (sessões de nuvem; PRs abertos a partir de 2026-10-28)
+## 4. Roadmap (entregue na `main` em 2026-10-28; sessões de nuvem)
 
 | Área / tela | Issues | Sessão |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ Relate: commit usado, saída JSON do `install-desktop.ps1` (smoke), versões de 
 | Turno e subagentes (diff por turno, teto de custo/tokens, hooks, árvore de subagentes) | #163 #164 #165 #166 | sessão Turno |
 | Runs, CLI e Workspaces (retomar/bifurcar, `oharness run --json`, worktree por run, P3 do #139, nomes reservados Windows) | #157 #158 #159 #154 #109 | sessão Runs |
 
-Se ao ler isto ainda houver PRs dessas sessões abertos, **termine a fila**: para cada PR, confirme CI obrigatório verde (`Quality / required`, `Security scan / required`), nenhuma thread aberta (`gh api repos/klebertiko/oharness/pulls/<n>/ccr/review_threads`) e `update-branch` feito; depois `gh api -X PUT repos/klebertiko/oharness/pulls/<n>/merge -f merge_method=squash`. Faça um PR por vez: cada merge deixa os outros atrás da `main`. PRs empilhados (ex.: #192 sobre #188) entram na ordem da pilha. Issue vira "fechada" só com o PR mergeado e os critérios de aceite atendidos.
+Todos os PRs dessas sessões estão mesclados e as issues fechadas. Pendentes abertos: #199 (contraste do toolbar Run no Ivory) e #209 (pytest intermitente). Se surgir outro PR aberto, **termine a fila**: para cada PR, confirme CI obrigatório verde (`Quality / required`, `Security scan / required`), nenhuma thread aberta (`gh api repos/klebertiko/oharness/pulls/<n>/ccr/review_threads`) e `update-branch` feito; depois `gh api -X PUT repos/klebertiko/oharness/pulls/<n>/merge -f merge_method=squash`. Faça um PR por vez: cada merge deixa os outros atrás da `main`. PRs empilhados (ex.: #192 sobre #188) entram na ordem da pilha. Issue vira "fechada" só com o PR mergeado e os critérios de aceite atendidos.
 
 ## 5. Regras que valem para tudo
 

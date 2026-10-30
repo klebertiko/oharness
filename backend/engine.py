@@ -62,6 +62,7 @@ class RunControl:
         self.gate = asyncio.Event()
         self.tool_approval = ToolApproval(self.gate)
         self.tool_mode = False
+        self.subagents = None  # sandbox.subagents.SubagentGroup when the run may start children
         self.decision: dict | None = None
         self.inbox: list[str] = []
         self.phase: str = "starting"
@@ -339,6 +340,7 @@ async def execute_harness(
     cwd: str | None = None,
     enforce_budget: Callable[[str | None, str | None], Awaitable[None]] | None = None,
     decision_transport: httpx.BaseTransport | None = None,
+    resume_outputs: dict[str, str] | None = None,
 ) -> AsyncIterator[str]:
     """
     `enforce_budget`, when given, is called as `await enforce_budget(model,
@@ -361,11 +363,21 @@ async def execute_harness(
     `httpx.AsyncClient`. `None` (the default) makes a real loopback call to
     `http://127.0.0.1:<LAYA_LOOPBACK_PORT>/predict`.
 
+    `resume_outputs`, when given (a continued run, ADR 0044), maps node ids to
+    the output a previous run already produced for them. The first time the
+    walk reaches such a node it is *restored* -- its output is put back and a
+    `node_restored` event is emitted -- instead of executed again, so nothing
+    is re-spent on work that was finished. A Gate retry that loops back to a
+    restored node runs it for real (it is restored only once). `None` (the
+    default) leaves every existing caller unchanged.
+
     Stream of SSE events:
 
       run_start         {run_id, mode, order:[node_view], unreachable}
       runtime_selected  {kind, name, reason}         — CLI probe or API fallback
       awaiting_step     {next: node_view}            — parked, step mode
+      node_restored     {node_id, output}            — a continued run took this node's
+                                                       output from the run it continues
       node_start        {node_id, label, type, adapter, model}
       node_phase        {node_id, phase, detail}     — thinking|tool|writing|done
       node_reason       {node_id, chunk}             — reasoning text
@@ -458,6 +470,7 @@ async def execute_harness(
     # target instead of letting it advance.
     attempts_total = 0
     pos = 0
+    restored: set[str] = set()
     while pos < len(order):
         node_id = order[pos]
         pos += 1
@@ -469,6 +482,12 @@ async def execute_harness(
         if control.stop.is_set():
             status, stopped_at = STATUS_STOPPED, node_id
             break
+
+        if resume_outputs and node_id in resume_outputs and node_id not in restored:
+            restored.add(node_id)
+            outputs[node_id] = resume_outputs[node_id]
+            yield _sse("node_restored", {"node_id": node_id, "output": outputs[node_id]})
+            continue
 
         # Step mode parks *before* each node so a person can read the previous
         # node's output before the next one starts spending tokens.

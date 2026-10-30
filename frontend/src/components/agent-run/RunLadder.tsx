@@ -27,7 +27,7 @@ export function RunLadder({ run }: { run: RunState }) {
 
   return (
     <div className="flex-none border-b border-line bg-sub-100 px-2.5 pb-2 pt-2">
-      <div className="flex items-center gap-[2px]" role="progressbar"
+      <div className="flex items-center gap-0.5" role="progressbar"
         aria-valuemin={0}
         aria-valuemax={run.plan.length}
         aria-valuenow={run.totals.nodesRun}
@@ -45,7 +45,7 @@ export function RunLadder({ run }: { run: RunState }) {
 
       <div className="mt-1.5 flex items-baseline gap-2">
         <span
-          className="h-[9px] w-[2px] flex-none translate-y-px rounded-none"
+          className="h-[9px] w-0.5 flex-none translate-y-px rounded-none"
           style={{ background: active ? ROLE_VAR[active.type] : "var(--ink-faint)" }}
           aria-hidden
         />

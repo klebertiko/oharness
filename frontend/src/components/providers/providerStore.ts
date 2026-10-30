@@ -11,6 +11,7 @@ import {
 } from "./catalog";
 import { activeVault, forgetSecret, saveSecret, type SecretRef } from "./secrets";
 import { apiUrl } from "@/lib/apiBase";
+import { modelNotPulled } from "./modelPull";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -90,10 +91,10 @@ const seed: Connection[] = [
     endpoint: "https://api.anthropic.com",
     secret: null,
     health: "live",
-    detail: "Logged in as klebertiko@gmail.com (pro plan). 4 models offered on this seat.",
+    detail: "Signed in on the CLI (pro plan). 4 models offered on this seat.",
     probes: [188, 204, 191, 176, 199, 212, 183, 195, 180, 207, 190, 186],
     facts: [
-      { k: "account", v: "klebertiko@gmail.com" },
+      { k: "account", v: "user@example.com" },
       { k: "plan", v: "pro", tone: "signal" },
       { k: "cli", v: "claude · on PATH", tone: "signal" },
     ],
@@ -116,10 +117,10 @@ const seed: Connection[] = [
     endpoint: "https://api.cursor.com",
     secret: null,
     health: "live",
-    detail: "Logged in as klebertiko@gmail.com. Delegation only — no completion endpoint exists.",
+    detail: "Signed in on the CLI. Delegation only — no completion endpoint exists.",
     probes: [246, 231, 259, 240, 268, 252, 238, 244, 271, 249, 235, 257],
     facts: [
-      { k: "account", v: "klebertiko@gmail.com" },
+      { k: "account", v: "user@example.com" },
       { k: "cli", v: "cursor-agent · on PATH", tone: "signal" },
     ],
     models: [
@@ -320,7 +321,16 @@ type ProbeResponse = {
 /** Replace the catalog list with what the endpoint reported serving, keeping
     the catalog's context/price facts for ids it already knows. No list (a CLI
     adapter, or an empty answer) leaves the catalog — marked as such — alone. */
-function servedModels(c: Connection, ids: string[] | undefined): Pick<Connection, "models" | "modelsFromEndpoint"> {
+function servedModels(
+  c: Connection,
+  ids: string[] | undefined,
+  answered: boolean,
+): Pick<Connection, "models" | "modelsFromEndpoint"> {
+  // A local Ollama that answered with no models has none pulled: that empty
+  // list is evidence, not a missing one, and must not fall back to the catalog.
+  if (answered && c.provider === "ollama" && c.residence === "local" && ids?.length === 0) {
+    return { models: [], modelsFromEndpoint: true };
+  }
   if (!ids || ids.length === 0) return { models: c.models, modelsFromEndpoint: c.modelsFromEndpoint };
   const known = new Map(c.models.map((m) => [m.id, m]));
   return { models: ids.map((id) => known.get(id) ?? { id, ctx: 0 }), modelsFromEndpoint: true };
@@ -356,7 +366,7 @@ async function runProbe(id: string, set: (partial: Partial<ProviderState>) => vo
         health: body.health,
         detail: body.detail,
         facts: body.facts,
-        ...servedModels(c, body.models),
+        ...servedModels(c, body.models, body.ok && body.health === "live"),
         probes: [...c.probes.slice(-11), { ms: body.latencyMs, ok: body.ok }],
         lastProbe: new Date().toISOString(),
       })),
@@ -433,6 +443,10 @@ interface ProviderState {
   /** Ledger filter — the honest default is "everything", not "healthy only". */
   query: string;
   hydrated: boolean;
+  /** What the sidecar has told this session: "idle" before the first request, "loading" while it is in flight,
+      "ready" once its rows were merged, "offline" when it could not be reached (rows are then the unverified
+      catalogue, not a claim that nothing is connected). */
+  loadState: "idle" | "loading" | "ready" | "offline";
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -465,10 +479,11 @@ const patch = (list: Connection[], id: string, f: (c: Connection) => Connection)
 
 export const useProviderStore = create<ProviderState>((set, get) => ({
   connections: seed.map(offlineTemplate),
-  selectedId: "openrouter",
+  selectedId: "",
   binding: ["anthropic", "ollama-local"],
   query: "",
   hydrated: false,
+  loadState: "idle",
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -479,13 +494,15 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     // The claim is only kept on success: a sidecar that is still booting (or a
     // 5xx) must not leave every connection on the offline template for the
     // whole session - release it so the next mounted consumer retries.
-    const release = () => set({ hydrated: false });
+    const release = () => set({ hydrated: false, loadState: "offline" });
+    set({ loadState: "loading" });
     try {
       const res = await fetch(apiUrl("/providers/connections"));
       if (!res.ok) return release();
       const body = (await res.json()) as { connections: BackendConnectionRow[] };
       const byId = new Map(body.connections.map((row) => [row.id, row]));
       set({
+        loadState: "ready",
         connections: get().connections.map((c) => {
           const row = byId.get(c.id);
           if (!row) return c;
@@ -621,7 +638,12 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       set({
         connections: patch(get().connections, id, (x) => (x.defaultModel === value ? { ...x, defaultModel: previous } : x)),
       });
+      return ok;
     }
+    // The model list is a snapshot of the last probe; a model typed here (or
+    // pulled since) may be newer than it. Refresh before calling it unpulled.
+    const after = get().connections.find((x) => x.id === id);
+    if (after && modelNotPulled(after)) void get().probe(id);
     return ok;
   },
 

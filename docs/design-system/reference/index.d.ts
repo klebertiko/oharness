@@ -46,6 +46,8 @@ export interface ListRowProps {
   title: ReactNode;
   /** Machine detail under the title, set in IBM Plex Mono. */
   meta?: ReactNode;
+  /** A second line in plain text (the Providers list: status word and short fix). */
+  description?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
   selected?: boolean;
@@ -72,3 +74,62 @@ export interface NiloProps {
   label?: string;
   className?: string;
 }
+
+export interface NoticeProps {
+  tone?: "info" | "warn" | "fault";
+  title?: string;
+  children?: ReactNode;
+  /** The fix, on the right. */
+  action?: ReactNode;
+  /** Faults are announced (alert) by default, the rest politely (status). */
+  role?: "alert" | "status";
+  className?: string;
+}
+
+export interface EmptyStateProps {
+  /** Says what is true. */
+  title: string;
+  children?: ReactNode;
+  /** The one action that changes it. */
+  action?: ReactNode;
+  className?: string;
+}
+
+export interface SegmentedProps<T extends string = string> {
+  /** Names the radio group. */
+  label: string;
+  value: T;
+  options: { value: T; label: string; hint?: string; disabled?: boolean }[];
+  onChange: (value: T) => void;
+  className?: string;
+}
+
+export interface StatusMarkProps {
+  tone?: "ok" | "warn" | "fault" | "busy" | "idle" | "off";
+  className?: string;
+}
+
+export interface ConfirmInlineProps {
+  prompt: ReactNode;
+  /** Names the act ("Remove key"), never "OK". Cancel has the focus. */
+  confirmLabel: string;
+  cancelLabel?: string;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  className?: string;
+}
+
+export interface PopoverProps {
+  /** Accessible name of the list. */
+  label: string;
+  header?: ReactNode;
+  /** Placeholder of the search field; omit for no search. */
+  search?: string;
+  /** Rendered between the search and the list (the scope toggle). */
+  panel?: ReactNode;
+  groups: { title?: string; options: { label: string; detail?: string; tone?: StatusMarkProps["tone"]; selected?: boolean; disabled?: boolean }[] }[];
+  footer?: ReactNode;
+  className?: string;
+}
+

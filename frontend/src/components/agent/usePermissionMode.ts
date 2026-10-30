@@ -5,6 +5,7 @@ import { DEFAULT_PERMISSION_MODE, isPermissionMode, nextPermissionMode, type Per
 import { usePermissionStore } from "@/store/permissionStore";
 
 const SAVE_FAILED = "Couldn't save the permission mode; the previous mode still applies.";
+const PLAN_WAITING = "A plan is waiting for approval. Approve or discard it before changing the mode.";
 
 /**
  * The conversation's permission mode. The sidecar holds and enforces the
@@ -43,9 +44,9 @@ export function usePermissionMode(threadId: string | null) {
     if (!threadId) return; // no conversation yet: becomes the first thread's mode via adopt()
     try {
       await chatToolsApi.setPermission(threadId, next);
-    } catch {
+    } catch (failure) {
       usePermissionStore.getState().setMode(threadId, previous);
-      setError(SAVE_FAILED);
+      setError((failure as { code?: string } | null)?.code === "plan_not_approved" ? PLAN_WAITING : SAVE_FAILED);
     }
   }, [threadId]);
 

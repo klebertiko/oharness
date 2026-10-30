@@ -47,13 +47,41 @@ describe("design-system guardrails", () => {
     expect(offenders(/["'`]#[0-9a-fA-F]{3,8}["'`]/, /\.tsx?$/)).toEqual([]);
   });
 
+  it("marks a selected row with shadow-selected, not an ad hoc inset shadow", () => {
+    expect(offenders(/shadow-\[inset_2px_0_0/, /\.tsx$/)).toEqual([]);
+  });
+
+  it("takes transition times and easing from the tokens (the 620ms march and the reduced-motion reset are the only literals)", () => {
+    expect(offenders(/transition[^;]*(?:\b\d*\.?\d+m?s\b|cubic-bezier)/, /\.css$/).filter((o) => !o.includes("0.01ms"))).toEqual([]);
+  });
+
+  it("uses a scale class, not an arbitrary even pixel value, for spacing and size (odd 3, 5, 7, 9, 11px marker sizes are documented in audit/components.md)", () => {
+    expect(offenders(/(?<![\w-])(?:min-w|min-h|max-h|w|h|px|py|pl|pr|pt|pb|mt|mb|my|mx|gap|size|top|left|right|bottom|inset)-\[\d*[02468]px\]/, /\.tsx$/)).toEqual([]);
+  });
+
   it("uses state colours as text only through warn-text, fault-text and signal-text", () => {
     expect(offenders(/(?<![-\w])(?:hover:|focus:)?text-(?:warn|fault|signal)(?![-\w])/, /\.tsx$/)).toEqual([]);
+  });
+
+  it("puts fault-ink, not signal-ink, on a fault fill (signal-ink is dark in Graphite: 3.7:1)", () => {
+    expect(offenders(/(?:bg-fault(?![-\w])|var\(--fault\)).*signal-ink|signal-ink.*(?:bg-fault(?![-\w])|var\(--fault\))/, /\.tsx$/)).toEqual([]);
   });
 
   it("only sets a control edge with line-strong (no border-line-soft on inputs)", () => {
     const inputs = offenders(/<(?:input|textarea|select)\b[^>]*border-line-soft/, /\.tsx$/);
     expect(inputs).toEqual([]);
+  });
+
+  it("never edges a field with the hairline (line or line-soft), even when the element spans lines", () => {
+    const bad = files
+      .filter((f) => f.endsWith(".tsx"))
+      .flatMap((f) => {
+        const text = fs.readFileSync(f, "utf8");
+        return [...text.matchAll(/<(input|textarea|select)\b[\s\S]*?(?:\/>|<\/\1>)/g)]
+          .filter((m) => /\bborder-line(?:-soft)?(?![-\w])/.test(m[0]))
+          .map((m) => `${path.relative(SRC, f)}:${text.slice(0, m.index).split("\n").length}`);
+      });
+    expect(bad).toEqual([]);
   });
 
   it("never removes the focus ring without a stated replacement", () => {
@@ -63,7 +91,8 @@ describe("design-system guardrails", () => {
     expect(bad).toEqual([]);
   });
 
-  it("keeps the interface in English (no accented Portuguese strings)", () => {
-    expect(offenders(/[À-ÖØ-öø-ÿ]/, /\.tsx?$/)).toEqual([]);
+  it("keeps accented text inside src/i18n (ADR 0034): everything else in src is English", () => {
+    const outside = offenders(/[À-ÖØ-öø-ÿ]/, /\.tsx?$/).filter((o) => !o.startsWith(`i18n${path.sep}`));
+    expect(outside).toEqual([]);
   });
 });

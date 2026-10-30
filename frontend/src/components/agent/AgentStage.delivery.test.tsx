@@ -76,9 +76,9 @@ it("recovers an instruction after a transport failure before a run id exists", (
 
 it("offers a model per direct turn without changing the connection default", () => {
   render(<AgentStage />);
-  fireEvent.click(screen.getByRole("button", { name: "Model for next turn: Connection default" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Chat provider:/ }));
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom-test-model" } });
-  fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+  fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter", shiftKey: true });
   send();
   expect(vi.mocked(startDirectRun).mock.calls[0][0]).toMatchObject({ connection_id: "local", model: "custom-test-model" });
   expect(useProviderStore.getState().connections[0].defaultModel).toBe("test-model");

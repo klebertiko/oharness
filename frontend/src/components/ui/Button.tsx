@@ -17,17 +17,17 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   iconOnly?: boolean;
 }
 
-/* Heights are control-sm/md/lg; narrow layouts raise every size to the 36px
-   touch target (experience.md, Targets). */
+/* Heights are control-sm/md/lg; narrow layouts raise every size to 36px and
+   a touch pointer to 44px (experience.md, Targets; ADR 0033). */
 const SIZE: Record<ButtonSize, string> = {
-  sm: "h-control-sm px-2 text-body max-sm:h-control-lg",
-  md: "h-control-md px-3 text-title max-sm:h-control-lg",
-  lg: "h-control-lg px-4 text-title",
+  sm: "h-control-sm px-2 text-body max-sm:h-control-lg pointer-coarse:h-control-touch",
+  md: "h-control-md px-3 text-title max-sm:h-control-lg pointer-coarse:h-control-touch",
+  lg: "h-control-lg px-4 text-title pointer-coarse:h-control-touch",
 };
 const SQUARE: Record<ButtonSize, string> = {
-  sm: "w-control-sm px-0 max-sm:w-control-lg",
-  md: "w-control-md px-0 max-sm:w-control-lg",
-  lg: "w-control-lg px-0",
+  sm: "w-control-sm px-0 max-sm:w-control-lg pointer-coarse:w-control-touch",
+  md: "w-control-md px-0 max-sm:w-control-lg pointer-coarse:w-control-touch",
+  lg: "w-control-lg px-0 pointer-coarse:w-control-touch",
 };
 
 const VARIANT: Record<ButtonVariant, string> = {

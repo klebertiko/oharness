@@ -1,5 +1,5 @@
 import type { NodeType } from "@/lib/types";
-import type { Block, FailoverAttempt, RunState, Segment, ToolCall } from "./types";
+import type { Block, FailoverAttempt, RunState, Segment, Subagent, ToolCall } from "./types";
 
 export const emptyRun: RunState = {
   runId: null,
@@ -15,6 +15,8 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  subagents: [],
+  turnDiff: null,
   budget: null,
   compactions: [],
 };
@@ -118,6 +120,11 @@ function parseToolArgs(raw: unknown): { argv?: string[]; path?: string } {
   if (Array.isArray(o.argv)) out.argv = o.argv.map(String);
   if (typeof o.path === "string") out.path = o.path;
   return out;
+}
+
+/** A run that ends leaves no child running: whatever did not report is shown as cancelled. */
+function settleSubagents(children: Subagent[]): Subagent[] {
+  return children.map((c) => (c.state === "running" ? { ...c, state: "cancelled" } : c));
 }
 
 function patchTool(state: RunState, nodeId: string, callId: string, fn: (call: ToolCall) => ToolCall): RunState {
@@ -308,7 +315,7 @@ export function runReducer(state: RunState, action: Action): RunState {
           ...(call.hooks ?? []),
           {
             hookId: String(action.data.hook_id ?? ""),
-            decision: action.data.decision === "allow" ? "allow" : "block" as const,
+            decision: action.data.decision === "allow" ? "allow" : action.data.decision === "skipped" ? "skipped" : ("block" as const),
             reason: String(action.data.reason ?? ""),
           },
         ],
@@ -370,6 +377,29 @@ export function runReducer(state: RunState, action: Action): RunState {
         },
       };
     }
+
+    case "worktree_ready": {
+      const text = "This run works in its own worktree; your folder is not touched.";
+      return state.notices.includes(text) ? state : { ...state, notices: [...state.notices, text] };
+    }
+
+    case "worktree_closed": {
+      const ref = typeof action.data.rescue_ref === "string" ? action.data.rescue_ref : null;
+      const text = ref ? `The worktree was removed. Its changes are kept on ${ref}.` : "The worktree was removed. It had no changes to keep.";
+      return state.notices.includes(text) ? state : { ...state, notices: [...state.notices, text] };
+    }
+
+    case "node_restored":
+      return patch(state, String(d.node_id), (s) => ({
+        ...s,
+        state: "done",
+        restored: true,
+        phase: "",
+        phaseDetail: "",
+        blocks: action.data.output ? [{ kind: "text", text: String(action.data.output) }] : [],
+        output: String(action.data.output ?? ""),
+        tokens: 0,
+      }));
 
     case "node_error": {
       const previous = state.plan.find((s) => s.nodeId === String(d.node_id))?.tokens ?? 0;
@@ -451,6 +481,53 @@ export function runReducer(state: RunState, action: Action): RunState {
         ],
       };
 
+    case "subagent_start":
+      return {
+        ...state,
+        subagents: [
+          ...state.subagents,
+          {
+            id: String(action.data.child_id ?? ""),
+            parentCallId: String(action.data.parent_call_id ?? ""),
+            task: String(action.data.task ?? ""),
+            state: "running",
+            chars: 0,
+            tokens: 0,
+          },
+        ],
+      };
+
+    case "subagent_progress":
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id ? { ...c, chars: Number(action.data.chars ?? c.chars) } : c
+        ),
+      };
+
+    case "subagent_done": {
+      const next = action.data.state;
+      const finalState = next === "cancelled" || next === "error" ? next : "done";
+      return {
+        ...state,
+        subagents: state.subagents.map((c) =>
+          c.id === action.data.child_id
+            ? { ...c, state: finalState, chars: Number(action.data.chars ?? c.chars), tokens: Number(action.data.tokens ?? 0) }
+            : c
+        ),
+      };
+    }
+
+    case "turn_diff":
+      return {
+        ...state,
+        turnDiff: {
+          files: Array.isArray(action.data.files) ? (action.data.files as never) : [],
+          omitted: Number(action.data.omitted ?? 0),
+          complete: action.data.complete !== false,
+        },
+      };
+
     case "budget_exceeded":
       return {
         ...state,
@@ -467,12 +544,13 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
 
     case "run_stopped":
-      return { ...state, status: "stopped" };
+      return { ...state, status: "stopped", subagents: settleSubagents(state.subagents) };
 
     case "harness_done": {
       const status = String(action.data.status ?? "complete");
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status:
           status === "complete" ? "complete" : status === "stopped" || status === "budget_exceeded" ? "stopped" : "error",
         endedAt: Date.now(),
@@ -492,10 +570,20 @@ export function runReducer(state: RunState, action: Action): RunState {
     case "error":
       return {
         ...state,
+        subagents: settleSubagents(state.subagents),
         status: "error",
         endedAt: Date.now(),
         notices: [...state.notices, String(action.data.error ?? "Stream error")],
       };
+
+    case "plan_error":
+      return { ...state, planNotSaved: true };
+
+    case "plan_proposed": {
+      const planId = typeof d.plan_id === "string" ? d.plan_id : "";
+      const text = typeof d.text === "string" ? d.text : "";
+      return planId && text ? { ...state, proposedPlan: { planId, text } } : state;
+    }
 
     default:
       return state;

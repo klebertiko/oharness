@@ -1,5 +1,7 @@
 import asyncio
 import json
+from dataclasses import dataclass
+import logging
 import re
 import time
 import uuid
@@ -16,20 +18,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import usage_tracking
 from database import SessionLocal, get_db
-from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact
-from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream
+from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, RunArtifact, RunInput, RunLink
+from run_worktree import RunWorktree, require_workspace
+from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run, resume_seed, claim_start, release_start
 from adapters import get_adapter, AdapterConfig
-from run_budget import STATUS_BUDGET_EXCEEDED, RunBudget, validate_max_tokens
+from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
 from sandbox.approval import ApprovalConflict
+from sandbox.turn_diff_store import TurnTracker
 from sandbox.hook_store import load_hooks
 from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
+from sandbox.plan_store import propose_plan
 from sandbox.schemas import ToolsRequest
 
 router = APIRouter(prefix="/execute", tags=["execution"])
@@ -42,6 +47,9 @@ class ExecuteRequest(BaseModel):
     step: bool = False
     instruction: str | None = None
     cwd: str | None = None
+    worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
+    # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
+    max_tokens: Any = None
 
 
 class DirectRequest(BaseModel):
@@ -298,8 +306,25 @@ def _apply_instruction(graph: dict, instruction: str | None) -> dict:
     return {**graph, "nodes": nodes}
 
 
+@dataclass
+class ResumeSeed:
+    """A continued run (ADR 0044): the already-created run to execute and the outputs it starts from."""
+    run_id: str
+    outputs: dict[str, str]
+    sequence: int
+    base_ref: str | None = None  # a worktree run starts from the rescue ref that kept the earlier run's edits
+
+
 @router.post("/")
 async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await _execute_run(body, request, db)
+
+
+async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession, resume: ResumeSeed | None = None):
+    try:
+        run_budget = parse_run_budget(body.max_tokens)
+    except ValueError:
+        return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     if body.harness_id:
         h = await db.get(Harness, body.harness_id)
         if not h:
@@ -317,6 +342,8 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
     connections = getattr(request.app.state, "provider_connections", None)
     secrets_store = getattr(request.app.state, "secrets_store", None)
     cwd = await _validated_project_cwd(db, body.cwd)
+    require_workspace(body.worktree, cwd)
+    isolation = RunWorktree(cwd, ref=(resume.base_ref if resume else None) or "HEAD") if body.worktree else None
 
     # Global budget gate — checked before *any* real spend, including the
     # routing call just below (it already invokes a real adapter). "mock" is
@@ -359,7 +386,7 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                 _first_provider_ids(graph),
                 connections=connections,
                 secrets_store=secrets_store,
-                cwd=cwd,
+                cwd=None if isolation is not None else cwd,  # a run asked to be isolated never lets the intake turn touch the main checkout
                 # SEC P2-5, 2026-09-15: this call already spends real tokens
                 # regardless of which way routing decides, and it used to run
                 # completely outside the budget gate — the most common path
@@ -376,21 +403,27 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         if not routed.engage_harness:
             name = "Nilo reply (no harness)"
 
-    run_id = str(uuid.uuid4())
-    log = ExecutionLog(
-        id=run_id,
-        harness_id=body.harness_id or "adhoc",
-        harness_name=name,
-        status="running",
-    )
-    db.add(log)
-    db.add(RunRecord(id=run_id, source="harness"))
-    await db.commit()
+    if resume is None:
+        run_id = str(uuid.uuid4())
+        log = ExecutionLog(
+            id=run_id,
+            harness_id=body.harness_id or "adhoc",
+            harness_name=name,
+            status="running",
+        )
+        db.add(log)
+        db.add(RunRecord(id=run_id, source="harness"))
+        await db.flush()
+        # What the run started with, so it can be continued later and run the same harness the same way.
+        db.add(RunInput(run_id=run_id, graph_json=json.dumps(graph), mode=body.mode, cwd=cwd, worktree=body.worktree))
+        await db.commit()
+    else:
+        run_id = resume.run_id  # created (and claimed) by the continuation; its journal already holds the event that opened it
 
     control = RunControl(run_id, step=body.step)
     RUNS[run_id] = control
 
-    writer = RunWriter(run_id)
+    writer = RunWriter(run_id, sequence=resume.sequence if resume else 0)
 
     async def event_stream():
         status = "error"
@@ -401,6 +434,11 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
         # store) so GET /execute/logs/{id} can replay them into the same
         # reducer client-side after a reload.
         events: list[dict] = []
+        run_cwd = cwd
+        tracker = None
+        closed_sent = False  # `worktree_closed` already went out on the stream (a normal end); the cleanup below only covers the other endings
+        # The intake call already spent real tokens before any node ran.
+        ceiling = HarnessCeiling(run_budget, routed.tokens if routed is not None and routed.engage_harness else 0)
         try:
             if budget_status is not None and budget_status.state == "warning":
                 warn_evt = _budget_warning_event(budget_status)
@@ -417,6 +455,26 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                         status = evt["data"]["status"]
                     yield _sse(evt["event"], evt["data"])
             else:
+                if isolation is not None:  # only a run that really executes the harness gets a worktree
+                    try:
+                        run_cwd = await isolation.open()
+                    except RuntimeError as exc:  # the manager's own refusal, already scrubbed: shown as is rather than as a provider failure
+                        for evt in ({"event": "error", "data": {"error": str(exc)}},
+                                    {"event": "harness_done", "data": {"status": "error", "total_tokens": 0, "tokens_estimated": False,
+                                                                       "elapsed_ms": 0, "nodes_run": 0}}):
+                            events.append(evt)
+                            yield _sse(evt["event"], evt["data"])
+                        status = "error"
+                        return
+                    ready_evt = {"event": "worktree_ready", "data": {"workspace_id": isolation.workspace_id}}  # the id, never the path
+                    events.append(ready_evt)
+                    yield _sse(ready_evt["event"], ready_evt["data"])
+                # A run in its own worktree keeps its work through the rescue ref instead; the diff covers the shared folder.
+                # Mock runs never write to the folder, and a worktree run keeps its work as a rescue ref.
+                if run_cwd and isolation is None and body.mode != "mock":
+                    tracker = TurnTracker(run_cwd, run_id)
+                if tracker:
+                    await tracker.begin()
                 async for chunk in execute_harness(
                     graph,
                     execution_mode=body.mode,
@@ -424,15 +482,41 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
                     run_id=run_id,
                     connections=connections,
                     secrets_store=secrets_store,
-                    cwd=cwd,
+                    cwd=run_cwd,
                     enforce_budget=_enforce_node_budget,
+                    resume_outputs=resume.outputs if resume else None,
                 ):
                     parsed = _parse_sse_chunk(chunk)
+                    if parsed and parsed["event"] == "harness_done" and tracker:
+                        # Last word of the run: what it changed in the folder, ahead of the closing event.
+                        turn_diff = await tracker.finish(SessionLocal)
+                        if turn_diff:
+                            events.append({"event": "turn_diff", "data": turn_diff})
+                            yield _sse("turn_diff", turn_diff)
+                    if parsed and parsed["event"] == "harness_done" and isolation is not None:
+                        # The run is over: remove its worktree and say where its changes went BEFORE the run is marked complete, so a
+                        # Continue made the moment it completes already finds the rescue ref (and the client still listens).
+                        await isolation.close()
+                        if isolation.closed_id is not None:
+                            closed_evt = {"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}}
+                            closed_sent = True
+                            events.append(closed_evt)
+                            yield _sse(closed_evt["event"], closed_evt["data"])
                     if parsed:
+                        due = ceiling.observe(parsed["event"], parsed["data"])
+                        if parsed["event"] == "harness_done" and ceiling.hit and parsed["data"].get("status") == STATUS_STOPPED:
+                            # The run was stopped on purpose: say why, not just "stopped".
+                            parsed["data"]["status"] = STATUS_BUDGET_EXCEEDED
+                            chunk = _sse("harness_done", parsed["data"])
                         events.append(parsed)
                         if parsed["event"] == "harness_done":
                             status = parsed["data"].get("status", "complete")
                     yield chunk
+                    if parsed and due:
+                        evt = {"event": "budget_exceeded", "data": due}
+                        events.append(evt)
+                        yield _sse(evt["event"], evt["data"])
+                        control.stop.set()  # the engine unwinds at its next checkpoint: no further node starts
         except GeneratorExit:
             control.stop.set()
             status = "interrupted"
@@ -445,6 +529,10 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
             raise
         except Exception as exc:  # noqa: BLE001
             status = "error"
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None  # edits made before the failure stay reviewable
+            if failed_diff:
+                events.append({"event": "turn_diff", "data": failed_diff})
+                yield _sse("turn_diff", failed_diff)
             evt = {"event": "error", "data": failure_details(exc)}
             events.append(evt)
             yield _sse(evt["event"], evt["data"])
@@ -452,7 +540,13 @@ async def run_harness(body: ExecuteRequest, request: Request, db: AsyncSession =
             RUNS.pop(run_id, None)
             # A fresh session: the request-scoped one is torn down by its
             # dependency and cannot be relied on inside a streaming generator.
-            await writer.finish(status)
+            try:
+                await writer.finish(status)
+            finally:  # the worktree goes whether or not the journal write succeeded
+                if isolation is not None:
+                    await isolation.close()  # a no-op when the run already closed it above
+                    if isolation.closed_id is not None and not closed_sent:  # the other endings: only the journal hears of it
+                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}})
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
@@ -524,7 +618,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
     except ValidationError:
         return JSONResponse({'error': 'invalid_argument'}, status_code=400)
     try:
-        run_budget = RunBudget(validate_max_tokens(body.max_tokens))
+        run_budget = parse_run_budget(body.max_tokens)
     except ValueError:
         return JSONResponse({'error': 'invalid_run_budget'}, status_code=400)
     preset_only = tool_options is not None and tool_options.preset is not None and not tool_options.summarize
@@ -616,7 +710,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         def emit(event: str, data: dict) -> str:
             return _sse(event, data)
 
+        tracker = TurnTracker(cwd, run_id) if cwd else None
         try:
+            if tracker:
+                await tracker.begin()
             if broker:
                 yield emit('capabilities', {'node_id': node_id, **broker.capabilities, 'permission_mode': broker.permission_mode, 'workspace_trusted': broker.workspace_trusted})
             if budget_status is not None and budget_status.state == "warning":
@@ -644,7 +741,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
-                        if broker and (kind.startswith('tool_') or kind == 'capabilities'):
+                        if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})
                         elif kind in ("budget_exceeded", "context_compacted"):
                             payload = {k: v for k, v in ev.items() if k != "kind"}
@@ -743,6 +840,17 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
                         )
+                        if broker and stored == "plan" and broker.permission_mode == "plan" and tool_options.preset is None and tool_options.thread_id and output.strip():
+                            # Plan mode ends in a plan artifact; nothing executes until a person approves it. Only a plain turn in a conversation
+                            # stored in Plan: the approval barrier and the card follow the stored mode, and a `/read` or `/exec` is not a plan.
+                            try:
+                                async with SessionLocal() as plan_session:
+                                    plan = await propose_plan(plan_session, tool_options.thread_id, output)
+                            except Exception:  # noqa: BLE001 - the answer was already delivered; only the approval card is missing
+                                logging.getLogger(__name__).exception("plan not saved (run %s)", run_id)
+                                yield emit("plan_error", {"node_id": node_id, "code": "plan_not_saved"})
+                            else:
+                                yield emit("plan_proposed", {"node_id": node_id, **plan})
                 except Exception as exc:  # noqa: BLE001
                     status = STATUS_ERROR
                     total_tokens = node_tokens
@@ -752,6 +860,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                     })
 
             control.phase = "done"
+            turn_diff = await tracker.finish(SessionLocal) if tracker else None
+            if turn_diff:
+                yield emit("turn_diff", {"node_id": node_id, **turn_diff})
             yield emit(
                 "harness_done",
                 {
@@ -775,6 +886,10 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise
         except Exception as exc:  # noqa: BLE001
             status = STATUS_ERROR
+            # Edits made before the failure are still the person's to review and undo.
+            failed_diff = await tracker.finish(SessionLocal) if tracker else None
+            if failed_diff:
+                yield emit("turn_diff", {"node_id": node_id, **failed_diff})
             yield emit("error", failure_details(exc))
         finally:
             RUNS.pop(run_id, None)
@@ -890,6 +1005,8 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         result = {"source": record.source, "events": [{"event": e.event_type, "data": json.loads(e.data_json)} for e in events]}
     return {
         **metadata(record),
+        **await lineage(db, log_id),
+        "resumable": is_resumable(lg, record, await db.get(RunInput, log_id)),
         "id": lg.id,
         "harness_id": lg.harness_id,
         "harness_name": lg.harness_name,
@@ -900,6 +1017,46 @@ async def get_log_detail(log_id: str, db: AsyncSession = Depends(get_db)):
         "result": result,
         "artifacts": await list_artifacts(log_id, db),
     }
+
+
+@router.post("/logs/{log_id}/start")
+async def start_continued_run(log_id: str, request: Request, db: AsyncSession = Depends(get_db), body: dict | None = None):
+    """Execute a continuation made by ``/continue``: finished nodes are restored from the run it continues, the rest run for real.
+
+    A continuation starts once: a second call (double click, retry) is a 409 and executes nothing.
+    """
+    await _require_log(db, log_id)
+    # The ceiling is the person's choice for this start (not saved with the run). Checked before the claim, so a bad value costs nothing.
+    try:
+        max_tokens = parse_run_budget((body or {}).get("max_tokens")).max_tokens
+    except ValueError:
+        return JSONResponse({"error": "invalid_run_budget"}, status_code=400)
+    link = await db.get(RunLink, log_id)
+    inputs = await db.get(RunInput, log_id)
+    if link is None or not await claim_start(db, log_id):
+        raise HTTPException(409, {"code": "not_startable", "message": "only a continued run that has not started yet can be started"})
+    try:
+        if inputs is None:
+            raise HTTPException(409, {"code": "inputs_unavailable", "message": "the run this continues was saved before its harness was kept; it cannot be continued"})
+        outputs = await resume_seed(db, link.parent_id)
+        record = await db.get(RunRecord, log_id)
+        if record is None:
+            raise HTTPException(409, {"code": "inputs_unavailable", "message": "this continuation has no saved journal"})
+        body = ExecuteRequest(graph_json=json.loads(inputs.graph_json), mode=inputs.mode, cwd=inputs.cwd, worktree=inputs.worktree, max_tokens=max_tokens)
+        return await _execute_run(body, request, db, ResumeSeed(log_id, outputs, record.last_sequence, inputs.base_ref))
+    except BaseException:
+        await release_start(db, log_id)
+        raise
+
+
+@router.post("/logs/{log_id}/continue", status_code=201)
+async def continue_log(log_id: str, db: AsyncSession = Depends(get_db)):
+    """A new run linked to this one, from its durable journal. The parent's events are left exactly as they are."""
+    await _require_log(db, log_id)
+    child = await continue_run(db, log_id)
+    if child is None:
+        raise HTTPException(409, {"code": "not_resumable", "message": "only a run that stopped before it finished, and has a saved journal, can be continued"})
+    return child
 
 
 async def _require_log(db, log_id):

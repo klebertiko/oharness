@@ -76,3 +76,17 @@ describe("providerStore.toggleEnabled", () => {
     expect(find().enabled).toBe(true);
   });
 });
+
+describe("providerStore.loadState", () => {
+  it("goes idle, loading, ready; and offline when the sidecar cannot be reached, then ready on a retry", async () => {
+    expect(useProviderStore.getState().loadState).toBe("idle");
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error("ECONNREFUSED")).mockResolvedValue(ok(rows()));
+    vi.stubGlobal("fetch", fetchMock);
+    const first = useProviderStore.getState().hydrate();
+    expect(useProviderStore.getState().loadState).toBe("loading");
+    await first;
+    expect(useProviderStore.getState().loadState).toBe("offline");
+    await useProviderStore.getState().hydrate();
+    expect(useProviderStore.getState().loadState).toBe("ready");
+  });
+});

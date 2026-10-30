@@ -56,6 +56,10 @@ _Avoid_: human-in-the-loop node as a generic Agent, approval widget
 A named capability an Agent may invoke or that may appear as a canvas node (e.g. `tdd`, `hallmark`).
 _Avoid_: plugin, prompt pack (unless referring only to content)
 
+**Token ceiling**:
+The most tokens one run may use. A run that reaches it stops with the explicit status `budget_exceeded`; a context compaction is reported with its tokens before and after.
+_Avoid_: quota, limit (ambiguous with the global USD budget)
+
 **Signal**:
 A typed exit-state on an edge (e.g. `"Ready for QA"`). Agents and Gates emit and consume Signals; they do not call each other directly.
 _Avoid_: unlabeled edge, message, event (unless domain event elsewhere)
@@ -74,17 +78,55 @@ _Avoid_: function, action
 Either an McpServer or a Tool in the Connections dock.
 _Avoid_: integration, plugin
 
+**Hook**:
+A program the person registers in the sidecar (never taken from a workspace). Before a tool runs, each hook that names the tool must exit 0; an error or a timeout blocks the tool and the run records the hook id. A hook can only veto, never approve.
+_Avoid_: plugin, callback
+
 ### Providers
 
 **Provider**:
 A registered LLM backend (cloud or local) with credentials. Agents and Skills bind **1..N** Providers (primary + fallbacks; optional task routing).
 _Avoid_: wallet, model host, adapter (UI copy — adapter remains an internal runtime term)
 
+### Chat and runs
+
+**Permission mode**:
+How much a chat may do on its own, one of Plan, Read-only, Ask, Auto, Workspace write, Full. Per conversation, enforced by the sidecar, never a bypass.
+_Avoid_: access level, safe mode, YOLO
+
+**Needs action**:
+The group in the chat's model picker for connections that cannot answer yet, each with the one step that fixes it, in the same words as Providers.
+_Avoid_: unavailable list, broken providers
+
+**Queue**:
+Messages typed while a turn runs; they run after it, in order. A turn that stops or fails pauses the queue.
+_Avoid_: backlog, pending messages
+
+**Subagent**:
+A task the model hands to a child run during a turn. Each child can be cancelled alone.
+_Avoid_: worker, thread
+
+**Turn diff**:
+The files a turn changed in the workspace, each with its own one-time revert.
+_Avoid_: undo all, changeset
+
+**Token ceiling**:
+The token total at which a run stops with the status Budget exceeded.
+_Avoid_: budget (as a field label), limit
+
+**Activity**:
+The list of every run, wherever it started, with Continue as a new run for an interrupted one.
+_Avoid_: history log, executions
+
 ### Assistant and places
 
 **Nilo**:
 The OHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
 _Avoid_: Copilot (a Microsoft brand; never in UI copy, docs or examples), AI assistant, bot
+
+**Turn diff**:
+The list of files a turn changed in the Workspace, with the diff of each. Reverting restores one file to how it was before the turn and never touches another; it refuses a file that changed again afterwards.
+_Avoid_: undo (that word is for Studio edits), patch
 
 **Studio**:
 The place where a person designs a harness: overview, canvas, inspector.

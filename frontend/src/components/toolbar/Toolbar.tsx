@@ -39,7 +39,7 @@ export function Toolbar({ onRun, onStop }: Props) {
         ) : (
           <Button variant="primary" onClick={onRun} disabled={nodes.length === 0} title={nodes.length === 0 ? "Add a node to run" : undefined} icon={<Play size={11} strokeWidth={0} fill="currentColor" aria-hidden />}>
             Run
-            <KbdChord caps={runCaps} className="max-sm:hidden [&_kbd]:border-transparent [&_kbd]:bg-[color-mix(in_oklab,var(--signal-ink)_16%,transparent)] [&_kbd]:text-signal-ink" />
+            <KbdChord caps={runCaps} className="max-sm:hidden [&_kbd]:border-[color-mix(in_oklab,var(--signal-ink)_45%,transparent)] [&_kbd]:bg-transparent [&_kbd]:text-signal-ink" />
           </Button>
         )}
 

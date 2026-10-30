@@ -47,7 +47,9 @@ export function ValidateDock() {
   function begin(label: string) {
     const ticket = ++requestId.current, stamp = draftKey();
     setImported(false); setResultFor(stamp); setStatus("working"); setMessage(label); setErrors([]); setSteps([]);
-    return () => ticket === requestId.current && stamp === draftKey();
+    // An import replaces the whole draft, so only a newer dock action may supersede it; the canvas
+    // settling while the file is validated (autosave, view sync) must not silently drop the import.
+    return (draftBound = true) => ticket === requestId.current && (!draftBound || stamp === draftKey());
   }
   function fail(error: unknown) { setStatus("error"); setMessage(error instanceof Error ? error.message : "Operation failed"); }
   async function inspect(kind: "validate" | "mock") {
@@ -81,7 +83,7 @@ export function ValidateDock() {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const result = await validateBundle(parsed);
-      if (!current() || useCanvasStore.getState().isRunning) return;
+      if (!current(false) || useCanvasStore.getState().isRunning) return;
       if (!result.ok) { setStatus("error"); setMessage("Import failed validation"); setErrors(result.errors ?? []); return; }
       if (!isOHarnessBundle(parsed)) { setStatus("error"); setMessage("Not a recognizable .ohm bundle"); return; }
       openStudioBundle(parsed as unknown as HarnessBundle);
@@ -101,7 +103,7 @@ export function ValidateDock() {
       <span className="flex-1" />
       {fresh && message && <span role="status" className={"text-body min-w-0 truncate " + (status === "error" ? "text-fault-text" : status === "ok" ? "text-signal-text" : "text-ink-mute")} title={message}>{message}</span>}
     </div>
-    {fresh && (errors.length > 0 || steps.length > 0) && <div className="max-h-[120px] overflow-y-auto px-2.5 py-1.5">
+    {fresh && (errors.length > 0 || steps.length > 0) && <div className="max-h-30 overflow-y-auto px-2.5 py-1.5">
       {errors.length > 0 && <ul className="space-y-0.5">{errors.map((error, i) => <li key={i} className="t-body text-fault-text">{error}</li>)}</ul>}
       {steps.length > 0 && <ol className="space-y-0.5">{steps.map((step, i) => <li key={step.nodeId + i} className="t-meta text-ink-dim">{i + 1}. {step.role} ({step.nodeId}) — {step.status}{step.note ? " · " + step.note : ""}</li>)}</ol>}
     </div>}

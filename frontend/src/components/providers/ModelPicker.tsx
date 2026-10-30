@@ -3,6 +3,7 @@
 import { ChevronDown } from "lucide-react";
 
 import { Combobox, type ComboOption } from "@/components/ui/Combobox";
+import { tr, useT } from "@/i18n/store";
 import { specOf, type Connection, type ModelInfo } from "./providerStore";
 
 const money = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
@@ -17,8 +18,8 @@ export function modelDetail(m: ModelInfo): string {
 /** Where a connection's model list came from, said plainly. */
 export function modelSourceNote(c: Connection): string {
   return c.modelsFromEndpoint
-    ? `Served by ${c.endpoint || specOf(c).endpoint.default} at the last test.`
-    : "From the OHarness catalog. Test the connection to list what it actually serves.";
+    ? tr("models.source.endpoint", { endpoint: c.endpoint || specOf(c).endpoint.default })
+    : tr("models.source.catalogue");
 }
 
 /**
@@ -52,14 +53,15 @@ export function ModelPicker({
   describedBy?: string;
   disabled?: boolean;
 }) {
+  const t = useT();
   const options: ComboOption[] = (connection?.models ?? []).map((m) => ({ id: m.id, label: m.id, detail: modelDetail(m) }));
   if (inheritLabel !== undefined) options.unshift({ id: "", label: inheritLabel, detail: inheritDetail });
   // A saved value the list no longer contains still shows as the selection.
   if (value && !options.some((o) => o.id === value)) {
-    options.push({ id: value, label: value, detail: "Not in the current list" });
+    options.push({ id: value, label: value, detail: t("model.notInList") });
   }
 
-  const shown = value || inheritLabel || "None chosen";
+  const shown = value || inheritLabel || t("model.none");
   return (
     <Combobox
       label={label}
@@ -70,11 +72,11 @@ export function ModelPicker({
       onChange={onChange}
       searchable
       allowCustom
-      searchPlaceholder="Filter or type a model name"
+      searchPlaceholder={t("model.placeholder")}
       status={connection?.health === "probing" ? "loading" : "ready"}
-      loadingText="Testing the connection…"
-      emptyText="No models listed. Test the connection, or type a model name."
-      header={connection ? modelSourceNote(connection) : "Pin a connection to list its models. A typed name is sent as is."}
+      loadingText={t("model.loading")}
+      emptyText={t("model.empty")}
+      header={connection ? modelSourceNote(connection) : t("model.pinHeader")}
       width={340}
       disabled={disabled}
       triggerClassName={

@@ -19,11 +19,22 @@ Two rules shape every word below:
 | **Gate** | A blocking checkpoint with PASS/FAIL routing. |
 | **HITL** | The human authority piece (merge, acceptance); not an Agent. |
 | **Skill** | A named capability an Agent may invoke. |
+| **Token ceiling** | The most tokens a run may use before it stops with the status `budget_exceeded`. Set in the composer; applies to harness-off and harness runs. |
 | **Signal** | A typed exit state on an edge. |
 | **Connector** | An McpServer or a Tool in the Connections dock. |
+| **Hook** | A program you register that must exit 0 before a tool runs. An error or a timeout blocks the tool, and the run records which hook decided. |
 | **Provider** | A registered LLM backend with credentials (shown on Providers). |
 | **Workspace** | The folder on this device a chat's tools read and run in. |
+| **Turn diff** | The files a turn changed in the workspace, each with its diff. **Revert** restores one file on its own. |
 | **Studio, Chats, Providers** | The three destinations of the app. |
+| **Permission mode** | How much a chat may do on its own: Plan, Read-only, Ask, Auto, Workspace write, Full. |
+| **Needs action** | The model picker's group of connections one step from working, with that step. |
+| **Queue** | Messages typed during a turn; they run after it, in order. |
+| **Subagent** | A task the model hands to a child run; each child cancels on its own. |
+| **Turn diff** | The files a turn changed, each with a one-time revert. |
+| **Token ceiling** | The token total at which a run stops as Budget exceeded. |
+| **Activity** | Every run in one list, with Continue as a new run. |
+| **Design system** | The tokens, components and rules the interface follows: [`docs/design-system/`](design-system/README.md). |
 | **Nilo** | The OHarness assistant. |
 
 Code may keep older words (`example` in the `/bundles/examples` route, `copilot` in some module names); only text a person reads follows this glossary. Retired UI wording is mapped in the Copy standard of `CONTEXT.md`.

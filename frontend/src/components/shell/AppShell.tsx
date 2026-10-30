@@ -12,6 +12,7 @@ import { Sheet } from "@/components/ui";
 import { shellNavCommands, type Command } from "./commands";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
+import { useLocaleStore } from "@/i18n/store";
 
 /**
  * Split handle. 5px hit area over a 1px visual rule — the standard trick, but
@@ -77,7 +78,7 @@ function Resizer({
       }}
       className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "right-[-3px]" : "left-[-3px]"}`}
     >
-      <span className="pointer-events-none absolute inset-y-0 left-[2px] w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
+      <span className="pointer-events-none absolute inset-y-0 left-0.5 w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
     </div>
   );
 }
@@ -133,6 +134,7 @@ export function AppShell({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Hydration runs once, deliberately
   useEffect(() => {
     shell.hydrate();
+    useLocaleStore.getState().hydrate();
     void hydrateProviders();
   }, []);
 
@@ -279,6 +281,7 @@ export function AppShell({
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
         onOpenPalette={() => setPaletteOpen(true)}
+        railCollapsed={narrow.left}
       />
 
       {toolbar}

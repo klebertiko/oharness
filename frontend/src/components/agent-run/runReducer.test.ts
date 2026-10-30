@@ -447,3 +447,64 @@ it("tool_result without a duration records none rather than 0ms", () => {
   const block = missing.plan[0].blocks.find((b) => b.kind === "tool");
   expect(block && block.kind === "tool" ? block.call.durationMs : "no-block").toBeUndefined();
 });
+
+describe("runReducer plan_proposed", () => {
+  it("keeps the plan artifact a Plan-mode run ended in, waiting for approval", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { node_id: "direct", plan_id: "p1", thread_id: "t1", text: "1. Do it", status: "proposed" } });
+    expect(state.proposedPlan).toEqual({ planId: "p1", text: "1. Do it" });
+  });
+
+  it("ignores a plan event without an id or text", () => {
+    expect(runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { text: "x" } }).proposedPlan).toBeUndefined();
+    expect(runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { plan_id: "p" } }).proposedPlan).toBeUndefined();
+  });
+
+  it("a new run starts with no plan", () => {
+    const withPlan = runReducer(emptyRun, { type: "sse", event: "plan_proposed", data: { plan_id: "p1", text: "t" } });
+    expect(runReducer(withPlan, { type: "reset", mode: "live", step: false }).proposedPlan).toBeUndefined();
+  });
+});
+
+
+describe("node_restored (a continued run)", () => {
+  it("marks the node done with the earlier output, restored, and does not count it as run or as spend", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "mock", step: false });
+    state = runReducer(state, { type: "sse", event: "run_start", data: { run_id: "r2", mode: "mock", order: [
+      { node_id: "a", type: "llm", label: "A", adapter: "mock", model: "", intrinsic: false },
+    ] } });
+    state = runReducer(state, { type: "sse", event: "node_restored", data: { node_id: "a", output: "kept" } });
+    const step = state.plan.find((s) => s.nodeId === "a");
+    expect(step).toMatchObject({ state: "done", restored: true, output: "kept", tokens: 0 });
+    expect(state.totals.nodesRun).toBe(0);
+    expect(state.totals.tokens).toBe(0);
+  });
+});
+
+describe("runReducer plan_error", () => {
+  it("records that the plan could not be saved, so the chat can say so", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { node_id: "direct", code: "plan_not_saved" } });
+    expect(state.planNotSaved).toBe(true);
+    expect(state.proposedPlan).toBeUndefined();
+  });
+
+  it("a new run clears it", () => {
+    const flagged = runReducer(emptyRun, { type: "sse", event: "plan_error", data: { code: "plan_not_saved" } });
+    expect(runReducer(flagged, { type: "reset", mode: "live", step: false }).planNotSaved).toBeUndefined();
+  });
+});
+
+describe("worktree events", () => {
+  it("tells the person the run works in its own worktree and where its changes were kept", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "live", step: false });
+    state = runReducer(state, { type: "sse", event: "worktree_ready", data: { workspace_id: "ws-1" } });
+    expect(state.notices).toContain("This run works in its own worktree; your folder is not touched.");
+    state = runReducer(state, { type: "sse", event: "worktree_closed", data: { workspace_id: "ws-1", rescue_ref: "refs/openharness/rescue/ws-1" } });
+    expect(state.notices.at(-1)).toBe("The worktree was removed. Its changes are kept on refs/openharness/rescue/ws-1.");
+  });
+
+  it("says nothing was left behind when the worktree was clean", () => {
+    let state = runReducer(emptyRun, { type: "reset", mode: "live", step: false });
+    state = runReducer(state, { type: "sse", event: "worktree_closed", data: { workspace_id: "ws-1", rescue_ref: null } });
+    expect(state.notices.at(-1)).toBe("The worktree was removed. It had no changes to keep.");
+  });
+});

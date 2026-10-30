@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const output = resolve(import.meta.dirname, '../../.harness/sprint-2026-10-21/story-CHAT-PROVIDERS/evidence');
 mkdirSync(output, { recursive: true });
 const fixture = JSON.parse(readFileSync('src/lib/fixtures/ohm-roundtrip.json', 'utf8'));
@@ -59,9 +60,29 @@ const composer = () => page.getByRole('textbox', { name: 'Message OHarness' });
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
   step = 'explicit model and completion';
-  await button('Model for next turn: Connection default').click();
+  await page.getByRole('button', { name: /^Chat provider: Auto → QA local/ }).click();
+  // The open combo is axe-clean in both themes, with a group of models and the scope toggle showing.
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    // Colours transition on a theme change; axe must read the settled colours, not a frame in between (slower CI hit this).
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await page.addScriptTag({ content: axeSource });
+    const found = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] })).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`));
+    assert.deepEqual(found, [], `axe with the model combo open (${theme})`);
+  }
+  const needs = page.getByRole('group', { name: 'Needs action' });
+  await needs.waitFor();
+  const needsText = await needs.textContent();
+  // The seeded connections that are not set up each show the one action they need; the rest are counted.
+  assert.match(needsText, /Not connected · Turn on/);
+  assert.match(needsText, /Paste an Ollama key/);
+  assert.match(needsText, /\d+ more need setup/);
+  checks.push('Model combo open with a Needs action group: axe clean in both themes');
   await page.getByRole('combobox').fill('qa-model');
-  await page.getByRole('combobox').press('Enter');
+  // Shift+Enter applies the typed model to this chat only; the connection default stays qa-default.
+  await page.getByRole('combobox').press('Shift+Enter');
+  await page.getByRole('button', { name: /^Chat provider: QA local · qa-model.*this conversation only/ }).waitFor();
   await composer().fill('Synthetic QA prompt');
   await button('Send message').click();
   await page.getByText('Synthetic completed answer', { exact: true }).waitFor();
@@ -102,16 +123,16 @@ try {
   step = 'provider usage and budget recovery';
   await button('Providers').click();
   rejectUsage = true;
-  await button('Refresh usage').click();
-  await page.getByRole('alert').filter({ hasText: 'isolated usage unavailable' }).waitFor();
+  await button('Refresh').click();
+  await page.getByText('Usage may be out of date').waitFor();
   rejectUsage = false;
-  await button('Refresh usage').click();
-  await page.getByRole('alert').filter({ hasText: 'isolated usage unavailable' }).waitFor({ state: 'hidden' });
-  await button('No budget — set one').click();
+  await button('Refresh').click();
+  await page.getByText('Usage may be out of date').waitFor({ state: 'hidden' });
+  await button('No budget. Set one').click();
   const budget = page.getByRole('textbox', { name: 'Global budget in USD' });
   await budget.fill('15');
   await button('Save').click();
-  await page.getByRole('alert').filter({ hasText: 'isolated budget unavailable' }).waitFor();
+  await page.getByRole('alert').filter({ hasText: "Couldn't save the budget" }).waitFor();
   assert.equal(await budget.inputValue(), '15');
   assert.equal(await budget.isEnabled(), true);
   rejectBudget = false;

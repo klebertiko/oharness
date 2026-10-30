@@ -89,3 +89,29 @@ it("a chat from before the setting existed is bound to what it runs with on the 
   expect(useThreadStore.getState().threads.find((t) => t.id === id)?.harness).toEqual({ kind: "harness", id: "agile", name: "Agile Harness" });
   expect(useThreadStore.getState().messagesFor(id).some((m) => m.role === "system")).toBe(false);
 });
+
+it("offers to move a fresh harness change to a new chat, and does so", async () => {
+  const id = useThreadStore.getState().createThread("Plan", NO_HARNESS);
+  useThreadStore.getState().appendMessage(id, { role: "user", content: "hi" });
+  useThreadStore.getState().appendMessage(id, { role: "assistant", content: "hello", harness: NO_HARNESS });
+  useThreadStore.getState().setThreadHarness(id, { kind: "harness", id: "agile", name: "Agile Harness" });
+  const { useChatModelStore: models } = await import("@/store/chatModelStore");
+  models.setState({ overrides: { [id]: { local: "pinned-model" } } });
+  render(<AgentStage />);
+  fireEvent.click(screen.getByRole("button", { name: "Move to a new chat" }));
+  const state = useThreadStore.getState();
+  expect(state.activeThreadId).not.toBe(id);
+  expect(state.threads.find((t) => t.id === id)?.harness).toEqual(NO_HARNESS);
+  expect(screen.queryByRole("button", { name: "Move to a new chat" })).toBeNull();
+  const { useChatModelStore } = await import("@/store/chatModelStore");
+  expect(useChatModelStore.getState().overrides[state.activeThreadId!]).toEqual({ local: "pinned-model" });
+});
+
+it("does not offer the move once the chat has carried on", () => {
+  const id = useThreadStore.getState().createThread("Plan", NO_HARNESS);
+  useThreadStore.getState().appendMessage(id, { role: "user", content: "hi" });
+  useThreadStore.getState().setThreadHarness(id, { kind: "harness", id: "agile", name: "Agile Harness" });
+  useThreadStore.getState().appendMessage(id, { role: "user", content: "later" });
+  render(<AgentStage />);
+  expect(screen.queryByRole("button", { name: "Move to a new chat" })).toBeNull();
+});

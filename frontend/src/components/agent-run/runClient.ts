@@ -15,10 +15,14 @@ export interface StartRunPayload {
   mode: string;
   step: boolean;
   instruction?: string;
+  /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
+  max_tokens?: number;
   /** Working folder for CLI-backed adapters — a Cowork project's `rootPath`.
       Omitted (not empty-string) when the person picked "No folder", so the
       backend's own `resolve_cwd()` fallback decides, not an empty path. */
   cwd?: string;
+  /** Work in a worktree of its own made from `cwd`, removed when the run ends. Needs `cwd`. */
+  worktree?: boolean;
 }
 
 function pumpSse(
@@ -83,6 +87,17 @@ export function startRun(
   return pumpSse(apiUrl("/execute/"), payload, onEvent, onClose);
 }
 
+/** Execute a continuation made by `POST /execute/logs/{id}/continue` (ADR 0044): finished nodes are restored, the rest run. */
+export function startContinuedRun(
+  runId: string,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+  onClose: (err?: Error) => void,
+  /** The token ceiling to start the continuation with (the ceiling is not saved with a run). */
+  maxTokens?: number | null
+): () => void {
+  return pumpSse(apiUrl(`/execute/logs/${encodeURIComponent(runId)}/start`), maxTokens ? { max_tokens: maxTokens } : {}, onEvent, onClose);
+}
+
 /** Contract v1.1 §2.4 — a user-chosen tool that runs before the model is called. */
 export type ToolPresetPayload =
   | { name: "exec"; argv: string[]; cwd?: string; timeout_s?: number }
@@ -104,6 +119,8 @@ export interface DirectRunPayload {
     enabled?: boolean;
     preset?: ToolPresetPayload;
     summarize?: boolean;
+    /** Let the model hand tasks to cancellable subagents (#166). */
+    subagents?: boolean;
     /** Conversation key. The sidecar looks up this thread's stored permission mode. */
     thread_id?: string;
     /** What the screen shows; the sidecar uses the stricter of this and the stored mode. */

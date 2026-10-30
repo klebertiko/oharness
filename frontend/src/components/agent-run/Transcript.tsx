@@ -1,10 +1,13 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLE_ICON, ROLE_VAR } from "@/lib/roles";
+import { useT } from "@/i18n/store";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import css from "./agentRun.module.css";
+import { SubagentTree } from "./SubagentTree";
+import { TurnDiffPanel } from "./TurnDiffPanel";
 import { clock, latency as fmtLatency, paragraphs, tokens as fmtTokens } from "./format";
 import { groupActivity, segmentActivity, summarizeGroup } from "./activity";
 import { Gate } from "./Gate";
@@ -116,7 +119,7 @@ function ToolRow({ call, transcriptRunId }: { call: ToolCall; transcriptRunId: s
       style={failed ? { borderColor: "var(--fault)" } : undefined}
     >
       <span
-        className="h-[10px] w-[2px] flex-none rounded-none"
+        className="h-2.5 w-0.5 flex-none rounded-none"
         style={{
           background: pending ? "var(--signal)" : failed ? "var(--fault)" : "var(--ink-faint)",
         }}
@@ -288,14 +291,14 @@ function SegmentView({
       <div
         className={`${css.gutter} ${first ? css.gutterFirst : ""} ${last ? css.gutterLast : ""}`}
       >
-        <div className="flex h-[22px] items-center justify-center pl-[3px]">
+        <div className="flex h-5.5 items-center justify-center pl-[3px]">
           <Marker segment={segment} />
         </div>
       </div>
 
       <div className={`min-w-0 pb-3 ${pending ? "opacity-45" : ""}`}>
         {/* Node header — label left, identity centre-dim, cost right. */}
-        <div className="flex h-[22px] min-w-0 items-center gap-2">
+        <div className="flex h-5.5 min-w-0 items-center gap-2">
           <Icon size={12} strokeWidth={1.75} style={{ color: role }} className="flex-none" />
           <span className="t-title min-w-0 flex-none truncate text-ink">{segment.label}</span>
           <span className="t-meta min-w-0 flex-1 truncate text-ink-mute">
@@ -313,7 +316,8 @@ function SegmentView({
               {stepActivity.label}
             </span>
           )}
-          {segment.state === "done" && (
+          {segment.restored && <span className="t-meta flex-none text-ink-mute">Restored from the earlier run</span>}
+          {segment.state === "done" && !segment.restored && (
             <span className="t-meta flex-none text-ink-mute">
               {segment.latencyMs ? fmtLatency(segment.latencyMs) : null}
               {segment.tokens ? ` · ${segment.tokensEstimated ? "~" : ""}${fmtTokens(segment.tokens)} tok` : null}
@@ -616,6 +620,7 @@ export function Transcript({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const t = useT();
 
   const connections = useProviderStore((s) => s.connections);
   const chosenProviderId = useChatProviderStore((s) => s.chosenId);
@@ -660,6 +665,7 @@ export function Transcript({
 
       <RunRollup run={run} elapsed={elapsed} />
       {run.routeDecision && <RouteDecisionProvenance decision={run.routeDecision} />}
+      <SubagentTree runId={run.runId} runLive={run.status === "running" || run.status === "starting"} status={run.status} subagents={run.subagents} />
       <NodeBreakdown segments={attributed} defaultConnectionId={defaultConnectionId} connections={connections} />
 
       {visible.map((s, i) => (
@@ -673,6 +679,7 @@ export function Transcript({
         />
       ))}
 
+      {run.turnDiff && <TurnDiffPanel runId={run.runId} turnDiff={run.turnDiff} />}
       {run.status === "complete" && (
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />
@@ -686,7 +693,7 @@ export function Transcript({
         <div key={`compaction-${i}`} className="grid grid-cols-[24px_minmax(0,1fr)] pb-1">
           <div />
           <p className="t-meta text-ink-mute">
-            context compacted — {fmtTokens(c.beforeTokens)} → {fmtTokens(c.afterTokens)} tok
+            {t("run.compacted", { before: fmtTokens(c.beforeTokens), after: fmtTokens(c.afterTokens) })}
           </p>
         </div>
       ))}
@@ -694,7 +701,7 @@ export function Transcript({
         <div className="grid grid-cols-[24px_minmax(0,1fr)] pb-2">
           <div />
           <p role="status" className="t-meta" style={{ color: "var(--warn-text)" }}>
-            budget_exceeded — stopped at {fmtTokens(run.budget.usedTokens)} of {fmtTokens(run.budget.maxTokens)} tok
+            {t("run.budgetExceeded", { used: fmtTokens(run.budget.usedTokens), max: fmtTokens(run.budget.maxTokens) })}
           </p>
         </div>
       )}
