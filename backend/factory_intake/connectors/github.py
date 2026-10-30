@@ -107,6 +107,14 @@ class GitHubConnector:
             return None
         return login
 
+    def accepts(self, payload: dict, rules: TriggerRules) -> bool:
+        """The checks every GitHub delivery must pass before it can start anything (repo allowlist, human sender, not the factory itself,
+        allowed authors, not our own marker). Automations use it too, so they cannot be reached from outside what the connector serves."""
+        repo = (payload.get("repository") or {}).get("full_name") if isinstance(payload.get("repository"), dict) else None
+        comment = payload.get("comment")
+        body = comment.get("body") if isinstance(comment, dict) else None
+        return self._sender_ok(repo, payload.get("sender"), rules) is not None and not (isinstance(body, str) and MARKER in body)
+
     def parse_event(self, event: str, payload: dict, trigger_id: str, rules: TriggerRules) -> list[WorkItemDraft]:
         """Shared by webhooks and polling. ``trigger_id`` tells one trigger on an issue/PR from the next (a webhook delivery id, a label
         event id): re-labeling or reopening after the item closed is a new trigger and may start new work. Anything not selected by the

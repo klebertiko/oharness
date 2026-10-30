@@ -17,6 +17,7 @@ class MemoryFactory:
         self._items: dict[str, WorkItemView] = {}
         self._by_key: dict[tuple[str, str], str] = {}
         self.comments: dict[str, list[tuple[str, str]]] = {}
+        self.drafts: dict[str, WorkItemDraft] = {}  # what created each item, for tests to inspect
         self._lock = threading.RLock()
 
     def submit(self, draft: WorkItemDraft) -> SubmitResult:
@@ -32,6 +33,7 @@ class MemoryFactory:
             item = WorkItemView(id=uuid.uuid4().hex[:12], state="queued", source=draft.source, title=draft.title, created_at=now, updated_at=now)
             self._items[item.id] = item
             self._by_key[key] = item.id
+            self.drafts[item.id] = draft
             return SubmitResult(item=item, created=True)
 
     def _get(self, item_id: str) -> WorkItemView:
