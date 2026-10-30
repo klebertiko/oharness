@@ -68,7 +68,7 @@ CASES = [
     (AzureDevOps, "az-secret", azdo, "azdo_workitem_created", "workitem/42:created"),
     (AzureDevOps, "az-secret", azdo, "azdo_workitem_commented", "workitem/42:comment:3"),
     (Linear, "li-secret", linear, "linear_comment", "eng-12:comment:c1"),
-    (Linear, "li-secret", linear, "linear_issue_labeled", "eng-13:created"),
+    (Linear, "li-secret", linear, "linear_issue_created_with_label", "eng-13:created"),
     (Jira, "ji-secret", jira, "jira_comment", "eng-7:comment:10001"),
     (Jira, "ji-secret", jira, "jira_issue_created", "eng-8:created"),
     (Slack, "sl-secret", slack, "slack_app_mention", "c1:1700000000.000100:event:Ev1"),
@@ -108,7 +108,7 @@ def test_replies_and_wiring_are_honestly_not_implemented():
 def test_mentions_labels_authors_and_service_rules_select_what_starts_work():
     assert make(GitLab, "gl-secret").parse(gitlab("gitlab_note_mention"), TriggerRules(handle="@other")) == []
     assert make(GitLab, "gl-secret").parse(gitlab("gitlab_note_mention"), TriggerRules(handle="@payments", allowed_authors=frozenset({"bob"}))) == []
-    [by_label] = make(Linear, "li-secret").parse(linear("linear_issue_labeled"), TriggerRules(labels=frozenset({"factory"})))  # label match ignores case
+    [by_label] = make(Linear, "li-secret").parse(linear("linear_issue_created_with_label"), TriggerRules(labels=frozenset({"factory"})))  # label match ignores case
     assert by_label.source.ref == "eng-13"
     assert make(Slack, "sl-secret").parse(slack("slack_bot_message"), RULES) == []                         # bots never start work
     assert make(Slack, "sl-secret").parse(slack("slack_plain_channel_message"), RULES) == []
@@ -153,3 +153,58 @@ def test_injection_text_stays_data():
 
 def test_time_default_is_the_real_clock():
     assert abs(Slack(MemorySecrets())._now() - time.time()) < 5
+
+
+def test_the_factorys_own_accounts_and_marker_never_start_work():
+    own = GitLab(make(GitLab, "gl-secret")._secrets, now=lambda: NOW, self_ids={"Alice"})
+    assert own.parse(gitlab("gitlab_note_mention"), RULES) == []
+    raw = json.dumps(json.loads(body("jira_comment")) | {"comment": {"id": "9", "body": "@payments done <!-- oharness-factory -->", "author": {"accountId": "z"}}}).encode()
+    assert make(Jira, "ji-secret").parse(Delivery({"x-hub-signature": hexsig(b"ji-secret", raw, "sha256=")}, raw), RULES) == []
+
+
+def test_shared_secrets_are_compared_exactly():
+    with pytest.raises(Rejected):
+        make(GitLab, "gl-secret").parse(gitlab("gitlab_note_mention", **{"x-gitlab-token": " gl-secret "}), RULES)
+    with pytest.raises(Rejected):
+        make(GitLab, "gl-secret").parse(gitlab("gitlab_note_mention", **{"x-gitlab-token": ""}), RULES)
+
+
+def test_jira_atlassian_document_format_bodies_still_match_mentions():
+    adf = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "hey"}, {"type": "text", "text": "@payments"}, {"type": "text", "text": "triage"}]}]}
+    raw = json.dumps(json.loads(body("jira_comment")) | {"comment": {"id": "5", "body": adf, "author": {"accountId": "a"}}}).encode()
+    [draft] = make(Jira, "ji-secret").parse(Delivery({"x-hub-signature": hexsig(b"ji-secret", raw, "sha256=")}, raw), RULES)
+    assert "@payments" in draft.body
+
+
+def test_a_slack_direct_message_needs_an_author_allow_list_and_odd_subtypes_are_dropped():
+    dm = json.loads(body("slack_app_mention"))
+    dm["event"] = {"type": "message", "channel_type": "im", "user": "U1", "text": "do it", "ts": "1700000009.000100", "channel": "D1"}
+    raw = json.dumps(dm).encode()
+
+    def deliver_dm(rules):
+        stamp = str(int(NOW))
+        sig = hexsig(b"sl-secret", b"v0:" + stamp.encode() + b":" + raw, "v0=")
+        return make(Slack, "sl-secret").parse(Delivery({"x-slack-request-timestamp": stamp, "x-slack-signature": sig}, raw), rules)
+
+    assert deliver_dm(TriggerRules()) == []
+    assert len(deliver_dm(TriggerRules(allowed_authors=frozenset({"U1"})))) == 1
+    changed = dm | {"event": dm["event"] | {"subtype": "message_changed"}}
+    raw = json.dumps(changed).encode()
+    assert deliver_dm(TriggerRules(allowed_authors=frozenset({"U1"}))) == []
+
+
+def test_odd_but_signed_payloads_are_ignored_not_500():
+    odd_url = json.loads(body("gitlab_note_mention"))
+    odd_url["object_attributes"]["url"] = {"not": "a string"}
+    [draft] = make(GitLab, "gl-secret").parse(Delivery({"x-gitlab-token": "gl-secret"}, json.dumps(odd_url).encode()), RULES)
+    assert draft.source.url is None
+    no_rev = json.loads(body("azdo_workitem_commented"))
+    del no_rev["resource"]["rev"]
+    raw = json.dumps(no_rev).encode()
+    auth = "Basic " + base64.b64encode(b"hook:az-secret").decode()
+    assert make(AzureDevOps, "az-secret").parse(Delivery({"authorization": auth}, raw), RULES) == []
+    huge = json.loads(body("linear_comment")) | {"webhookTimestamp": 10 ** 400}
+    raw = json.dumps(huge).encode()
+    with pytest.raises(Rejected) as exc:
+        make(Linear, "li-secret").parse(Delivery({"linear-signature": hexsig(b"li-secret", raw)}, raw), RULES)
+    assert exc.value.status == 400

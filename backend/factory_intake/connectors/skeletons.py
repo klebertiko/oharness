@@ -18,11 +18,14 @@ import re
 import time
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from ..connector import Delivery, TriggerRules
 from ..port import SourceRef, WorkItemDraft, clamp_draft
-from ..security import Rejected, verify_bearer, verify_hmac_sha256, vault_key
+from ..security import Rejected, vault_key, verify_hmac_sha256, verify_shared_secret
 
 EXPERIMENTAL = True
+MARKER = "<!-- oharness-factory -->"  # replies will carry it (when implemented): the factory never reacts to its own words
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,7 @@ class Extracted:
     bot: bool = False
     is_reply: bool = False
     explicit: bool = False        # the service itself says the factory was addressed (a Slack app mention, a Teams outgoing webhook)
+    needs_allowlist: bool = False  # explicit only when the owner restricted authors (a Slack direct message: anyone in the workspace can send one)
     thread_ref: str | None = None
     body: str | None = None       # the item body when it differs from the triggering text
 
@@ -48,9 +52,11 @@ class SkeletonConnector:
     secret_name = ""
     scopes: tuple[str, ...] = ()
 
-    def __init__(self, secrets=None, now=time.time):
+    def __init__(self, secrets=None, now=time.time, self_ids=frozenset()):
+        """``self_ids``: the accounts the factory itself posts as (lower-case ids or usernames); their activity never starts work."""
         self._secrets = secrets
         self._now = now
+        self.self_ids = frozenset(i.lower() for i in self_ids)
 
     experimental = EXPERIMENTAL
 
@@ -83,24 +89,36 @@ class SkeletonConnector:
             found = self.extract({k.lower(): v for k, v in delivery.headers.items()}, payload)
         except (KeyError, TypeError, AttributeError, ValueError):
             found = None   # not shaped as documented: ignored, like any activity the rules do not select
-        if found is None or found.bot or not rules.author_allowed(found.author):
+        if found is None or found.bot or found.author in self.self_ids or found.author.endswith("[bot]") or MARKER in found.text or not rules.author_allowed(found.author):
             return []
         labeled = bool(rules.labels & {label.lower() for label in found.labels})
-        if not (found.explicit or labeled or rules.mentions(found.text)):
+        explicit = found.explicit and (not found.needs_allowlist or rules.allowed_authors is not None)
+        if not (explicit or labeled or rules.mentions(found.text)):
             return []
-        return [clamp_draft(SourceRef(kind=self.kind, ref=found.ref[:200], url=found.url, thread_ref=found.thread_ref or found.ref), found.title,
-                            found.body if found.body is not None else found.text, list(found.labels), found.author, f"{found.ref}:{found.key}", is_reply=found.is_reply)]
+        try:
+            return [clamp_draft(SourceRef(kind=self.kind, ref=found.ref[:200], url=found.url if isinstance(found.url, str) and len(found.url) <= 2000 else None,
+                                          thread_ref=(found.thread_ref or found.ref)[:500]), found.title,
+                                found.body if found.body is not None else found.text, list(found.labels), found.author, f"{found.ref}:{found.key}", is_reply=found.is_reply)]
+        except ValidationError:
+            return []   # a field outside the documented shape: ignored like any other unexpected payload
 
 
 def _text(value) -> str:
-    return value if isinstance(value, str) else ""
+    """A plain string, or the text inside an Atlassian Document Format tree (Jira Cloud sends comment and description bodies either way)."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        parts = [value["text"]] if isinstance(value.get("text"), str) else []
+        parts += [_text(child) for child in value.get("content", []) if isinstance(child, (dict, str))] if isinstance(value.get("content"), list) else []
+        return " ".join(p for p in parts if p)
+    return ""
 
 
 class GitLab(SkeletonConnector):
     kind, secret_name, scopes = "gitlab", "gitlab-webhook-secret", ("api (or a project/group access token with Reporter+ and api)",)
 
     def verify(self, delivery: Delivery) -> str:
-        verify_bearer(self._secret(), "Bearer " + delivery.headers.get("x-gitlab-token", ""))  # X-Gitlab-Token carries the shared secret
+        verify_shared_secret(self._secret(), delivery.headers.get("x-gitlab-token"))  # X-Gitlab-Token carries the shared secret as-is
         return delivery.headers.get("x-gitlab-event-uuid") or hashlib.sha256(delivery.body).hexdigest()
 
     def extract(self, headers, payload):
@@ -111,7 +129,7 @@ class GitLab(SkeletonConnector):
             parent = payload.get("merge_request") or payload.get("issue") or {}
             return Extracted(f"{project}!{parent['iid']}" if "merge_request" in payload else f"{project}#{parent['iid']}", _text(parent.get("title")), _text(attrs.get("note")),
                              f"note:{attrs['id']}", author, attrs.get("url"), is_reply=True)
-        if kind in ("issue", "merge_request") and attrs.get("action") in ("open", "reopen"):
+        if kind in ("issue", "merge_request") and attrs.get("action") == "open":  # reopen and label-after-creation need the service's update events: not handled yet
             sep = "!" if kind == "merge_request" else "#"
             return Extracted(f"{project}{sep}{attrs['iid']}", _text(attrs.get("title")), f"{_text(attrs.get('title'))}\n{_text(attrs.get('description'))}", f"{kind}:{attrs['id']}",
                              author, attrs.get("url"), tuple(l["title"] for l in payload.get("labels", [])), body=_text(attrs.get("description")))
@@ -127,7 +145,7 @@ class AzureDevOps(SkeletonConnector):
             password = base64.b64decode(header[6:], validate=True).decode().partition(":")[2] if header.lower().startswith("basic ") else ""
         except (binascii.Error, UnicodeDecodeError):
             password = ""
-        verify_bearer(self._secret(), "Bearer " + password)  # the service hook's basic-auth password is the shared secret
+        verify_shared_secret(self._secret(), password)  # the service hook's basic-auth password is the shared secret
         try:
             return str(json.loads(delivery.body)["id"])
         except (ValueError, KeyError, TypeError):
@@ -143,7 +161,7 @@ class AzureDevOps(SkeletonConnector):
         if event == "workitem.commented":
             fields = resource["fields"]
             return Extracted(f"workitem/{resource['workItemId']}", _text(fields.get("System.Title")) or f"Work item {resource['workItemId']}", re.sub(r"<[^>]+>", " ", _text(fields.get("System.History"))),
-                             f"comment:{resource.get('rev')}", _text((resource.get("revisedBy") or {}).get("uniqueName")).lower(), is_reply=True)
+                             f"comment:{resource['rev']}", _text((resource.get("revisedBy") or {}).get("uniqueName")).lower(), is_reply=True)
         return None
 
 
@@ -153,8 +171,11 @@ class Linear(SkeletonConnector):
     def verify(self, delivery: Delivery) -> str:
         verify_hmac_sha256(self._secret().encode(), delivery.body, delivery.headers.get("linear-signature"), prefix="")
         try:
-            stamp = float(json.loads(delivery.body)["webhookTimestamp"]) / 1000.0
-        except (ValueError, KeyError, TypeError):
+            raw = json.loads(delivery.body)["webhookTimestamp"]
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                raise TypeError
+            stamp = float(raw) / 1000.0
+        except (ValueError, KeyError, TypeError, OverflowError):
             raise Rejected("bad_payload", "missing webhook timestamp", 400) from None
         if not math.isfinite(stamp) or abs(self._now() - stamp) > 60:
             raise Rejected("stale", "webhook timestamp is outside the accepted window", 401)
@@ -164,11 +185,11 @@ class Linear(SkeletonConnector):
         data, kind = payload["data"], payload["type"]
         if kind == "Comment" and payload.get("action") == "create":
             issue = data["issue"]
-            return Extracted(issue["identifier"].lower(), _text(issue.get("title")), _text(data.get("body")), f"comment:{data['id']}", _text((data.get("user") or {}).get("name")).lower(),
+            return Extracted(issue["identifier"].lower(), _text(issue.get("title")), _text(data.get("body")), f"comment:{data['id']}", _text((data.get("user") or {}).get("id")).lower(),
                              payload.get("url"), is_reply=True)
         if kind == "Issue" and payload.get("action") == "create":
             title = _text(data.get("title"))
-            return Extracted(data["identifier"].lower(), title, f"{title}\n{_text(data.get('description'))}", "created", _text((data.get("creator") or {}).get("name")).lower(),
+            return Extracted(data["identifier"].lower(), title, f"{title}\n{_text(data.get('description'))}", "created", _text((data.get("creator") or {}).get("id")).lower(),
                              payload.get("url"), tuple(l["name"] for l in data.get("labels", [])), body=_text(data.get("description")))
         return None
 
@@ -214,13 +235,13 @@ class Slack(SkeletonConnector):
         if payload.get("type") != "event_callback":
             return None   # url_verification and the rest belong to the receiver, not to work
         event = payload["event"]
-        if event.get("bot_id") or event.get("subtype"):
+        if event.get("bot_id") or event.get("subtype") not in (None, "thread_broadcast", "file_share"):
             return None
         direct = event.get("type") == "message" and event.get("channel_type") == "im"
         if event.get("type") != "app_mention" and not direct:
             return None
         thread = f"{event['channel']}:{event.get('thread_ts') or event['ts']}"
-        return Extracted(thread.lower(), "Slack message", _text(event.get("text")), f"event:{payload['event_id']}", _text(event.get("user")).lower(), explicit=True, is_reply=True, thread_ref=thread)
+        return Extracted(thread.lower(), "Slack message", _text(event.get("text")), f"event:{payload['event_id']}", _text(event.get("user")).lower(), explicit=True, needs_allowlist=direct, is_reply=True, thread_ref=thread)
 
 
 class Teams(SkeletonConnector):
