@@ -160,3 +160,6 @@ def secret_ref(name: str) -> str:
     if not name or not all(ch.isalnum() or ch in "-_." for ch in name):
         raise ValueError("secret names use letters, digits, '-', '_' and '.'")
     return SECRET_REF_PREFIX + name
+
+
+vault_key = secret_ref  # the name of an entry in the secrets store: a label, not a credential

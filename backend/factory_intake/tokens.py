@@ -10,7 +10,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from .security import Rejected, secret_ref
+from .security import Rejected, vault_key
 
 SCOPES = ("work:read", "work:write", "work:claim")
 CLIENT_KINDS = ("cli", "mcp", "webhook", "manual")
@@ -42,7 +42,7 @@ class ClientTokens:
         self._store = store
 
     def _load(self) -> dict:
-        raw = self._store.get(secret_ref(STORE_NAME))
+        raw = self._store.get(vault_key(STORE_NAME))
         if not raw:
             return {}
         try:
@@ -54,7 +54,7 @@ class ClientTokens:
         return data
 
     def _save(self, data: dict) -> None:
-        self._store.put(secret_ref(STORE_NAME), json.dumps(data))
+        self._store.put(vault_key(STORE_NAME), json.dumps(data))
 
     def create(self, name: str, scopes: list[str], source_kind: str = "cli") -> str:
         if not _NAME.fullmatch(name) or source_kind not in CLIENT_KINDS or not scopes or any(s not in SCOPES for s in scopes):
