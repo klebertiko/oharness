@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Trash2, Upload, Workflow } from "lucide-react";
 
 import { Panel } from "@/components/shell/Panel";
@@ -19,7 +19,9 @@ import { harnessSubtitle, isBuiltInHarness, splitHarnessName } from "./harnessLa
  */
 export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle) => void } = {}) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const entries = useHarnessLibraryStore((s) => s.entries);
+  // Harnesses saved in Studio are listed (and opened) on Studio's own overview; this is the bundled and imported set.
+  const allEntries = useHarnessLibraryStore((s) => s.entries);
+  const entries = useMemo(() => allEntries.filter((e) => e.source !== "saved"), [allEntries]);
   const hydrated = useHarnessLibraryStore((s) => s.hydrated);
   const hydrate = useHarnessLibraryStore((s) => s.hydrate);
   const importBundle = useHarnessLibraryStore((s) => s.importBundle);
@@ -118,7 +120,7 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
                   ? undefined
                   : () => {
                       if (onPicked) onPicked(entry.bundle);
-                      else activate(entry.id);
+                      else void activate(entry.id);
                     }
               }
               trailing={
@@ -137,7 +139,7 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
                         label={(onPicked ? "Open " : "Use ") + title}
                         onClick={() => {
                           if (onPicked) onPicked(entry.bundle);
-                      else activate(entry.id);
+                      else void activate(entry.id);
                         }}
                       >
                         {onPicked ? "Open" : "Use"}
