@@ -1,0 +1,16 @@
+{
+ "webhookEvent": "comment_created",
+ "comment": {
+  "id": "10001",
+  "body": "@payments please triage",
+  "author": {
+   "accountId": "acc-1"
+  }
+ },
+ "issue": {
+  "key": "ENG-7",
+  "fields": {
+   "summary": "Login fails"
+  }
+ }
+}

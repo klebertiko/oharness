@@ -1,0 +1,11 @@
+{
+ "type": "event_callback",
+ "event_id": "Ev1",
+ "event": {
+  "type": "app_mention",
+  "user": "U1",
+  "text": "<@UBOT> triage this",
+  "ts": "1700000000.000100",
+  "channel": "C1"
+ }
+}

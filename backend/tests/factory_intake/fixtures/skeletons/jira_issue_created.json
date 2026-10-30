@@ -1,0 +1,16 @@
+{
+ "webhookEvent": "jira:issue_created",
+ "issue": {
+  "key": "ENG-8",
+  "fields": {
+   "summary": "Export",
+   "description": "@payments do it",
+   "labels": [
+    "ops"
+   ],
+   "creator": {
+    "accountId": "acc-2"
+   }
+  }
+ }
+}
