@@ -1,0 +1,32 @@
+{
+ "action": "created",
+ "issue": {
+  "number": 7,
+  "title": "Checkout fails",
+  "body": "steps...",
+  "html_url": "https://github.com/acme/payments/issues/7",
+  "labels": [],
+  "user": {
+   "login": "alice",
+   "type": "User"
+  },
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z",
+  "id": 1007
+ },
+ "comment": {
+  "id": 503,
+  "body": "@payments looping",
+  "user": {
+   "login": "payments-factory[bot]",
+   "type": "Bot"
+  }
+ },
+ "sender": {
+  "login": "payments-factory[bot]",
+  "type": "Bot"
+ },
+ "repository": {
+  "full_name": "acme/payments"
+ }
+}

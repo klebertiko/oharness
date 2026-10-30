@@ -40,9 +40,10 @@ class WorkItemDraft(BaseModel):
     labels: tuple[Annotated[str, StringConstraints(max_length=100)], ...] = Field(default=(), max_length=50)
     requested_by: str = Field(default="", max_length=200, description="opaque author id as the source reports it; never an authorization")
     idempotency_key: str = Field(min_length=1, max_length=200)
+    is_reply: bool = Field(default=False, description="a message in an existing thread (a comment): if the thread's item is open it is added there as a comment")
 
 
-def clamp_draft(source: SourceRef, title: str, body: str, labels, requested_by: str, idempotency_key: str) -> "WorkItemDraft":
+def clamp_draft(source: SourceRef, title: str, body: str, labels, requested_by: str, idempotency_key: str, is_reply: bool = False) -> "WorkItemDraft":
     """Build a draft from outside text that may be too long or empty: cut to the limits (sources allow larger bodies than the factory
     keeps) and give a blank title a placeholder, so a normal oversized payload is never a validation error."""
     return WorkItemDraft(
@@ -52,6 +53,7 @@ def clamp_draft(source: SourceRef, title: str, body: str, labels, requested_by: 
         labels=tuple(str(label)[:100] for label in list(labels)[:50]),
         requested_by=requested_by[:200],
         idempotency_key=idempotency_key[:200],
+        is_reply=is_reply,
     )
 
 
