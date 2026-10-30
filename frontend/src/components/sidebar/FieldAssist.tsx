@@ -1,4 +1,5 @@
 "use client";
+import { useT } from "@/i18n/store";
 import { Button } from "@/components/ui/Button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PenLine } from "lucide-react";
@@ -163,29 +164,31 @@ export function useFieldAssist(nodeId: string, field: AssistField): AssistContro
 
 
 export function AssistToggle({ ctl }: { ctl: AssistController }) {
+  const t = useT();
   return (
     <button
       type="button"
       aria-expanded={ctl.open}
       disabled={ctl.disabled}
-      title={ctl.disabled ? "Stop the run to edit this field" : undefined}
+      title={ctl.disabled ? t("sidebar.assist.stopToEdit") : undefined}
       onClick={() => ctl.setOpen(!ctl.open)}
       className="inline-flex h-5 items-center gap-1 rounded-control px-1.5 text-body text-ink-mute hover:bg-sub-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-40"
     >
       <PenLine size={12} aria-hidden />
-      Assist
+      {t("sidebar.assist.toggle")}
     </button>
   );
 }
 
 export function AssistRow({ ctl }: { ctl: AssistController }) {
+  const t = useT();
   if (!ctl.open) return null;
 
   if (ctl.phase === "working") {
     return (
       <div role="status" className="mt-1.5 flex items-center gap-2">
-        <span className="t-meta text-ink-mute">Working · {ctl.seconds}s</span>
-        <Button size="sm" variant="secondary" onClick={ctl.cancel}>Cancel</Button>
+        <span className="t-meta text-ink-mute">{t("sidebar.assist.working", { n: ctl.seconds })}</span>
+        <Button size="sm" variant="secondary" onClick={ctl.cancel}>{t("common.cancel")}</Button>
       </div>
     );
   }
@@ -199,7 +202,7 @@ export function AssistRow({ ctl }: { ctl: AssistController }) {
         {typeof response.text === "string" && (
           <pre className="max-h-45 overflow-auto whitespace-pre-wrap wrap-break-word rounded-float border border-line bg-sub-300 p-2.5 font-sans text-body leading-relaxed text-ink">{response.text}</pre>
         )}
-        {response.source === "offline" && <span className="t-meta text-ink-mute">Offline draft</span>}
+        {response.source === "offline" && <span className="t-meta text-ink-mute">{t("sidebar.assist.offline")}</span>}
         {notes.length > 0 && (
           <ul className="space-y-0.5">
             {notes.map((n, i) => (
@@ -209,11 +212,11 @@ export function AssistRow({ ctl }: { ctl: AssistController }) {
         )}
         <div className="flex items-center gap-2">
           {review ? (
-            <Button size="sm" variant="primary" onClick={() => ctl.run("improve", response.notes.join("\n"))}>Improve with these</Button>
+            <Button size="sm" variant="primary" onClick={() => ctl.run("improve", response.notes.join("\n"))}>{t("sidebar.assist.improveWith")}</Button>
           ) : (
-            <Button size="sm" variant="primary" onClick={ctl.use}>Use this</Button>
+            <Button size="sm" variant="primary" onClick={ctl.use}>{t("sidebar.assist.use")}</Button>
           )}
-          <Button size="sm" variant="secondary" onClick={ctl.discard}>Discard</Button>
+          <Button size="sm" variant="secondary" onClick={ctl.discard}>{t("sidebar.assist.discard")}</Button>
         </div>
       </div>
     );
@@ -226,15 +229,15 @@ export function AssistRow({ ctl }: { ctl: AssistController }) {
       )}
       {ctl.hasText ? (
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => ctl.run("improve")}>Improve</Button>
-          <Button size="sm" variant="secondary" onClick={() => ctl.run("review")}>Review</Button>
+          <Button size="sm" variant="secondary" onClick={() => ctl.run("improve")}>{t("sidebar.assist.improve")}</Button>
+          <Button size="sm" variant="secondary" onClick={() => ctl.run("review")}>{t("sidebar.assist.review")}</Button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
           <input
             type="text"
-            aria-label="What should it do?"
-            placeholder="What should it do?"
+            aria-label={t("sidebar.assist.intent")}
+            placeholder={t("sidebar.assist.intent")}
             maxLength={INTENT_MAX}
             value={ctl.intent}
             onChange={(e) => ctl.setIntent(e.target.value)}
@@ -246,7 +249,7 @@ export function AssistRow({ ctl }: { ctl: AssistController }) {
             }}
             className="h-control-md min-w-0 flex-1 rounded-control border border-line-strong bg-sub-200 px-2 text-title text-ink placeholder:text-ink-mute hover:bg-sub-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
           />
-          <Button size="sm" variant="primary" disabled={!ctl.intent.trim()} onClick={() => ctl.run("draft")}>Draft</Button>
+          <Button size="sm" variant="primary" disabled={!ctl.intent.trim()} onClick={() => ctl.run("draft")}>{t("sidebar.assist.draft")}</Button>
         </div>
       )}
     </div>
