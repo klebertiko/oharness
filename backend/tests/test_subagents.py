@@ -305,3 +305,53 @@ def test_invalid_tasks_do_not_use_up_child_slots():
 
 def test_cancel_route_tells_missing_run_from_missing_child(client):
     assert client.post('/execute/no-run/subagents/x/cancel').json() == {'error': 'run_not_found'}
+
+
+# -- round 2 -------------------------------------------------------------------
+class TextOnly(AgentAdapter):
+    """A CLI-style adapter: text only, no function-calling loop (no `stream_turn`)."""
+
+    async def invoke(self, prompt, config):
+        raise AssertionError
+
+    async def stream(self, prompt, config):
+        yield 'x'
+
+    async def stream_events(self, prompt, config):
+        yield {'kind': 'text', 'text': 'plain answer'}
+
+
+def test_a_provider_without_a_tool_loop_says_subagents_were_not_offered(tmp_path):
+    b = ToolBroker(str(tmp_path), 'ollama', RunControl('plain'), ToolsRequest(subagents=True))
+
+    async def go():
+        return [e async for e in b.stream('x', TextOnly(), CONFIG)]
+    events = asyncio.run(go())
+    assert [e for e in events if e['kind'] == 'subagent_unavailable'] == [{'kind': 'subagent_unavailable', 'reason': 'provider'}]
+    assert any(e['kind'] == 'text' for e in events)  # the turn itself still ran
+
+
+def test_no_notice_when_subagents_were_not_asked_for(tmp_path):
+    b = ToolBroker(str(tmp_path), 'ollama', RunControl('p2'), ToolsRequest(enabled=True))
+
+    async def go():
+        return [e async for e in b.stream('x', TextOnly(), CONFIG)]
+    assert not [e for e in asyncio.run(go()) if e['kind'] == 'subagent_unavailable']
+
+
+def test_a_model_that_rejects_tools_also_gets_the_notice(tmp_path):
+    import httpx
+    from adapters.openai_compatible import OpenAICompatibleAdapter
+
+    def handler(request):
+        payload = json.loads(request.content)
+        if payload.get('tools'):
+            return httpx.Response(400, text='this model does not support tools')
+        return httpx.Response(200, text='data: ' + json.dumps({'choices': [{'delta': {'content': 'plain'}}]}) + '\n\ndata: [DONE]\n\n')
+    adapter = OpenAICompatibleAdapter(transport=httpx.MockTransport(handler))
+    b = ToolBroker(str(tmp_path), 'ollama', RunControl('rej'), ToolsRequest(subagents=True))
+
+    async def go():
+        return [e async for e in b.stream('x', adapter, CONFIG)]
+    kinds = [e['kind'] for e in asyncio.run(go())]
+    assert 'subagent_unavailable' in kinds and 'text' in kinds

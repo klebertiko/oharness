@@ -233,6 +233,23 @@ export const en = {
   "diff.err.notFound": "This change is no longer recorded.",
   "diff.err.gone": "The folder this turn changed is no longer there, so nothing can be restored.",
   "diff.err.generic": "The revert did not go through.",
+
+  "subagents.title": "Subagents",
+  "subagents.state.running": "running",
+  "subagents.state.done": "done",
+  "subagents.state.cancelled": "cancelled",
+  "subagents.state.error": "error",
+  "subagents.chars": "{n} chars",
+  "subagents.cancel": "Cancel",
+  "subagents.cancelAria": "Cancel subagent {task}",
+  "subagents.cancel.finished": "This subagent already finished, so nothing was cancelled.",
+  "subagents.cancel.failed": "The cancel did not go through. Try again.",
+  "subagents.toggle.on": "Subagents on",
+  "subagents.toggle.off": "Subagents off",
+  "subagents.toggle.title": "Let this turn hand tasks to subagents",
+  "subagents.unavailable": "Subagents are not available with this provider, so the turn ran without them.",
+  "subagents.toggle.harness": "Subagents are off while a harness is on",
+  "subagents.toggle.plan": "Subagents are off in Plan mode",
 };
 
 export type MessageKey = keyof typeof en;
