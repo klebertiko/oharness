@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+from .factory_cli import COMMANDS
+
 EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
 
 
@@ -31,6 +33,9 @@ def add_parser(sub) -> argparse.ArgumentParser:
     actions.add_parser("check", help="whether a client with this name exists").add_argument("name")
     revoke = actions.add_parser("revoke")
     revoke.add_argument("name")
+    from . import factory_cli
+
+    factory_cli.add_commands(group)
     group.add_parser("mcp", help="Factory MCP over stdio, for a local coding agent (ADR 0063)")
 
     auto = group.add_parser("automation", help="scheduled and event automations (ADR 0062)")
@@ -68,6 +73,16 @@ def run(args: argparse.Namespace) -> int:
         from .server import serve
 
         return serve(args.host, args.port, args.dir, args.allow_remote)
+    if args.factory_cmd in COMMANDS:
+        from . import factory_cli
+        from .loader import FoundationMissing, load_port
+
+        try:
+            port = load_port()
+        except FoundationMissing as exc:
+            factory_cli._fail("no_factory", str(exc), args.json)
+            return EXIT_USAGE
+        return factory_cli.run(args, port)
     if args.factory_cmd == "mcp":
         from .loader import FoundationMissing, load_port
         from .mcp import serve_stdio

@@ -135,8 +135,8 @@ class FactoryPort(Protocol):
 
     def cancel(self, item_id: str) -> WorkItemView: ...
 
-    def claim(self, item_id: str, holder: str) -> WorkItemView:
-        """Suspend the factory's own run and hand the item to a local session (state ``claimed``)."""
+    def claim(self, item_id: str, holder: str, worktree_ref: str | None = None) -> WorkItemView:
+        """Suspend the factory's own run and hand the item to a local session (state ``claimed``); ``worktree_ref`` names the local worktree."""
 
     def release(self, item_id: str, result: ReleaseResult) -> WorkItemView:
         """Give a claimed item back; it goes to review, never to merge."""
