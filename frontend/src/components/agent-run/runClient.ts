@@ -21,6 +21,8 @@ export interface StartRunPayload {
       Omitted (not empty-string) when the person picked "No folder", so the
       backend's own `resolve_cwd()` fallback decides, not an empty path. */
   cwd?: string;
+  /** Work in a worktree of its own made from `cwd`, removed when the run ends. Needs `cwd`. */
+  worktree?: boolean;
 }
 
 function pumpSse(

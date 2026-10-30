@@ -23,7 +23,11 @@ class Delivery:
 
 
 _HANDLE = re.compile(r"^@?[A-Za-z0-9][A-Za-z0-9_-]{0,38}$")
+<<<<<<< HEAD
 _CODE = re.compile(r"(?s:```.*?```)|`[^`\n]*`|(?m:^>[^\n]*$)")
+=======
+_CODE = re.compile(r"```.*?```|`[^`\n]*`|^>.*$", re.DOTALL | re.MULTILINE)
+>>>>>>> origin/main
 
 
 @dataclass(frozen=True)
@@ -33,7 +37,11 @@ class TriggerRules:
     A mention inside a code block, inline code or a quoted reply does not count (quoting someone is not addressing the factory)."""
 
     handle: str | None = None
+<<<<<<< HEAD
     labels: frozenset[str] = field(default_factory=frozenset)  # compared case-insensitively
+=======
+    labels: frozenset[str] = field(default_factory=frozenset)
+>>>>>>> origin/main
     allowed_authors: frozenset[str] | None = None  # None: anyone who can reach the source; a set restricts it (recommended for public repos)
 
     def __post_init__(self) -> None:
@@ -41,7 +49,10 @@ class TriggerRules:
             raise ValueError("handle must be a name such as '@payments' (letters, digits, '-', '_')")
         if self.allowed_authors is not None:
             object.__setattr__(self, "allowed_authors", frozenset(a.lower() for a in self.allowed_authors))
+<<<<<<< HEAD
         object.__setattr__(self, "labels", frozenset(label.lower() for label in self.labels))  # labels are case-insensitive in the sources we serve
+=======
+>>>>>>> origin/main
 
     def mentions(self, text: str) -> bool:
         if not self.handle:
@@ -69,12 +80,17 @@ class Connector(Protocol):
     def required_scopes(self) -> tuple[str, ...]:
         """The minimum token permissions this connector needs, shown to the owner (documented per connector)."""
 
+<<<<<<< HEAD
     def verify(self, delivery: Delivery) -> str:
         """Check the delivery's signature against the secret in the store (raises ``Rejected``); returns its delivery id for the receiver's
         replay guard. ``parse`` calls it too, so calling ``parse`` alone is already safe."""
 
     def parse(self, delivery: Delivery, rules: TriggerRules) -> list[WorkItemDraft]:
         """``parse`` verifies the delivery itself (raises ``Rejected``), so a forged payload can never become a draft. Returns drafts only for activity the rules select; ignores the rest."""
+=======
+    def parse(self, delivery: Delivery, rules: TriggerRules) -> list[WorkItemDraft]:
+        """Authenticity is already checked by the receiver. Returns drafts only for activity the rules select; ignores the rest."""
+>>>>>>> origin/main
 
     def reply(self, ref: SourceRef, text: str) -> None:
         """Post ``text`` in the thread ``ref`` came from. Raises on failure; never merges, never pushes."""
