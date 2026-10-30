@@ -102,18 +102,6 @@ _Avoid_: unavailable list, broken providers
 Messages typed while a turn runs; they run after it, in order. A turn that stops or fails pauses the queue.
 _Avoid_: backlog, pending messages
 
-**Subagent**:
-A task the model hands to a child run during a turn. Each child can be cancelled alone.
-_Avoid_: worker, thread
-
-**Turn diff**:
-The files a turn changed in the workspace, each with its own one-time revert.
-_Avoid_: undo all, changeset
-
-**Token ceiling**:
-The token total at which a run stops with the status Budget exceeded.
-_Avoid_: budget (as a field label), limit
-
 **Activity**:
 The list of every run, wherever it started, with Continue as a new run for an interrupted one.
 _Avoid_: history log, executions
@@ -123,6 +111,14 @@ _Avoid_: history log, executions
 **Nilo**:
 The OHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
 _Avoid_: Copilot (a Microsoft brand; never in UI copy, docs or examples), AI assistant, bot
+
+**Turn diff**:
+The list of files a turn changed in the Workspace, with the diff of each. Reverting restores one file to how it was before the turn and never touches another; it refuses a file that changed again afterwards.
+_Avoid_: undo (that word is for Studio edits), patch
+
+**Subagent**:
+A helper Nilo starts for one task during a turn. It answers once, has no tools of its own and cannot start others. Cancelling one subagent leaves the turn and its siblings running; stopping the run ends all of them.
+_Avoid_: worker, child agent (in UI copy), Agent (that is a crew role)
 
 **Studio**:
 The place where a person designs a harness: overview, canvas, inspector.
