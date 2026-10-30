@@ -38,8 +38,8 @@ def gitlab(name, **over):
     return Delivery({"x-gitlab-token": "gl-secret", "x-gitlab-event-uuid": "u1", **over}, body(name))
 
 
-def azdo(name, password="az-secret"):
-    return Delivery({"authorization": "Basic " + base64.b64encode(f"hook:{password}".encode()).decode()}, body(name))
+def azdo(name, secret="az-secret"):
+    return Delivery({"authorization": "Basic " + base64.b64encode(f"hook:{secret}".encode()).decode()}, body(name))
 
 
 def linear(name, secret=b"li-secret"):
