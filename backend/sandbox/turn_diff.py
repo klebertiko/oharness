@@ -180,6 +180,8 @@ def revert_file(root, rel, status, before, after_sha, mode=0o644) -> None:
     """
     parts = _split(rel)
     base = Path(root).resolve()
+    if not base.is_dir():
+        raise RevertRefused('workspace_gone')
     current = base
     for index, part in enumerate(parts):
         current = current / part
