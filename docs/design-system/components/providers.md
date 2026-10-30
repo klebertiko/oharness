@@ -99,7 +99,7 @@ The vendor's summary, where it runs (this device or the cloud), and a caveat `No
 
 ## Tokens and components used
 
-`control-touch` (ADR 0033), `edge-selected` (ADR 0037) on the open row, `StatusMark` and `ConfirmInline` (the first screen to use them), `ListRow` with its `description` line, `Panel level={3}`, `Notice`, `Skeleton`, `Input compact`, `Badge`, `Button`, `Combobox`. No new token was added for this screen. `atoms.tsx` still holds `Monogram`, `ResidenceMark`, `StateRule` and `TONE_TEXT`, which the Studio run-binding panel (`/dev/providers`) uses; `ToneDot`, `Chip` and `Fact` have no consumer left and can be deleted (audit D2 of `../audit/providers.md`).
+`control-touch` (ADR 0033), `edge-selected` (ADR 0037) on the open row, `StatusMark` and `ConfirmInline` (the first screen to use them), `ListRow` with its `description` line, `Panel level={3}`, `Notice`, `Skeleton`, `Input compact`, `Badge`, `Button`, `Combobox`. No new token was added for this screen. `atoms.tsx` keeps `Monogram`, `ResidenceMark`, `StateRule`, `ProbeTrace` and `TONE_TEXT`; the old `ToneDot`, `Chip` and `Fact` were deleted with the rebuild (audit D13, closing D2 of `../audit/providers.md`).
 
 ## Don't
 

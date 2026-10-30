@@ -436,6 +436,7 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
         events: list[dict] = []
         run_cwd = cwd
         tracker = None
+        closed_sent = False  # `worktree_closed` already went out on the stream (a normal end); the cleanup below only covers the other endings
         # The intake call already spent real tokens before any node ran.
         ceiling = HarnessCeiling(run_budget, routed.tokens if routed is not None and routed.engage_harness else 0)
         try:
@@ -492,6 +493,15 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                         if turn_diff:
                             events.append({"event": "turn_diff", "data": turn_diff})
                             yield _sse("turn_diff", turn_diff)
+                    if parsed and parsed["event"] == "harness_done" and isolation is not None:
+                        # The run is over: remove its worktree and say where its changes went BEFORE the run is marked complete, so a
+                        # Continue made the moment it completes already finds the rescue ref (and the client still listens).
+                        await isolation.close()
+                        if isolation.closed_id is not None:
+                            closed_evt = {"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}}
+                            closed_sent = True
+                            events.append(closed_evt)
+                            yield _sse(closed_evt["event"], closed_evt["data"])
                     if parsed:
                         due = ceiling.observe(parsed["event"], parsed["data"])
                         if parsed["event"] == "harness_done" and ceiling.hit and parsed["data"].get("status") == STATUS_STOPPED:
@@ -534,9 +544,9 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                 await writer.finish(status)
             finally:  # the worktree goes whether or not the journal write succeeded
                 if isolation is not None:
-                    rescue = await isolation.close()
-                    if isolation.closed_id is not None:
-                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": rescue}})
+                    await isolation.close()  # a no-op when the run already closed it above
+                    if isolation.closed_id is not None and not closed_sent:  # the other endings: only the journal hears of it
+                        await writer.append({"event": "worktree_closed", "data": {"workspace_id": isolation.closed_id, "rescue_ref": isolation.closed_rescue}})
             with anyio.CancelScope(shield=True):
                 await persist_usage(events)
 
