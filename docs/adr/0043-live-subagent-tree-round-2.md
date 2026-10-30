@@ -5,7 +5,8 @@ Status: accepted (#166, follow-up to ADR 0027)
 ## Decision
 - The "Subagents" switch is remembered (`localStorage`, `oh.subagents.v1`; only a literal `true` is trusted on read) and shown only for chats without a harness, where it applies.
 - A provider that runs its own loop (a CLI adapter: no `stream_turn`) cannot be given the `run_subagent` tool. When subagents were asked for, the stream carries `subagent_unavailable` (reason `provider`) and the run shows a notice instead of ignoring the choice.
-- Everything the person reads (tree title, states, Cancel and its refusal reasons, the switch, the notice) goes through the en / pt-BR catalogs (`subagents.*`).
+- What is specific to subagents (tree title, child states, Cancel and its refusal reasons, the switch and why it is unavailable in Plan mode or with a harness on, the notice) goes through the en / pt-BR catalogs (`subagents.*`). The parent turn's status word is the shared run status, not catalogued yet.
+- The notice also covers a model that rejects function calling (the existing fallback to plain text).
 - History: the journal already holds `subagent_*`; replay shows the final states, and a run that ended or was interrupted never shows a child as running.
 - e2e: `e2e-subagents.mjs` runs against a small real HTTP sidecar, so the stream is open while Cancel is pressed: parent and both children running, axe with the tree live, Cancel by keyboard reaching exactly one child, the sibling finishing, both themes.
 

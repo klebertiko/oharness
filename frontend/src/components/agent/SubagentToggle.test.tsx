@@ -23,6 +23,25 @@ describe("subagent choice is remembered", () => {
   });
 });
 
+describe("SubagentToggle when the turn cannot use subagents", () => {
+  afterEach(() => {
+    cleanup();
+    useSubagentStore.setState({ enabled: false });
+  });
+
+  it("is disabled and says why, never showing a stale 'on'", () => {
+    useSubagentStore.setState({ enabled: true });
+    const { rerender } = render(<SubagentToggle unavailable="plan" />);
+    const toggle = screen.getByRole("switch", { name: "Subagents are off in Plan mode" }) as HTMLButtonElement;
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    rerender(<SubagentToggle unavailable="harness" />);
+    expect(screen.getByRole("switch", { name: "Subagents are off while a harness is on" })).toBeTruthy();
+    rerender(<SubagentToggle />);
+    expect(screen.getByRole("switch", { name: "Subagents on" }).getAttribute("aria-checked")).toBe("true");
+  });
+});
+
 describe("SubagentToggle", () => {
   afterEach(() => {
     cleanup();

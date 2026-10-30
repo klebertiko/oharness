@@ -225,5 +225,7 @@ export const ptBR: Record<MessageKey, string> = {
   "subagents.toggle.on": "Subagentes ligados",
   "subagents.toggle.off": "Subagentes desligados",
   "subagents.toggle.title": "Deixar este turno passar tarefas a subagentes",
-  "subagents.unavailable": "Este provedor roda as próprias ferramentas, então o turno rodou sem subagentes.",
+  "subagents.unavailable": "Subagentes não estão disponíveis com este provedor, então o turno rodou sem eles.",
+  "subagents.toggle.harness": "Subagentes ficam desligados enquanto um harness está ligado",
+  "subagents.toggle.plan": "Subagentes ficam desligados no modo Plan",
 };

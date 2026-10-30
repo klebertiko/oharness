@@ -234,6 +234,8 @@ class ToolBroker:
                 detail = exc.response.text.lower()
                 if tools and exc.response.status_code in {400, 404, 422} and any(word in detail for word in ('tool', 'function')) and any(word in detail for word in ('not support', 'unsupported', 'unrecognized', 'unknown')):
                     unsupported = True
+                    if self.options.subagents:
+                        yield {'kind': 'subagent_unavailable', 'reason': 'provider'}
                     self.capabilities = capabilities(str(self.root), config.adapter, unsupported=True)
                     yield {'kind': 'capabilities', **self.capabilities}
                     continue

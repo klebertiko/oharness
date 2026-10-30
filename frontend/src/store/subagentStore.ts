@@ -20,6 +20,7 @@ export const useSubagentStore = create<SubagentState>()(
     {
       name: SUBAGENT_STORAGE_KEY,
       version: 1,
+      migrate: (stored) => ({ enabled: (stored as { enabled?: unknown } | undefined)?.enabled === true }),
       partialize: (s) => ({ enabled: s.enabled }),
       merge: (stored, current) => ({ ...current, enabled: (stored as { enabled?: unknown } | undefined)?.enabled === true }),
       storage: createJSONStorage(() => localStorage),

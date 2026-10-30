@@ -337,3 +337,21 @@ def test_no_notice_when_subagents_were_not_asked_for(tmp_path):
     async def go():
         return [e async for e in b.stream('x', TextOnly(), CONFIG)]
     assert not [e for e in asyncio.run(go()) if e['kind'] == 'subagent_unavailable']
+
+
+def test_a_model_that_rejects_tools_also_gets_the_notice(tmp_path):
+    import httpx
+    from adapters.openai_compatible import OpenAICompatibleAdapter
+
+    def handler(request):
+        payload = json.loads(request.content)
+        if payload.get('tools'):
+            return httpx.Response(400, text='this model does not support tools')
+        return httpx.Response(200, text='data: ' + json.dumps({'choices': [{'delta': {'content': 'plain'}}]}) + '\n\ndata: [DONE]\n\n')
+    adapter = OpenAICompatibleAdapter(transport=httpx.MockTransport(handler))
+    b = ToolBroker(str(tmp_path), 'ollama', RunControl('rej'), ToolsRequest(subagents=True))
+
+    async def go():
+        return [e async for e in b.stream('x', adapter, CONFIG)]
+    kinds = [e['kind'] for e in asyncio.run(go())]
+    assert 'subagent_unavailable' in kinds and 'text' in kinds

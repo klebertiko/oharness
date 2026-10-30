@@ -483,7 +483,10 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
 
     case "subagent_unavailable":
-      return { ...state, notices: [...state.notices, tr("subagents.unavailable")] };
+      {
+        const notice = tr("subagents.unavailable");
+        return state.notices.includes(notice) ? state : { ...state, notices: [...state.notices, notice] };
+      }
 
     case "subagent_start":
       return {

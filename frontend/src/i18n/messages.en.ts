@@ -223,7 +223,9 @@ export const en = {
   "subagents.toggle.on": "Subagents on",
   "subagents.toggle.off": "Subagents off",
   "subagents.toggle.title": "Let this turn hand tasks to subagents",
-  "subagents.unavailable": "This provider runs its own tools, so the turn ran without subagents.",
+  "subagents.unavailable": "Subagents are not available with this provider, so the turn ran without them.",
+  "subagents.toggle.harness": "Subagents are off while a harness is on",
+  "subagents.toggle.plan": "Subagents are off in Plan mode",
 };
 
 export type MessageKey = keyof typeof en;

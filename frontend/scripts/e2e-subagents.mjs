@@ -76,7 +76,7 @@ const browser = await chromium.launch(launch);
 
 for (const theme of ["dark", "light"]) {
   resetTurn();
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block", locale: "en-US" });
   await context.addInitScript(([t, api]) => {
     window.__OH_API__ = api;
     try { localStorage.setItem("oharness-theme", t); } catch { /* storage blocked */ }
@@ -90,6 +90,8 @@ for (const theme of ["dark", "light"]) {
     await toggle.focus();
     await page.keyboard.press("Enter");
     await page.getByRole("switch", { name: "Subagents on" }).waitFor();
+    await page.reload({ waitUntil: "networkidle" });
+    note(await page.getByRole("switch", { name: "Subagents on" }).count() === 1, `${theme}: the choice is remembered after a reload`);
     await page.getByRole("textbox", { name: "Message OHarness" }).fill("Split this up");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     // The tree lives in the run detail; open it while the turn is still running.

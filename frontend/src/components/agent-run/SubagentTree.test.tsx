@@ -22,7 +22,8 @@ describe("subagent state in the run", () => {
 
   it("tells the person when the provider could not offer subagents", () => {
     const s = sse(emptyRun, "subagent_unavailable", { reason: "provider" });
-    expect(s.notices).toEqual(["This provider runs its own tools, so the turn ran without subagents."]);
+    expect(s.notices).toEqual(["Subagents are not available with this provider, so the turn ran without them."]);
+    expect(sse(s, "subagent_unavailable", { reason: "provider" }).notices).toHaveLength(1); // not repeated
   });
 
   it("settles running children when the run stops, so none is left looking live", () => {
