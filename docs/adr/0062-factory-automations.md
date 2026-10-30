@@ -1,6 +1,6 @@
 # ADR 0062: Automações agendadas e gatilhos por evento
 
-Status: aceita (implementação no PR de automações). Conceitos de: docs.warp.dev/factories/automations (gatilho + filtros + agente, semântica de casamento, filtro de payload, filtros não controlam acesso); desenho próprio.
+Status: aceita (entregue no PR #322). Conceitos de: docs.warp.dev/factories/automations (gatilho + filtros + agente, semântica de casamento, filtro de payload, filtros não controlam acesso); desenho próprio.
 
 ## Decisão
 - **Automação** = {id, `enabled`, `agent` (o agente da definição que trata; padrão o foreman), `triggers[]`, prompt do dono}. Arquivo `automations/<id>/automation.md` (frontmatter + corpo, o espaço reservado pelo ADR 0056), versionado, **sem segredo**; ela só **filtra e roteia**: o que o agente pode fazer continua nas permissões do agente (ADR 0054/0055), não no filtro.
