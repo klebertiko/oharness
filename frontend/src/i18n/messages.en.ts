@@ -209,6 +209,21 @@ export const en = {
   "run.budgetExceeded": "budget_exceeded — stopped at {used} of {max} tok",
   "run.stoppedAtCeiling": "Run stopped at the token ceiling.",
   "run.notice.ceiling": "The turn reached its token ceiling. Raise the ceiling or reuse your instruction when ready.",
+
+  "subagents.title": "Subagents",
+  "subagents.state.running": "running",
+  "subagents.state.done": "done",
+  "subagents.state.cancelled": "cancelled",
+  "subagents.state.error": "error",
+  "subagents.chars": "{n} chars",
+  "subagents.cancel": "Cancel",
+  "subagents.cancelAria": "Cancel subagent {task}",
+  "subagents.cancel.finished": "This subagent already finished, so nothing was cancelled.",
+  "subagents.cancel.failed": "The cancel did not go through. Try again.",
+  "subagents.toggle.on": "Subagents on",
+  "subagents.toggle.off": "Subagents off",
+  "subagents.toggle.title": "Let this turn hand tasks to subagents",
+  "subagents.unavailable": "This provider runs its own tools, so the turn ran without subagents.",
 };
 
 export type MessageKey = keyof typeof en;

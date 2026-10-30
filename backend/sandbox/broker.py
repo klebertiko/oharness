@@ -200,6 +200,9 @@ class ToolBroker:
             self.provider_called = True
             if preset_result:
                 prompt += '\n' + preset_result
+            if self.options.subagents and not hasattr(adapter, 'stream_turn'):
+                # Asked for, but this provider runs its own loop: say so instead of silently ignoring the choice.
+                yield {'kind': 'subagent_unavailable', 'reason': 'provider'}
             async for event in adapter.stream_events(prompt, config):
                 yield event
             return

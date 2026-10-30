@@ -35,5 +35,6 @@ Two rules shape every word below:
 | **Activity** | Every run in one list, with Continue as a new run. |
 | **Design system** | The tokens, components and rules the interface follows: [`docs/design-system/`](design-system/README.md). |
 | **Nilo** | The OHarness assistant. |
+| **Subagent** | A task Nilo hands to a helper that works alongside it during one turn. The run detail shows Nilo and each subagent with its live state, and Cancel stops one subagent without ending the turn or the others. |
 
 Code may keep older words (`example` in the `/bundles/examples` route, `copilot` in some module names); only text a person reads follows this glossary. Retired UI wording is mapped in the Copy standard of `CONTEXT.md`.

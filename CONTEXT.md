@@ -124,6 +124,10 @@ _Avoid_: history log, executions
 The OHarness assistant: it drafts harnesses in Studio and answers in chat. Not a role in the crew.
 _Avoid_: Copilot (a Microsoft brand; never in UI copy, docs or examples), AI assistant, bot
 
+**Subagent**:
+A helper Nilo starts for one task during a turn. It answers once, has no tools of its own and cannot start others. Cancelling one subagent leaves the turn and its siblings running; stopping the run ends all of them.
+_Avoid_: worker, child agent (in UI copy), Agent (that is a crew role)
+
 **Studio**:
 The place where a person designs a harness: overview, canvas, inspector.
 _Avoid_: designer, builder

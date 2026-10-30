@@ -5,6 +5,24 @@ import { useSubagentStore } from "@/store/subagentStore";
 import { axeViolations } from "@/test/axe";
 import { SubagentToggle } from "./SubagentToggle";
 
+describe("subagent choice is remembered", () => {
+  afterEach(() => {
+    localStorage.clear();
+    useSubagentStore.setState({ enabled: false });
+  });
+
+  it("is saved when set, and only a literal true is trusted when read back", async () => {
+    useSubagentStore.getState().setEnabled(true);
+    expect(JSON.parse(localStorage.getItem("oh.subagents.v1") ?? "{}").state.enabled).toBe(true);
+    localStorage.setItem("oh.subagents.v1", JSON.stringify({ state: { enabled: "yes" }, version: 1 }));
+    await useSubagentStore.persist.rehydrate();
+    expect(useSubagentStore.getState().enabled).toBe(false);
+    localStorage.setItem("oh.subagents.v1", JSON.stringify({ state: { enabled: true }, version: 1 }));
+    await useSubagentStore.persist.rehydrate();
+    expect(useSubagentStore.getState().enabled).toBe(true);
+  });
+});
+
 describe("SubagentToggle", () => {
   afterEach(() => {
     cleanup();
