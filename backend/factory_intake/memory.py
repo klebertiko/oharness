@@ -68,12 +68,12 @@ class MemoryFactory:
                 raise FactoryError("already_finished", f"work item is {item.state}")
             return self._set(item, state="cancelled", claim=None)
 
-    def claim(self, item_id: str, holder: str) -> WorkItemView:
+    def claim(self, item_id: str, holder: str, worktree_ref: str | None = None) -> WorkItemView:
         with self._lock:
             item = self._get(item_id)
             if item.state not in CLAIMABLE:
                 raise FactoryError("not_claimable", f"work item is {item.state}")
-            return self._set(item, state="claimed", claim=Claim(holder=holder))
+            return self._set(item, state="claimed", claim=Claim(holder=holder, worktree_ref=worktree_ref))
 
     def release(self, item_id: str, result: ReleaseResult) -> WorkItemView:
         with self._lock:
