@@ -28,7 +28,7 @@ def add_parser(sub) -> argparse.ArgumentParser:
     create.add_argument("--scope", action="append", choices=("work:read", "work:write", "work:claim"), required=True)
     create.add_argument("--out", type=Path, required=True, help="file the token is written to (mode 0600, must not exist); it is never printed")
     create.add_argument("--kind", choices=("cli", "mcp", "webhook", "manual"), default="cli", help="the source.kind its work is recorded under")
-    actions.add_parser("list", help="client names")
+    actions.add_parser("check", help="whether a client with this name exists").add_argument("name")
     revoke = actions.add_parser("revoke")
     revoke.add_argument("name")
     auto = group.add_parser("automation", help="scheduled and event automations (ADR 0062)")
@@ -97,9 +97,10 @@ def run(args: argparse.Namespace) -> int:
                 return EXIT_USAGE if isinstance(exc, ValueError) else EXIT_FAILED
             print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))
             return EXIT_OK
-        if args.token_cmd == "list":
-            print(json.dumps({"clients": clients.names()}))
-            return EXIT_OK
+        if args.token_cmd == "check":
+            exists = args.name in clients.names()
+            print(json.dumps({"exists": exists}))
+            return EXIT_OK if exists else EXIT_FAILED
         if args.token_cmd == "revoke":
             ok = clients.revoke(args.name)
             print(json.dumps({"revoked": ok}))

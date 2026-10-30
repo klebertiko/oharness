@@ -58,7 +58,7 @@ export function RunBinding() {
                     }`}
                   >
                     <span
-                      className={`t-meta grid h-[16px] w-[16px] flex-none place-items-center rounded-none ${
+                      className={`t-meta grid h-4 w-4 flex-none place-items-center rounded-none ${
                         i === 0 ? "bg-signal text-signal-ink" : "bg-sub-400 text-ink-dim"
                       }`}
                     >
@@ -124,7 +124,7 @@ export function RunBinding() {
 
           {broken.length > 0 && (
             <p className="t-body mt-2.5 flex items-start gap-1.5 text-warn-text">
-              <TriangleAlert size={12} strokeWidth={1.8} className="mt-[2px] flex-none" />
+              <TriangleAlert size={12} strokeWidth={1.8} className="mt-0.5 flex-none" />
               {broken.length === 1
                 ? `Step ${bound.indexOf(broken[0]) + 1} will be skipped — ${providerReadiness(broken[0]).label.toLowerCase()}.`
                 : `${broken.length} steps will be skipped.`}
@@ -198,7 +198,7 @@ function Icon({
       aria-label={label}
       title={label}
       disabled={disabled}
-      className="grid h-[18px] w-[18px] place-items-center rounded-none text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink-dim disabled:opacity-30"
+      className="grid h-4.5 w-4.5 place-items-center rounded-none text-ink-mute transition-colors hover:bg-sub-300 hover:text-ink-dim disabled:opacity-30"
     >
       {children}
     </button>
