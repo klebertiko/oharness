@@ -200,6 +200,9 @@ class ToolBroker:
             self.provider_called = True
             if preset_result:
                 prompt += '\n' + preset_result
+            if self.options.subagents and not hasattr(adapter, 'stream_turn'):
+                # Asked for, but this provider runs its own loop: say so instead of silently ignoring the choice.
+                yield {'kind': 'subagent_unavailable', 'reason': 'provider'}
             async for event in adapter.stream_events(prompt, config):
                 yield event
             return
@@ -231,6 +234,8 @@ class ToolBroker:
                 detail = exc.response.text.lower()
                 if tools and exc.response.status_code in {400, 404, 422} and any(word in detail for word in ('tool', 'function')) and any(word in detail for word in ('not support', 'unsupported', 'unrecognized', 'unknown')):
                     unsupported = True
+                    if self.options.subagents:
+                        yield {'kind': 'subagent_unavailable', 'reason': 'provider'}
                     self.capabilities = capabilities(str(self.root), config.adapter, unsupported=True)
                     yield {'kind': 'capabilities', **self.capabilities}
                     continue

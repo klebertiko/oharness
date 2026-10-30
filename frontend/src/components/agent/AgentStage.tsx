@@ -564,7 +564,7 @@ export function AgentStage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pb-2.5 pt-1">
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
-            <SubagentToggle />
+            <SubagentToggle unavailable={enabled ? "harness" : permission.mode === "plan" ? "plan" : undefined} />
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {enabled && workspace?.rootPath && <WorktreeToggle disabled={live} />}

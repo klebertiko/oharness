@@ -82,6 +82,9 @@ for (const theme of ["dark", "light"]) {
     await sheet.getByText("audit", { exact: true }).waitFor();
     note(puts.length === 1 && puts[0][0] === "audit" && puts[0][1].argv[0] === "/usr/bin/audit", `${theme}: the hook is saved`, JSON.stringify(puts));
     await sheet.getByRole("button", { name: "Edit hook audit" }).click();
+    // Edit moves focus to the program field on a timer: wait for it, so a slow runner cannot steal focus mid-fill.
+    await sheet.getByText("Editing audit. Saving replaces it.").waitFor();
+    await page.waitForFunction(() => document.activeElement?.id?.endsWith("-prog"));
     await sheet.getByLabel("Timeout (seconds)").fill("2");
     await sheet.getByRole("button", { name: "Save hook" }).click();
     await sheet.getByText(/2s/).waitFor();
