@@ -1,0 +1,11 @@
+{
+ "type": "event_callback",
+ "event_id": "Ev2",
+ "event": {
+  "type": "app_mention",
+  "bot_id": "B1",
+  "text": "<@UBOT> loop",
+  "ts": "1700000001.000100",
+  "channel": "C1"
+ }
+}
