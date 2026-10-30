@@ -4,7 +4,7 @@ from __future__ import annotations
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from database import SessionLocal
 from factory import stages

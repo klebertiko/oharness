@@ -21,7 +21,6 @@ from factory.router import router as factory_router
 from secret_store.factory import build_secrets_store
 from providers.store import load_all as load_provider_connections
 import models  # noqa: F401 — register ORM tables for create_all
-import factory.orm  # noqa: F401 — factory_* tables
 
 
 @asynccontextmanager
