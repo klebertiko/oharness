@@ -56,6 +56,10 @@ export interface NodeData {
       node_error) when its real usage is at/over this limit, and warns,
       non-blocking, at 80% of it. `undefined`/`0` means no limit. */
   tokenLimit?: number;
+  /** Flow advice input (ADR 0065): marks this step as unsafe. Evidence only — the run still executes it. */
+  unsafe?: boolean;
+  /** Flow advice input (ADR 0065): text whose appearance in the last result means this node's goal is met. */
+  goal?: string;
   /** MCP server transport hint. */
   mcpCommand?: string;
   mcpUrl?: string;

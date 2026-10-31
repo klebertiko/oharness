@@ -50,6 +50,7 @@ function sidecar(rows, probes = {}) {
     if (key === "GET /usage/summary") return { body: usage };
     if (key === "GET /bundles/default") return { body: fixture };
     if (key === "GET /health") return { body: { status: "ok" } };
+    if (key === "GET /flow/config") return { body: { enabled: false } };
     if (key === "GET /harnesses/") return { body: [] };
     if (key === "GET /cowork/projects") return { body: { projects: [] } };
     if (key === "GET /bundles/examples") return { body: { examples: [] } };

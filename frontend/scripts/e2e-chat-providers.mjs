@@ -44,7 +44,7 @@ await context.route('**/*', async route => {
     return route.fulfill({ contentType: 'text/event-stream', body: frames.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('') });
   }
   const responses = {
-    'GET /health': { status: 'ok' }, 'GET /bundles/default': fixture,
+    'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /bundles/default': fixture,
     'GET /cowork/projects': { projects: [] }, 'GET /harnesses/': [],
     'GET /bundles/examples': { examples: [] },
     'GET /providers/connections': { connections: [{ id: 'ollama-local', provider: 'ollama', label: 'QA local', enabled: true, residence: 'local', endpoint: 'http://127.0.0.1:11434', secretRef: null, defaultModel: 'qa-default' }] },
