@@ -120,3 +120,27 @@ def test_a_copy_never_writes_through_a_linked_destination(tmp_path):
     _link(work / 'door', outside)
     result = result_of(run_exec(work, ['cp', 'a.txt', 'door'], mode='full'))
     assert result['exit_code'] == 1 and not (outside / 'a.txt').exists()
+
+
+def test_no_write_goes_through_a_linked_directory_in_the_path(tmp_path):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    work = tmp_path / 'work'
+    work.mkdir()
+    (work / 'a.txt').write_text('a')
+    _link(work / 'door', outside)
+    for argv in (['touch', 'door/n.txt'], ['mkdir', '-p', 'door/sub'], ['cp', 'a.txt', 'door/a.txt'], ['mv', 'a.txt', 'door/a.txt']):
+        result = result_of(run_exec(work, argv, mode='full'))
+        assert result['exit_code'] == 1 and 'link' in result['result'], argv
+    assert list(outside.iterdir()) == [] and (work / 'a.txt').exists()
+
+
+def test_a_linked_directory_is_not_copied_as_a_source(tmp_path):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'secret.txt').write_text('s')
+    work = tmp_path / 'work'
+    work.mkdir()
+    _link(work / 'door', outside)
+    result = result_of(run_exec(work, ['cp', '-r', 'door', 'copy'], mode='full'))
+    assert result['exit_code'] == 1 and not (work / 'copy').exists()

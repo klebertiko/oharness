@@ -37,6 +37,19 @@ def _is_link(path) -> bool:
     return os.path.islink(path) or os.path.isjunction(path)
 
 
+def _guard(program: str, cwd: Path, name: str) -> Path:
+    """`cwd / name`, refused when it or any directory on the way to it (below `cwd`) is a link or junction: nothing is
+    written, or copied from, through one. A path that leaves `cwd` was approved by the person, so only its last part is checked."""
+    target = Path(os.path.normpath(cwd / name))
+    inside = target.is_relative_to(cwd)
+    for part in (target, *target.parents) if inside else (target,):
+        if inside and part == Path(cwd):
+            break
+        if _is_link(part):
+            raise _Failure(f"{program}: refusing to go through the link '{part.name}'")
+    return target
+
+
 def _holds_link(tree: Path) -> bool:
     """True when anything inside `tree` is a symbolic link or a Windows junction (never followed)."""
     for directory, names, files in os.walk(tree, followlinks=False):
@@ -50,7 +63,7 @@ def _mkdir(cwd: Path, flags: set[str], operands: list[str]) -> list[str]:
         raise _Failure('mkdir: missing operand', 2)
     out = []
     for name in operands:
-        target = cwd / name
+        target = _guard('mkdir', cwd, name)
         if target.exists() and 'p' not in flags:
             raise _Failure(f"mkdir: cannot create directory '{name}': File exists")
         try:
@@ -66,7 +79,7 @@ def _touch(cwd: Path, flags: set[str], operands: list[str]) -> list[str]:
     if not operands:
         raise _Failure('touch: missing file operand', 2)
     for name in operands:
-        target = cwd / name
+        target = _guard('touch', cwd, name)
         if target.exists():
             os.utime(target)
         elif 'c' not in flags:
@@ -79,14 +92,12 @@ def _touch(cwd: Path, flags: set[str], operands: list[str]) -> list[str]:
 
 def _pairs(cwd: Path, program: str, sources: list[str], dest_name: str) -> list[tuple[Path, Path]]:
     """(source, target) pairs: into an existing directory, `dir/<name of each source>`; otherwise the single target itself."""
-    dest = cwd / dest_name
+    dest = _guard(program, cwd, dest_name)
     if dest.is_dir():
-        if _is_link(dest):
-            raise _Failure(f"{program}: refusing to write through the link '{dest_name}'")
-        return [(cwd / s, dest / Path(s.rstrip('/\\')).name) for s in sources]
+        return [(_guard(program, cwd, s), _guard(program, cwd, os.path.join(dest_name, Path(s.rstrip('/\\')).name))) for s in sources]
     if len(sources) > 1:
         raise _Failure(f"{program}: target '{dest_name}' is not a directory")
-    return [(cwd / sources[0], dest)]
+    return [(_guard(program, cwd, sources[0]), dest)]
 
 
 def _transfer(program: str):
@@ -98,12 +109,10 @@ def _transfer(program: str):
             shown = source.name
             if not os.path.lexists(source):
                 raise _Failure(f"{program}: cannot stat '{shown}': No such file or directory")
-            if _is_link(target):
-                raise _Failure(f"{program}: refusing to write through the link '{target.name}'")
             if 'n' in flags and os.path.lexists(target):
                 continue
             if program == 'cp':
-                if source.is_dir() and not source.is_symlink():
+                if source.is_dir():
                     if not flags & {'r', 'R'}:
                         raise _Failure(f"cp: -r not specified; omitting directory '{shown}'")
                     if _holds_link(source):
