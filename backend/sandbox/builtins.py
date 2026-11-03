@@ -33,6 +33,18 @@ def _split(program: str, args: list[str]) -> tuple[set[str], list[str]]:
     return flags, operands
 
 
+def _is_link(path) -> bool:
+    return os.path.islink(path) or os.path.isjunction(path)
+
+
+def _holds_link(tree: Path) -> bool:
+    """True when anything inside `tree` is a symbolic link or a Windows junction (never followed)."""
+    for directory, names, files in os.walk(tree, followlinks=False):
+        if any(_is_link(os.path.join(directory, name)) for name in (*names, *files)):
+            return True
+    return False
+
+
 def _mkdir(cwd: Path, flags: set[str], operands: list[str]) -> list[str]:
     if not operands:
         raise _Failure('mkdir: missing operand', 2)
@@ -69,6 +81,8 @@ def _pairs(cwd: Path, program: str, sources: list[str], dest_name: str) -> list[
     """(source, target) pairs: into an existing directory, `dir/<name of each source>`; otherwise the single target itself."""
     dest = cwd / dest_name
     if dest.is_dir():
+        if _is_link(dest):
+            raise _Failure(f"{program}: refusing to write through the link '{dest_name}'")
         return [(cwd / s, dest / Path(s.rstrip('/\\')).name) for s in sources]
     if len(sources) > 1:
         raise _Failure(f"{program}: target '{dest_name}' is not a directory")
@@ -84,12 +98,16 @@ def _transfer(program: str):
             shown = source.name
             if not os.path.lexists(source):
                 raise _Failure(f"{program}: cannot stat '{shown}': No such file or directory")
+            if _is_link(target):
+                raise _Failure(f"{program}: refusing to write through the link '{target.name}'")
             if 'n' in flags and os.path.lexists(target):
                 continue
             if program == 'cp':
                 if source.is_dir() and not source.is_symlink():
                     if not flags & {'r', 'R'}:
                         raise _Failure(f"cp: -r not specified; omitting directory '{shown}'")
+                    if _holds_link(source):
+                        raise _Failure(f"cp: '{shown}' holds a symbolic link or junction, which is not copied here")
                     shutil.copytree(source, target, symlinks=True, dirs_exist_ok=True)
                 else:
                     shutil.copy2(source, target)

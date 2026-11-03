@@ -82,3 +82,41 @@ def test_a_program_that_is_not_installed_says_so(tmp_path):
 def test_a_real_program_still_runs_normally(tmp_path):
     result = result_of(run_exec(tmp_path, [sys.executable, '--version'], mode='full'))
     assert result['exit_code'] == 0 and 'Python' in result['result']
+
+
+def _link(link, target):
+    """A symlink, or a junction on Windows when the account may not create symlinks; skips when neither can be made."""
+    import os
+    import subprocess
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return
+    except OSError:
+        if os.name != 'nt':
+            pytest.skip('cannot create a symbolic link here')
+    made = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], capture_output=True, check=False)  # nosemgrep
+    if made.returncode != 0:
+        pytest.skip('cannot create a symbolic link or a junction here')
+
+
+def test_a_recursive_copy_refuses_a_tree_that_holds_a_link_to_a_directory(tmp_path):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'secret.txt').write_text('s')
+    work = tmp_path / 'work'
+    (work / 'src').mkdir(parents=True)
+    _link(work / 'src' / 'door', outside)
+    result = result_of(run_exec(work, ['cp', '-r', 'src', 'dst']))
+    assert result['exit_code'] == 1 and 'link' in result['result']
+    assert not (work / 'dst').exists()
+
+
+def test_a_copy_never_writes_through_a_linked_destination(tmp_path):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    work = tmp_path / 'work'
+    work.mkdir()
+    (work / 'a.txt').write_text('a')
+    _link(work / 'door', outside)
+    result = result_of(run_exec(work, ['cp', 'a.txt', 'door'], mode='full'))
+    assert result['exit_code'] == 1 and not (outside / 'a.txt').exists()
