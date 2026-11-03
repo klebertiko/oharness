@@ -224,6 +224,19 @@ class BudgetConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class FlowConfig(Base):
+    """Singleton row (id='global') -- the default of the Flow switch (ADR 0065).
+
+    Off unless someone turned it on; a run's own `flow` setting overrides it.
+    """
+
+    __tablename__ = "flow_config"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default="global")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class ToolHook(Base):
     """A pre-tool hook (`sandbox.hooks`): a program that must exit 0 before a tool runs.
 

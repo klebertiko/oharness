@@ -58,6 +58,7 @@ async function session(theme, { failDefault = false, imports = mine } = {}) {
       "GET /harnesses/": [],
       "GET /bundles/examples": { examples: [] },
       "GET /providers/connections": { connections: [{ id: "ollama-local", provider: "ollama", label: "QA local", enabled: true, residence: "local", endpoint: "http://127.0.0.1:11434", secretRef: null, defaultModel: "qa-default" }] },
+      "GET /flow/config": { enabled: false },
       "GET /usage/summary": { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, byConnection: [], bySource: [], budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" } },
     };
     if (!Object.hasOwn(responses, key)) return route.fulfill({ status: 501, contentType: "application/json", body: "{}" });

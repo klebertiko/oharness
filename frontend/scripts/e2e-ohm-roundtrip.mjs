@@ -33,6 +33,7 @@ await context.route("http://127.0.0.1:8000/**", async route => {
     "GET /bundles/examples": { examples: [] },
     "GET /harnesses/": [],
     "GET /health": { status: "ok" },
+    "GET /flow/config": { enabled: false },
     "GET /cowork/projects": { projects: [] },
     "GET /providers/connections": { connections: [] },
   };
