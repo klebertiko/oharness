@@ -1,0 +1,395 @@
+{
+  "$defs": {
+    "Claim": {
+      "additionalProperties": false,
+      "properties": {
+        "holder": {
+          "title": "Holder",
+          "type": "string"
+        },
+        "worktree_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worktree Ref"
+        }
+      },
+      "required": [
+        "holder"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "github",
+            "gitlab",
+            "azdo",
+            "linear",
+            "jira",
+            "slack",
+            "teams",
+            "webhook",
+            "mcp",
+            "cli",
+            "schedule",
+            "conversation",
+            "manual",
+            "monitor"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "description": "id of the issue/PR/message in the source system",
+          "maxLength": 200,
+          "title": "Ref",
+          "type": "string"
+        },
+        "thread_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "opaque handle the connector uses to answer in the same thread",
+          "title": "Thread Ref"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "WorkItemView": {
+      "additionalProperties": false,
+      "properties": {
+        "claim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Claim"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cost_tokens": {
+          "default": 0,
+          "title": "Cost Tokens",
+          "type": "integer"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "pr_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr Url"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "running",
+            "awaiting_human",
+            "waiting_merge",
+            "claimed",
+            "parked",
+            "done",
+            "cancelled",
+            "failed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "state",
+        "source",
+        "title",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "WorkItemView",
+      "type": "object"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://oharness.dev/schema/factory.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "submit"
+        },
+        "item": {
+          "$ref": "#/$defs/WorkItemView"
+        },
+        "outcome": {
+          "enum": [
+            "created",
+            "followup",
+            "replay"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "outcome",
+        "item"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "list"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkItemView"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "items"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "inbox"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkItemView"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "items"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "status"
+        },
+        "item": {
+          "$ref": "#/$defs/WorkItemView"
+        }
+      },
+      "required": [
+        "command",
+        "item"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "comment"
+        },
+        "ok": {
+          "const": true
+        }
+      },
+      "required": [
+        "command",
+        "ok"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "cancel"
+        },
+        "item": {
+          "$ref": "#/$defs/WorkItemView"
+        }
+      },
+      "required": [
+        "command",
+        "item"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "claim"
+        },
+        "item": {
+          "$ref": "#/$defs/WorkItemView"
+        },
+        "worktree": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "item",
+        "worktree"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "release"
+        },
+        "item": {
+          "$ref": "#/$defs/WorkItemView"
+        }
+      },
+      "required": [
+        "command",
+        "item"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "metrics"
+        },
+        "metrics": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "command",
+        "metrics"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "oharness factory --json: one object on stdout per command; failures are the `error` definition on stderr"
+}

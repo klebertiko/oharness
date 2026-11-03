@@ -1,0 +1,19 @@
+{
+ "object_kind": "note",
+ "user": {
+  "username": "alice"
+ },
+ "project": {
+  "path_with_namespace": "grp/proj"
+ },
+ "object_attributes": {
+  "id": 77,
+  "note": "@payments please look",
+  "noteable_type": "MergeRequest",
+  "url": "https://gitlab.example/grp/proj/-/merge_requests/5#note_77"
+ },
+ "merge_request": {
+  "iid": 5,
+  "title": "Add retry"
+ }
+}

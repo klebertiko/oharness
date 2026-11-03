@@ -17,6 +17,7 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 
 const BASE = process.env.BASE || "http://localhost:3000";
@@ -66,6 +67,7 @@ for (const theme of ["dark", "light"]) {
       } catch (e) { errors.push(`act: ${e.message.slice(0, 150)}`); }
       // The Next.js dev indicator is not part of the product; keep it out of the audit and the captures.
       await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
+      await settleForAxe(page);
       await page.addScriptTag({ content: axeSource });
       const axe = await page.evaluate(async () => {
         const r = await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] });

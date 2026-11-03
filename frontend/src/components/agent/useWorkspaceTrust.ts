@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tr } from "@/i18n/store";
 import { chatToolsApi } from "@/lib/chatToolsApi";
 
-const SAVE_FAILED = "Couldn't save workspace trust; the workspace stays untrusted.";
 
 /**
  * Whether the person trusted the selected workspace. The sidecar stores and
@@ -36,7 +36,7 @@ export function useWorkspaceTrust(root: string | null, enabled: boolean) {
       const stored = await chatToolsApi.setTrust(root, next);
       setState({ root, trusted: stored.trusted === true });
     } catch {
-      setError(SAVE_FAILED);
+      setError(tr("chat.trust.saveFailed"));
     }
   }, [root]);
 

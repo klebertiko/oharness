@@ -1,0 +1,20 @@
+{
+ "action": "create",
+ "type": "Issue",
+ "data": {
+  "id": "i2",
+  "identifier": "ENG-13",
+  "title": "Add cache",
+  "description": "details",
+  "creator": {
+   "name": "Bob"
+  },
+  "labels": [
+   {
+    "name": "Factory"
+   }
+  ]
+ },
+ "url": "https://linear.app/x/issue/ENG-13",
+ "webhookTimestamp": 1700000000000
+}

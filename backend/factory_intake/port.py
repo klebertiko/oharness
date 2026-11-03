@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 # Vocabulary of the foundation (package A, ADR 0053): `source.kind` is the connector, `status` the item's lifecycle. `done` is set only by an observed
 # merge or a person's confirmation, never by intake; a release returns an item to review, not to done.
@@ -40,6 +40,10 @@ class WorkItemDraft(BaseModel):
     labels: tuple[Annotated[str, StringConstraints(max_length=100)], ...] = Field(default=(), max_length=50)
     requested_by: str = Field(default="", max_length=200, description="opaque author id as the source reports it; never an authorization")
     idempotency_key: str = Field(min_length=1, max_length=200)
+    agent: str | None = Field(default=None, max_length=100, description="the agent an automation routes this to (owner-set, not from the source)")
+    automation: str | None = Field(default=None, max_length=100, description="id of the automation that created the draft")
+    instructions: str = Field(default="", max_length=MAX_BODY, description="TRUSTED: the owner's automation prompt; `body` stays untrusted source text")
+    token_ceiling: int | None = Field(default=None, ge=1, description="token ceiling for the item's runs, from the automation's limits")
     is_reply: bool = Field(default=False, description="a message in an existing thread (a comment): if the thread's item is open it is added there as a comment")
 
 
@@ -82,8 +86,15 @@ class WorkItemView(BaseModel):
 class ReleaseResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    @field_validator("branch")
+    @classmethod
+    def _safe_ref(cls, value):
+        if value is not None and (".." in value or "//" in value or value.endswith((".lock", "/", "."))):
+            raise ValueError("not a valid branch name")
+        return value
+
     summary: str = Field(max_length=MAX_COMMENT)
-    branch: str | None = Field(default=None, max_length=200)
+    branch: str | None = Field(default=None, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")  # a plain ref name: never starts with "-", no spaces or shell characters
     status: Literal["needs_review", "abandoned"]  # a release never completes an item: review is a person's checkpoint, abandoning re-queues it
 
 
@@ -124,8 +135,8 @@ class FactoryPort(Protocol):
 
     def cancel(self, item_id: str) -> WorkItemView: ...
 
-    def claim(self, item_id: str, holder: str) -> WorkItemView:
-        """Suspend the factory's own run and hand the item to a local session (state ``claimed``)."""
+    def claim(self, item_id: str, holder: str, worktree_ref: str | None = None) -> WorkItemView:
+        """Suspend the factory's own run and hand the item to a local session (state ``claimed``); ``worktree_ref`` names the local worktree."""
 
     def release(self, item_id: str, result: ReleaseResult) -> WorkItemView:
         """Give a claimed item back; it goes to review, never to merge."""

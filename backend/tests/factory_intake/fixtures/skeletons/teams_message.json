@@ -1,0 +1,12 @@
+{
+ "type": "message",
+ "id": "1700000000000",
+ "text": "<at>Payments</at> please triage",
+ "from": {
+  "id": "29:abc",
+  "name": "Alice"
+ },
+ "conversation": {
+  "id": "19:xyz@thread.tacv2"
+ }
+}

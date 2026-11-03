@@ -7,6 +7,8 @@ import styles from "@/components/canvas/canvas.module.css";
 import { PORTS } from "@/lib/ports";
 import { Panel } from "@/components/shell/Panel";
 import type { NodeTemplate, NodeType } from "@/lib/types";
+import { useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    The palette.
@@ -19,13 +21,24 @@ import type { NodeTemplate, NodeType } from "@/lib/types";
    like dragging the thing itself, not like picking from a menu.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/** The localized gloss for each palette block; a type without one falls back to the template text. */
+const DESCRIPTION: Partial<Record<NodeType, MessageKey>> = {
+  agent: "node.agent.desc",
+  gate: "node.gate.desc",
+  hitl: "node.hitl.desc",
+  skill: "node.skill.desc",
+  mcp: "node.mcp.desc",
+  tool: "node.tool.desc",
+};
+
 /** "1 in · 2 out" — the fact that decides whether a node can go where you want. */
-function portShape(type: NodeType) {
+function portShape(type: NodeType, t: (key: MessageKey, vars?: Record<string, string | number>) => string) {
   const { in: i, out: o } = PORTS[type];
-  return `${i.length} in · ${o.length} out`;
+  return t("sidebar.ports", { in: i.length, out: o.length });
 }
 
 function TemplateRow({ template }: { template: NodeTemplate }) {
+  const t = useT();
   const type = template.type as NodeType;
   const Icon = ROLE_ICON[type];
   const add = () => {
@@ -53,10 +66,10 @@ function TemplateRow({ template }: { template: NodeTemplate }) {
     <button
       type="button"
       draggable
-      aria-label={`Add ${template.label}`}
+      aria-label={t("sidebar.palette.add", { label: template.label })}
       onClick={add}
       onDragStart={onDragStart}
-      title={`Click or drag to add — ${template.description}`}
+      title={t("sidebar.palette.tooltip", { description: DESCRIPTION[type] ? t(DESCRIPTION[type]) : template.description })}
       className={`${styles.paletteRow} group relative flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left transition-colors hover:bg-sub-200`}
     >
       <span
@@ -69,7 +82,7 @@ function TemplateRow({ template }: { template: NodeTemplate }) {
 
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="t-title truncate text-ink-dim group-hover:text-ink">{template.label}</span>
-        <span className="t-meta truncate text-ink-mute">{portShape(type)}</span>
+        <span className="t-meta truncate text-ink-mute">{portShape(type, t)}</span>
       </span>
 
       <GripVertical
@@ -84,10 +97,11 @@ function TemplateRow({ template }: { template: NodeTemplate }) {
 }
 
 export function NodePalette() {
+  const t = useT();
   return (
-    <Panel title="Blocks" meta="click or drag" className="h-full">
+    <Panel title={t("sidebar.palette.title")} meta={t("sidebar.palette.meta")} className="h-full">
       <p className="px-2 pb-2 pt-1 text-body text-ink-mute">
-        Add a block, then connect its named ports.
+        {t("sidebar.palette.intro")}
       </p>
       <div className="space-y-0.5 px-1">
         {NODE_TEMPLATES.map((template) => (

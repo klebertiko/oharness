@@ -1,0 +1,22 @@
+{
+ "object_kind": "issue",
+ "user": {
+  "username": "bob"
+ },
+ "project": {
+  "path_with_namespace": "grp/proj"
+ },
+ "object_attributes": {
+  "id": 900,
+  "iid": 12,
+  "action": "open",
+  "title": "Crash",
+  "description": "@payments fix it",
+  "url": "https://gitlab.example/grp/proj/-/issues/12"
+ },
+ "labels": [
+  {
+   "title": "bug"
+  }
+ ]
+}

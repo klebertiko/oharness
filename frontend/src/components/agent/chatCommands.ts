@@ -1,3 +1,4 @@
+import { tr } from "@/i18n/store";
 import { shellNavCommands } from "@/components/shell/commands";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useThreadStore } from "@/store/threadStore";
@@ -18,8 +19,8 @@ export interface ChatCommand {
   description: string;
   /** Contract §1: Command = UI action · Skill = insert text · Tool = run with a preset. */
   kind: "Command" | "Skill" | "Tool";
-  /** What selecting it does, in the user's words — never "executar" for a Skill. */
-  hint?: "inserir" | "executar";
+  /** What selecting it does, in the user's words — never "run" for a Skill. */
+  hint?: "insert" | "run";
   run?: () => void;
   /** Skill text available synchronously (bundled with the loaded harness). */
   draft?: string;
@@ -76,19 +77,19 @@ export function splitArgv(text: string): { argv: string[]; shellSyntax: string[]
 export function chatCommands(skills: unknown, tools?: ChatToolsInput): ChatCommand[] {
   const nav = shellNavCommands();
   const aliases = [
-    ["studio", "go:studio", "Open the harness editor"],
-    ["harness", "harness:library", "Browse or import an .ohm harness"],
-    ["providers", "go:providers", "Manage connections and models"],
+    ["studio", "go:studio", tr("chat.cmd.studio")],
+    ["harness", "harness:library", tr("chat.cmd.harness")],
+    ["providers", "go:providers", tr("chat.cmd.providers")],
   ];
   const commands: ChatCommand[] = [
-    { id: "new", name: "new", description: "Start a new chat; keep your history", kind: "Command", run: () => useThreadStore.getState().startNewChat() },
+    { id: "new", name: "new", description: tr("chat.cmd.new"), kind: "Command", run: () => useThreadStore.getState().startNewChat() },
     ...aliases.map(([name, id, description]) => ({ id, name, description, kind: "Command" as const, run: nav.find(command => command.id === id)!.run })),
-    { id: "shortcuts", name: "shortcuts", description: "Show keyboard shortcuts", kind: "Command", run: () => useShellStore.getState().setKeymapOpen(true) },
+    { id: "shortcuts", name: "shortcuts", description: tr("chat.cmd.shortcuts"), kind: "Command", run: () => useShellStore.getState().setKeymapOpen(true) },
   ];
   if (skills && typeof skills === "object" && !Array.isArray(skills)) {
     for (const [name, content] of Object.entries(skills)) {
       if (typeof content !== "string" || !content.trim()) continue;
-      commands.push({ id: "skill:" + name, name: "skill:" + name, description: "From this harness · insert as an editable draft", kind: "Skill", hint: "inserir", draft: content });
+      commands.push({ id: "skill:" + name, name: "skill:" + name, description: tr("chat.cmd.skillFromHarness"), kind: "Skill", hint: "insert", draft: content });
     }
   }
   if (!tools?.workspace) return commands;
@@ -100,15 +101,15 @@ export function chatCommands(skills: unknown, tools?: ChatToolsInput): ChatComma
   for (const item of tools.items) {
     if (item.kind === "skill") {
       commands.push({
-        id: "ws-skill:" + item.path, name: "skill:" + item.name, kind: "Skill", hint: "inserir",
-        description: (item.description ? item.description + " · " : "") + `${ws.name} · ${item.source} · insert as an editable draft`,
+        id: "ws-skill:" + item.path, name: "skill:" + item.name, kind: "Skill", hint: "insert",
+        description: tr("chat.cmd.skillFromWorkspace", { prefix: item.description ? item.description + " · " : "", ws: ws.name, source: item.source }),
         loadDraft: () => readSkill(item.path),
       });
     } else if (item.kind === "command") {
       if (item.argv?.length && preset.exec) {
         commands.push({
-          id: "ws-cmd:" + item.path + ":" + item.name, name: item.name, kind: "Tool", hint: "executar",
-          description: `${item.argv.join(" ")} · ${item.cwd ?? ws.name} · ${item.source} · asks for approval`,
+          id: "ws-cmd:" + item.path + ":" + item.name, name: item.name, kind: "Tool", hint: "run",
+          description: tr("chat.cmd.toolItem", { argv: item.argv.join(" "), where: item.cwd ?? ws.name, source: item.source }),
           preset: { name: "exec", argv: item.argv, ...(item.cwd ? { cwd: item.cwd } : {}) },
         });
       } else if (!item.argv && preset.read) {
@@ -116,22 +117,22 @@ export function chatCommands(skills: unknown, tools?: ChatToolsInput): ChatComma
           id: "ws-command:" + item.path,
           name: "command:" + item.name,
           kind: "Skill",
-          hint: "inserir",
-          description: (item.description ? item.description + " · " : "") + `${ws.name} · ${item.source} · insert as an editable draft`,
+          hint: "insert",
+          description: tr("chat.cmd.skillFromWorkspace", { prefix: item.description ? item.description + " · " : "", ws: ws.name, source: item.source }),
           loadDraft: () => readSkill(item.path),
         });
       }
     }
   }
   if (preset.exec) {
-    commands.push({ id: "tool:exec", name: "exec", kind: "Tool", hint: "executar", takesArgs: true,
-      description: `Run a program in ${ws.name} (no shell; approval required) · /exec npm run test` });
+    commands.push({ id: "tool:exec", name: "exec", kind: "Tool", hint: "run", takesArgs: true,
+      description: tr("chat.cmd.exec", { ws: ws.name }) });
   }
   if (preset.read) {
-    commands.push({ id: "tool:read", name: "read", kind: "Tool", hint: "executar", takesArgs: true,
-      description: `Read a file from ${ws.name} into the conversation · /read README.md` });
-    commands.push({ id: "tool:ls", name: "ls", kind: "Tool", hint: "executar",
-      description: `List skills, commands and scripts found in ${ws.name}`, preset: { name: "discover" } });
+    commands.push({ id: "tool:read", name: "read", kind: "Tool", hint: "run", takesArgs: true,
+      description: tr("chat.cmd.read", { ws: ws.name }) });
+    commands.push({ id: "tool:ls", name: "ls", kind: "Tool", hint: "run",
+      description: tr("chat.cmd.ls", { ws: ws.name }), preset: { name: "discover" } });
   }
   return commands;
 }

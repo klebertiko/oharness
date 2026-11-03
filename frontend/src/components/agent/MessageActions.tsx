@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { useT } from "@/i18n/store";
 
 export function MessageActions({ content, onReuse }: { content: string; onReuse?: () => void }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
   const copy = async () => {
@@ -17,9 +19,9 @@ export function MessageActions({ content, onReuse }: { content: string; onReuse?
     }
   };
   return <div className="-ml-2 flex flex-wrap items-center gap-1">
-    <Button size="sm" variant="ghost" onClick={() => void copy()}>Copy message</Button>
-    {onReuse && <Button size="sm" variant="ghost" onClick={onReuse}>Reuse message</Button>}
-    {copied && <span role="status" className="text-meta text-ink-mute">Copied</span>}
-    {error && <span role="alert" className="text-meta text-fault-text">Could not copy. Select the message text and copy it manually.</span>}
+    <Button size="sm" variant="ghost" onClick={() => void copy()}>{t("chat.message.copy")}</Button>
+    {onReuse && <Button size="sm" variant="ghost" onClick={onReuse}>{t("chat.message.reuse")}</Button>}
+    {copied && <span role="status" className="text-meta text-ink-mute">{t("chat.message.copied")}</span>}
+    {error && <span role="alert" className="text-meta text-fault-text">{t("chat.message.copyFailed")}</span>}
   </div>;
 }

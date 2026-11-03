@@ -80,14 +80,19 @@ export function useChatHarness(sync = false) {
         settled.syncId = syncId;
         settled.key = "none";
       } else if (status.state === "ready") {
-        if (activeId !== bound.id) activate(bound.id);
-        else if (!enabled) setEnabled(true);
+        if (activeId !== bound.id) {
+          // A saved harness loads its graph first; if that fails the session stays as it was, and that is not a pick.
+          void activate(bound.id).then((ok) => {
+            if (!ok) settled.key = keyOf(harnessFromSession(useHarnessSessionStore.getState().enabled, useHarnessSessionStore.getState().activeBundle));
+          });
+        } else if (!enabled) setEnabled(true);
         settled.syncId = syncId;
         settled.key = bound.id;
       }
       return;
     }
-    if (sessionKey !== settled.key) {
+    // A saved harness is still loading: the session has not moved on its own.
+    if (sessionKey !== settled.key && !useHarnessLibraryStore.getState().activating) {
       // The session moved under an open chat: that is the person's pick.
       settled.key = sessionKey;
       if (thread) setThreadHarness(thread.id, sessionBinding, binding);
@@ -95,13 +100,27 @@ export function useChatHarness(sync = false) {
   }, [sync, sessionReady, running, thread?.id, bound && keyOf(bound), sessionKey, status.state]);
 
   const choose = (next: ThreadHarness) => {
+    const settle = () => {
+      if (next.kind === "harness") useHarnessRecentStore.getState().push(next.id);
+      if (thread) setThreadHarness(thread.id, next, binding);
+    };
+    useHarnessLibraryStore.getState().cancelActivation();
     if (next.kind === "none") setEnabled(false);
     else if (next.id === activeId) setEnabled(true);
-    else if (entries.some((e) => e.id === next.id)) activate(next.id);
-    else return;
-    if (next.kind === "harness") useHarnessRecentStore.getState().push(next.id);
-    if (thread) setThreadHarness(thread.id, next, binding);
+    else {
+      const entry = entries.find((e) => e.id === next.id);
+      if (!entry) return;
+      const loaded = activate(next.id);
+      if (entry.source === "saved") {
+        // Its graph is fetched first; the chat only moves to a harness that is really loaded.
+        void loaded.then((ok) => ok && settle());
+        return;
+      }
+    }
+    settle();
   };
 
-  return { binding, status, choose, canSend: sessionReady && (status.state === "none" || status.state === "ready") };
+  // A saved harness is run from its fetched graph: until the session holds it (or if it couldn't be loaded) the chat would run something else.
+  const notLoaded = binding.kind === "harness" && activeId !== binding.id && entries.some((e) => e.id === binding.id && e.source === "saved");
+  return { binding, status, choose, canSend: sessionReady && !notLoaded && (status.state === "none" || status.state === "ready") };
 }

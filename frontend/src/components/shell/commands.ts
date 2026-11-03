@@ -7,6 +7,8 @@ import {
   PowerOff,
   Workflow,
 } from "lucide-react";
+import { tr } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useShellStore, type RailSection } from "./shellStore";
 
@@ -39,17 +41,17 @@ const goTo = (section: RailSection) => () => useShellStore.getState().setSection
 
 /** Every destination in the rail, plus the harness on/off verbs. */
 export function shellNavCommands(): Command[] {
-  const nav: { section: RailSection; label: string; icon: LucideIcon; chord: string; keywords: string }[] = [
-    { section: "chats", label: "Go to Chats", icon: MessagesSquare, chord: "Alt+1", keywords: "conversation thread agent" },
-    { section: "studio", label: "Go to Studio", icon: Boxes, chord: "Alt+2", keywords: "canvas design harness graph" },
-    { section: "providers", label: "Go to Providers", icon: Plug, chord: "Alt+3", keywords: "models keys anthropic openai ollama" },
+  const nav: { section: RailSection; label: MessageKey; icon: LucideIcon; chord: string; keywords: string }[] = [
+    { section: "chats", label: "shell.cmd.goChats", icon: MessagesSquare, chord: "Alt+1", keywords: "conversation thread agent" },
+    { section: "studio", label: "shell.cmd.goStudio", icon: Boxes, chord: "Alt+2", keywords: "canvas design harness graph" },
+    { section: "providers", label: "shell.cmd.goProviders", icon: Plug, chord: "Alt+3", keywords: "models keys anthropic openai ollama" },
   ];
 
   return [
     ...nav.map(({ section, label, icon, chord, keywords }) => ({
       id: `go:${section}`,
-      label,
-      group: "Go to",
+      label: tr(label),
+      group: tr("shell.cmd.group.goTo"),
       icon,
       chord,
       keywords,
@@ -58,24 +60,24 @@ export function shellNavCommands(): Command[] {
     })),
     {
       id: "harness:library",
-      label: "Open harness library",
-      group: "Go to",
+      label: tr("shell.cmd.openLibrary"),
+      group: tr("shell.cmd.group.goTo"),
       icon: Workflow,
       keywords: "library bundle ohm import open harnesses",
       run: () => useShellStore.getState().setLibraryOpen(true),
     },
     {
       id: "harness:on",
-      label: "Turn harness on",
-      group: "Harness",
+      label: tr("shell.cmd.harnessOn"),
+      group: tr("shell.cmd.group.harness"),
       icon: Power,
       keywords: "enable govern policy",
       run: () => useHarnessSessionStore.getState().setEnabled(true),
     },
     {
       id: "harness:off",
-      label: "Turn harness off",
-      group: "Harness",
+      label: tr("shell.cmd.harnessOff"),
+      group: tr("shell.cmd.group.harness"),
       icon: PowerOff,
       keywords: "disable direct passthrough",
       run: () => useHarnessSessionStore.getState().setEnabled(false),

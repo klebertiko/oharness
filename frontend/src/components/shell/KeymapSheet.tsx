@@ -1,6 +1,8 @@
 "use client";
 import { chordCaps, useIsMac } from "./keys";
 import { KbdChord, Sheet } from "@/components/ui";
+import { useT } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 
 /**
  * The keymap sheet (`?`). Every chord the shell owns, in the order a person
@@ -8,61 +10,62 @@ import { KbdChord, Sheet } from "@/components/ui";
  * on a Mac. Nothing here is exclusive: each row also exists in the palette.
  */
 
-const GROUPS: { title: string; rows: [string, string][] }[] = [
+const GROUPS: { title: MessageKey; rows: [string, MessageKey][] }[] = [
   {
-    title: "Command",
+    title: "shell.keymap.group.command",
     rows: [
-      ["Mod+K", "Command palette"],
-      ["?", "This sheet"],
-      ["Escape", "Dismiss overlay"],
+      ["Mod+K", "shell.keymap.palette"],
+      ["?", "shell.keymap.thisSheet"],
+      ["Escape", "shell.keymap.dismiss"],
     ],
   },
   {
-    title: "Run",
+    title: "shell.keymap.group.run",
     rows: [
-      ["Mod+Enter", "Run harness"],
-      ["Mod+S", "Save harness"],
-      ["Mod+Shift+M", "Cycle execution mode"],
-      ["Shift+Tab", "Cycle chat permission mode (composer)"],
+      ["Mod+Enter", "shell.keymap.runHarness"],
+      ["Mod+S", "shell.keymap.saveHarness"],
+      ["Mod+Shift+M", "shell.keymap.cycleMode"],
+      ["Shift+Tab", "shell.keymap.cyclePermission"],
     ],
   },
   {
-    title: "Go to",
+    title: "shell.keymap.group.goTo",
     rows: [
-      ["Alt+1", "Chats"],
-      ["Alt+2", "Studio"],
-      ["Alt+3", "Providers"],
+      ["Alt+1", "shell.rail.chats"],
+      ["Alt+2", "shell.rail.studio"],
+      ["Alt+3", "shell.rail.providers"],
     ],
   },
   {
-    title: "Layout",
+    title: "shell.keymap.group.layout",
     rows: [
-      ["Mod+B", "Toggle left panel"],
-      ["Mod+Alt+B", "Toggle inspector (Studio)"],
-      ["Mod+I", "Ask Nilo (Studio)"],
+      ["Mod+B", "shell.keymap.toggleLeft"],
+      ["Mod+Alt+B", "shell.keymap.toggleInspector"],
+      ["Mod+I", "shell.keymap.askNilo"],
     ],
   },
   {
-    title: "Graph",
+    title: "shell.keymap.group.graph",
     rows: [
-      ["Mod+Z", "Undo"],
-      ["Mod+Shift+Z", "Redo"],
-      ["Shift+L", "Auto-arrange graph (Studio)"],
-      ["Mod+Shift+E", "Export graph JSON (advanced)"],
+      ["Mod+Z", "shell.keymap.undo"],
+      ["Mod+Shift+Z", "shell.keymap.redo"],
+      ["Shift+L", "shell.keymap.autoArrange"],
+      ["Mod+Shift+E", "shell.keymap.exportJson"],
     ],
   },
 ];
 
 export function KeymapSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
   const mac = useIsMac();
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()} title="Keyboard map" className="w-[min(560px,calc(100vw-24px))]">
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()} title={t("shell.keymap.title")} className="w-[min(560px,calc(100vw-24px))]">
       <div className="grid min-h-0 grid-cols-1 gap-x-6 gap-y-4 overflow-y-auto p-4 sm:grid-cols-2">
         {GROUPS.map((g) => (
-          <section key={g.title} aria-label={g.title}>
+          <section key={g.title} aria-label={t(g.title)}>
             <div className="mb-1.5 flex items-center gap-2" aria-hidden>
-              <span className="t-label text-ink-mute">{g.title}</span>
+              <span className="t-label text-ink-mute">{t(g.title)}</span>
               <span className="h-px flex-1 bg-line-soft" />
             </div>
             <dl className="space-y-1">
@@ -71,14 +74,14 @@ export function KeymapSheet({ open, onClose }: { open: boolean; onClose: () => v
                   <dt className="flex-none">
                     <KbdChord caps={chordCaps(chord, mac)} />
                   </dt>
-                  <dd className="t-body min-w-0 text-ink-dim">{label}</dd>
+                  <dd className="t-body min-w-0 text-ink-dim">{t(label)}</dd>
                 </div>
               ))}
             </dl>
           </section>
         ))}
       </div>
-      <p className="t-body flex-none border-t border-line-soft bg-sub-200 px-3 py-2 text-ink-mute">Every shortcut is also in the command palette.</p>
+      <p className="t-body flex-none border-t border-line-soft bg-sub-200 px-3 py-2 text-ink-mute">{t("shell.keymap.footer")}</p>
     </Sheet>
   );
 }

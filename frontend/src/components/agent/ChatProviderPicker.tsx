@@ -17,6 +17,7 @@ import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useChatModelStore, modelOverride, NEW_CHAT_KEY } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { useThreadStore } from "@/store/threadStore";
+import { useT } from "@/i18n/store";
 import { nextStep, distanceToReady } from "@/components/providers/nextStep";
 import { AUTO_ID, buildComboOptions, filterComboOptions, modelOptionId, parseOptionId, selectedOptionId } from "./chatCombo";
 
@@ -53,6 +54,7 @@ export function ChatProviderPicker({
   /** False while a harness runs the turn: it uses its own models, so a model pinned to this chat alone would change nothing. */
   modelAppliesToChat?: boolean;
 }) {
+  const t = useT();
   const connections = useProviderStore((s) => s.connections);
   const selectConnection = useProviderStore((s) => s.select);
   const chosenId = useChatProviderStore((s) => s.chosenId);
@@ -117,7 +119,7 @@ export function ChatProviderPicker({
   const readiness = connection ? providerReadiness(connection) : null;
   const dotClass = toneDotClass(readiness?.tone ?? "unconfigured");
   // Real evidence only: an unprobed connection never grows a timestamp.
-  const lastChecked = connection?.lastProbe ? "checked " + formatRelativeTime(connection.lastProbe) : null;
+  const lastChecked = connection?.lastProbe ? t("chat.provider.checked", { rel: formatRelativeTime(connection.lastProbe) }) : null;
   // Auto that resolves to nothing has no status of its own to add.
   const unresolvedAuto = !chosenId && !provider;
   // `{connection} · {model}`; Auto names where it lands: `Auto → {connection} · {model}`.

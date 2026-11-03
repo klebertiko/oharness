@@ -266,3 +266,18 @@ def test_an_unreadable_token_map_is_503_not_an_empty_one(env):
     with pytest.raises(Exception):
         ClientTokens(secrets).create("new", ["work:read"])
     assert secrets.get("factory/api-tokens") == "{not json"  # nothing was overwritten
+
+
+def test_a_webhook_starts_work_only_through_a_subscribed_automation(env, tmp_path):
+    from factory_intake.automations import AutomationEngine, parse_automation
+
+    client, port, log, secrets, _ = env
+    hooks = {"ci": parse_webhook("ci", "authMode: token\nsecretRef: factory/hook-token\n")}
+    text = "---\nagent: foreman\ntriggers:\n  - provider: webhook\n    event: received\n    filter:\n      webhooks: [ci]\n      payload: {env: [prod]}\n---\nCheck it.\n"
+    engine = AutomationEngine(port, {"deploys": parse_automation("deploys", text)}, tmp_path / "auto.db")
+    c = TestClient(create_app(port, secrets, hooks, log, automations=engine))
+    h = {"authorization": "Bearer tok-secret"}
+    assert c.post("/hooks/ci", content=b'{"env":"dev"}', headers=h).status_code == 202 and port.list() == []
+    assert c.post("/hooks/ci", content=b'{"env":"prod"}', headers=h).status_code == 202
+    [item] = port.list()
+    assert item.source.kind == "webhook" and port.drafts[item.id].agent == "foreman" and log.recent("ci")[0]["items"] == [item.id]

@@ -6,6 +6,8 @@ import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2 } from "l
 
 import { Panel } from "@/components/shell/Panel";
 import { Button, EmptyState, Input } from "@/components/ui";
+import { useI18n } from "@/i18n/store";
+import type { MessageKey } from "@/i18n/translate";
 import { cn } from "@/lib/utils";
 import { useThreadStore, type Thread } from "@/store/threadStore";
 
@@ -19,6 +21,7 @@ import { useThreadStore, type Thread } from "@/store/threadStore";
  * chat they land on).
  */
 export function ThreadsSidebar() {
+  const { t } = useI18n();
   const threads = useThreadStore((s) => s.threads);
   const activeThreadId = useThreadStore((s) => s.activeThreadId);
   const startNewChat = useThreadStore((s) => s.startNewChat);
@@ -60,15 +63,15 @@ export function ThreadsSidebar() {
           aria-current={activeThreadId === null ? "true" : undefined}
           className={cn("w-full justify-start", activeThreadId === null && "bg-sub-300")}
         >
-          New chat
+          {t("chat.threads.new")}
         </Button>
       </div>
 
       <div className="px-2 py-1">
         <Input
           type="search"
-          aria-label="Search chats"
-          placeholder="Search chats"
+          aria-label={t("chat.threads.searchAria")}
+          placeholder={t("chat.threads.searchPlaceholder")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           compact
@@ -78,16 +81,16 @@ export function ThreadsSidebar() {
       {open.length === 0 && archived.length === 0 ? (
         <div className="px-2 py-2">
           {needle ? (
-            <p role="status" className="text-body text-ink-mute">No matching chats.</p>
+            <p role="status" className="text-body text-ink-mute">{t("chat.threads.noMatch")}</p>
           ) : (
-            <EmptyState title="No chats yet">Start one and it shows up here.</EmptyState>
+            <EmptyState title={t("chat.threads.emptyTitle")}>{t("chat.threads.emptyBody")}</EmptyState>
           )}
         </div>
       ) : (
-        <nav ref={listRef} aria-label="Chats" onKeyDown={onKeyDown} className="flex flex-col pb-2">
+        <nav ref={listRef} aria-label={t("chat.threads.navAria")} onKeyDown={onKeyDown} className="flex flex-col pb-2">
           {groups.map(({ label, items }) => (
-            <section key={label} aria-label={label} className="px-1.5 pt-2">
-              <h3 className="px-2 pb-1 text-meta font-medium text-ink-mute">{label}</h3>
+            <section key={label} aria-label={t(label)} className="px-1.5 pt-2">
+              <h3 className="px-2 pb-1 text-meta font-medium text-ink-mute">{t(label)}</h3>
               <ul className="flex flex-col gap-px">
                 {items.map((thread) => (
                   <ThreadRow key={thread.id} thread={thread} active={thread.id === activeThreadId} onSelect={() => selectThread(thread.id)} />
@@ -99,7 +102,7 @@ export function ThreadsSidebar() {
           {archived.length > 0 && (
             <details key={needle ? "search" : "all"} open={needle ? true : undefined} className="mt-2 px-1.5">
               <summary className="oh-focus-inner min-h-control-md cursor-pointer list-none rounded-control px-2 py-1.5 text-meta font-medium text-ink-mute marker:content-none hover:text-ink">
-                Archived · {archived.length}
+                {t("chat.threads.archived", { n: archived.length })}
               </summary>
               <ul className="flex flex-col gap-px pt-1">
                 {archived.map((thread) => (
@@ -115,6 +118,7 @@ export function ThreadsSidebar() {
 }
 
 function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boolean; onSelect: () => void }) {
+  const { t, date } = useI18n();
   const renameThread = useThreadStore((s) => s.renameThread);
   const archiveThread = useThreadStore((s) => s.archiveThread);
   const restoreThread = useThreadStore((s) => s.restoreThread);
@@ -201,7 +205,7 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") setEditing(false);
           }}
-          aria-label="Chat name"
+          aria-label={t("chat.threads.nameAria")}
           className="h-control-lg w-full rounded-control border border-line-strong bg-sub-200 px-2.5 text-title text-ink focus-visible:border-signal"
         />
       ) : (
@@ -216,7 +220,7 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
           )}
         >
           <span id={titleId} className={cn("min-w-0 flex-1 truncate text-title", active ? "text-ink" : "text-ink-dim")}>{thread.title}</span>
-          <span className="t-meta shrink-0 text-ink-mute group-focus-within/row:hidden group-hover/row:hidden">{relativeTime(thread.updatedAt)}</span>
+          <span className="t-meta shrink-0 text-ink-mute group-focus-within/row:hidden group-hover/row:hidden">{relativeTime(thread.updatedAt, t, date)}</span>
         </button>
       )}
 
@@ -226,7 +230,7 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
           iconOnly
           size="sm"
           variant="ghost"
-          aria-label="Chat actions"
+          aria-label={t("chat.threads.actionsAria")}
           aria-describedby={titleId}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
@@ -237,10 +241,10 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
       )}
 
       {menuOpen && (
-        <div ref={menuRef} onKeyDown={onMenuKeyDown} className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-46 p-1" role="menu" aria-label={`Actions for ${thread.title}`}>
+        <div ref={menuRef} onKeyDown={onMenuKeyDown} className="oh-float absolute right-1.5 top-[calc(100%-2px)] z-40 w-46 p-1" role="menu" aria-label={t("chat.threads.menuAria", { title: thread.title })}>
           {confirmingDelete ? (
-            <div className="px-2 py-1.5" role="group" aria-label="Confirm delete">
-              <p className="pb-2 text-body text-ink-dim">Delete this chat and its messages?</p>
+            <div className="px-2 py-1.5" role="group" aria-label={t("chat.threads.confirmAria")}>
+              <p className="pb-2 text-body text-ink-dim">{t("chat.threads.confirmBody")}</p>
               <div className="flex gap-2">
                 <Button
                   variant="danger"
@@ -250,29 +254,29 @@ function ThreadRow({ thread, active, onSelect }: { thread: Thread; active: boole
                     closeMenu(false);
                   }}
                 >
-                  Delete chat
+                  {t("chat.threads.deleteChat")}
                 </Button>
                 <Button size="sm" data-cancel onClick={() => closeMenu()}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </div>
             </div>
           ) : (
             <>
               <MenuItem icon={Pencil} onClick={() => { setEditing(true); closeMenu(false); }}>
-                Rename
+                {t("chat.threads.rename")}
               </MenuItem>
               {thread.archived ? (
                 <MenuItem icon={ArchiveRestore} onClick={() => { restoreThread(thread.id); closeMenu(false); }}>
-                  Restore
+                  {t("chat.threads.restore")}
                 </MenuItem>
               ) : (
                 <MenuItem icon={Archive} onClick={() => { archiveThread(thread.id); closeMenu(false); }}>
-                  Archive
+                  {t("chat.threads.archive")}
                 </MenuItem>
               )}
               <MenuItem icon={Trash2} danger onClick={() => setConfirmingDelete(true)}>
-                Delete
+                {t("chat.threads.delete")}
               </MenuItem>
             </>
           )}
@@ -301,14 +305,14 @@ function MenuItem({ icon: Icon, children, onClick, danger = false }: { icon: typ
 
 const DAY = 86_400_000;
 
-function groupByRecency(threads: Thread[]): { label: string; items: Thread[] }[] {
+function groupByRecency(threads: Thread[]): { label: MessageKey; items: Thread[] }[] {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const buckets: { label: string; items: Thread[] }[] = [
-    { label: "Today", items: [] },
-    { label: "Yesterday", items: [] },
-    { label: "Previous 7 days", items: [] },
-    { label: "Older", items: [] },
+  const buckets: { label: MessageKey; items: Thread[] }[] = [
+    { label: "chat.threads.today", items: [] },
+    { label: "chat.threads.yesterday", items: [] },
+    { label: "chat.threads.week", items: [] },
+    { label: "chat.threads.older", items: [] },
   ];
   for (const t of threads) {
     if (t.updatedAt >= startOfToday) buckets[0].items.push(t);
@@ -319,14 +323,14 @@ function groupByRecency(threads: Thread[]): { label: string; items: Thread[] }[]
   return buckets.filter((b) => b.items.length > 0);
 }
 
-function relativeTime(ts: number): string {
+function relativeTime(ts: number, t: (key: MessageKey, vars?: Record<string, string | number>) => string, date: (d: number, options?: Intl.DateTimeFormatOptions) => string): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return "now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
-  if (diff < DAY) return `${Math.floor(diff / 3_600_000)}h`;
-  if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d`;
+  if (diff < 60_000) return t("chat.time.now");
+  if (diff < 3_600_000) return t("chat.time.minutes", { n: Math.floor(diff / 60_000) });
+  if (diff < DAY) return t("chat.time.hours", { n: Math.floor(diff / 3_600_000) });
+  if (diff < 7 * DAY) return t("chat.time.days", { n: Math.floor(diff / DAY) });
   try {
-    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(ts);
+    return date(ts, { month: "short", day: "numeric" });
   } catch {
     return "";
   }

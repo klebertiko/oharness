@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { settleForAxe } from "./axe-settle.mjs";
 const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const output = resolve(import.meta.dirname, '../../.harness/sprint-2026-10-21/story-CHAT-PROVIDERS/evidence');
 mkdirSync(output, { recursive: true });
@@ -67,6 +68,7 @@ try {
     // Colours transition on a theme change; axe must read the settled colours, not a frame in between (slower CI hit this).
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await settleForAxe(page);
     await page.addScriptTag({ content: axeSource });
     const found = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] })).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`));
     assert.deepEqual(found, [], `axe with the model combo open (${theme})`);

@@ -11,7 +11,7 @@ import { ASSISTABLE } from "@/lib/copilot/catalog";
 import type { AssistField } from "@/lib/copilot/contract";
 import { AssistRow, AssistToggle, useFieldAssist } from "./FieldAssist";
 import type { NodeData, AdapterType, NodeType } from "@/lib/types";
-import { PROVIDERS_BIND_NONE } from "@/components/providers/copy";
+import { fmtNumber, tr, useT } from "@/i18n/store";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import { providerReadiness } from "@/components/agent/chatProvider";
 import { ModelPicker } from "@/components/providers/ModelPicker";
@@ -42,7 +42,7 @@ const pickerCls = `${inputCls} h-8 justify-between text-left`;
 
 /** The shared readiness word, guarded for a row the catalog does not know. */
 function readinessWord(c: Connection): string {
-  return specOf(c) ? providerReadiness(c).label : c.enabled ? "On" : "Not connected";
+  return specOf(c) ? providerReadiness(c).label : c.enabled ? tr("sidebar.props.on") : tr("sidebar.props.notConnected");
 }
 
 function SectionHead({ label, note }: { label: string; note?: string }) {
@@ -103,6 +103,7 @@ function AssistedField({ nodeId, nodeType, field, label, children }: { nodeId: s
 
 /** The node's wiring, read straight off the graph. */
 function PortTable({ nodeId, type }: { nodeId: string; type: NodeType }) {
+  const t = useT();
   const edges = useCanvasStore((s) => s.edges);
   const nodes = useCanvasStore((s) => s.nodes);
   const nameOf = (id: string) => String(nodes.find((n) => n.id === id)?.data.label ?? id);
@@ -138,7 +139,7 @@ function PortTable({ nodeId, type }: { nodeId: string; type: NodeType }) {
                 boxShadow: wired ? "none" : `inset 0 0 0 1px var(--line)`,
               }}
             />
-            <span className="t-meta w-6 flex-none text-ink-mute">{r.dir}</span>
+            <span className="t-meta w-12 flex-none truncate text-ink-mute">{r.dir === "in" ? t("sidebar.props.in") : t("sidebar.props.out")}</span>
             <span className="t-meta w-14 flex-none truncate" style={{ color: tone }}>
               {r.port.label}
             </span>
@@ -171,6 +172,7 @@ function FallbackConnections({
   connections: Connection[];
   onChange: (ids: string[]) => void;
 }) {
+  const t = useT();
   const primary = providerIds[0];
   if (!primary) return null;
   const fallbacks = providerIds.slice(1);
@@ -192,11 +194,11 @@ function FallbackConnections({
   };
 
   return (
-    <Field label="Fallback connections">
+    <Field label={t("sidebar.props.fallbacks")}>
       <div className="space-y-1">
         {fallbacks.length === 0 && (
           <p className="t-meta leading-4 text-ink-mute">
-            None configured — a resolution or first-output failure on the pin above stops the run today.
+            {t("sidebar.props.fallbackNone")}
           </p>
         )}
         {fallbacks.map((id, i) => {
@@ -209,7 +211,7 @@ function FallbackConnections({
                 type="button"
                 className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
                 disabled={i === 0}
-                aria-label={`Move ${label} up`}
+                aria-label={t("sidebar.props.moveUp", { label })}
                 onClick={() => moveFallback(i, -1)}
               >
                 <ArrowUp size={12} strokeWidth={2} aria-hidden />
@@ -218,7 +220,7 @@ function FallbackConnections({
                 type="button"
                 className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400 disabled:pointer-events-none disabled:opacity-30"
                 disabled={i === fallbacks.length - 1}
-                aria-label={`Move ${label} down`}
+                aria-label={t("sidebar.props.moveDown", { label })}
                 onClick={() => moveFallback(i, 1)}
               >
                 <ArrowDown size={12} strokeWidth={2} aria-hidden />
@@ -226,7 +228,7 @@ function FallbackConnections({
               <button
                 type="button"
                 className="rounded-control p-0.5 text-ink-mute hover:bg-sub-300 hover:text-ink-dim active:bg-sub-400"
-                aria-label={`Remove ${label} fallback`}
+                aria-label={t("sidebar.props.removeFallback", { label })}
                 onClick={() => removeFallback(i)}
               >
                 <X size={12} strokeWidth={2} aria-hidden />
@@ -236,25 +238,25 @@ function FallbackConnections({
         })}
         {available.length > 0 && (
           <Combobox
-            label="Add fallback connection"
-            triggerLabel="Add fallback connection"
+            label={t("sidebar.props.addFallback")}
+            triggerLabel={t("sidebar.props.addFallback")}
             value={null}
             options={available.map((c) => ({ id: c.id, label: c.label, detail: readinessWord(c) }))}
             onChange={addFallback}
             triggerClassName={pickerCls}
-            trigger={<span className="min-w-0 truncate text-ink-mute">+ Add fallback connection…</span>}
+            trigger={<span className="min-w-0 truncate text-ink-mute">{t("sidebar.props.addFallbackBtn")}</span>}
           />
         )}
       </div>
       <p className="t-meta mt-1 leading-4 text-ink-dim">
-        Tried in this order only if the pin above fails to resolve or errors before any output —
-        never a silent swap. The Transcript marks any node this happens on.
+        {t("sidebar.props.fallbackNote")}
       </p>
     </Field>
   );
 }
 
 export function PropertiesPanel() {
+  const t = useT();
   const nodes = useCanvasStore((s) => s.nodes);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
@@ -265,14 +267,14 @@ export function PropertiesPanel() {
 
   if (!node) {
     return (
-      <Panel title="Inspector" className="h-full">
+      <Panel title={t("sidebar.props.title")} className="h-full">
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6">
-          <p className="text-center text-title font-semibold text-ink-dim">Select a block</p>
+          <p className="text-center text-title font-semibold text-ink-dim">{t("sidebar.props.selectBlock")}</p>
           <p className="max-w-[190px] text-center text-body leading-5 text-ink-mute">
-            Inspect its connections and edit its settings here. Add a block from the Blocks panel to get started.
+            {t("sidebar.props.selectBody")}
           </p>
           <p className="t-meta flex items-center gap-1.5 text-ink-mute">
-            select a block, or
+            {t("sidebar.props.selectOr")}
             {chordCaps("Mod+K", mac).map((c) => (
               <kbd key={c} className="oh-kbd">
                 {c}
@@ -294,21 +296,21 @@ export function PropertiesPanel() {
   const pin = d.providerIds?.[0];
   const pinned = pin ? connections.find((c) => c.id === pin) : undefined;
   const pinOptions: ComboOption[] = [
-    { id: "", label: "Use chat default (in chat)", detail: "Unpinned agents use the chat provider" },
-    ...(pin && !pinned ? [{ id: pin, label: pin, detail: "Removed under Providers" }] : []),
+    { id: "", label: t("sidebar.props.chatDefault"), detail: t("sidebar.props.chatDefaultDetail") },
+    ...(pin && !pinned ? [{ id: pin, label: pin, detail: t("sidebar.props.removedDetail") }] : []),
     ...connections.map((c) => ({ id: c.id, label: c.label, detail: readinessWord(c) })),
   ];
   // What "Connection default" will actually resolve to, said up front.
   const inheritDetail = !pinned
-    ? "The chat provider's default model"
+    ? t("sidebar.props.inheritChat")
     : pinned.defaultModel ||
       (specOf(pinned) && requiresModel(specOf(pinned))
-        ? "None set: runs on this connection fail until one is chosen"
-        : "The vendor CLI's own default");
+        ? t("sidebar.props.inheritNone")
+        : t("sidebar.props.inheritCli"));
 
   return (
     <Panel
-      title="Inspector"
+      title={t("sidebar.props.title")}
       meta={ROLE_CODE[type]}
       className="h-full"
       actions={
@@ -338,12 +340,12 @@ export function PropertiesPanel() {
         </div>
       </div>
 
-      <SectionHead label="Wiring" note={`${PORTS[type].in.length} in · ${PORTS[type].out.length} out`} />
+      <SectionHead label={t("sidebar.props.wiring")} note={t("sidebar.ports", { in: PORTS[type].in.length, out: PORTS[type].out.length })} />
       <PortTable nodeId={node.id} type={type} />
 
-      <SectionHead label="Settings" />
+      <SectionHead label={t("sidebar.props.settings")} />
       <div className="space-y-3.5 p-2.5">
-        <Field label="Label">
+        <Field label={t("sidebar.props.label")}>
           <input
             className={inputCls}
             value={d.label ?? ""}
@@ -352,7 +354,7 @@ export function PropertiesPanel() {
         </Field>
 
         {node.type === "agent" && (
-          <Field label="Role id">
+          <Field label={t("sidebar.props.roleId")}>
             <input
               className={inputCls}
               value={d.roleId ?? ""}
@@ -363,7 +365,7 @@ export function PropertiesPanel() {
         )}
 
         {node.type === "skill" && (
-          <Field label="Skill id">
+          <Field label={t("sidebar.props.skillId")}>
             <input
               className={inputCls}
               value={d.skillId ?? ""}
@@ -375,7 +377,7 @@ export function PropertiesPanel() {
 
         {node.type === "gate" && (
           <>
-            <Field label="Gate id">
+            <Field label={t("sidebar.props.gateId")}>
               <input
                 className={inputCls}
                 value={d.gateId ?? ""}
@@ -383,7 +385,7 @@ export function PropertiesPanel() {
                 placeholder="stl, qa, arch, sec…"
               />
             </Field>
-            <AssistedField key={`${node.id}:checklist`} nodeId={node.id} nodeType={type} field="checklist" label="Checklist">
+            <AssistedField key={`${node.id}:checklist`} nodeId={node.id} nodeType={type} field="checklist" label={t("sidebar.props.checklist")}>
               <textarea
                 className={textareaCls}
                 value={d.checklist ?? ""}
@@ -395,7 +397,7 @@ export function PropertiesPanel() {
         )}
 
         {node.type === "hitl" && (
-          <Field label="Approval Label">
+          <Field label={t("sidebar.props.approvalLabel")}>
             <input
               className={inputCls}
               value={d.approvalLabel ?? ""}
@@ -406,7 +408,7 @@ export function PropertiesPanel() {
 
         {node.type === "mcp" && (
           <>
-            <Field label="MCP URL">
+            <Field label={t("sidebar.props.mcpUrl")}>
               <input
                 className={inputCls}
                 value={d.mcpUrl ?? ""}
@@ -414,7 +416,7 @@ export function PropertiesPanel() {
                 placeholder="http://localhost:3100/mcp"
               />
             </Field>
-            <Field label="MCP command">
+            <Field label={t("sidebar.props.mcpCommand")}>
               <input
                 className={inputCls}
                 value={d.mcpCommand ?? ""}
@@ -426,7 +428,7 @@ export function PropertiesPanel() {
         )}
 
         {node.type === "tool" && (
-          <Field label="Tool kind">
+          <Field label={t("sidebar.props.toolKind")}>
             <input
               className={inputCls}
               value={d.toolKind ?? ""}
@@ -437,7 +439,7 @@ export function PropertiesPanel() {
         )}
 
         {(node.type === "agent" || node.type === "gate" || node.type === "skill") && (
-          <Field label="Emits (Signals)">
+          <Field label={t("sidebar.props.emits")}>
             <textarea
               className={textareaCls}
               value={(d.emits ?? []).join("\n")}
@@ -449,7 +451,7 @@ export function PropertiesPanel() {
                     .filter(Boolean),
                 })
               }
-              placeholder={'Ready for QA\nApproved for Architecture Review'}
+              placeholder={t("sidebar.props.emitsPlaceholder")}
             />
           </Field>
         )}
@@ -457,14 +459,14 @@ export function PropertiesPanel() {
 
       {isModel && (
         <>
-          <SectionHead label="Provider" note="resolved per node" />
+          <SectionHead label={t("sidebar.props.provider")} note={t("sidebar.props.providerNote")} />
 
           <div className="space-y-3.5 p-2.5">
             {node.type === "agent" && (
-              <Field label="Connection pin">
+              <Field label={t("sidebar.props.pin")}>
                 <Combobox
-                  label="Connection pin"
-                  triggerLabel={`Connection pin: ${pinned ? pinned.label : pin ? pin + " (removed)" : "Use chat default (in chat)"}`}
+                  label={t("sidebar.props.pin")}
+                  triggerLabel={t("sidebar.props.pinTrigger", { value: pinned ? pinned.label : pin ? t("sidebar.props.removedSuffix", { id: pin }) : t("sidebar.props.chatDefault") })}
                   describedBy={providerHintId}
                   value={pin ?? ""}
                   options={pinOptions}
@@ -479,15 +481,14 @@ export function PropertiesPanel() {
                   trigger={
                     <>
                       <span className="min-w-0 truncate">
-                        {pinned ? pinned.label : pin ? pin : "Use chat default (in chat)"}
+                        {pinned ? pinned.label : pin ? pin : t("sidebar.props.chatDefault")}
                       </span>
-                      <span className="t-meta flex-none text-ink-mute">{pinned ? readinessWord(pinned) : pin ? "Removed" : ""}</span>
+                      <span className="t-meta flex-none text-ink-mute">{pinned ? readinessWord(pinned) : pin ? t("sidebar.props.removed") : ""}</span>
                     </>
                   }
                 />
                 <p id={providerHintId} className="t-meta mt-1 leading-4 text-ink-dim">
-                  Applies to this agent only. In chat, a pinned connection overrides the chat provider;
-                  unpinned agents use the chat default. Connected Studio runs require an explicit pin.
+                  {t("sidebar.props.pinNote")}
                 </p>
               </Field>
             )}
@@ -500,23 +501,23 @@ export function PropertiesPanel() {
               />
             )}
 
-            <Field label="Model">
+            <Field label={t("sidebar.props.model")}>
               <ModelPicker
                 connection={pinned ?? null}
                 value={d.model ?? ""}
                 onChange={(model) => update({ model })}
-                label="Model"
-                inheritLabel="Connection default"
+                label={t("sidebar.props.model")}
+                inheritLabel={t("sidebar.props.connectionDefault")}
                 inheritDetail={inheritDetail}
                 triggerClassName={pickerCls}
               />
             </Field>
 
             <details className="rounded-control border border-line-soft p-2">
-              <summary className="t-meta cursor-pointer text-ink-mute">Legacy bundle settings</summary>
-              <p className="t-meta my-2 leading-4 text-ink-mute">Preserved for compatibility. Connected runs use the connection pin; simulation calls no provider.</p>
+              <summary className="t-meta cursor-pointer text-ink-mute">{t("sidebar.props.legacy")}</summary>
+              <p className="t-meta my-2 leading-4 text-ink-mute">{t("sidebar.props.legacyNote")}</p>
               <div className="space-y-3.5">
-            <Field label="Adapter">
+            <Field label={t("sidebar.props.adapter")}>
               <select
                 className={inputCls}
                 value={d.adapter ?? "mock"}
@@ -531,7 +532,7 @@ export function PropertiesPanel() {
             </Field>
 
             {(d.adapter === "ollama" || d.adapter === "lmstudio") && (
-              <Field label="Endpoint">
+              <Field label={t("sidebar.props.endpoint")}>
                 <input
                   className={inputCls}
                   value={d.endpoint ?? ""}
@@ -542,7 +543,7 @@ export function PropertiesPanel() {
             )}
 
             {(d.adapter ?? "mock") !== "mock" && (
-              <Field label="Credential">
+              <Field label={t("sidebar.props.credential")}>
                 <select
                   className={inputCls}
                   value={d.secretRef ?? ""}
@@ -552,7 +553,7 @@ export function PropertiesPanel() {
                     update({ secretRef, apiKey: undefined });
                   }}
                 >
-                  <option value="">{PROVIDERS_BIND_NONE}</option>
+                  <option value="">{t("sidebar.props.bindNone")}</option>
                   {sealed.map((c) => (
                     <option key={c.id} value={c.secret!.service}>
                       {c.label} · {c.secret!.prefix}…{c.secret!.tail}
@@ -561,7 +562,7 @@ export function PropertiesPanel() {
                 </select>
                 {sealed.length === 0 && (
                   <p className="t-meta mt-1 text-ink-mute">
-                    Seal a key under Providers (Alt+4). The inspector only stores the reference.
+                    {t("sidebar.props.sealNote")}
                   </p>
                 )}
               </Field>
@@ -570,16 +571,16 @@ export function PropertiesPanel() {
               </div>
             </details>
 
-            <AssistedField key={`${node.id}:systemPrompt`} nodeId={node.id} nodeType={type} field="systemPrompt" label="System Prompt">
+            <AssistedField key={`${node.id}:systemPrompt`} nodeId={node.id} nodeType={type} field="systemPrompt" label={t("sidebar.props.systemPrompt")}>
               <textarea
                 className={textareaCls}
                 value={d.systemPrompt ?? ""}
                 onChange={(e) => update({ systemPrompt: e.target.value })}
-                placeholder="You are a helpful assistant..."
+                placeholder={t("sidebar.props.systemPromptPlaceholder")}
               />
             </AssistedField>
 
-            <Field label={`Temperature — ${d.temperature ?? 0.7}`}>
+            <Field label={t("sidebar.props.temperature", { value: fmtNumber(d.temperature ?? 0.7) })}>
               <input
                 type="range"
                 min={0}
@@ -591,7 +592,7 @@ export function PropertiesPanel() {
               />
             </Field>
 
-            <Field label="Max Tokens">
+            <Field label={t("sidebar.props.maxTokens")}>
               <input
                 className={inputCls}
                 type="number"
@@ -600,12 +601,12 @@ export function PropertiesPanel() {
               />
             </Field>
 
-            <Field label="Token Limit (budget)">
+            <Field label={t("sidebar.props.tokenLimit")}>
               <input
                 className={inputCls}
                 type="number"
                 min={0}
-                placeholder="no limit"
+                placeholder={t("sidebar.props.noLimit")}
                 value={d.tokenLimit ?? ""}
                 onChange={(e) => {
                   const raw = e.target.value;
@@ -614,8 +615,7 @@ export function PropertiesPanel() {
               />
             </Field>
             <p className="t-meta -mt-2 text-ink-mute">
-              Stops this node honestly (not the whole run) if its own turn spends at or over this
-              many tokens. Separate from Max Tokens, which only caps generation length.
+              {t("sidebar.props.tokenLimitNote")}
             </p>
           </div>
         </>
@@ -623,19 +623,19 @@ export function PropertiesPanel() {
 
       {d.status && d.status !== "idle" && (
         <>
-          <SectionHead label="Last run" />
+          <SectionHead label={t("sidebar.props.lastRun")} />
           <div className="space-y-1 p-2.5">
             <div className="t-meta flex justify-between text-ink-mute">
-              status <span className="text-signal-text">{d.status}</span>
+              {t("sidebar.props.status")} <span className="text-signal-text">{d.status}</span>
             </div>
             {d.tokens !== undefined && (
               <div className="t-meta flex justify-between text-ink-mute">
-                tokens <span className="text-ink-dim">{d.tokens}</span>
+                {t("sidebar.props.tokens")} <span className="text-ink-dim">{d.tokens}</span>
               </div>
             )}
             {d.latencyMs !== undefined && (
               <div className="t-meta flex justify-between text-ink-mute">
-                latency <span className="text-ink-dim">{d.latencyMs}ms</span>
+                {t("sidebar.props.latency")} <span className="text-ink-dim">{d.latencyMs}ms</span>
               </div>
             )}
             {d.output && (

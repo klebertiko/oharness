@@ -68,6 +68,14 @@ def verify_standard_webhooks(secret: str, headers: dict, body: bytes, now: float
         raise Rejected("bad_signature", "signature does not match", 401)
 
 
+def verify_shared_secret(expected: str, presented: str | None) -> None:
+    """Constant-time, exact comparison of a shared secret a service sends as-is (no whitespace trimming, no scheme)."""
+    if not expected:
+        raise Rejected("no_secret", "no webhook secret is configured", 503)
+    if not presented or not hmac.compare_digest(presented.encode("utf-8", "replace"), expected.encode("utf-8", "replace")):
+        raise Rejected("unauthorized", "missing or invalid secret", 401)
+
+
 def verify_bearer(expected: str, header: str | None) -> None:
     """Constant-time check of ``Authorization: Bearer <token>`` against a token read from the secrets store."""
     if not expected:

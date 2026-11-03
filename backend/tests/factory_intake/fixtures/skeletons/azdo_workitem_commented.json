@@ -1,0 +1,15 @@
+{
+ "id": "evt-2",
+ "eventType": "workitem.commented",
+ "resource": {
+  "workItemId": 42,
+  "rev": 3,
+  "fields": {
+   "System.Title": "Fix totals",
+   "System.History": "<div>@payments again</div>"
+  },
+  "revisedBy": {
+   "uniqueName": "bob@example.com"
+  }
+ }
+}

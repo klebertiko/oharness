@@ -34,7 +34,9 @@ backend/build/
 backend/.mutmut-cache
 
 # Local agent/tooling state (machine-specific, never source)
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 .pytest_cache/
 __pycache__/
 

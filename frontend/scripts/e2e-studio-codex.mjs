@@ -82,7 +82,7 @@ try {
   checks.push('Inspector edit and pin survive Back/Continue');
   step = 'Validate and simulation feedback';
   await button('Validate').click(); await page.getByText('Bundle valid', { exact: true }).waitFor();
-  await button('Plan simulation').click(); await page.getByText('Simulation plan · 1 step(s) · no provider called', { exact: true }).waitFor();
+  await button('Plan simulation').click(); await page.getByText('Simulation plan · 1 step · no provider called', { exact: true }).waitFor();
   await page.getByLabel('Label', { exact: true }).fill('Updated draft');
   assert.equal(await page.getByText(/Simulation plan ·/).count(), 0);
   rejectValidation = true; await button('Validate').click(); await page.getByText('Isolated invalid bundle', { exact: true }).waitFor();

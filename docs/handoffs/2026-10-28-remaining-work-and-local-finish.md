@@ -5,19 +5,19 @@ Data: 2026-10-28. Repositório: `klebertiko/oharness`, branch `main`. Para o **a
 ## 0. Estado
 
 - Tudo o que foi pedido até aqui está na `main`: design system, rebranding OHarness, redesign das telas, docs, site, correções de segurança e qualidade, Workspace Manager e os Dependabot.
-- **Commit para a tag `v0.0.1-alpha`: `f6ec5fea221ad2097a06f94a348dbfcb57cb90c8`** (inclui o header/hero do site corrigidos, #187, e a higiene do Gitleaks, #190). As cinco versões do projeto já são `0.0.1-alpha`, então o "version gate" do workflow passa.
+- **Commit para a tag `v0.0.1-alpha`: use o HEAD da `main` no momento da build, depois de conferir o CI verde.** Último commit verificado verde por mim: `5de42ebc6c43db3456bbaed20c3dcd19f505a55e` (22 checks, nenhuma falha). O SHA antigo `f6ec5fe` foi superado: a `main` recebeu o roadmap inteiro depois dele (Providers refeito, design system, Factory, i18n, Runs, Turno, correções). As cinco versões do projeto já são `0.0.1-alpha`, então o "version gate" do workflow passa.
 - **Não existe tag nem release ainda.** A nuvem não consegue criar tags (o proxy do ambiente devolve 403 em API de refs e em `git push` de tag); por isso é tarefa local.
 - O roadmap das próximas versões foi entregue por sessões de nuvem em PRs separados, já na `main` (seção 4). Eles **não** entram na `v0.0.1-alpha`: a tag é fixada no commit acima.
 
 ## 1. Tag e release `v0.0.1-alpha` (você, agente local)
 
-1. `git fetch origin` e confirme que o commit existe: `git cat-file -t f6ec5fea221ad2097a06f94a348dbfcb57cb90c8`.
+1. `git fetch origin` e confirme que o commit existe: `git cat-file -t 5de42ebc6c43db3456bbaed20c3dcd19f505a55e`.
 2. **Confirme que o CI desse commit está verde** antes de tagear:
-   `gh api repos/klebertiko/oharness/commits/f6ec5fea221ad2097a06f94a348dbfcb57cb90c8/check-runs --jq '[.check_runs[]|(.conclusion//.status)]|group_by(.)|map("\(.[0]):\(length)")|join(" ")'`
+   `gh api repos/klebertiko/oharness/commits/5de42ebc6c43db3456bbaed20c3dcd19f505a55e/check-runs --jq '[.check_runs[]|(.conclusion//.status)]|group_by(.)|map("\(.[0]):\(length)")|join(" ")'`
    Esperado: só `success` e `skipped`. Se algo estiver `failure`, pare e abra issue; não tagueie.
 3. Crie e empurre a tag **anotada**:
    ```powershell
-   git tag -a v0.0.1-alpha f6ec5fea221ad2097a06f94a348dbfcb57cb90c8 -m "OHarness v0.0.1-alpha (pre-release)"
+   git tag -a v0.0.1-alpha 5de42ebc6c43db3456bbaed20c3dcd19f505a55e -m "OHarness v0.0.1-alpha (pre-release)"
    git push origin v0.0.1-alpha
    ```
 4. O workflow `Release` dispara: gates de qualidade e segurança → version gate → build das 3 plataformas dentro do ambiente protegido **`release`** (revisor: o dono do repositório) → **release em rascunho** marcada como pré-lançamento, com `SHA256SUMS`, SBOM e atestações. **Peça ao usuário para aprovar o ambiente** (Actions → o run da tag → Review deployments); sem isso nada é construído.
@@ -67,3 +67,16 @@ Todos os PRs dessas sessões estão mesclados e as issues fechadas. Pendentes ab
 - Textos "tudo é harness"; o assistente é o **Nilo** (nunca "Copilot"); tokens do design system; dois temas; acessibilidade (teclado, foco, axe 0).
 - Compatibilidade do rebranding é intencional: salt `openharness.file-secrets.v1:`, pasta `~/.openharness/secrets`, serviço legado do keychain e `OPENHARNESS_*`. Não "limpe" isso.
 - Nunca reescreva histórico, apague branches, nem force-push em `main` sem pedido explícito do usuário.
+
+
+## 6. Verificações que o sandbox de nuvem NÃO fez (faça na sua máquina e registre no #284/#287)
+1. `OH_SECRETS=keychain python -m oharness run <bundle> --mode live --json` com uma conexão real: a chave não pode aparecer na saída (ADR 0045).
+2. App empacotado (Tauri): abrir o chat, escolher harness **criado/salvo/importado** (corrigido no #334 só com sidecar simulado), rodar, abrir Providers (tela refeita no #231) e trocar idioma en/pt-BR.
+3. Toque real (alvos de 44px), espaçador de 68px do macOS sob Tauri em janela estreita (U11/#236).
+4. `pytest` completo numa máquina com git atual: no sandbox, `test_sandbox_git_config_allowlist.py` falha por causa do git 2.43.
+5. Factory MCP (#323) com Claude Code, Codex ou Cursor reais; conector GitHub (#247) com token real; os demais conectores (#325) são só esqueletos experimentais.
+6. pt-BR por falante nativo: blocos `shell.*`, `chat.*`, `studio.*`, `time.*`, `sidebar.*`, `node.*`, `cowork.*`, `ui.*`.
+7. Revisar os ADRs marcados "proposta, reversível" (#291).
+
+## 7. Fora desta build (backlog, GitHub #248)
+Fábrica A2–A9 (definição como código, foreman/estágios, agentes/memória, sala de controle, métricas), Fábrica C (scorers, benchmarks, auto-melhoria, computer use), i18n de Runs/Turno/Factory, lacunas da matriz de paridade (`docs/product/parity-matrix.md`). Processo: `docs/process/`.

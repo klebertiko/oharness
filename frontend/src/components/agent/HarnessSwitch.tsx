@@ -7,6 +7,7 @@ import { splitHarnessName } from "@/components/harnesses/harnessLabel";
 import { ComboAction, Combobox } from "@/components/ui/Combobox";
 import { NO_HARNESS } from "@/lib/chatHarness";
 import { NONE_ID, buildHarnessOptions } from "@/lib/harnessOptions";
+import { useT } from "@/i18n/store";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
 import { useHarnessRecentStore } from "@/store/harnessRecentStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
@@ -33,6 +34,9 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
   const entries = useHarnessLibraryStore((s) => s.entries);
   const libraryHydrated = useHarnessLibraryStore((s) => s.hydrated);
   const libraryFailed = useHarnessLibraryStore((s) => s.failed);
+  const savedFailed = useHarnessLibraryStore((s) => s.savedFailed);
+  const activateFailed = useHarnessLibraryStore((s) => s.activateFailed);
+  const t = useT();
   const hydrateLibrary = useHarnessLibraryStore((s) => s.hydrate);
 
   const recent = useHarnessRecentStore((s) => s.ids);
@@ -41,9 +45,13 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
 
   const [sessionError, setSessionError] = useState(false);
   const failed = libraryFailed || sessionError;
+  const listProblem = libraryHydrated && savedFailed;
   const retry = () => {
-    setSessionError(false);
-    void hydrateSession().catch(() => setSessionError(true));
+    // Only the saved list failed: just ask for the library again.
+    if (failed) {
+      setSessionError(false);
+      void hydrateSession().catch(() => setSessionError(true));
+    }
     void hydrateLibrary().catch(() => undefined);
   };
 
@@ -58,13 +66,13 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
   const studio = activeBundle?.manifest?.id ? { id: activeBundle.manifest.id, name: activeBundle.manifest.name || activeBundle.manifest.id } : null;
   const { options, searchable, harnessCount } = useMemo(
     () => buildHarnessOptions({ entries, status: chat.status, recent, studioActive: studio }),
-    [entries, chat.status, recent, studio],
+    [entries, chat.status, recent, studio, t],
   );
 
   const bound = chat.binding.kind === "harness" ? chat.binding : null;
   const title = bound ? splitHarnessName(bound.name).title : "";
   const gone = chat.status.state === "missing";
-  const label = !bound ? "No harness" : gone ? `${title} (unavailable)` : title;
+  const label = !bound ? t("harness.none") : gone ? t("harness.picker.unavailable", { name: title }) : title;
   const status = libraryHydrated ? "ready" : failed ? "error" : "loading";
 
   const choose = (id: string) => {
@@ -76,29 +84,37 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
 
   return (
     <Combobox
-      label="Harness"
-      triggerLabel={`Harness: ${label}`}
+      label={t("harness.picker.label")}
+      triggerLabel={t("harness.picker.trigger", { name: label })}
       value={bound?.id ?? NONE_ID}
       options={options}
       onChange={choose}
       searchable={searchable}
-      searchPlaceholder="Find a harness"
+      searchPlaceholder={t("harness.picker.search")}
       status={status}
-      loadingText="Loading harnesses…"
-      errorText="Couldn't load harnesses."
-      emptyText="No harness matches that."
-      header={status === "ready" && harnessCount === 0 ? "No harnesses yet. Create one in Studio." : undefined}
+      loadingText={t("harness.picker.loading")}
+      errorText={t("harness.picker.error")}
+      emptyText={t("harness.picker.empty")}
+      header={
+        activateFailed ? (
+          <span role="alert">{t("harness.picker.activateError", { name: splitHarnessName(activateFailed.name).title })}</span>
+        ) : listProblem ? (
+          <span role="alert">{t("harness.picker.savedError")}</span>
+        ) : status === "ready" && harnessCount === 0 ? (
+          t("harness.picker.none")
+        ) : undefined
+      }
       triggerClassName="h-control-md max-w-[260px] px-2.5 text-body font-medium text-ink-dim hover:text-ink max-sm:h-control-lg"
       trigger={
         <>
           <Workflow size={14} strokeWidth={1.8} className={gone ? "flex-none text-warn-text" : bound ? "flex-none text-signal-text" : "flex-none text-ink-mute"} aria-hidden />
-          <span className={`min-w-0 truncate ${gone ? "text-warn-text" : ""}`}>{status === "loading" && !bound ? "Loading…" : label}</span>
+          <span className={`min-w-0 truncate ${gone ? "text-warn-text" : ""}`}>{status === "loading" && !bound ? t("harness.picker.loadingShort") : label}</span>
           <ChevronDown size={13} strokeWidth={1.8} className="flex-none text-ink-mute" aria-hidden />
         </>
       }
       footer={({ close }) => (
         <>
-          {status === "error" && <ComboAction onClick={retry}>Try again</ComboAction>}
+          {(status === "error" || listProblem) && <ComboAction onClick={retry}>{t("harness.picker.retry")}</ComboAction>}
           {onOpenStudio && (
             <ComboAction
               onClick={() => {
@@ -106,7 +122,7 @@ export function HarnessSwitch({ onOpenStudio }: HarnessSwitchProps) {
                 onOpenStudio();
               }}
             >
-              {chat.status.state === "ready" ? "Edit in Studio" : "Open Studio"}
+              {chat.status.state === "ready" ? t("harness.picker.editInStudio") : t("harness.picker.openStudio")}
             </ComboAction>
           )}
         </>

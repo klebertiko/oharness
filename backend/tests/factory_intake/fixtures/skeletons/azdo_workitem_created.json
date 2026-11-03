@@ -1,0 +1,20 @@
+{
+ "id": "evt-1",
+ "eventType": "workitem.created",
+ "resource": {
+  "id": 42,
+  "fields": {
+   "System.Title": "Fix totals",
+   "System.Description": "<div>@payments check</div>",
+   "System.Tags": "bug; factory",
+   "System.CreatedBy": {
+    "uniqueName": "alice@example.com"
+   }
+  },
+  "_links": {
+   "html": {
+    "href": "https://dev.azure.com/o/p/_workitems/edit/42"
+   }
+  }
+ }
+}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { useCallback, useEffect, useState } from "react";
 import { FolderPlus, Trash2 } from "lucide-react";
 
+import { tr, useT } from "@/i18n/store";
 import { Panel } from "@/components/shell/Panel";
 import { coworkApi, type CoworkProject } from "@/lib/coworkApi";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
@@ -13,6 +14,7 @@ import { useHarnessSessionStore } from "@/store/harnessSessionStore";
  * Session harness is the create default; each project can override.
  */
 export function CoworkPanel() {
+  const t = useT();
   const sessionEnabled = useHarnessSessionStore((s) => s.enabled);
   const activeBundleId = useHarnessSessionStore((s) => s.activeBundle?.manifest.id ?? null);
 
@@ -55,7 +57,7 @@ export function CoworkPanel() {
       setInstructions("");
       await refresh();
     } catch (err) {
-      setError((err as Error).message || "Create failed");
+      setError((err as Error).message || tr("cowork.createFailed"));
     } finally {
       setBusy(false);
     }
@@ -68,7 +70,7 @@ export function CoworkPanel() {
       await coworkApi.update(project.id, { harnessEnabled: !project.harnessEnabled });
       await refresh();
     } catch (err) {
-      setError((err as Error).message || "Update failed");
+      setError((err as Error).message || tr("cowork.updateFailed"));
     } finally {
       setBusy(false);
     }
@@ -81,37 +83,38 @@ export function CoworkPanel() {
       await coworkApi.remove(id);
       await refresh();
     } catch (err) {
-      setError((err as Error).message || "Delete failed");
+      setError((err as Error).message || tr("cowork.deleteFailed"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Panel title="Cowork" meta={`${projects.length}`} className="h-full">
+    <Panel title={t("cowork.title")} meta={`${projects.length}`} className="h-full">
       <div className="border-b border-line-soft p-2.5">
         <p className="t-meta mb-2 text-ink-mute">
-          Session harness: {sessionEnabled ? "on" : "off"}
-          {activeBundleId ? ` · ${activeBundleId}` : ""}
+          {activeBundleId
+            ? t("cowork.sessionBundle", { state: sessionEnabled ? t("cowork.on") : t("cowork.off"), id: activeBundleId })
+            : t("cowork.session", { state: sessionEnabled ? t("cowork.on") : t("cowork.off") })}
         </p>
         <div className="flex flex-col gap-1.5">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Project name"
+            placeholder={t("cowork.name")}
             className="h-control-md rounded-control border border-line-strong bg-sub-200 px-2 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
           <input
             value={rootPath}
             onChange={(e) => setRootPath(e.target.value)}
-            placeholder="Folder path (e.g. D:/workspaces/research)"
+            placeholder={t("cowork.path")}
             className="h-control-md rounded-control border border-line-strong bg-sub-200 px-2 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
           <textarea
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={2}
-            placeholder="Standing instructions…"
+            placeholder={t("cowork.instructions")}
             className="resize-none rounded-control border border-line-strong bg-sub-200 px-2 py-1.5 text-body text-ink placeholder:text-ink-mute focus-visible:border-signal"
           />
           <label className="flex items-center gap-1.5 text-meta text-ink-mute">
@@ -121,10 +124,10 @@ export function CoworkPanel() {
               onChange={(e) => setHarnessOverride(e.target.checked)}
               className="accent-(--signal)"
             />
-            Harness enabled for this project
+            {t("cowork.harnessEnabled")}
           </label>
           <Button variant="primary" disabled={busy || !name.trim()} loading={busy} onClick={() => void onCreate()} icon={<FolderPlus size={12} strokeWidth={1.8} aria-hidden />}>
-            Create project
+            {t("cowork.create")}
           </Button>
         </div>
       </div>
@@ -137,14 +140,14 @@ export function CoworkPanel() {
 
       <ul className="divide-y divide-line-soft">
         {projects.length === 0 && (
-          <li className="t-body px-3 py-3 text-ink-mute">No cowork projects yet.</li>
+          <li className="t-body px-3 py-3 text-ink-mute">{t("cowork.empty")}</li>
         )}
         {projects.map((p) => (
           <li key={p.id} className="flex items-start gap-2 px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="text-body font-medium text-ink">{p.name}</div>
               <div className="t-meta truncate text-ink-mute" title={p.rootPath}>
-                {p.rootPath || "(no path)"}
+                {p.rootPath || t("cowork.noPath")}
               </div>
               <button
                 type="button"
@@ -152,13 +155,13 @@ export function CoworkPanel() {
                 onClick={() => void onToggleHarness(p)}
                 className="mt-1 text-meta text-ink-mute underline-offset-2 hover:text-ink hover:underline"
               >
-                Harness {p.harnessEnabled ? "on" : "off"} (override)
+                {t("cowork.harnessToggle", { state: p.harnessEnabled ? t("cowork.on") : t("cowork.off") })}
               </button>
             </div>
             <button
               type="button"
               disabled={busy}
-              title="Delete project"
+              title={t("cowork.delete")}
               onClick={() => void onDelete(p.id)}
               className="grid h-5.5 w-5.5 flex-none place-items-center rounded-control text-ink-mute hover:bg-sub-200 hover:text-ink"
             >
