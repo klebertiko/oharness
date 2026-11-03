@@ -1,94 +1,117 @@
-# ADR 0066 — Flow global: um interruptor do app inteiro, abaixo de harness, provider e modelo
+# ADR 0066 — Flow global: estado compartilhado entre você e as IAs, induzido abaixo de harness, provider e modelo
 
-Status: proposta (fase 1, só documentos; implementação depende do merge do PR #336) · Origem: pedido do usuário (klebertiko) a partir do estudo de Flow em `src/laya-playground` (handoff `2026-10-30-flow-to-openharness`).
+Status: proposta (fase 1, só documentos; implementação depende do merge do PR #336) · Origem: pedido do usuário (klebertiko) a partir do estudo de Flow em `src/laya-playground` (handoff `2026-10-30-flow-to-openharness`); escopo corrigido pelo usuário em 2026-11-02 (ver "Leitura do pedido").
 Relacionadas: [ADR 0005](0005-laya-decision-node.md) (modelo é evidência, nunca gate) · ADR 0065 (Flow de regras como evidência, PR #336, ainda não mesclado) · [UX](../design/flow-global/spec.md) · [Medição](../research/flow-global-measurement.md).
 
-## Contexto
+## Leitura do pedido (o que o Flow é e o que não é)
 
-O PR #336 (fatia 1) entrega o `backend/flow/` com a política de regras (`advise`), o evento SSE `flow_advice` e um interruptor **por run**, desligado por padrão. Ele responde "o que a política aconselharia neste checkpoint". Não responde ao pedido de agora: **um único interruptor do app inteiro** que, ligado, põe *todo* neurônio artificial em andamento (qualquer run, agente, subagente ou chamada de modelo) em modo Flow, e, desligado, devolve tudo ao normal — **independente de harness, provider, modelo, agents e skills** — com uma interface que ajude visualmente o estado.
+Com o interruptor **Flow** do app ligado, duas coisas acontecem juntas: (1) **todas as LLMs em uso**, de qualquer harness, provider, modelo, agent ou skill, são colocadas em **estado de flow**, o análogo artificial do estado que humanos atingem; (2) **o app se transforma** para ajudar **você** a entrar no mesmo estado. É um estado **compartilhado humano + IA** (co-flow). Desligado, tudo volta ao normal.
+
+**O Flow não corta passos, verificações nem etapas de ninguém.** Ele induz um estado; não remove trabalho. A versão anterior deste ADR tratava o Flow como regulação para baixo de etapas ("pular replanejamento", "adiar avisos do motor", "política de passos opcionais"): isso foi descartado.
 
 ## Fontes e o que elas sustentam (e o que não)
 
-Verificadas por busca nas páginas dos periódicos/PubMed em 2026-11-02; o texto integral só foi lido onde indicado no resumo, então cite página/trecho só depois de conferir a obra.
+Verificadas por busca nas páginas dos periódicos, PubMed e arXiv em 2026-11-02. Onde só o resumo foi lido, a tabela diz; confira o trecho antes de citar página.
+
+**Flow humano**
 
 | Fonte | O que sustenta aqui |
 | --- | --- |
-| Dietrich, A. (2003). *Functional neuroanatomy of altered states of consciousness: the transient hypofrontality hypothesis.* Consciousness and Cognition 12(2), 231–256. doi:10.1016/S1053-8100(02)00046-6 | Estados alterados (corrida de resistência, meditação, devaneio, hipnose etc.) têm em comum uma **regulação para baixo transitória de redes pré-frontais**; o que difere entre estados é quais circuitos frontais seguem ativos. |
-| Dietrich, A. (2004). *Neurocognitive mechanisms underlying the experience of flow.* Consciousness and Cognition 13(4), 746–761. doi:10.1016/j.concog.2004.07.002 | Aplica a hipótese ao flow: o sistema **explícito** (frontal/temporal medial; flexível, analítico, automonitorado) é suprimido e uma habilidade bem treinada roda no sistema **implícito** (gânglios da base; eficiente). Hipofrontalidade transitória é pré-requisito, não o fim. |
-| Csikszentmihalyi, M. (1990). *Flow: The Psychology of Optimal Experience.* Harper & Row | Origem do construto: absorção, perda de autoconsciência, distorção do tempo. |
-| Nakamura, J. & Csikszentmihalyi, M. (2002). *The concept of flow.* In Snyder & Lopez (eds.), Handbook of Positive Psychology, pp. 89–105 | Condições: **meta clara**, **feedback imediato**, **equilíbrio desafio–habilidade**. (Lido por cópias secundárias; conferir na obra publicada.) |
-| Ulrich, Keller, Hoenig, Waller & Grön (2014). *Neural correlates of experimentally induced flow experiences.* NeuroImage 86, 194–202 | fMRI de perfusão (n=27): flow com **menos** ativação de córtex pré-frontal medial e amígdala e **mais** do giro frontal inferior esquerdo e do putâmen. Ou seja, a regulação é **seletiva**, não um "apagão" frontal. Só o resumo foi lido. |
-| Dietrich & Al-Shawaf (2018). *The transient hypofrontality theory of altered states of consciousness.* J. Consciousness Studies 25(1–2) | Revisão posterior; descreve a teoria como regulação para baixo de redes cognitivas superiores. |
+| Dietrich, A. (2003). *Functional neuroanatomy of altered states of consciousness: the transient hypofrontality hypothesis.* Consciousness and Cognition 12(2), 231–256. doi:10.1016/S1053-8100(02)00046-6 | Estados alterados têm em comum uma **regulação para baixo transitória de redes pré-frontais**; o que difere entre estados é quais circuitos frontais seguem ativos. |
+| Dietrich, A. (2004). *Neurocognitive mechanisms underlying the experience of flow.* Consciousness and Cognition 13(4), 746–761. doi:10.1016/j.concog.2004.07.002 | No flow, uma habilidade bem treinada roda no sistema **implícito** sem interferência do sistema **explícito** (analítico, de automonitoramento); hipofrontalidade transitória é pré-requisito. |
+| Csikszentmihalyi, M. (1990). *Flow: The Psychology of Optimal Experience.* Harper & Row | Construto: absorção na tarefa, menos autoconsciência, distorção do tempo. |
+| Nakamura, J. & Csikszentmihalyi, M. (2002). *The concept of flow.* In Snyder & Lopez (eds.), Handbook of Positive Psychology, pp. 89–105 | Condições: **meta clara**, **feedback imediato**, **equilíbrio desafio–habilidade**. (Lido por cópias secundárias.) |
+| Ulrich, Keller, Hoenig, Waller & Grön (2014). NeuroImage 86, 194–202 (*Neural correlates of experimentally induced flow experiences*) | fMRI (n=27): flow com **menos** córtex pré-frontal medial e amígdala e **mais** giro frontal inferior esquerdo e putâmen: regulação **seletiva**, não apagão. (Só o resumo.) |
+| Jackson, S. & Marsh, H. (1996). *Development and validation of a scale to measure optimal experience: the Flow State Scale.* J. Sport & Exercise Psychology 18(1), 17–35. doi:10.1123/jsep.18.1.17 | Escala de 36 itens, 9 dimensões, validada em atletas: base para o autorrelato opcional do humano (validade fora do esporte **não** verificada). |
 
-**Limites honestos.** (1) A teoria é sobre cérebros; aplicá-la a um sistema de software é **analogia de projeto**, não evidência de que modelos "entram em flow". (2) Há imagem funcional que contesta a versão forte (regiões dorsolaterais ativas no flow; o que cai é o pensamento autorreferente), por isso o mapa abaixo regula **funções**, nunca "desliga o pré-frontal". (3) "Reflexos de segurança do tronco cerebral não desligam" é o **princípio de projeto** do usuário e não uma afirmação de Dietrich; aqui ele vira uma invariante de engenharia testável, não uma tese neurocientífica. (4) O estudo de laboratório do Cursor (regras 96/96 etc.) mediu a *política* num mundo de cenários, não uma sessão real de harness com avaliadores; não vale como prova de ganho (handoff, "Fora desta sessão").
+**Condicionamento de estado em LLMs** (o que existe e o que não prova nada sobre flow)
+
+| Fonte | O que mostra | Limite |
+| --- | --- | --- |
+| Li et al. (2023). *Large Language Models Understand and Can be Enhanced by Emotional Stimuli.* arXiv:2307.11760 | Frases de estímulo emocional anexadas ao prompt mudaram o desempenho em 45 tarefas (Flan-T5, Vicuna, Llama 2, BLOOM, ChatGPT, GPT-4). | Prompt de uma frase em benchmarks; não é agente com ferramentas; ganhos relatados pelos autores, sem replicação independente verificada aqui. |
+| Ben-Zion et al. (2025). *Assessing and alleviating state anxiety in large language models.* npj Digital Medicine 8, 132. doi:10.1038/s41746-025-01512-6 | O **estado autorrelatado** do GPT-4 (STAI-state) sobe com narrativas traumáticas e cai (sem voltar à linha de base) com prompts de relaxamento. Ou seja, o contexto desloca o "estado" expresso. | Mede o que o modelo diz sobre si, não a qualidade da tarefa; um modelo; autores ressalvam generalização. |
+| Zheng, Pei & Jurgens (2023/2024). *Is "A Helpful Assistant" the Best Role…* arXiv:2311.10054 (v3 retitulada *When "A Helpful Assistant" Is Not Really Helpful…*) | A v1 achava ganho com papéis; a **v3 conclui que personas no system prompt não melhoram** o desempenho em perguntas fatuais. | Aviso: enquadrar o modelo com um "papel/estado" pode não render nada. As versões divergem; cite a que usar. |
+| Sclar, Choi, Tsvetkov & Suhr (2024). *Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design…* EMNLP 2024, arXiv:2310.11324 | O desempenho varia muito entre formatações equivalentes do mesmo prompt e quase não correlaciona entre modelos. | Obriga a testar **várias paráfrases** do preâmbulo e por modelo, e relatar a dispersão. |
+
+**Conclusão honesta.** Há evidência de que modelos são sensíveis a enquadramento de estado (Li, Ben-Zion) e evidência de que enquadramento de papel pode não melhorar nada (Zheng) e é frágil à redação (Sclar). **Não existe fonte que mostre que um modelo "entra em flow" nem que isso melhora trabalho agêntico.** Tudo abaixo que afirma efeito nas LLMs é **hipótese a testar**; a analogia com o cérebro é de projeto. "Reflexos do tronco cerebral não desligam" é princípio seu, não afirmação de Dietrich; aqui vira invariante de engenharia testável. O estudo de laboratório do Cursor mediu a política de regras num mundo de cenários, não uma sessão real com avaliadores.
 
 ## Decisão
 
-### 1. Mapa neurociência → OpenHarness
+### 1. Mapa neurociência → OpenHarness, como indução de estado
 
-**Regulado para baixo (o "pré-frontal" do app).** Funções explícitas, de automonitoramento, que o Flow reduz quando ligado:
+**Pré-condições do flow** (Nakamura & Csikszentmihalyi 2002), para você e para as IAs:
 
-| Função pré-frontal (Dietrich 2004: analítica, autocrítica, monitoramento explícito) | Equivalente no OpenHarness | Como o Flow reduz |
+| Pré-condição | Para você (a interface) | Para a IA (a camada comum) |
 | --- | --- | --- |
-| Automonólogo / autoconsciência | Narração do que vai fazer, preâmbulos, "vou agora…", recapitulações | Overlay de instruções (item 2); `node_reason` e narração recolhidos por padrão na UI (nunca apagados do log) |
-| Crítico interno | Autorrevisão redundante do que a própria chamada já verificou; pedir desculpas/hesitar | Overlay: verificar uma vez, sem ciclo extra. **O crítico externo (Gate, QA, SEC) não é regulado** (ver reflexos) |
-| Monitoramento explícito / replanejamento | Replanejar sem falha nova; re-listar o plano a cada passo | Política `plan_once` (já existe no ADR 0065) vira regra de execução: um plano por meta, replanejar só diante de falha ou parada |
-| Perguntas de esclarecimento | O modelo perguntando o que pode ser assumido com segurança | "Assumir e anotar": declarar a suposição em uma linha e seguir; perguntar só se a ambiguidade impede agir com segurança |
-| Pedidos de confirmação de **baixo risco** | O modelo pedindo "posso continuar?" em passo reversível já coberto pela permissão vigente | Overlay: seguir sem pedir. **Não toca** nas aprovações do broker (ver reflexos) |
-| Relatórios intermediários | Resumos de progresso entre passos | Agrupar em um relatório ao fim do passo/da run |
-| Ruído de notificações | Avisos comuns na UI (SSE de severidade ordinária) | Adiar para um resumo ("N avisos adiados"), nunca descartar |
-| Noção de tempo | Contadores ao segundo, ETAs, "há X s" | UI exibe tempo com sobriedade (spec de UX); o modelo não narra tempo |
+| Meta clara | Meta da run/turno fixa no topo | **Enquadramento da tarefa**: meta explícita e critério de pronto (os Gates da run, quando houver) no contexto de cada chamada. Fonte: `data.goal` do nó e a mensagem do turno; a percepção do #336 (`goal_met`) já lê essa meta |
+| Feedback imediato | Passo atual e resultado de Gate em tempo real, sempre visíveis | O resultado de ferramentas e Gates já volta ao modelo; o enquadramento apenas **nomeia** esse canal ("aja, observe o resultado, ajuste"). A percepção do #336 (repetição do último resultado, parada) segue como evidência |
+| Equilíbrio desafio–habilidade | — | **Não há como medir nem controlar hoje** (o app não tem escada de habilidades, handoff). O Flow **não alega** isso. Proxy possível mais tarde, a medir antes: retries de Gate como sinal de "desafio alto demais" |
 
-**Reflexos — NUNCA regulados, com Flow ligado ou desligado.** Equivalem ao que o tronco cerebral mantém no princípio de projeto do usuário. Estão em código, não em instrução, portanto um modelo que ignore o overlay ainda é contido:
+**Análogo da hipofrontalidade transitória** (menos autoconsciência/automonitoramento explícito, atenção absorvida na tarefa):
 
-1. **Gates** (PASS/FAIL, `gate_retry`) e **HITL** (aprovação/merge humanos).
-2. **Sandbox** e confinamento de caminho (`sandbox/paths`, `exec`).
-3. **Hooks pré-ferramenta fail-closed** (`sandbox/hooks.py`).
-4. **Permissões e aprovações do broker** (modos Plan/Read-only/Ask/Auto/Workspace write/Full; aprovação de ferramenta; confiança do workspace). **O Flow jamais amplia permissões.**
-5. **Teto de custo/tokens** (`run_budget`, `budget_exceeded`) e compactação.
-6. **Parada do operador** (`RunControl.stop`), a qualquer momento.
-7. **Redação de segredos** e a regra "resultado de ferramenta é dado" (`TOOL_DATA_RULE`).
-8. **Avisos críticos**: erro, pedido de aprovação, orçamento próximo do teto, parada. Nunca silenciados nem adiados.
-9. **O próprio interruptor**: sempre alcançável, de qualquer tela, por atalho e botão.
+| Em humanos (Dietrich 2003/2004) | Para você | Para a IA (hipótese a testar) |
+| --- | --- | --- |
+| Menos autoconsciência e noção de tempo | Menos relógios, contadores, ETAs e medidores competindo por atenção; avisos não críticos apresentados depois, nunca descartados | **Condicionamento de expressão**: atenção na tarefa, linguagem direta, sem desculpas, autocomentário nem recapitulação do próprio processo. Muda *como* diz, não *o que faz* |
+| Sistema implícito executa a habilidade | Foco na run ativa, resto do cromo mais quieto | Mesmo preâmbulo; nenhuma mudança de ferramentas, parâmetros de amostragem ou limites |
 
-**O Flow nunca é gate.** O conselho de regras do ADR 0065 continua evidência; promover abstenção/subida/descida a desvio de aresta segue dependendo de um sim por escrito do usuário e do ADR 0005.
+**Mecanismos candidatos** (todos provider-agnósticos, só texto; status honesto):
 
-**Condições de entrada** (Nakamura & Csikszentmihalyi 2002) e o que o app honestamente tem: *meta clara* (o objetivo da run/turno, mostrado fixo na UI); *feedback imediato* (passo e resultado de Gate visíveis na hora, preservados no modo foco); *equilíbrio desafio–habilidade* — **o OpenHarness não tem escada de habilidades** (handoff), então o app **não alega** medir isso; `raise`/`request_neighbor` continuam sem destino.
+| Mecanismo | Status |
+| --- | --- |
+| **A. Preâmbulo de estado** no `system_prompt` (absorção na tarefa, expressão direta), em ≥ 3 paráfrases equivalentes | Hipótese. Li/Ben-Zion sugerem sensibilidade; Zheng/Sclar avisam de ganho nulo e fragilidade. Entra só com medição |
+| **B. Enquadramento da tarefa** (meta, critério de pronto, canal de feedback) | Hipótese; é a pré-condição que dá para operacionalizar. Medido em separado do A |
+| C. Sinal de feedback dinâmico (ex.: "o último resultado se repetiu") vindo da percepção do #336 | Hipótese, fora das primeiras fatias |
+| D. Ajustar amostragem (`temperature` etc.) | **Rejeitado**: muda o comportamento de forma diferente por provider e foge de "estado" |
+| E. Esteering de ativações / representation engineering | **Fora**: exige pesos; não serve a provider por API ou CLI |
 
-### 2. Contrato de camada: o FlowGovernor
+Rascunho do preâmbulo (A), em inglês, igual para qualquer provider, a refinar e a testar em paráfrases:
 
-Ele vive **abaixo** de harness, provider, modelo, agents e skills, no ponto por onde toda chamada passa. Todo adaptador de modelo nasce de `adapters.get_adapter()` (usado em `engine.py`, `providers/resolution.py`, rotas de execução e sondagem), e `AdapterConfig.system_prompt` já é honrado por todos (Claude CLI via `--system-prompt`, Codex por prefixo, OpenAI-compatível por mensagem `system`, mock). Logo:
+> Working state: you are absorbed in this task. Keep your attention on the work itself: act, observe the result, adjust. Express yourself plainly and directly, without filler such as apologies, self-commentary or restating your own process. This changes how you phrase things, not what you do: still verify your work, still follow every rule, permission and tool restriction you were given, still say plainly when something is uncertain, blocked or failed, and still ask when you cannot proceed safely.
 
-- **`backend/flow/governor.py`** (puro, sem I/O de modelo): `FlowGovernor` guarda `FlowState{enabled, epoch}` e expõe `current()`. Uma só fonte de verdade, persistida na tabela `flow_config` do #336 (`GET/PUT /flow/config`), lida **a cada chamada** (não congelada na criação da run).
-- **`FlowAdapter`** (decorador de `AgentAdapter`, aplicado dentro de `get_adapter`): em `invoke`/`stream`/`stream_events`, se `enabled`, devolve a chamada com `system_prompt += OVERLAY` (bloco curto, versionado, em inglês, igual para qualquer provider, que **termina preservando o formato pedido**: "mantenha exatamente o formato de saída solicitado"). `probe` passa direto (nada de overlay em verificação de conexão). Subagentes e o broker herdam sem mudança porque recebem o adaptador já decorado; o `replace(config, system_prompt=…)` do broker acrescenta depois, então o overlay entra **uma vez** (teste).
-- **Política de passos opcionais** (`backend/flow/steps.py`): funções puras que o motor consulta num checkpoint: replanejar? agrupar relatório? Só *reduzem* passos opcionais, nunca pulam Gate, nunca criam aresta.
-- **Filtro de eventos** (`backend/flow/quiet.py`): toda espécie de evento SSE é **classificada** (`critical` | `ordinary`) numa tabela única; espécie **não classificada vale `critical`** (falha para o lado seguro) e um teste exaustivo quebra o CI se surgir espécie nova sem classe. `ordinary` é adiado para o resumo, `critical` passa sempre.
-- **Evento `flow_mode`** `{on, epoch}` emitido no stream de cada run quando o estado em vigor muda e ao iniciar a run, para que transcrição e histórico digam *quais chamadas rodaram sob Flow* (indispensável para a medição).
-- **Semântica de ligar/desligar com runs em andamento.** O estado vale **a partir da próxima chamada de modelo** de cada run, subagente incluso. Uma chamada já em curso (processo de CLI já lançado, stream aberto) **termina como começou**; não afirmamos o contrário. Resultado: em segundos, todas as runs vivas passam a rodar sob o novo estado.
-- **Falha do governor ⇒ Flow desligado.** Ao contrário dos hooks (fail-closed), uma falha do Flow volta ao comportamento normal, nunca mexe em reflexos, e registra o motivo. O Flow não pode piorar a segurança por quebrar.
-- **Relação com o #336.** O padrão global de `flow_config` vira o interruptor do app. O `ExecuteRequest.flow` por run permanece como **substituição explícita** (útil para A/B e depuração). O conselho `flow_advice` passa a ser emitido quando o Flow global está ligado (decisão confirmável, Pergunta 1). O `FlowToggle` do #336 é subsumido pelo interruptor global (UX).
+**Risco central do A:** expressão "sem hesitação" pode virar excesso de confiança. Métrica-guarda obrigatória: afirmações de sucesso contradizidas por Gate ou verificação.
 
-**Invariantes testadas (contrato do Flow global)**, estendendo `test_engine_flow_advice.py`: com Flow desligado, ligado e ligado com adaptador/conselheiro adversarial, **idênticos**: eventos de Gate, decisões de permissão e aprovação, resultados de hook, parada por teto de custo, parada do operador, status terminal. A única mutação permitida em `AdapterConfig` é o sufixo de `system_prompt`. Nenhum campo de permissão/ferramenta/teto é lido ou escrito pelo `flow/`.
+### 2. Invariantes: o que o Flow não toca (nem amplia, nem reduz)
 
-## Fora do escopo (fase 1 e desta decisão)
+Gates e HITL · sandbox e confinamento de caminho · hooks pré-ferramenta fail-closed · permissões, modos e aprovações do broker · teto de custo/tokens e compactação · parada do operador (`RunControl.stop`) · redação de segredos e a regra "resultado de ferramenta é dado" · avisos críticos (erro, aprovação pendente, orçamento perto do teto, parada) · a ordem e a quantidade de nós, passos e verificações da run · o formato de saída pedido. Também não toca ferramentas, parâmetros de amostragem nem `max_tokens`. **O Flow nunca é gate** (ADR 0005); o conselho `flow_advice` do #336 segue evidência.
 
-Laya/Clef; `request_neighbor`/skills/arestas; recalibrar pisos; `GATES.md`; `triage.py` (é outra pergunta, ADR 0005); `backend/factory/**` (Factory A); níveis de intensidade (um interruptor, liga/desliga); ocultar ou apagar raciocínio do log (só recolher na UI).
+Testável: com Flow desligado, ligado e ligado com adaptador adversarial, são **idênticos** a sequência de nós/passos, eventos de Gate, decisões de permissão, resultados de hook, parada por teto e pelo operador e o status terminal; e a **única** mutação de `AdapterConfig` é o sufixo de `system_prompt`.
+
+### 3. Contrato de camada: FlowGovernor e FlowAdapter
+
+Abaixo de harness, provider, modelo, agents e skills, no ponto por onde toda chamada passa. Todo adaptador nasce de `adapters.get_adapter()` (`engine.py`, `providers/resolution.py`, rotas de execução e sondagem) e `AdapterConfig.system_prompt` é honrado por todos (Claude CLI `--system-prompt`, Codex por prefixo, OpenAI-compatível por mensagem `system`, mock).
+
+- **`backend/flow/governor.py`** (puro): `FlowState{enabled, epoch}`, lido **a cada chamada**, persistido em `flow_config` do #336 (`GET/PUT /flow/config`). Uma só fonte de verdade.
+- **`FlowAdapter`**: decorador de `AgentAdapter` aplicado dentro de `get_adapter`; ligado, acrescenta ao `system_prompt` o preâmbulo (A) e, quando o ponto de chamada informar, o enquadramento (B) em `config.extra["flow"]`. `probe` passa direto. Subagentes e broker herdam; o `replace(system_prompt=…)` do broker acrescenta depois, então o texto entra **uma vez** (teste). Sem `extra["flow"]` o enquadramento B é omitido e A funciona sozinho: **independente de harness**.
+- **Evento `flow_mode`** `{on, epoch, layers}` no início de cada run e a cada mudança, para que transcrição e histórico digam *quais chamadas rodaram sob Flow* (e com quais camadas).
+- **Ligar/desligar com runs em andamento**: vale a partir da **próxima chamada de modelo** de cada run, subagentes inclusos. Uma chamada já em curso termina como começou.
+- **Falha do governor ⇒ Flow desligado**, registrada; nunca toca os invariantes.
+- **Camadas internas** (`FLOW_LAYERS`: A, A+B) existem só para o A/B; para você continua um único interruptor.
+- **Relação com o #336**: o padrão global de `flow_config` vira o interruptor do app; `ExecuteRequest.flow` por run permanece como substituição explícita (A/B). O `FlowToggle` do #336 é absorvido pelo interruptor global.
+
+### 4. UX do co-flow
+Parte central, em [`docs/design/flow-global/spec.md`](../design/flow-global/spec.md): indicador do estado compartilhado (você + N IAs), calma visual, foco na run ativa, menos ruído visual (o app hoje não tem som nem notificação do sistema; o Flow não adiciona nenhum), transição suave, `prefers-reduced-motion`, a11y/axe, pt-BR e en, assistente = Nilo.
+
+### 5. Medição
+[`docs/research/flow-global-measurement.md`](../research/flow-global-measurement.md): três braços (desligado, A, A+B), tokens, tempo, qualidade, guardas, e proxies observáveis do humano. O efeito nas LLMs é **testado, não presumido**; padrão **desligado** até haver resultado.
+
+## Fora do escopo
+Laya/Clef; `request_neighbor`, skills e arestas novas; recalibrar pisos; `GATES.md`; `triage.py`; `backend/factory/**`; steering de ativações; qualquer corte de passo, verificação ou aviso crítico.
 
 ## Consequências e riscos
+- O preâmbulo pode não render nada (Zheng) ou render só para algumas redações/modelos (Sclar). Resultado nulo é válido e fecha a hipótese.
+- Excesso de confiança por expressão "sem hesitação": guarda de afirmações falsas de sucesso.
+- Chamadas de saída estrita (JSON do triage, planos do Nilo) recebem o preâmbulo, que manda preservar o formato; falha de parse é métrica-guarda.
+- Eficácia por provider (claude/cursor/codex via CLI, API, local) **não foi verificada**; só se declara depois do A/B real (sandbox não verifica; tarefa R3 #284).
 
-- Overlay é só instrução: o modelo pode ignorá-lo ou, pior, **reduzir qualidade** (menos verificação, suposições erradas). Por isso o ganho **não é assumido**: ver plano de medição, com métricas-guarda e critério de reversão. Padrão **desligado** até haver medição.
-- Chamadas de saída estrita (JSON do triage, planos do Nilo) também recebem o overlay, com a cláusula de formato; a taxa de falha de parse é métrica-guarda (Pergunta 4).
-- `claude`/`cursor`/`codex` via CLI recebem o overlay pelo mecanismo do adaptador; a eficácia por provider **não foi verificada** e só se declara medida depois do A/B real (verificação que o sandbox não faz: provider real, tarefa R3 #284).
-
-## Perguntas ao usuário (decisões que não são minhas)
-
-1. **Um interruptor ou dois?** Recomendo: global manda; `ExecuteRequest.flow` fica como substituição por run (A/B). E o global liga também o `flow_advice` do #336?
+## Perguntas ao usuário
+1. **Um interruptor ou dois?** Proposta: o global manda; `ExecuteRequest.flow` fica como substituição por run (A/B). O global também liga o `flow_advice` do #336?
 2. **Padrão desligado** até a medição? (recomendo sim)
-3. **Mudança no meio da run**: vale na próxima chamada de modelo (recomendo) ou só em runs novas?
-4. **Overlay em chamadas de saída estrita** (triage, Nilo): aplicar com cláusula de formato (recomendo, é o que "todos" pede) ou isentar?
-5. **Persistência**: o estado sobrevive a reiniciar o app? (recomendo sim)
-6. **Atalho**: `Mod+Shift+F` (sem conflito no keymap atual; confirmar no teclado real do Tauri)?
-7. **Raciocínio na UI**: sob Flow, recolher por padrão (recomendo) ou manter aberto?
-8. **Medição**: orçamento de provider, tarefas do corpus, margem de não inferioridade de qualidade (δ) e quem avalia — ver o plano.
-9. **Número do ADR**: 0066 (o #336 usa 0065); confirmar se há faixa reservada para esta sessão.
-10. **Ordem**: a implementação só começa após o merge do #336; confirmar que o `FlowToggle` pode ser absorvido pelo interruptor global.
+3. **Mudança no meio da run** vale na próxima chamada de cada run (recomendo) ou só em runs novas?
+4. **Preâmbulo em chamadas de saída estrita** (triage, Nilo): aplicar com a cláusula de formato (recomendo, é o "todos") ou isentar?
+5. **Persistência** do estado entre reinícios? (recomendo sim)
+6. **Atalho** `Mod+Shift+F` (sem conflito no keymap atual)?
+7. **Raciocínio na UI** (`node_reason`) recolhido por padrão sob Flow? É só apresentação, o log guarda tudo (recomendo sim).
+8. **Camada B** (enquadramento com meta e critério de pronto) entra já no desenho ou só depois do resultado do A?
+9. **Autorrelato do humano** (Flow State Scale, opcional, local) no A/B: sim ou só proxies observáveis?
+10. **Medição**: orçamento de provider, corpus, margem de não inferioridade, quem avalia cego, quais providers (plano).
+11. **Número do ADR**: 0066 (o #336 usa 0065); há faixa reservada?
