@@ -1,6 +1,6 @@
 # ADR 0066 — Flow global: estado compartilhado entre você e as IAs, induzido abaixo de harness, provider e modelo
 
-Status: proposta (fase 1, só documentos; implementação depende do merge do PR #336) · Origem: pedido do usuário (klebertiko) a partir do estudo de Flow em `src/laya-playground` (handoff `2026-10-30-flow-to-openharness`); escopo corrigido pelo usuário em 2026-11-02 (ver "Leitura do pedido").
+Status: **aceita em 2026-11-03** com as recomendações deste ADR como decisões (ver "Decisões adotadas"); Flow DESLIGADO por padrão; o #336 já está mesclado · Origem: pedido do usuário (klebertiko) a partir do estudo de Flow em `src/laya-playground` (handoff `2026-10-30-flow-to-openharness`); escopo corrigido pelo usuário em 2026-11-02 (ver "Leitura do pedido").
 Relacionadas: [ADR 0005](0005-laya-decision-node.md) (modelo é evidência, nunca gate) · ADR 0065 (Flow de regras como evidência, PR #336, ainda não mesclado) · [UX](../design/flow-global/spec.md) · [Medição](../research/flow-global-measurement.md).
 
 ## Leitura do pedido (o que o Flow é e o que não é)
@@ -103,7 +103,11 @@ Laya/Clef; `request_neighbor`, skills e arestas novas; recalibrar pisos; `GATES.
 - Chamadas de saída estrita (JSON do triage, planos do Nilo) recebem o preâmbulo, que manda preservar o formato; falha de parse é métrica-guarda.
 - Eficácia por provider (claude/cursor/codex via CLI, API, local) **não foi verificada**; só se declara depois do A/B real (sandbox não verifica; tarefa R3 #284).
 
-## Perguntas ao usuário
+## Decisões adotadas (2026-11-03)
+
+O usuário aceitou "siga as recomendações do ADR" (relayado pela sessão Maestro). Tudo é reversível e o Flow nasce **desligado**. Respostas às perguntas abaixo: 1 o interruptor global manda; `ExecuteRequest.flow` fica como substituição por run (A/B) e o global liga também o `flow_advice` · 2 padrão desligado até a medição · 3 vale na próxima chamada de cada run · 4 preâmbulo também em saída estrita, com a cláusula de formato · 5 estado persiste · 6 `Mod+Shift+F`, a confirmar no teclado real · 7 `node_reason` recolhido por padrão, só apresentação · 11 número 0066. **Sem recomendação explícita no texto, adotado o mais conservador** (revisável): 8 a camada B fica no desenho, implementada depois da A e atrás de `FLOW_LAYERS`; o A/B decide se entra · 9 só proxies observáveis na v1, autorrelato fora · 10 orçamento, corpus, margem de não inferioridade, avaliador e providers seguem abertos e são pré-requisito da S9 (`needs-human`).
+
+## Perguntas originais
 1. **Um interruptor ou dois?** Proposta: o global manda; `ExecuteRequest.flow` fica como substituição por run (A/B). O global também liga o `flow_advice` do #336?
 2. **Padrão desligado** até a medição? (recomendo sim)
 3. **Mudança no meio da run** vale na próxima chamada de cada run (recomendo) ou só em runs novas?
