@@ -10,6 +10,7 @@ from factory_intake.automations import (AutomationEngine, AutomationError, githu
 from factory_intake.cron import CronError, parse_cron
 from factory_intake.matching import PatternError, check_pattern, match_field, match_payload
 from factory_intake.memory import MemoryFactory
+from link_support import make_dir_link
 
 UTC = timezone.utc
 SCHEMAS = Path(__file__).resolve().parents[2] / "oharness" / "schema"
@@ -158,7 +159,7 @@ def test_load_automations_reads_folders_and_refuses_symlinks(tmp_path):
     folder.mkdir(parents=True)
     (folder / "automation.md").write_text(DEAD_CODE)
     assert set(load_automations(tmp_path)) == {"cleanup"}
-    (tmp_path / "automations" / "evil").symlink_to(folder)
+    make_dir_link(tmp_path / "automations" / "evil", folder)
     with pytest.raises(AutomationError):
         load_automations(tmp_path)
 

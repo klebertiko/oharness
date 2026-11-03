@@ -8,6 +8,7 @@ from factory_intake.loader import FoundationMissing, load_port
 from factory_intake.memory import MemoryFactory
 from factory_intake.server import is_loopback
 from factory_intake.tokens import ClientTokens
+from link_support import make_symlink
 from secret_store.memory import MemorySecrets
 
 OK = "authMode: signature\nsignatureScheme: github\nsecretRef: factory/gh\ngithub:\n  repos: [Acme/Payments]\n  handle: '@payments'\n  labels: [factory]\n  allowedAuthors: [owner]\n"
@@ -43,7 +44,7 @@ def test_load_webhooks_reads_the_directory_and_refuses_symlinks(tmp_path):
     (tmp_path / "webhooks" / "ci.yaml").write_text("secretRef: factory/ci\n")
     assert set(load_webhooks(tmp_path)) == {"ci"}
     assert load_webhooks(tmp_path / "nothing") == {}
-    (tmp_path / "webhooks" / "evil.yaml").symlink_to(tmp_path / "webhooks" / "ci.yaml")
+    make_symlink(tmp_path / "webhooks" / "evil.yaml", tmp_path / "webhooks" / "ci.yaml", directory=False)
     with pytest.raises(ConfigError):
         load_webhooks(tmp_path)
 
