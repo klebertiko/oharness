@@ -116,6 +116,13 @@ def run(args: argparse.Namespace) -> int:
             except OSError as exc:
                 print(f"refused: cannot create {args.out}: {exc.strerror}", file=sys.stderr)
                 return EXIT_USAGE
+            from security import sidecar_token
+
+            if not sidecar_token.restrict_to_current_user(args.out):  # before any secret is written: POSIX mode 0600, a Windows ACL
+                os.close(descriptor)
+                args.out.unlink(missing_ok=True)
+                print(f"failed: could not restrict {args.out} to the current user, so no token was created", file=sys.stderr)
+                return EXIT_FAILED
             created = False
             try:
                 value = clients.create(args.name, args.scope, args.kind)
