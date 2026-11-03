@@ -653,6 +653,10 @@ jobs:
         run: |
           set -euo pipefail
           {
+            # Hand-written notes first (EN, then PT-BR) when docs/release-notes/<tag>*.md exist.
+            for f in "source/docs/release-notes/${GITHUB_REF_NAME}.md" "source/docs/release-notes/${GITHUB_REF_NAME}.pt-BR.md"; do
+              if [ -f "$f" ]; then cat "$f"; echo; echo "---"; echo; fi
+            done
             echo "## Downloads"
             echo
             echo "| Platform | File |"

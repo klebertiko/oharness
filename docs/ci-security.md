@@ -104,6 +104,8 @@ Promotion beyond shadow mode requires a versioned, human-labelled PT/EN corpus w
 
 PRs cannot break the site silently: the Quality `website` job already runs `npm run build:pages`, `test:publication`, `test:i18n` and `test:security` on every PR.
 
+Release links on the site are dynamic: the build job reads the newest published release (pre-releases included, drafts excluded) and passes its tag as `RELEASE_TAG` to `build-pages.mjs`, which rewrites the release-page links; with no release yet they point at the releases list. A published release triggers the `redeploy` job, which re-dispatches the workflow on `main` (the `github-pages` environment rejects tag refs). No PR is needed when a release ships.
+
 Edit the site only in `website/` on `main`. Do not commit to `gh-pages` by hand.
 
 **Cut-over (one time, repo owner):**

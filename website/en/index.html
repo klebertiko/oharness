@@ -105,9 +105,9 @@
     <section id="baixar" class="ecosystem-section download-section wrap" aria-labelledby="download-title">
       <div><p class="overline">Download</p><h2 id="download-title">Pre-release<br> 0.0.1-alpha.</h2></div>
       <div class="ecosystem-copy"><p>Version 0.0.1-alpha is a pre-release of alpha quality: the app keeps changing, and the screenshots above show what exists today. <strong>The installers are not signed.</strong> Verify each file before you open it.</p>
-        <p><a class="button primary" href="https://github.com/klebertiko/oharness/releases/tag/v0.0.1-alpha" target="_blank" rel="noopener noreferrer">Open the 0.0.1-alpha release page <svg class="icon" aria-hidden="true"><use href="#external"/></svg></a></p>
+        <p><a class="button primary" href="https://github.com/klebertiko/oharness/releases/tag/v0.0.1-alpha" target="_blank" rel="noopener noreferrer">Open the latest release page <svg class="icon" aria-hidden="true"><use href="#external"/></svg></a></p>
         <p class="source-note">Before you download, check the <a href="#requisitos">system requirements</a>: below them the interface renders broken, with no warning.</p>
-        <p class="source-note">When the version is published, the files will be on its GitHub page. Pre-releases never show up under “Latest”, so the link points straight at the version. Until it is published, the page does not open.</p>
+        <p class="source-note">This link updates itself with every published release; the files are on its GitHub page. Pre-releases never show up under “Latest”, so the link points straight at the newest release (or at the list of releases while none is published).</p>
         <div class="download-list">
           <div><strong>Windows 10/11 x64</strong><code>OHarness-windows-x64-setup.exe</code><p>Unsigned. SmartScreen shows “Windows protected your PC” and an unknown publisher: choose “More info”, then “Run anyway”. Needs the WebView2 Runtime, present on current Windows 10/11.</p></div>
           <div><strong>macOS, Apple silicon and Intel</strong><code>OHarness-macos-arm64.dmg</code><code>OHarness-macos-x64.dmg</code><p>Ad-hoc signature only, not notarized: Gatekeeper blocks the first launch. After verifying the file, use “Open Anyway” in System Settings, Privacy &amp; Security.</p></div>
@@ -161,7 +161,7 @@ gh attestation verify OHarness-windows-x64-setup.exe --repo klebertiko/oharness<
           <li>Linux: the effect of <code>(>= 2.40)</code> in the generated .deb (the package may appear twice in Depends) can only be confirmed in PR #167's file. The WebKitGTK version of Fedora 36 and of distros outside those listed was not verified either.</li>
         </ul>
         <h3 class="download-step">Before you open it</h3>
-        <p>The installers are unsigned. Download only from the <a href="https://github.com/klebertiko/oharness/releases/tag/v0.0.1-alpha" target="_blank" rel="noopener noreferrer">0.0.1-alpha release page</a> (pre-releases do not show up under “Latest”) and check each file with <code>sha256sum --check --ignore-missing SHA256SUMS</code> and <code>gh attestation verify OHarness-windows-x64-setup.exe --repo klebertiko/oharness</code>, as shown in <a href="#baixar">Download</a>.</p>
+        <p>The installers are unsigned. Download only from the <a href="https://github.com/klebertiko/oharness/releases/tag/v0.0.1-alpha" target="_blank" rel="noopener noreferrer">latest release page</a> (pre-releases do not show up under “Latest”) and check each file with <code>sha256sum --check --ignore-missing SHA256SUMS</code> and <code>gh attestation verify OHarness-windows-x64-setup.exe --repo klebertiko/oharness</code>, as shown in <a href="#baixar">Download</a>.</p>
       </div>
     </section>
 
