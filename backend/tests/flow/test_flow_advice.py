@@ -68,3 +68,9 @@ def test_trail_keeps_the_dict_behaviour_and_ignores_empty_results() -> None:
     trail["a"] = ""
     assert trail["a"] == "" and trail.last_two() == ("x", "")
     assert dict(trail) == {"a": ""}
+
+
+def test_trail_equals_a_plain_dict_with_the_same_results() -> None:
+    trail = OutputTrail()
+    trail["a"] = "x"
+    assert trail == {"a": "x"} and trail != {"a": "y"}

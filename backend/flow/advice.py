@@ -32,6 +32,13 @@ class OutputTrail(dict):
         if isinstance(value, str) and value:
             self._last = (value, before if isinstance(before, str) else "")
 
+    # The trail is bookkeeping beside the results, not part of them: two trails
+    # are equal when their results are, exactly as for a plain dict.
+    def __eq__(self, other: object) -> bool:
+        return dict.__eq__(self, other)
+
+    __hash__ = None  # type: ignore[assignment]  # mutable, like dict
+
     def last_two(self) -> tuple[str, str]:
         """(last result, what the same node produced the time before, else "").
 
