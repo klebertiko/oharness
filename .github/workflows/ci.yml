@@ -75,6 +75,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Advisory (not in `required.needs`): the product is a Windows app and the platform-sensitive tests (links, junctions, ACLs, PATH)
+  # never ran on it. A targeted subset keeps it cheap (the full suite takes ~12 min there); see docs/process/windows-ci.md.
+  backend-windows:
+    name: pytest (windows, platform-sensitive subset)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: $/.github/actions/setup-safe-chain # nosemgrep: third-party-action-not-pinned-to-commit-sha (in-repo action, self-repository syntax)
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt -r requirements-test.txt
+      - name: Test
+        run: python -m pytest -q tests/test_turn_diff.py tests/test_sandbox_p3_followups.py tests/test_permission_policy.py tests/test_sandbox_paths.py tests/workspace_manager --deselect tests/workspace_manager/test_workspaces_race.py
+
   rust-tauri:
     name: cargo fmt clippy test
     runs-on: ubuntu-latest
