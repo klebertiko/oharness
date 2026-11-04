@@ -2,6 +2,7 @@
 import getpass
 import os
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,9 +48,9 @@ def test_a_token_is_never_written_when_the_file_cannot_be_restricted(tmp_path, m
 def test_the_restriction_reports_a_failed_icacls(tmp_path, monkeypatch):
     target = tmp_path / "t"
     target.write_text("x")
-    monkeypatch.delenv("USERNAME", raising=False)  # falls back to getpass.getuser()
+    monkeypatch.delenv("USERNAME", raising=False)
+    monkeypatch.setattr(sidecar_token.getpass, "getuser", lambda: "someone")  # the fallback when USERNAME is unset
     monkeypatch.setattr(sidecar_token.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(sidecar_token.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 5))
-    assert sidecar_token.restrict_to_current_user(target) is False
-    monkeypatch.setattr(sidecar_token.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0))
-    assert sidecar_token.restrict_to_current_user(target) is True
+    for returncode, restricted in ((5, False), (0, True)):
+        monkeypatch.setattr(sidecar_token.subprocess, "run", lambda *a, _rc=returncode, **k: SimpleNamespace(returncode=_rc))
+        assert sidecar_token.restrict_to_current_user(target) is restricted
