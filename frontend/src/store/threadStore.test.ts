@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { useMessageQueueStore } from "./messageQueueStore";
 import { DEFAULT_THREAD_TITLE, THREADS_STORAGE_KEY, useThreadStore } from "./threadStore";
 
 describe("threadStore", () => {
@@ -60,6 +61,16 @@ describe("threadStore", () => {
     expect(useThreadStore.getState().threads.map((t) => t.id)).toEqual([a]);
     expect(useThreadStore.getState().messagesFor(b)).toEqual([]);
     expect(useThreadStore.getState().activeThreadId).toBe(a);
+  });
+
+  it("deleting a chat also drops its queued messages", () => {
+    const a = useThreadStore.getState().createThread("A");
+    const b = useThreadStore.getState().createThread("B");
+    useMessageQueueStore.getState().enqueue(a, "keep");
+    useMessageQueueStore.getState().enqueue(b, "gone");
+    useThreadStore.getState().deleteThread(b);
+    expect(useMessageQueueStore.getState().byThread[b]).toBeUndefined();
+    expect(useMessageQueueStore.getState().byThread[a]).toHaveLength(1);
   });
 
   it("ensureActiveThread skips archived chats", () => {

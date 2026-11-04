@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -99,7 +100,9 @@ def test_cli_token_commands_refuse_an_in_memory_store_and_work_with_a_file_store
     assert main(["factory", "token", "create", "agent-a", "--scope", "work:read", "--out", str(out)]) == 0
     printed = capsys.readouterr().out
     token = out.read_text().strip()
-    assert token.startswith("ohf_") and token not in printed and oct(out.stat().st_mode & 0o777) == "0o600"
+    assert token.startswith("ohf_") and token not in printed
+    if os.name != "nt":  # Windows has no POSIX mode: test_token_file_is_restricted_to_the_current_user reads the ACL
+        assert oct(out.stat().st_mode & 0o777) == "0o600"
     assert main(["factory", "token", "check", "agent-a"]) == 0 and json.loads(capsys.readouterr().out) == {"exists": True}
     assert main(["factory", "token", "check", "nobody"]) == 1
     assert main(["factory", "token", "create", "agent-a", "--scope", "work:read", "--out", str(tmp_path / "again.token")]) == 2

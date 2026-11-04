@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { PERMISSION_MODES, nextPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import { Button, Notice, Segmented } from "@/components/ui";
 import { tr, useI18n } from "@/i18n/store";
@@ -47,6 +47,25 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
   const [confirmingFull, setConfirmingFull] = useState(false);
   // Full runs commands unasked: it is chosen on purpose (a confirmation), never by cycling or by accident.
   useEffect(() => { setConfirmingFull(false); }, [permissionMode, live]);
+  const permissionRef = useRef<HTMLDivElement>(null);
+  /** Close the Full confirmation and hand focus back to the Full option it came from (keyboard users go on from there). */
+  const dismissFull = useCallback(() => {
+    setConfirmingFull(false);
+    const fullLabel = t("chat.perm.full.label");
+    [...(permissionRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])].find((el) => el.textContent === fullLabel)?.focus();
+  }, [t]);
+  // Escape dismisses the confirmation wherever focus is: a warning that needs a mouse to leave is a trap.
+  useEffect(() => {
+    if (!confirmingFull) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      dismissFull();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [confirmingFull, dismissFull]);
   const choosePermission = (next: PermissionMode) => {
     if (next === "full" && permissionMode !== "full") { setConfirmingFull(true); return; }
     setConfirmingFull(false);
@@ -156,16 +175,16 @@ export function ChatComposer({ value, onChange, onSend, inputRef, skills, live, 
       }}
       placeholder={live ? t("chat.composer.placeholderLive") : tools?.workspace ? t("chat.composer.placeholderWorkspace", { name: tools.workspace.name }) : t("chat.composer.placeholder")}
       className="block min-h-16 w-full resize-none bg-transparent px-4 pt-3.5 text-reading text-ink outline-hidden placeholder:text-ink-mute" />
-    {permissionMode && onPermissionModeChange && <div className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
-      <Segmented label={t("chat.composer.permissionMode")} value={permissionMode} onChange={choosePermission}
+    {permissionMode && onPermissionModeChange && <div ref={permissionRef} className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-1">
+      <Segmented label={t("chat.composer.permissionMode")} value={permissionMode} onChange={choosePermission} className="max-w-full flex-wrap"
         options={PERMISSION_MODES.map(mode => ({ value: mode, label: t(`chat.perm.${mode}.label`), hint: t(`chat.perm.${mode}.hint`), disabled: live }))} />
       <span className="text-meta text-ink-mute">{t("chat.composer.cycleHint", { summary: t(`chat.perm.${permissionMode}.summary`) })}</span>
       {permissionNotice && <Notice tone="fault" className="w-full">{permissionNotice}</Notice>}
       {confirmingFull && <div role="alertdialog" aria-label={t("chat.composer.switchFullAria")} className="w-full rounded-control border border-warn p-3 text-body text-ink">
         <p>{t("chat.composer.fullWarning")}</p>
         <div className="mt-2 flex gap-2">
-          <Button variant="primary" onClick={() => { setConfirmingFull(false); onPermissionModeChange?.("full"); }}>{t("chat.composer.useFull")}</Button>
-          <Button autoFocus onClick={() => setConfirmingFull(false)}>{t("common.cancel")}</Button>
+          <Button variant="primary" onClick={() => { dismissFull(); onPermissionModeChange?.("full"); }}>{t("chat.composer.useFull")}</Button>
+          <Button autoFocus onClick={dismissFull}>{t("common.cancel")}</Button>
         </div>
       </div>}
       {(permissionMode === "auto_workspace" || permissionMode === "workspace_write") && workspaceTrust && <div className="w-full text-body text-ink-mute">

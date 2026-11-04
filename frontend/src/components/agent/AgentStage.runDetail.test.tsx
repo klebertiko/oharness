@@ -111,8 +111,8 @@ describe("AgentStage — a single run-detail control per run", () => {
     expect(screen.getAllByTestId("transcript")).toHaveLength(1);
     // The detail of the run that just finished is already in memory — opening
     // it must not round-trip to the sidecar for a log it already has.
-    // (The Flow switch reads its own setting when it mounts; that is not the run log.)
-    expect(fetchSpy.mock.calls.filter(([url]) => !String(url).endsWith("/flow/config"))).toEqual([]);
+    // (The Flow switch and the permission mode read their own settings when they mount; that is not the run log.)
+    expect(fetchSpy.mock.calls.filter(([url]) => !/\/(flow\/config|chat\/tools\/permission)/.test(String(url)))).toEqual([]);
   });
 
   it("exposes expanded state and the region it controls, and closes again on a second press", () => {

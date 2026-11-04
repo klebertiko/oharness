@@ -1,0 +1,559 @@
+{
+  "$id": "https://oharness.dev/schema/factory-definition.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "agents": {
+      "additionalProperties": false,
+      "maxProperties": 50,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "harness": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "type": "string"
+            },
+            "instructions": {
+              "maxLength": 20000,
+              "minLength": 0,
+              "type": "string"
+            },
+            "localSkills": {
+              "additionalProperties": false,
+              "maxProperties": 50,
+              "patternProperties": {
+                "^[a-z0-9][a-z0-9-]{0,62}$": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": {
+                      "maxLength": 20000,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "mcp": {
+              "items": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "memory": {
+              "additionalProperties": false,
+              "properties": {
+                "maxNoteChars": {
+                  "maximum": 400,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxNotes": {
+                  "maximum": 50,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxTotalBytes": {
+                  "maximum": 20480,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "maxNotes",
+                "maxNoteChars",
+                "maxTotalBytes"
+              ],
+              "type": "object"
+            },
+            "model": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$",
+              "type": "string"
+            },
+            "permissions": {
+              "additionalProperties": false,
+              "properties": {
+                "maxTokens": {
+                  "maximum": 1000000000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "mode": {
+                  "enum": [
+                    "plan",
+                    "read_only",
+                    "ask",
+                    "auto_workspace",
+                    "workspace_write",
+                    "full"
+                  ]
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            "role": {
+              "enum": [
+                "foreman",
+                "triage",
+                "spec",
+                "implement",
+                "review",
+                "verify",
+                "monitor",
+                "custom"
+              ]
+            },
+            "secrets": {
+              "items": {
+                "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "skills": {
+              "items": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "tokenCeiling": {
+              "maximum": 1000000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "trigger": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "model",
+            "instructions",
+            "skills",
+            "localSkills",
+            "mcp",
+            "permissions",
+            "secrets",
+            "memory",
+            "enabled"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "alias": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "type": "string"
+    },
+    "apiVersion": {
+      "const": "oharness.factory/v1"
+    },
+    "ceilings": {
+      "additionalProperties": false,
+      "properties": {
+        "tokensPerRun": {
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "tokensPerWorkItem": {
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "defaults": {
+      "additionalProperties": false,
+      "properties": {
+        "harness": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "model": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "mcp": {
+      "additionalProperties": false,
+      "maxProperties": 50,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "args": {
+                  "items": {
+                    "maxLength": 500,
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "type": "array"
+                },
+                "command": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "env": {
+                  "additionalProperties": false,
+                  "maxProperties": 50,
+                  "patternProperties": {
+                    "^[A-Z_][A-Z0-9_]{0,63}$": {
+                      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "headers": {
+                  "additionalProperties": false,
+                  "maxProperties": 50,
+                  "patternProperties": {
+                    "^[A-Za-z0-9-]{1,100}$": {
+                      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "url": {
+                  "pattern": "^https?://[^\\s]{1,2000}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "name": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "type": "string"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "maxPermissionMode": {
+          "enum": [
+            "plan",
+            "read_only",
+            "ask",
+            "auto_workspace",
+            "workspace_write",
+            "full"
+          ]
+        },
+        "maxReviewReturns": {
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requireSpec": {
+          "type": "boolean"
+        },
+        "reviewIndependence": {
+          "enum": [
+            "require",
+            "warn",
+            "off"
+          ]
+        },
+        "specApproval": {
+          "enum": [
+            "required",
+            "optional"
+          ]
+        }
+      },
+      "required": [
+        "requireSpec",
+        "specApproval",
+        "maxReviewReturns",
+        "reviewIndependence",
+        "maxPermissionMode"
+      ],
+      "type": "object"
+    },
+    "repositories": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "type": "string"
+          },
+          "path": {
+            "pattern": "^(\\.|[A-Za-z0-9_][A-Za-z0-9_.@+-]*(/[A-Za-z0-9_][A-Za-z0-9_.@+-]*)*)$",
+            "type": "string"
+          },
+          "protectedBranches": {
+            "items": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/*-]{0,199}$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "subdir": {
+            "pattern": "^(\\.|[A-Za-z0-9_][A-Za-z0-9_.@+-]*(/[A-Za-z0-9_][A-Za-z0-9_.@+-]*)*)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "protectedBranches"
+        ],
+        "type": "object"
+      },
+      "maxItems": 50,
+      "minItems": 1,
+      "type": "array"
+    },
+    "reserved": {
+      "additionalProperties": false,
+      "properties": {
+        "automations": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "webhooks": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "runners": {
+      "additionalProperties": false,
+      "maxProperties": 10,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "credentialStrategy": {
+              "enum": [
+                "factory",
+                "user"
+              ]
+            },
+            "kind": {
+              "enum": [
+                "local"
+              ]
+            },
+            "maxConcurrentRuns": {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "pushSecretRef": {
+              "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "maxConcurrentRuns",
+            "credentialStrategy"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "skills": {
+      "additionalProperties": false,
+      "maxProperties": 100,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "stages": {
+      "additionalProperties": false,
+      "properties": {
+        "implement": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "monitor": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "review": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "spec": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "triage": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "verify": {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "tiers": {
+      "additionalProperties": false,
+      "maxProperties": 10,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "models": {
+              "items": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "models"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "name",
+    "alias",
+    "defaults",
+    "repositories",
+    "tiers",
+    "ceilings",
+    "policy",
+    "stages",
+    "runners",
+    "agents",
+    "skills",
+    "mcp",
+    "reserved"
+  ],
+  "title": "OHarness factory definition (the merged form of .oharness/factory)",
+  "type": "object"
+}

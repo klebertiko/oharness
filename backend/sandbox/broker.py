@@ -12,7 +12,7 @@ import httpx
 from run_budget import compact_messages
 from .capabilities import capabilities
 from .discover import discover
-from .exec import run, risk_hints
+from .exec import ProgramNotFound, run, risk_hints
 from .hooks import run_hook
 from .paths import PathViolation, resolve_in_root
 from .permission import DENY_NOTES, decide_with_class, effective_mode, hardened_git, needs_confirmation_even_when_allowed
@@ -159,8 +159,8 @@ class ToolBroker:
         except (ValueError, ReadFailure, PathViolation, TypeError):
             self.last_result = 'policy: invalid or unauthorized tool arguments'
             yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': self.last_result}
-        except OSError:
-            self.last_result = 'Unable to start or read the requested local resource.'
+        except OSError as error:
+            self.last_result = str(error) if isinstance(error, ProgramNotFound) else 'Unable to start or read the requested local resource.'
             yield {'kind': 'tool_result', 'call_id': call_id, 'ok': False, 'result': self.last_result,
                    'duration_ms': 0, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0}
 

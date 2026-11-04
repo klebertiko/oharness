@@ -23,6 +23,10 @@ def add_parser(sub) -> argparse.ArgumentParser:
     serve.add_argument("--dir", type=Path, default=Path(".oharness/factory"), help="the factory definition directory (webhooks/<name>.yaml)")
     serve.add_argument("--allow-remote", action="store_true", help="bind beyond loopback; put your own authenticated tunnel or proxy in front")
 
+    validate = group.add_parser("validate", help="check a factory definition folder (exit 0 valid, 1 invalid, 2 folder missing); prints JSON")
+    validate.add_argument("dir", type=Path, help="the definition folder, usually .oharness/factory")
+    validate.add_argument("--check", action="store_true", help="also walk example work items through the definition (no provider, no network)")
+
     token = group.add_parser("token", help="client tokens for the integration API (kept hashed in the secrets store)")
     actions = token.add_subparsers(dest="token_cmd", required=True)
     create = actions.add_parser("create", help="create a token; it is printed once")
@@ -57,6 +61,13 @@ def _backend_on_path() -> None:
         sys.path.insert(0, backend)
 
 
+def _discard(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:  # an ACL half-applied: the file is empty, so nothing secret is left behind
+        pass
+
+
 def _vault():
     _backend_on_path()
     if os.environ.get("OH_SECRETS", "memory").strip().lower() in ("", "memory", "mem"):
@@ -83,6 +94,12 @@ def run(args: argparse.Namespace) -> int:
             factory_cli._fail("no_factory", str(exc), args.json)
             return EXIT_USAGE
         return factory_cli.run(args, port)
+    if args.factory_cmd == "validate":
+        from factory.definition import cli_validate
+
+        code, payload = cli_validate(args.dir, args.check)
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return code
     if args.factory_cmd == "mcp":
         from .loader import FoundationMissing, load_port
         from .mcp import serve_stdio
@@ -116,6 +133,13 @@ def run(args: argparse.Namespace) -> int:
             except OSError as exc:
                 print(f"refused: cannot create {args.out}: {exc.strerror}", file=sys.stderr)
                 return EXIT_USAGE
+            from security import sidecar_token
+
+            if not sidecar_token.restrict_to_current_user(args.out):  # before any secret is written: POSIX mode 0600, a Windows ACL
+                os.close(descriptor)
+                _discard(args.out)
+                print(f"failed: could not restrict {args.out} to the current user, so no token was created", file=sys.stderr)
+                return EXIT_FAILED
             created = False
             try:
                 value = clients.create(args.name, args.scope, args.kind)
@@ -127,7 +151,7 @@ def run(args: argparse.Namespace) -> int:
                     clients.revoke(args.name)
                 else:
                     os.close(descriptor)
-                args.out.unlink(missing_ok=True)
+                _discard(args.out)
                 print(f"refused: {exc}" if isinstance(exc, ValueError) else "failed: the token could not be stored", file=sys.stderr)
                 return EXIT_USAGE if isinstance(exc, ValueError) else EXIT_FAILED
             print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))

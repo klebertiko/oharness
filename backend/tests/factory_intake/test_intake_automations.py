@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -284,9 +285,11 @@ def test_non_ascii_digits_in_cron_are_a_cron_error():
             parse_cron(bad, "UTC")
 
 
+# `time.tzset` (how this test switches the system zone) exists only on POSIX; Windows reads the zone from the OS, not from `TZ`.
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset is POSIX-only")
 def test_without_a_timezone_the_system_zone_is_used_per_instant(monkeypatch):
     monkeypatch.setenv("TZ", "America/New_York")
-    __import__("time").tzset()
+    time.tzset()
     c = parse_cron("0 3 * * *")
     assert c.matches(dt(2026, 1, 15, 8, 0)) and c.matches(dt(2026, 7, 15, 7, 0))  # 03:00 local in winter (UTC-5) and in summer (UTC-4)
     assert not c.matches(dt(2026, 7, 15, 8, 0))
