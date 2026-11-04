@@ -57,6 +57,13 @@ def _backend_on_path() -> None:
         sys.path.insert(0, backend)
 
 
+def _discard(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:  # an ACL half-applied: the file is empty, so nothing secret is left behind
+        pass
+
+
 def _vault():
     _backend_on_path()
     if os.environ.get("OH_SECRETS", "memory").strip().lower() in ("", "memory", "mem"):
@@ -116,6 +123,13 @@ def run(args: argparse.Namespace) -> int:
             except OSError as exc:
                 print(f"refused: cannot create {args.out}: {exc.strerror}", file=sys.stderr)
                 return EXIT_USAGE
+            from security import sidecar_token
+
+            if not sidecar_token.restrict_to_current_user(args.out):  # before any secret is written: POSIX mode 0600, a Windows ACL
+                os.close(descriptor)
+                _discard(args.out)
+                print(f"failed: could not restrict {args.out} to the current user, so no token was created", file=sys.stderr)
+                return EXIT_FAILED
             created = False
             try:
                 value = clients.create(args.name, args.scope, args.kind)
@@ -127,7 +141,7 @@ def run(args: argparse.Namespace) -> int:
                     clients.revoke(args.name)
                 else:
                     os.close(descriptor)
-                args.out.unlink(missing_ok=True)
+                _discard(args.out)
                 print(f"refused: {exc}" if isinstance(exc, ValueError) else "failed: the token could not be stored", file=sys.stderr)
                 return EXIT_USAGE if isinstance(exc, ValueError) else EXIT_FAILED
             print(json.dumps({"name": args.name, "scopes": sorted(set(args.scope)), "kind": args.kind, "token_file": str(args.out), "note": "only the token's hash is stored"}))
