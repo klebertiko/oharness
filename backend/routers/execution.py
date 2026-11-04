@@ -28,6 +28,8 @@ from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from providers.outcomes import failure_details
+from flow import config as flow_config
+from flow.config import resolve_flow_switch
 from sandbox.approval import ApprovalConflict
 from sandbox.turn_diff_store import TurnTracker
 from sandbox.hook_store import load_hooks
@@ -50,6 +52,8 @@ class ExecuteRequest(BaseModel):
     worktree: bool = False  # run in a worktree of its own (made from `cwd`, removed when the run ends)
     # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
     max_tokens: Any = None
+    # Flow advice (ADR 0065): True/False for this run, None = the global default (off until turned on).
+    flow: bool | None = None
 
 
 class DirectRequest(BaseModel):
@@ -420,6 +424,7 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
     else:
         run_id = resume.run_id  # created (and claimed) by the continuation; its journal already holds the event that opened it
 
+    flow_advice = resolve_flow_switch(body.flow, await flow_config.get_enabled(db))
     control = RunControl(run_id, step=body.step)
     RUNS[run_id] = control
 
@@ -485,6 +490,7 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                     cwd=run_cwd,
                     enforce_budget=_enforce_node_budget,
                     resume_outputs=resume.outputs if resume else None,
+                    flow_advice=flow_advice,
                 ):
                     parsed = _parse_sse_chunk(chunk)
                     if parsed and parsed["event"] == "harness_done" and tracker:
