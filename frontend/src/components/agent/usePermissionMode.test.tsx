@@ -74,6 +74,17 @@ it("a conversation that was just adopted is not checked against a stale answer: 
   expect(api.getPermission).not.toHaveBeenCalledWith("t9");
 });
 
+it("a conversation adopted here is checked like any other once its mode was delivered", async () => {
+  usePermissionStore.getState().setMode(null, "plan");
+  const { result, rerender } = renderHook(({ id }) => usePermissionMode(id), { initialProps: { id: null as string | null } });
+  await act(async () => { await result.current.adopt("t9"); });
+  rerender({ id: "t9" });
+  rerender({ id: "other" });
+  api.getPermission.mockClear();
+  rerender({ id: "t9" });
+  await waitFor(() => expect(api.getPermission).toHaveBeenCalledWith("t9"));
+});
+
 it("a late answer from the backend never overwrites a change made in the meantime", async () => {
   usePermissionStore.getState().setMode("t1", "plan");
   let release: (v: { thread_id: string; mode: "plan" }) => void = () => {};

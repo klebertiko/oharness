@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { NEW_CHAT_KEY } from "./chatModelStore";
 
 export const QUEUE_STORAGE_KEY = "oh.messageQueue.v1";
 
@@ -54,12 +55,13 @@ export function restoreQueue(raw: unknown): Record<string, QueuedMessage[]> {
   const byThread: Record<string, QueuedMessage[]> = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return byThread;
   for (const [threadId, list] of Object.entries(raw as Record<string, unknown>)) {
-    if (!Array.isArray(list)) continue;
+    // `__proto__` as a key would swap the prototype of `byThread` instead of adding an entry.
+    if (threadId === "__proto__" || !Array.isArray(list)) continue;
     const kept: QueuedMessage[] = [];
     for (const item of list) {
       if (kept.length >= MAX_QUEUED || !item || typeof item !== "object") continue;
       const { id, text } = item as { id?: unknown; text?: unknown };
-      if (typeof id !== "string" || !id || typeof text !== "string") continue;
+      if (typeof id !== "string" || !id || typeof text !== "string" || kept.some((m) => m.id === id)) continue;
       const trimmed = text.trim();
       if (trimmed && trimmed.length <= MAX_QUEUED_CHARS) kept.push({ id, text: trimmed });
     }
@@ -102,8 +104,8 @@ export const useMessageQueueStore = create<QueueState>()(
       name: QUEUE_STORAGE_KEY,
       version: 1,
       storage: createJSONStorage(() => safeStorage),
-      // "new" is the key for a chat that has no thread yet: nothing to come back to after a reload.
-      partialize: (state) => ({ byThread: pick(state.byThread, (key) => key !== "new") }),
+      // NEW_CHAT_KEY is the key for a chat that has no thread yet: nothing to come back to after a reload.
+      partialize: (state) => ({ byThread: pick(state.byThread, (key) => key !== NEW_CHAT_KEY) }),
       merge: (persisted, current) => {
         const byThread = restoreQueue((persisted as { byThread?: unknown } | undefined)?.byThread);
         return { ...current, byThread, pausedThreads: Object.fromEntries(Object.keys(byThread).map((id) => [id, true as const])) };

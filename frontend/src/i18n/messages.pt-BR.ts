@@ -290,6 +290,7 @@ export const ptBR: Record<MessageKey, string> = {
   "chat.queue.paused": "Fila pausada: o turno não terminou. {n} aguardando.",
   "chat.queue.waiting": "Na fila ({n}): roda depois do turno atual.",
   "chat.queue.restored": "Fila restaurada e pausada: nada roda até você mandar. {n} aguardando.",
+  "chat.queue.noProvider": "Conecte um provedor para enviar as mensagens da fila. A fila foi mantida.",
   "chat.queue.full": "A fila está cheia ({n} mensagens). Espere uma rodar ou limpe a fila.",
   "chat.queue.long": "Essa mensagem é longa demais para a fila (limite de {n} caracteres). Envie depois do turno atual.",
   "chat.queue.sendNext": "Enviar a próxima",

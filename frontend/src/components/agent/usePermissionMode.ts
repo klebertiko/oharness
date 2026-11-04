@@ -61,6 +61,7 @@ export function usePermissionMode(threadId: string | null) {
     store.resetDraft();
     if (chosen === DEFAULT_PERMISSION_MODE) {
       store.setMode(newThreadId, chosen);
+      adopted.current.delete(newThreadId);
       return chosen;
     }
     try {
@@ -71,6 +72,9 @@ export function usePermissionMode(threadId: string | null) {
       usePermissionStore.getState().setMode(newThreadId, DEFAULT_PERMISSION_MODE);
       setError(tr("chat.permission.saveFailed"));
       return DEFAULT_PERMISSION_MODE;
+    } finally {
+      // Delivered (or given up): from here on this conversation is checked like any other.
+      adopted.current.delete(newThreadId);
     }
   }, []);
 

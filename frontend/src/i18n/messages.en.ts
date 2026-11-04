@@ -288,6 +288,7 @@ export const en = {
   "chat.queue.paused": "Queue paused: the turn did not finish. {n} waiting.",
   "chat.queue.waiting": "Queued ({n}): runs after the current turn.",
   "chat.queue.restored": "Queue restored and paused: nothing runs until you say so. {n} waiting.",
+  "chat.queue.noProvider": "Connect a provider to send queued messages. The queue is kept.",
   "chat.queue.full": "The queue is full ({n} messages). Wait for one to run or clear the queue.",
   "chat.queue.long": "That message is too long to queue (limit {n} characters). Send it after the current turn.",
   "chat.queue.sendNext": "Send next",

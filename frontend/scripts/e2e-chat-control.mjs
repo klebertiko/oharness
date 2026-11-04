@@ -103,6 +103,8 @@ for (const theme of ["dark", "light"]) {
     const radio = (name) => page.getByRole("radio", { name, exact: true });
     const checked = async () => (await page.getByRole("radio").evaluateAll((els) => els.find((el) => el.getAttribute("aria-checked") === "true")?.textContent)) ?? null;
     const focused = () => page.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
+    // The sidecar stub records a turn when its request arrives; wait for that, never for a particular answer text.
+    const turnsReach = async (count) => { for (let i = 0; i < 100 && turns.length < count; i++) await page.waitForTimeout(100); return turns.length >= count; };
     const mod = process.platform === "darwin" ? "Meta" : "Control";
     const axe = async (what) => {
       await settleForAxe(page);
@@ -160,8 +162,10 @@ for (const theme of ["dark", "light"]) {
       note(turns.length === 1 && Object.values(modes).includes("plan"), label("the Plan turn was sent in Plan mode"), JSON.stringify({ turns, modes }));
       await axe("a plan is waiting for approval");
       await page.getByRole("button", { name: "Approve plan" }).click();
-      await page.getByText("Synthetic answer 2", { exact: true }).waitFor();
-      note(turns[1].includes("Carry out this approved plan"), label("approving sends the plan as the next turn"), turns[1]);
+      note(await turnsReach(2), label("approving sends a second turn"), JSON.stringify(turns));
+      await card.waitFor({ state: "detached" });
+      await page.getByRole("button", { name: "Stop run" }).waitFor({ state: "detached" });
+      note(turns[1]?.includes("Carry out this approved plan"), label("approving sends the plan as the next turn"), String(turns[1]));
       note((await card.count()) === 0 && (await checked()) === "Ask", label("the card is gone and the chat is on Ask"), String(await checked()));
 
       // 3. A plan, discarded: the chat stays in Plan mode and nothing else runs.
@@ -203,6 +207,7 @@ for (const theme of ["dark", "light"]) {
       await axe("a restored queue is showing");
       await page.getByRole("button", { name: "Send next" }).click();
       await queue().waitFor({ state: "detached" });
+      note(await turnsReach(sentBeforeReload + 1), label("the restored message reached the sidecar"), JSON.stringify(turns));
       note(turns.at(-1) === "Queued across a reload", label("Send next runs the restored message"), JSON.stringify(turns));
       note((await page.evaluate(() => localStorage.getItem("oh.messageQueue.v1")))?.includes("Queued across") === false, label("the queue storage is emptied once it ran"));
 

@@ -164,6 +164,21 @@ describe("AgentStage message queue", () => {
     expect(instructions()).toEqual(["left over"]);
   });
 
+  it("while a turn is running, a restored queue offers no Send next: it cannot start a second run", async () => {
+    const thread = useThreadStore.getState().createThread("Earlier chat");
+    useMessageQueueStore.setState({ byThread: { [thread]: [{ id: "q1", text: "left over" }] }, pausedThreads: { [thread]: true } });
+    render(<AgentStage />);
+    type("typed now");
+    send();
+    await waitFor(() => expect(startDirectRun).toHaveBeenCalledTimes(1));
+    begin("r1");
+    await screen.findByRole("region", { name: "Queued messages" });
+    expect(screen.queryByRole("button", { name: "Send next" })).toBeNull();
+    finish("done");
+    expect(await screen.findByRole("button", { name: "Send next" })).toBeTruthy(); // idle again: a person decides
+    expect(startDirectRun).toHaveBeenCalledTimes(1);
+  });
+
   it("a full queue says so and keeps what was typed", async () => {
     await firstTurnRunning();
     const thread = useThreadStore.getState().activeThreadId!;
@@ -173,6 +188,16 @@ describe("AgentStage message queue", () => {
     expect(await screen.findByText(/queue is full/i)).toBeTruthy();
     expect(input().value).toBe("one too many");
     expect(useMessageQueueStore.getState().byThread[thread]).toHaveLength(MAX_QUEUED);
+  });
+
+  it("the queue warning goes away once you change what you typed", async () => {
+    await firstTurnRunning();
+    const long = "x".repeat(MAX_QUEUED_CHARS + 1);
+    type(long);
+    send();
+    await screen.findByText(/too long to queue/i);
+    type("short again");
+    await waitFor(() => expect(screen.queryByText(/too long to queue/i)).toBeNull());
   });
 
   it("a message too long for the queue says so and keeps what was typed", async () => {

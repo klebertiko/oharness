@@ -93,6 +93,14 @@ describe("messageQueueStore", () => {
       expect(restoreQueue(null)).toEqual({});
     });
 
+    it("never lets a stored key rewrite the object it lands in, and drops repeated ids", () => {
+      const hostile = JSON.parse('{"__proto__": [{"id": "x", "text": "boo"}], "a": [{"id": "d", "text": "one"}, {"id": "d", "text": "two"}]}');
+      const byThread = restoreQueue(hostile);
+      expect(Object.getPrototypeOf(byThread)).toBe(Object.prototype);
+      expect(Object.keys(byThread)).toEqual(["a"]);
+      expect(byThread.a).toEqual([{ id: "d", text: "one" }]);
+    });
+
     it("rehydrates from storage as paused, and a new message never reuses a restored id", async () => {
       localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify({ state: { byThread: { a: [{ id: "q1", text: "kept" }] } }, version: 1 }));
       await useMessageQueueStore.persist.rehydrate();

@@ -18,6 +18,7 @@ A fila é trabalho que a pessoa pediu: perder no reload é pior que reter. Mas r
 
 ## Consequências
 - Toda conversa aberta faz uma requisição a mais (`GET /chat/tools/permission`); os e2e que abrem conversa stubam a rota.
+- Dívidas conhecidas (não tratadas aqui): sem sincronização entre abas; fila de conversa apagada em outra aba fica órfã no armazenamento até a próxima limpeza; se o sidecar ainda não subiu e não há cache, o modo exibido é Ask até a próxima conferência (o sidecar aplica o dele).
 - A fila persistida é só neste dispositivo e neste armazenamento local; não sincroniza.
 
 ## Verificação

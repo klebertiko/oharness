@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useThreadStore } from "@/store/threadStore";
 import { usePermissionStore } from "@/store/permissionStore";
+import { useMessageQueueStore } from "@/store/messageQueueStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { startDirectRun } from "@/components/agent-run/runClient";
@@ -51,6 +52,17 @@ describe("approving a plan with no provider connected", () => {
     expect(await screen.findByText(/connect a provider/i)).toBeTruthy();
     expect(api.approvePlan).not.toHaveBeenCalled();
     expect(screen.getByRole("region", { name: "Plan awaiting your approval" })).toBeTruthy();
+    expect(startDirectRun).not.toHaveBeenCalled();
+  });
+
+  it("Send next with no provider keeps the queued message and says why", async () => {
+    const threadId = useThreadStore.getState().createThread("Earlier chat");
+    useThreadStore.getState().appendMessage(threadId, { role: "user", content: "hi" });
+    useMessageQueueStore.setState({ byThread: { [threadId]: [{ id: "q1", text: "left over" }] }, pausedThreads: { [threadId]: true } });
+    render(<AgentStage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Send next" }));
+    expect(await screen.findByText(/connect a provider to send queued/i)).toBeTruthy();
+    expect(useMessageQueueStore.getState().byThread[threadId]).toHaveLength(1);
     expect(startDirectRun).not.toHaveBeenCalled();
   });
 });

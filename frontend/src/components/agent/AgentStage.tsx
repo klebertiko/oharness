@@ -251,12 +251,14 @@ export function AgentStage() {
   const canStart = !live && canCompose;
   // Commands (`/exec`, `/read`) wait for the run; only a plain message can be queued.
   const canQueue = live && canCompose && !slashPreset;
-  const queueKey = activeThreadId ?? "new";
+  const queueKey = activeThreadId ?? NEW_CHAT_KEY;
   const queued = useMessageQueueStore((state) => state.byThread[queueKey]);
   const queue = useMemo(() => queued ?? [], [queued]);
   // A queue restored after a reload waits for a person, exactly like one behind a stopped turn.
   const queueRestored = useMessageQueueStore((state) => Boolean(state.pausedThreads[queueKey]));
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
+  // A queue warning describes the text that was refused; it goes when that text, or the conversation, changes.
+  useEffect(() => { setQueueNotice(null); }, [instruction, queueKey]);
 
   /** A `/` Tool was chosen: one run whose first act is the preset (contract §2.4).
       `exec` parks on the approval gate; the user sees the card before anything runs. */
@@ -334,6 +336,7 @@ export function AgentStage() {
   };
 
   const [approveBlocked, setApproveBlocked] = useState(false);
+  useEffect(() => { if (provider) setApproveBlocked(false); }, [provider]); // the reason is gone once a provider is connected
   const approvePlan = async () => {
     // Approving consumes the plan: only do it when the approved turn can actually be sent. Otherwise say why.
     if (!provider) { setApproveBlocked(true); return; }
@@ -344,7 +347,9 @@ export function AgentStage() {
 
   /** Run the next queued message of this chat. A draft being typed is not touched. */
   const sendNextQueued = () => {
-    if (!activeThreadId) return;
+    if (!activeThreadId || live) return; // one turn at a time
+    // Taking the message and then failing to send it would lose it: with no provider it stays queued.
+    if (!provider) { setQueueNotice(t("chat.queue.noProvider")); return; }
     const next = useMessageQueueStore.getState().takeNext(activeThreadId);
     if (next) send(next.text, next.text, undefined, true);
   };
@@ -361,7 +366,7 @@ export function AgentStage() {
     drainedFor.current = run.runId;
     sendNextQueued();
   }, [live, run, activeThreadId, ownerThreadId, queue]);
-  const queuePaused = queueRestored || (!live && runInCurrentChat && (run.status === "error" || run.status === "stopped"));
+  const queuePaused = !live && (queueRestored || (runInCurrentChat && (run.status === "error" || run.status === "stopped")));
 
   const gateSeg = run.plan?.find((s) => s.state === "gate" && s.gate);
   const suggestions = [
