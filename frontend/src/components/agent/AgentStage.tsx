@@ -33,6 +33,7 @@ import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDeta
 import { SubagentToggle } from "@/components/agent/SubagentToggle";
 import { useSubagentStore } from "@/store/subagentStore";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
+import { FlowToggle } from "@/components/agent-run/FlowToggle";
 import { RunBudgetField } from "@/components/agent-run/RunBudgetField";
 import { useT } from "@/i18n/store";
 import { useRunStream } from "@/components/agent-run/useRunStream";
@@ -568,6 +569,7 @@ export function AgentStage() {
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {enabled && workspace?.rootPath && <WorktreeToggle disabled={live} />}
+            {enabled && <FlowToggle />}
             <RunBudgetField />
             <ToolHooksButton />
             </fieldset>

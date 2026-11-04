@@ -1,5 +1,5 @@
 import './build-locales.mjs';
-import { copyFile, mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +24,20 @@ for (const file of files) {
   const destination = resolve(output, file);
   await mkdir(dirname(destination), {recursive:true});
   await copyFile(resolve(source, file), destination);
+}
+// Release links follow the newest published release without a new PR: the Pages workflow
+// passes its tag as RELEASE_TAG. Without it (no release yet, local build) they point at the
+// releases list, which always opens. Pre-releases never count as "Latest" on GitHub.
+const repoReleases = 'https://github.com/klebertiko/oharness/releases';
+const tag = process.env.RELEASE_TAG || '';
+if (tag && !/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(tag)) {
+  throw new Error(`RELEASE_TAG is not a SemVer tag: ${tag}`);
+}
+const releaseUrl = tag ? `${repoReleases}/tag/${tag}` : repoReleases;
+for (const file of ['index.html', 'en/index.html']) {
+  const target = resolve(output, file);
+  const html = await readFile(target, 'utf8');
+  await writeFile(target, html.replaceAll(`${repoReleases}/tag/v0.0.1-alpha`, releaseUrl));
 }
 await writeFile(resolve(output, '.nojekyll'), '');
 await writeFile(resolve(output, 'README.md'), `# OHarness website
