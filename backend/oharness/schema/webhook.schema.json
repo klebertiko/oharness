@@ -20,7 +20,7 @@
     },
     "secretRef": {
       "type": "string",
-      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$"
+      "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$"
     },
     "enabled": {
       "type": "boolean"

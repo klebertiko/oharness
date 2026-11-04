@@ -152,7 +152,7 @@ def run(args: argparse.Namespace, port) -> int:
                     print(f"note: a worktree was left at {_plain(made[1])}; remove it with the workspace manager", file=sys.stderr)
             item = _item(claimed)
             _emit(name, {"item": item, "worktree": None if made is None else {"id": made[0], "path": made[1]}}, as_json,
-                  lambda: [_line(item)] + ([f"worktree: {_plain(made[1])}  (detached: create a branch there, e.g. git switch -c factory/{args.id})"] if made else [])
+                  lambda: [_line(item)] + ([f"worktree: {_plain(made[1])}  (detached: create a branch there, e.g. git switch -c forja/{args.id})"] if made else [])
                   + [f"when done: push your branch, then oharness factory release {args.id} --summary ... --branch <branch>"])
         elif name == "release":
             item = _item(port.release(args.id, ReleaseResult(summary=args.summary, branch=args.branch, status=args.status)))

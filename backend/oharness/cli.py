@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--workspace", help="live/local: a project registered in OHarness; the run works in its folder")
     run_parser.add_argument("--worktree", action="store_true", help="live/local: run in a worktree of its own made from --workspace, removed when the run ends")
 
-    backend = str(Path(__file__).resolve().parent.parent)  # the factory intake lives beside `engine` in the backend, not in this package
+    backend = str(Path(__file__).resolve().parent.parent)  # the Forja intake lives beside `engine` in the backend, not in this package
     if backend not in sys.path:
         sys.path.insert(0, backend)
     from factory_intake import cli as factory_cli  # argparse only: nothing is configured until a `factory` command runs
@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     factory_cli.add_parser(sub)
 
     args = parser.parse_args(argv)
-    if args.cmd == "factory":
+    if args.cmd == "forja":
         return factory_cli.run(args)
     if args.cmd == "validate":
         result = validate_path(args.path)

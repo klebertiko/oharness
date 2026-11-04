@@ -1,4 +1,4 @@
-"""``oharness factory ...``: the intake side of the factory CLI (ADR 0064). This module owns ``serve`` and ``token``; later subcommands
+"""``oharness forja ...``: the intake side of the Forja CLI (ADR 0064). This module owns ``serve`` and ``token``; later subcommands
 (submit, list, status...) register here too so the whole group lives in one place."""
 from __future__ import annotations
 
@@ -14,17 +14,17 @@ EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
 
 
 def add_parser(sub) -> argparse.ArgumentParser:
-    factory = sub.add_parser("factory", help="the software factory: intake server, client tokens")
+    factory = sub.add_parser("forja", help="the Forja: intake server, client tokens, definition check")
     group = factory.add_subparsers(dest="factory_cmd", required=True)
 
     serve = group.add_parser("serve", help="receive webhooks and integration API calls (loopback by default)")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
-    serve.add_argument("--dir", type=Path, default=Path(".oharness/factory"), help="the factory definition directory (webhooks/<name>.yaml)")
+    serve.add_argument("--dir", type=Path, default=Path(".oharness/forja"), help="the Forja definition directory (webhooks/<name>.yaml)")
     serve.add_argument("--allow-remote", action="store_true", help="bind beyond loopback; put your own authenticated tunnel or proxy in front")
 
-    validate = group.add_parser("validate", help="check a factory definition folder (exit 0 valid, 1 invalid, 2 folder missing); prints JSON")
-    validate.add_argument("dir", type=Path, help="the definition folder, usually .oharness/factory")
+    validate = group.add_parser("validate", help="check a Forja definition folder (exit 0 valid, 1 invalid, 2 folder missing); prints JSON")
+    validate.add_argument("dir", type=Path, help="the definition folder, usually .oharness/forja")
     validate.add_argument("--check", action="store_true", help="also walk example work items through the definition (no provider, no network)")
 
     token = group.add_parser("token", help="client tokens for the integration API (kept hashed in the secrets store)")
@@ -40,10 +40,10 @@ def add_parser(sub) -> argparse.ArgumentParser:
     from . import factory_cli
 
     factory_cli.add_commands(group)
-    group.add_parser("mcp", help="Factory MCP over stdio, for a local coding agent (ADR 0063)")
+    group.add_parser("mcp", help="Forja MCP over stdio, for a local coding agent (ADR 0063)")
 
     auto = group.add_parser("automation", help="scheduled and event automations (ADR 0062)")
-    auto.add_argument("--dir", type=Path, default=Path(".oharness/factory"))
+    auto.add_argument("--dir", type=Path, default=Path(".oharness/forja"))
     verbs = auto.add_subparsers(dest="auto_cmd", required=True)
     verbs.add_parser("list", help="automations with their triggers and paused state")
     for verb in ("pause", "resume"):
