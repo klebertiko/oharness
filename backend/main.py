@@ -18,6 +18,7 @@ from routers.flow import router as flow_router
 from routers.turn_diff import router as turn_diff_router
 from routers.studio_copilot import router as studio_copilot_router
 from routers.studio_assist import router as studio_assist_router
+from factory.definition_router import router as factory_definition_router
 from factory.router import router as factory_router
 from secret_store.factory import build_secrets_store
 from providers.store import load_all as load_provider_connections
@@ -120,6 +121,7 @@ app.include_router(turn_diff_router)
 app.include_router(studio_copilot_router)
 app.include_router(studio_assist_router)
 app.include_router(factory_router)
+app.include_router(factory_definition_router)
 
 
 @app.get("/health")
