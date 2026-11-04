@@ -1,10 +1,18 @@
 """Links for the tests: junctions on Windows (no privilege needed), symbolic links elsewhere; skip when the account cannot make one."""
 from __future__ import annotations
 
+import errno
 import os
 import sys
 
 import pytest
+
+
+def _skip_if_not_permitted(exc: OSError) -> None:
+    """Skip only when the account or platform cannot make a link (WinError 1314, EPERM, EACCES, ENOTSUP); any other error is a real failure."""
+    if getattr(exc, "winerror", None) == 1314 or exc.errno in (errno.EPERM, errno.EACCES, errno.ENOTSUP):
+        pytest.skip("symbolic links need a privilege this account does not have")
+    raise exc
 
 
 def make_dir_link(link, target) -> None:
@@ -15,8 +23,8 @@ def make_dir_link(link, target) -> None:
         return
     try:
         os.symlink(target, link, target_is_directory=True)
-    except OSError:
-        pytest.skip("cannot create links here")
+    except OSError as exc:
+        _skip_if_not_permitted(exc)
 
 
 def remove_dir_link(link) -> None:
@@ -28,30 +36,7 @@ def make_symlink(link, target, *, directory: bool) -> None:
     """A real symbolic link; skipped where the platform or the account does not allow creating one (WinError 1314)."""
     try:
         os.symlink(target, link, target_is_directory=directory)
-    except (OSError, NotImplementedError):
-        pytest.skip("symbolic links need a privilege this account does not have")
-
-
-class Repo:
-    """A throwaway repository driven through the production runner."""
-
-    def __init__(self, path: Path, runner: GitRunner):
-        self.path, self.runner = path, runner
-
-    def git(self, *args, cwd=None, input=None, check=True):
-        return self.runner.run(cwd or self.path, [*IDENT, *args], input=input, check=check)
-
-    def out(self, *args, cwd=None) -> str:
-        return self.git(*args, cwd=cwd).stdout.decode("utf-8", "replace").strip()
-
-    def write(self, name: str, text: str = "x\n") -> Path:
-        target = self.path / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8", newline="\n")
-        return target
-
-    def commit(self, name: str, text: str = "x\n", message: str | None = None) -> str:
-        self.write(name, text)
-        self.git("add", "--", name)
-        self.git("commit", "-q", "-m", message or f"add {name}")
-        return self.out("rev-parse", "HEAD")
+    except NotImplementedError:
+        pytest.skip("symbolic links are not implemented on this platform")
+    except OSError as exc:
+        _skip_if_not_permitted(exc)
