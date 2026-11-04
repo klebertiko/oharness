@@ -4,12 +4,15 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+// The biome entry point run by node itself: `npx` is `npx.cmd` on Windows and cannot be spawned without a shell.
+const biome = path.join(__dirname, "..", "node_modules", "@biomejs", "biome", "bin", "biome");
+
 function lint(source: string): string {
   const dir = mkdtempSync(path.join(__dirname, ".probe-"));
   try {
     const file = path.join(dir, "probe.tsx");
     writeFileSync(file, source);
-    const r = spawnSync("npx", ["biome", "lint", file], { encoding: "utf8" });
+    const r = spawnSync(process.execPath, [biome, "lint", file], { encoding: "utf8" });
     return r.stdout + r.stderr;
   } finally {
     rmSync(dir, { recursive: true, force: true });

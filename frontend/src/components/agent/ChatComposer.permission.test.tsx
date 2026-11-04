@@ -29,6 +29,13 @@ it("always shows every mode and which one is current", () => {
   expect(PERMISSION_MODES).toHaveLength(6);
 });
 
+it("the six modes wrap onto more lines on a narrow screen instead of running off it", () => {
+  render(<Composer />);
+  const group = screen.getByRole("radiogroup", { name: "Permission mode" });
+  expect(group.className).toMatch(/(^|\s)flex-wrap(\s|$)/);
+  expect(group.className).toMatch(/(^|\s)max-w-full(\s|$)/);
+});
+
 it("clicking a mode selects it", () => {
   render(<Composer />);
   fireEvent.click(screen.getByRole("radio", { name: /Auto/ }));
@@ -165,6 +172,35 @@ it("Full needs a confirmation that names what it does; Cancel is the default foc
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(checked()).toBe("Ask");
+});
+
+it("Escape closes the Full confirmation from anywhere on the page and puts focus back on the Full option", () => {
+  render(<Composer />);
+  const full = screen.getByRole("radio", { name: /Full/ });
+  full.focus();
+  fireEvent.click(full);
+  expect(screen.getByRole("alertdialog", { name: "Switch to Full" })).toBeTruthy();
+  textbox().focus(); // focus left the dialog: Escape must still dismiss it
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  expect(changed).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(full);
+});
+
+it("Cancel also returns focus to the Full option, so keyboard navigation can go on from there", () => {
+  render(<Composer />);
+  const full = screen.getByRole("radio", { name: /Full/ });
+  full.focus();
+  fireEvent.click(full);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(document.activeElement).toBe(full);
+});
+
+it("Escape does nothing when no Full confirmation is open", () => {
+  render(<Composer />);
+  const before = document.activeElement;
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  expect(document.activeElement).toBe(before);
 });
 
 it("confirming Full applies it", () => {

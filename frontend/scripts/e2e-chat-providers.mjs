@@ -5,8 +5,9 @@ import { resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { settleForAxe } from "./axe-settle.mjs";
+import { evidenceDir } from "./e2e-evidence.mjs";
 const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
-const output = resolve(import.meta.dirname, '../../.harness/sprint-2026-10-21/story-CHAT-PROVIDERS/evidence');
+const output = evidenceDir('chat-providers');
 mkdirSync(output, { recursive: true });
 const fixture = JSON.parse(readFileSync('src/lib/fixtures/ohm-roundtrip.json', 'utf8'));
 const base = process.env.OHM_E2E_URL || 'http://127.0.0.1:3000';
@@ -44,7 +45,7 @@ await context.route('**/*', async route => {
     return route.fulfill({ contentType: 'text/event-stream', body: frames.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('') });
   }
   const responses = {
-    'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /bundles/default': fixture,
+    'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /chat/tools/permission': { thread_id: 'qa', mode: 'ask' }, 'GET /bundles/default': fixture,
     'GET /cowork/projects': { projects: [] }, 'GET /harnesses/': [],
     'GET /bundles/examples': { examples: [] },
     'GET /providers/connections': { connections: [{ id: 'ollama-local', provider: 'ollama', label: 'QA local', enabled: true, residence: 'local', endpoint: 'http://127.0.0.1:11434', secretRef: null, defaultModel: 'qa-default' }] },

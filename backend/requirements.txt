@@ -9,6 +9,8 @@ openai==3.35.1
 python-dotenv==1.2.4
 anyio==4.15.1
 jsonschema==4.26.0
+# Windows has no IANA time-zone database; automations (factory_intake/cron.py) name zones. Packaged by scripts/build-sidecar.mjs.
+tzdata==2026.6
 cryptography==50.0.2
 # OHM .ohm restricted YAML 1.2 profile (oharness/codec.py, ADR 0003). Pinned
 # after proving it rejects duplicate keys/tags/anchors/aliases/merge keys and
