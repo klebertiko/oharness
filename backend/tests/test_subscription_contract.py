@@ -79,8 +79,9 @@ def test_i7_probe_only_runs_a_status_command(pid, cls, _module) -> None:
     captured: list[dict] = []
     adapter = cls(runner=_recording(captured, CliRunResult(returncode=0, stdout="{}", stderr="")))
     asyncio.run(adapter.probe(_config()))
+    assert len(captured) == 1  # a probe is exactly one command
     argv = captured[0]["argv"]
-    assert "status" in argv  # `auth status`, `login status` or `status --format json`
+    assert argv[-1] in {"status", "json"} and "status" in argv  # `auth status`, `login status` or `status --format json`
     assert PROMPT not in " ".join(argv)
     assert captured[0]["stdin"] is None  # a probe never sends a prompt
     assert not any(var in captured[0]["env"] for var in CRED_VARS)  # I5 on the probe too
@@ -98,11 +99,11 @@ def test_i13_ids_stay_cli_backed(pid, cls, _module) -> None:
 
 
 # Cursor runs agents, not chat turns, so it never resolves through an llm node: its adapter
-# receives no credential at all (covered by test_i5 / test_i13 above).
+# receives no credential at all (env allowlist in the invoke test, adapter wiring in the I13 test).
 @pytest.mark.parametrize("pid", ["anthropic", "openai"])
 def test_i1_i8_a_secret_ref_on_a_cli_connection_is_ignored(pid) -> None:
     store = MemorySecrets()
-    store.put(f"oharness/{pid}", "sk-REAL-SHOULD-NOT-BE-READ")
+    store.put(f"oharness/{pid}", "canary-secret-7d3e")
     connections = {pid: {
         "id": pid, "provider": pid, "label": pid, "residence": "cloud", "enabled": True,
         "secretRef": f"oharness/{pid}", "endpoint": "", "credential": {"kind": "cli"},
@@ -113,7 +114,23 @@ def test_i1_i8_a_secret_ref_on_a_cli_connection_is_ignored(pid) -> None:
     assert resolved.config.api_key == ""
 
 
-def test_i10_cli_stderr_never_reaches_the_run_response(client, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+def test_i8_positive_control_a_key_connection_does_read_its_secret() -> None:
+    # Guards the test above against passing vacuously: for a kind=api connection the same
+    # store DOES produce a key, so an empty key on kind=cli is the invariant at work.
+    store = MemorySecrets()
+    store.put("oharness/openrouter", "canary-secret-7d3e")
+    connections = {"openrouter": {
+        "id": "openrouter", "provider": "openrouter", "label": "OpenRouter", "residence": "cloud",
+        "enabled": True, "secretRef": "oharness/openrouter", "endpoint": "https://openrouter.ai/api/v1",
+        "credential": {"kind": "key"},
+    }}
+    resolved = resolve_node_provider(
+        {"providerIds": ["openrouter"], "model": "m"}, "llm", "Node", connections=connections, secrets_store=store,
+    )
+    assert resolved.config.api_key == "canary-secret-7d3e"
+
+
+def test_i10_cli_stderr_never_arrives_in_the_run_response(client, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
     captured: list[dict] = []
     failing = ClaudeCliAdapter(runner=_recording(captured, CliRunResult(returncode=1, stdout="", stderr=f"boom {CANARY}")))
     monkeypatch.setattr("providers.resolution.get_adapter", lambda name: failing)
