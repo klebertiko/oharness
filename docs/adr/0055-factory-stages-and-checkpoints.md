@@ -32,3 +32,12 @@ Transições permitidas ficam em uma tabela única em `backend/factory/stages.py
 
 ## Escolhas conservadoras
 Padrão é parar e perguntar: dúvida do foreman → `awaiting_human`, nunca seguir por conta própria. Limite de voltas e de tokens por item protege custo (teto da fábrica, ADR 0056, soma as runs vinculadas).
+
+## Implementação (#257)
+O fluxo está em `backend/factory/foreman.py`; o disparo automático dos estágios (rodar os agentes) chega com o runner (#260).
+- **Plano.** `check_plan` valida o plano JSON do foreman contra a definição: estágios na ordem, estágio obrigatório não pode ser pulado nem faltar, agente existente, ligado e com o papel do estágio, modelo dentro dos tiers, `maxTokens` até o teto da run, `harness` só em agente que não escreve e, com `reviewIndependence: require`, review diferente de implement em modelo ou harness. Recusado, o foreman recebe os motivos e tenta uma vez mais; na segunda recusa o item vai para `awaiting_human` com a pergunta registrada (`plan_rejected`, `checkpoint_requested`).
+- **Texto de fora é dado.** O prompt de sistema só leva as regras do dono; título e texto de origem entram num bloco `<untrusted-data>` com `<` escapado.
+- **Decide o código.** Triage com `requireSpec` vira spec; `wait` vira pergunta (nunca palpite). Spec nova invalida a aprovação e espera uma pessoa; com `specApproval: optional` o código aprova e grava `spec_approved` com ator `system` e a política como motivo. Review é consultivo (`review_verdict`) e leva ao handoff (`waiting_merge`), nunca a `done`; `changes_requested` volta a implement até `maxReviewReturns` e depois pergunta; verify que falha conta no mesmo limite e, esgotado, o item vira `failed`.
+- **Concluir.** `done` só por `confirm_merged` (pessoa) ou por `observe_merge`: leitura de git (a ponta da branch do artefato é ancestral da branch padrão), sem escrever nem buscar, e só com nome de branch simples. `POST /factory/work-items/{id}/check-landing` expõe isso para um projeto registrado. Teste de contrato: nenhuma rota contém "merge" e a única ação é `confirm_merged`.
+- **Reinício.** Ao subir, itens `running` viram `awaiting_human` com `recovered`; as runs já ficam `interrupted` e continuáveis (ADR 0044).
+
