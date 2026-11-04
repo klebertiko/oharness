@@ -79,6 +79,7 @@ try {
       "GET /bundles/default": bundled,
       "GET /health": { status: "ok" },
       "GET /flow/config": { enabled: false },
+      "GET /chat/tools/permission": { thread_id: "qa", mode: "ask" },
       "GET /cowork/projects": { projects: [] },
       "GET /providers/connections": { connections },
       "GET /bundles/examples": { examples: [] },

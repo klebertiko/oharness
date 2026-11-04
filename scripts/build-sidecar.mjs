@@ -44,6 +44,7 @@ run([
   "--name", `oharness-sidecar-${triple}`,
   "--paths", join(root, "backend"),
   "--hidden-import", "aiosqlite",
+  "--collect-data", "tzdata",
   "--distpath", join(root, "src-tauri", "binaries"),
   "--workpath", join(root, "backend", "build", "pyinstaller"),
   "--specpath", join(root, "backend", "build"),

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { harnessLabel, sameHarness, switchNotice, type ThreadHarness } from "@/lib/chatHarness";
+import { useMessageQueueStore } from "./messageQueueStore";
 import { usePermissionStore } from "./permissionStore";
 
 export type Thread = {
@@ -192,6 +193,7 @@ export const useThreadStore = create<ThreadState>()(
 
       deleteThread: (id) => {
         usePermissionStore.getState().forget(id);
+        useMessageQueueStore.getState().clear(id);
         const rest = get().threads.filter((t) => t.id !== id);
         const nextMessages = { ...get().messagesByThread };
         delete nextMessages[id];
