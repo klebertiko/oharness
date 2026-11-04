@@ -160,7 +160,7 @@ Nenhum requisito, de Providers ou de qualquer outra frente, pode violar estes it
 | --- | --- |
 | I1 | O OHarness não obtém, não guarda e não repassa credencial de assinatura. `secret_ref` fica nulo; e-mail e plano do probe ficam só em memória e nunca vão a log, jornal, diagnóstico ou arquivo. |
 | I2 | O login é sempre feito pelo usuário, no terminal. O OHarness nunca executa `login` ou `logout`; a UI só copia o comando ou abre a documentação. |
-| I3 | Subprocesso sem shell: argv literal em lista, nunca `shell=True`. |
+| I3 | Subprocesso sem shell: argv literal em lista, nunca execução via shell. |
 | I4 | O prompt e qualquer texto do usuário vão só por stdin, nunca em argv. |
 | I5 | O ambiente do subprocesso é uma allowlist; nenhuma variável de credencial (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CURSOR_API_KEY`, tokens) é repassada. |
 | I6 | O `cwd` é validado dentro da pasta de trabalho dos CLIs ou de uma raiz de projeto registrada. |
