@@ -30,6 +30,8 @@ CONTEXTS = ('spec', 'origin', 'diff')
 VERDICTS = ('approved', 'changes_requested', 'needs_human')
 MAX_ATTEMPTS = 2
 _BRANCH = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$')
+_SHA = re.compile(r'^[0-9a-f]{40,64}$')
+_RECORD = re.compile(r'sha=([0-9a-f]{40,64})(?: base=([0-9a-f]{40,64}))?')
 
 Planner = Callable[[str, str], Awaitable[tuple[str, int]]]  # (system, user) -> (text, tokens used)
 
@@ -264,9 +266,13 @@ async def spec_proposed(db: AsyncSession, item: WorkItem, definition: dict, text
     await db.commit()
 
 
-async def implement_done(db: AsyncSession, item: WorkItem, definition: dict, branch: str) -> None:
+async def implement_done(db: AsyncSession, item: WorkItem, definition: dict, branch: str, sha: str | None = None, base: str | None = None) -> None:
+    """`sha` is the branch tip the run produced and `base` the commit it started from: the merge check compares those commits, not a name."""
     _need(item, 'implement')
-    await service.add_artifact(db, item, 'diff', branch, 'implementation branch', FOREMAN)
+    label = 'implementation branch'
+    if sha and _SHA.fullmatch(sha):
+        label += f' sha={sha}' + (f' base={base}' if base and _SHA.fullmatch(base) else '')
+    await service.add_artifact(db, item, 'diff', branch, label, FOREMAN)
     nxt = await _after(db, item, definition, ('verify', 'review'))
     if nxt == 'handoff':
         await _hand_off(db, item)
@@ -327,7 +333,10 @@ def _default_ref(runner, repo: Path) -> str | None:
 
 
 async def observe_merge(db: AsyncSession, item: WorkItem, repo: Path | str) -> bool:
-    """Read-only git: the item is done when the tip of its branch is an ancestor of the default branch. Nothing is written or fetched."""
+    """Read-only git: the item is done when the commit its run produced is an ancestor of the default branch. Nothing is written or fetched.
+
+    A branch that points at the base proves nothing (it is an ancestor of everything), so the recorded tip must differ from the recorded
+    base, and a branch with no recorded tip counts only if it holds commits the default branch does not simply equal."""
     if item.stage != 'handoff' or item.status != 'waiting_merge':
         return False
     arts = [a for a in await service.artifacts(db, item.id) if a.kind == 'diff']
@@ -337,18 +346,30 @@ async def observe_merge(db: AsyncSession, item: WorkItem, repo: Path | str) -> b
     from workspaces.service import WorkspaceService
     runner = WorkspaceService().runner
     default = _default_ref(runner, Path(repo))
-    if default is None:
+    if default is None or branch == default.rsplit('/', 1)[-1]:
         return False
-    for ref in (f'refs/heads/{branch}', f'refs/remotes/origin/{branch}'):
-        if runner.run(repo, ['rev-parse', '--verify', '--quiet', ref], check=False).returncode == 0:
-            if runner.run(repo, ['merge-base', '--is-ancestor', ref, default], check=False).returncode != 0:
-                return False
-            await service.add_event(db, item, 'merge_observed', ('system', 'git'), {'via': 'git', 'branch': branch})
-            service._move(item, 'handoff', 'done')
-            await service.add_event(db, item, 'completed', ('system', 'git'))
-            await db.commit()
-            return True
-    return False
+    recorded = _RECORD.search(arts[-1].label or '')
+    tip = recorded.group(1) if recorded else None
+    if tip is None:
+        for ref in (f'refs/heads/{branch}', f'refs/remotes/origin/{branch}'):
+            found = runner.run(repo, ['rev-parse', '--verify', '--quiet', ref], check=False)
+            if found.returncode == 0:
+                tip = found.text().strip()
+                break
+        default_tip = runner.run(repo, ['rev-parse', '--verify', '--quiet', default], check=False).text().strip()
+        if tip is None or tip == default_tip:  # nothing recorded to tell finished work from an untouched branch
+            return False
+    elif recorded.group(2) and recorded.group(2) == tip:
+        return False
+    if runner.run(repo, ['cat-file', '-e', f'{tip}^{{commit}}'], check=False).returncode != 0:
+        return False
+    if runner.run(repo, ['merge-base', '--is-ancestor', tip, default], check=False).returncode != 0:
+        return False
+    await service.add_event(db, item, 'merge_observed', ('system', 'git'), {'via': 'git', 'branch': branch})
+    service._move(item, 'handoff', 'done')
+    await service.add_event(db, item, 'completed', ('system', 'git'))
+    await db.commit()
+    return True
 
 
 async def recover_items(db: AsyncSession) -> int:

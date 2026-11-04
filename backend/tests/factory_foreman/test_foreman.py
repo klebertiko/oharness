@@ -15,6 +15,7 @@ from factory.orm import WorkItem, WorkItemArtifact, WorkItemEvent, WorkItemRun
 from workspaces.service import WorkspaceService
 
 HUMAN = ('human', 'local-user')
+HUMAN_HEADER = {'x-oharness-human': 'human-secret'}
 
 
 def agent(role, model='openai/gpt-4o', mode='read_only', harness=None, enabled=True):
@@ -318,30 +319,87 @@ def _git(runner, cwd, *args):
     return runner.run(cwd, list(args), filters=True)
 
 
-def test_done_needs_an_observed_merge_or_a_human_confirmation(db_ready, tmp_path):
+COMMIT = ['-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '--allow-empty']
+
+
+def _tip(runner, repo, ref):
+    return runner.run(repo, ['rev-parse', ref]).text().strip()
+
+
+def _repo_with_branch(tmp_path, name):
     runner = WorkspaceService().runner
     repo = tmp_path / 'repo'
     repo.mkdir()
     _git(runner, repo, 'init', '-q', '-b', 'main')
-    _git(runner, repo, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '--allow-empty', '-m', 'base')
-    _git(runner, repo, 'checkout', '-q', '-b', 'forja/item-1')
-    _git(runner, repo, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '--allow-empty', '-m', 'work')
+    _git(runner, repo, *COMMIT, '-m', 'base')
+    base = _tip(runner, repo, 'HEAD')
+    _git(runner, repo, 'checkout', '-q', '-b', name)
+    _git(runner, repo, *COMMIT, '-m', 'work')
+    sha = _tip(runner, repo, 'HEAD')
     _git(runner, repo, 'checkout', '-q', 'main')
+    return runner, repo, base, sha
+
+
+def test_done_needs_an_observed_merge_or_a_human_confirmation(db_ready, tmp_path):
+    runner, repo, base, sha = _repo_with_branch(tmp_path, 'forja/item-1')
 
     async def case(db):
         item = await _new(db)
         await _at(db, item, 'implement')
-        await foreman.implement_done(db, item, defn(), 'forja/item-1')
+        await foreman.implement_done(db, item, defn(), 'forja/item-1', sha=sha, base=base)
         await foreman.review_done(db, item, defn(), 'approved')
-        before = await foreman.observe_merge(db, item, repo)  # branch not in main yet
+        before = await foreman.observe_merge(db, item, repo)  # the work is not in main yet
         state_before = (item.stage, item.status)
-        _git(runner, repo, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'merge', '-q', '--no-ff', 'forja/item-1', '-m', 'merge')
+        _git(runner, repo, *COMMIT[:4], 'merge', '-q', '--no-ff', 'forja/item-1', '-m', 'merge')
         after = await foreman.observe_merge(db, item, repo)
         return before, state_before, after, item, await _types(db, item)
 
     before, state_before, after, item, types = run(case)
     assert before is False and state_before == ('handoff', 'waiting_merge')
     assert after is True and item.status == 'done' and 'merge_observed' in types and 'completed' in types
+
+
+def test_a_branch_with_no_new_work_is_never_a_merge(db_ready, tmp_path):
+    runner, repo, base, _ = _repo_with_branch(tmp_path, 'forja/item-3')
+    _git(runner, repo, 'branch', '-f', 'forja/item-3', base)  # the branch points at the base: an ancestor of main, but no work
+
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        await foreman.implement_done(db, item, defn(), 'forja/item-3', sha=base, base=base)
+        await foreman.review_done(db, item, defn(), 'approved')
+        recorded = await foreman.observe_merge(db, item, repo)
+        other = await _new(db, 'other')
+        await _at(db, other, 'implement')
+        await foreman.implement_done(db, other, defn(), 'forja/item-3')  # no sha recorded: a tip equal to main proves nothing
+        await foreman.review_done(db, other, defn(), 'approved')
+        return recorded, await foreman.observe_merge(db, other, repo), item.status, other.status
+
+    assert run(case) == (False, False, 'waiting_merge', 'waiting_merge')
+
+
+def test_the_default_branch_itself_cannot_be_the_item_branch(db_ready, tmp_path):
+    _, repo, base, sha = _repo_with_branch(tmp_path, 'forja/item-4')
+
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        await foreman.implement_done(db, item, defn(), 'main', sha=sha, base=base)
+        await foreman.review_done(db, item, defn(), 'approved')
+        return await foreman.observe_merge(db, item, repo)
+
+    assert run(case) is False
+
+
+def test_plan_reasons_with_a_credential_are_not_stored(db_ready):
+    async def case(db):
+        item = await _new(db)
+        plan = copy.deepcopy(GOOD_PLAN)
+        plan['stages'][0]['reason'] = 'use sk-ant-' + 'a1b2' * 8
+        await foreman.make_plan(db, item, defn(), planner_returning(json.dumps(plan)))
+        return json.dumps([e.data_json for e in await service.events(db, item.id, 0, 500)])
+
+    assert 'sk-ant-' not in run(case)
 
 
 def test_a_branch_name_that_looks_like_an_option_is_never_passed_to_git(db_ready, tmp_path):
@@ -376,27 +434,34 @@ def test_nothing_in_the_sidecar_can_merge():
     assert not [name for name in dir(foreman) if name.lower().startswith(('merge', 'push'))]
 
 
-def test_the_merge_observation_endpoint_reads_git_of_a_registered_project(db_ready, tmp_path):
+def test_the_merge_observation_endpoint_reads_git_of_a_registered_project(db_ready, tmp_path, monkeypatch):
+    monkeypatch.setenv('OH_HUMAN_TOKEN', 'human-secret')
     from fastapi.testclient import TestClient
     from main import app
     runner = WorkspaceService().runner
     repo = tmp_path / 'proj'
     repo.mkdir()
     _git(runner, repo, 'init', '-q', '-b', 'main')
-    _git(runner, repo, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '--allow-empty', '-m', 'base')
-    _git(runner, repo, 'branch', 'forja/item-2')  # already contained in main
+    _git(runner, repo, *COMMIT, '-m', 'base')
+    base = _tip(runner, repo, 'HEAD')
+    _git(runner, repo, 'checkout', '-q', '-b', 'forja/item-2')
+    _git(runner, repo, *COMMIT, '-m', 'work')
+    sha = _tip(runner, repo, 'HEAD')
+    _git(runner, repo, 'checkout', '-q', 'main')
+    _git(runner, repo, *COMMIT[:4], 'merge', '-q', '--ff-only', 'forja/item-2')
 
     async def prepare(db):
         item = await _new(db, 'obs')
         await _at(db, item, 'implement')
-        await foreman.implement_done(db, item, defn(), 'forja/item-2')
+        await foreman.implement_done(db, item, defn(), 'forja/item-2', sha=sha, base=base)
         await foreman.review_done(db, item, defn(), 'approved')
         return item.id
 
     item_id = run(prepare)
     with TestClient(app) as client:
         client.post('/cowork/projects', json={'name': 'proj', 'rootPath': str(repo)})
-        unknown = client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(tmp_path)})
+        assert client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(repo)}).status_code == 403  # an observation that completes an item is a person's call
+        unknown = client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(tmp_path)}, headers=HUMAN_HEADER)
         assert unknown.status_code == 404
-        seen = client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(repo)})
+        seen = client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(repo)}, headers=HUMAN_HEADER)
         assert seen.status_code == 200 and seen.json()['merged'] is True and seen.json()['status'] == 'done'
