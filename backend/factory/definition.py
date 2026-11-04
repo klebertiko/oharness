@@ -25,7 +25,7 @@ FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automa
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
-                           r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]{1,100}:[^\s/@]{3,200}@')
+                           r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]+:[^\s/@]{3,}@')
 _CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|pass|passwd|password|credential|auth)[A-Za-z0-9-]*$', re.IGNORECASE)
 _PLAIN_NAME = re.compile(r'^[A-Za-z0-9_./-]{1,80}$')
 _LONG_TOKEN = re.compile(r'[A-Za-z0-9_+/=.~-]{20,}')
@@ -177,7 +177,7 @@ def _read(root: Path, rel: str) -> str:
         raise _FileProblem('the file cannot be read') from None
     with os.fdopen(handle, 'rb') as stream:
         opened = os.fstat(stream.fileno())
-        if (opened.st_ino, opened.st_dev) != (before.st_ino, before.st_dev) and before.st_ino:
+        if (opened.st_ino, opened.st_dev, opened.st_size) != (before.st_ino, before.st_dev, before.st_size):
             raise _FileProblem('symbolic links are not followed; put the file itself here')
         raw = stream.read(rules.MAX_FILE_BYTES + 1)
     if len(raw) > rules.MAX_FILE_BYTES:

@@ -375,3 +375,12 @@ def test_the_credential_scan_is_linear_on_hostile_text(make_definition):
     started = time.monotonic()
     _issues(make_definition({'agents/builder/agent.md': agent_md(*BUILDER, body='x' * 200_000)}))
     assert time.monotonic() - started < 5
+
+
+def test_the_url_password_pattern_is_fast_on_hostile_shapes():
+    import time
+    started = time.monotonic()
+    for text in ('http://' + 'a' * 200_000, 'http://u' + ':a' * 100_000, ('a://' + 'b' * 50) * 3000):
+        definition.looks_secret(text)
+    assert time.monotonic() - started < 3
+    assert definition.looks_secret('https://user:' + 'p4ss' * 40 + '@host.example/x')  # a long password is still caught
