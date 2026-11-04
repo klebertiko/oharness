@@ -92,7 +92,7 @@ _Avoid_: wallet, model host, adapter (UI copy — adapter remains an internal ru
 
 **Permission mode**:
 How much a chat may do on its own, one of Plan, Read-only, Ask, Auto, Workspace write, Full. Per conversation, enforced by the sidecar, never a bypass.
-_Avoid_: access level, safe mode, YOLO
+_Avoid_: preset, access level, safe mode, YOLO
 
 **Needs action**:
 The group in the chat's model picker for connections that cannot answer yet, each with the one step that fixes it, in the same words as Providers.
