@@ -8,19 +8,21 @@ interface Props {
   items: QueuedMessage[];
   /** The turn stopped or failed: nothing runs on its own until a person says so. */
   paused: boolean;
+  /** The queue came back from a previous session: say so instead of blaming a turn. */
+  restored?: boolean;
   onRemove: (id: string) => void;
   onClear: () => void;
   onSendNext: () => void;
 }
 
 /** Messages waiting behind the current turn, in the order they will run. */
-export function QueuedMessages({ items, paused, onRemove, onClear, onSendNext }: Props) {
+export function QueuedMessages({ items, paused, restored = false, onRemove, onClear, onSendNext }: Props) {
   const { t } = useI18n();
   if (items.length === 0) return null;
   return (
     <section aria-label={t("chat.queue.aria")} className="mb-2 rounded-control border border-line-soft bg-sub-100 px-3 py-2">
       <p className="flex flex-wrap items-center gap-2 text-meta text-ink-mute">
-        <span>{paused ? t("chat.queue.paused", { n: items.length }) : t("chat.queue.waiting", { n: items.length })}</span>
+        <span>{paused ? t(restored ? "chat.queue.restored" : "chat.queue.paused", { n: items.length }) : t("chat.queue.waiting", { n: items.length })}</span>
         <span className="flex-1" />
         {paused && <Button size="sm" onClick={onSendNext}>{t("chat.queue.sendNext")}</Button>}
         <Button size="sm" onClick={onClear}>{t("chat.queue.clear")}</Button>
