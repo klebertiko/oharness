@@ -805,13 +805,18 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             )
                         elif kind == "usage":
                             node_tokens = int(ev.get("tokens", 0))
+                            if not broker and budget_hit is None and run_budget.exceeded(node_tokens):
+                                # The provider's own count arrives after the text; it outranks the length estimate.
+                                budget_hit = {"max_tokens": run_budget.max_tokens, "used_tokens": node_tokens}
+                                yield emit("budget_exceeded", {"node_id": node_id, **budget_hit})
 
                     output = "".join(collected)
                     # Provenance travels with the count: a usage event means the
                     # provider reported it; the length-based fallback is an estimate.
                     tokens_estimated = False
                     if not node_tokens and (not broker or broker.provider_called):
-                        node_tokens = max(1, len(output) // 4)
+                        # One turn, one count: when the estimate stopped the stream, that is the number the ceiling used.
+                        node_tokens = budget_hit["used_tokens"] if budget_hit else max(1, len(output) // 4)
                         tokens_estimated = True
                     total_tokens = node_tokens
                     nodes_run = 1 if not control.stop.is_set() else 0
