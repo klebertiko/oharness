@@ -84,3 +84,17 @@ def test_examples_catalog_served_to_the_ui_never_labels_a_harness_example():
 @pytest.mark.parametrize("path", sorted(RESOURCES.glob("*.oharness")), ids=lambda p: p.name)
 def test_packaged_resources_never_label_a_harness_example(path):
     assert not RETIRED_LABEL.search(path.read_text(encoding="utf-8")), path.name
+
+
+MODES_JSON = BACKEND_DIR / "sandbox" / "permission_modes.json"
+MODE_STRINGS = [
+    (f"{mode['id']}.{field}", mode[field])
+    for mode in json.loads(MODES_JSON.read_text(encoding="utf-8"))["modes"]
+    for field in ("label", "summary", "hint", "denyNote")
+]
+
+
+@pytest.mark.parametrize(("field", "text"), MODE_STRINGS, ids=[f for f, _ in MODE_STRINGS])
+def test_permission_mode_strings_use_no_forbidden_term(field, text):
+    """Refusal notes and hints are read in the chat: the UI calls these "modes"."""
+    assert not FORBIDDEN.search(text), f"{field}: {text!r}"
