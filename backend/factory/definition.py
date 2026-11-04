@@ -10,13 +10,12 @@ import hashlib
 import json
 import os
 import re
+import stat
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
-from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
 
 from factory import definition_rules as rules
 from sandbox.secrets import redact
@@ -26,8 +25,8 @@ FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automa
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
-                           r'|github_pat_[A-Za-z0-9_]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s/@]{3,}@')
-_CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|password|passwd|credential)[A-Za-z0-9-]*$', re.IGNORECASE)
+                           r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]{1,100}:[^\s/@]{3,200}@')
+_CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|pass|passwd|password|credential|auth)[A-Za-z0-9-]*$', re.IGNORECASE)
 _PLAIN_NAME = re.compile(r'^[A-Za-z0-9_./-]{1,80}$')
 _LONG_TOKEN = re.compile(r'[A-Za-z0-9_+/=.~-]{20,}')
 _ID = re.compile(rules.ID_PATTERN)
@@ -165,69 +164,47 @@ def _walk(root: Path, issues: list[Issue]) -> list[str]:
 
 
 def _read(root: Path, rel: str) -> str:
+    """Opens the file without following a link and reads at most the limit from that same handle, so a file swapped for a link between the
+    walk and the read is refused instead of followed."""
     path = root / rel
-    if path.stat().st_size > rules.MAX_FILE_BYTES:
+    try:
+        before = os.lstat(path)
+        if not stat.S_ISREG(before.st_mode):
+            raise _FileProblem('symbolic links are not followed; put the file itself here')
+        flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+        handle = os.open(path, flags)
+    except OSError:
+        raise _FileProblem('the file cannot be read') from None
+    with os.fdopen(handle, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if (opened.st_ino, opened.st_dev) != (before.st_ino, before.st_dev) and before.st_ino:
+            raise _FileProblem('symbolic links are not followed; put the file itself here')
+        raw = stream.read(rules.MAX_FILE_BYTES + 1)
+    if len(raw) > rules.MAX_FILE_BYTES:
         raise _FileProblem(f'file is too large (limit {rules.MAX_FILE_BYTES // 1024} KB)')
     try:
-        text = path.read_bytes().decode('utf-8-sig')
+        text = raw.decode('utf-8-sig')
     except UnicodeDecodeError:
         raise _FileProblem('not valid UTF-8 text') from None
-    return text.replace('\r\n', '\n').replace('\r', '\n')  # a checkout with CRLF must hash like one with LF
-
-
-def _shared_container(node, seen: set[int]) -> bool:
-    stack = [node]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, (dict, list)):
-            if id(current) in seen:
-                return True
-            seen.add(id(current))
-            stack.extend(current.values() if isinstance(current, dict) else current)
-    return False
-
-
-def _too_deep(text: str) -> bool:
-    """Cheap pre-scan: the YAML parser recurses per level, so a hostile file must be refused before it gets there."""
-    depth = 0
-    for char in text:
-        if char in '[{':
-            depth += 1
-            if depth > rules.MAX_YAML_DEPTH:
-                return True
-        elif char in ']}':
-            depth = max(0, depth - 1)
-    return any((len(line) - len(line.lstrip(' '))) // 2 > rules.MAX_YAML_DEPTH for line in text.split(chr(10)))
-
-
-def _only_text_keys(node) -> bool:
-    stack = [node]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, dict):
-            if not all(isinstance(key, str) for key in current):
-                return False
-            stack.extend(current.values())
-        elif isinstance(current, list):
-            stack.extend(current)
-    return True
+    return text.replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10))  # a checkout with CRLF must hash like one with LF
 
 
 def _yaml(text: str):
-    if _too_deep(text):
-        raise _FileProblem(f'nested too deep (limit {rules.MAX_YAML_DEPTH} levels)')
+    """The OHM profile of YAML 1.2 (ADR 0003) through the repo codec: one mapping document, no anchors, aliases, tags or duplicate keys, text keys
+    only, and its resource limits (depth, size, parse time) enforced on the parser events, before anything is built."""
+    from oharness import codec
+
+    if not text.strip():
+        return {}
+    limits = codec.ResourceLimits(max_bytes=rules.MAX_FILE_BYTES, max_depth=rules.MAX_YAML_DEPTH, max_syntax_nodes=20_000,
+                                  max_scalar_bytes=rules.MAX_FILE_BYTES, max_parse_seconds=2.0)
     try:
-        data = YAML(typ='safe').load(text)
-    except YAMLError as exc:
-        mark = getattr(exc, 'problem_mark', None)
-        raise _FileProblem(f'not valid YAML{f" (line {mark.line + 1})" if mark else ""}; duplicate keys and tags are refused') from None
-    except RecursionError:
-        raise _FileProblem(f'nested too deep (limit {rules.MAX_YAML_DEPTH} levels)') from None
-    if _shared_container(data, set()):
-        raise _FileProblem('YAML anchors and aliases are not supported; write the value out')
-    if not _only_text_keys(data):
-        raise _FileProblem('every key must be text')
-    return data
+        return codec.decode_bytes(text.encode('utf-8'), limits=limits)
+    except codec.CodecError as exc:
+        mark = f' (line {exc.line + 1})' if exc.line is not None else ''
+        raise _FileProblem(f'not valid under the OHM YAML profile{mark}: {_scrub(str(exc).split(" (line ", 1)[0].split(": ", 1)[-1])}') from None
+    except (ValueError, RecursionError):  # e.g. an integer with thousands of digits
+        raise _FileProblem('not valid under the OHM YAML profile') from None
 
 
 def _front_matter(text: str) -> tuple[object, str]:
@@ -282,7 +259,7 @@ def _render(path) -> str:
 
 
 def _file_of(path: tuple) -> str:
-    head = [p for p in path if isinstance(p, str)]
+    head = [_safe_name(p) for p in path if isinstance(p, str)]
     if len(head) >= 2 and head[0] == 'agents':
         return f'agents/{head[1]}/skills/{head[3]}/SKILL.md' if len(head) >= 4 and head[2] == 'localSkills' else f'agents/{head[1]}/agent.md'
     if len(head) >= 2 and head[0] == 'skills':

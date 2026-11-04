@@ -5,6 +5,7 @@ this touches an item already in flight.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from factory.orm import DefinitionVersion
 from factory.service import FactoryError
 
 CANARY_PERCENT_RANGE = (1, 50)
+_WRITES = asyncio.Lock()  # one process owns the database: changes to the active version are applied one at a time
 
 
 @dataclass(frozen=True)
@@ -72,7 +74,7 @@ def _row(factory_id: str, definition: dict, hash_: str, kind: str, actor: str, p
                              activated_by=actor)
 
 
-async def activate(db: AsyncSession, definition: dict, hash_: str, actor: str, *, mode: str = 'stable', percent: int | None = None,
+async def _activate(db: AsyncSession, definition: dict, hash_: str, actor: str, *, mode: str = 'stable', percent: int | None = None,
                    label: str | None = None) -> DefinitionVersion:
     """`definition` must already be validated: the caller refuses an invalid one before it gets here."""
     factory_id = definition['name']
@@ -95,7 +97,7 @@ async def activate(db: AsyncSession, definition: dict, hash_: str, actor: str, *
     return row
 
 
-async def promote(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVersion:
+async def _promote(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVersion:
     current = await state(db, factory_id)
     if current.canary is None:
         raise FactoryError('no_canary', 409, 'There is no canary to promote.')
@@ -106,7 +108,7 @@ async def promote(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVe
     return row
 
 
-async def abort(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVersion:
+async def _abort(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVersion:
     current = await state(db, factory_id)
     if current.canary is None or current.stable is None:
         raise FactoryError('no_canary', 409, 'There is no canary to abort.')
@@ -116,7 +118,7 @@ async def abort(db: AsyncSession, factory_id: str, actor: str) -> DefinitionVers
     return row
 
 
-async def rollback(db: AsyncSession, factory_id: str, actor: str, to: str | None = None) -> DefinitionVersion:
+async def _rollback(db: AsyncSession, factory_id: str, actor: str, to: str | None = None) -> DefinitionVersion:
     current = await state(db, factory_id)
     if current.canary is not None:
         raise FactoryError('canary_active', 409, 'A canary is running: abort it first.')
@@ -149,3 +151,23 @@ async def snapshot(db: AsyncSession, factory_id: str, hash_: str) -> DefinitionV
 
 async def history(db: AsyncSession, factory_id: str) -> list[DefinitionVersion]:
     return await _log(db, factory_id)
+
+
+async def activate(*args, **kwargs) -> DefinitionVersion:
+    async with _WRITES:
+        return await _activate(*args, **kwargs)
+
+
+async def promote(*args, **kwargs) -> DefinitionVersion:
+    async with _WRITES:
+        return await _promote(*args, **kwargs)
+
+
+async def abort(*args, **kwargs) -> DefinitionVersion:
+    async with _WRITES:
+        return await _abort(*args, **kwargs)
+
+
+async def rollback(*args, **kwargs) -> DefinitionVersion:
+    async with _WRITES:
+        return await _rollback(*args, **kwargs)

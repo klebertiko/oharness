@@ -296,9 +296,9 @@ def test_secret_looking_names_are_not_echoed_in_any_issue(make_definition):
 def test_deeply_nested_yaml_is_refused_not_a_crash(make_definition):
     for nest in ('[' * 30000, '{a: ' * 3000):
         issues = _issues(make_definition({'mcp/docs.yaml': 'command: x\nargs: ' + nest + '\n'}))
-        assert any(i.file == 'mcp/docs.yaml' and 'deep' in i.message for i in issues)
+        assert any(i.file == 'mcp/docs.yaml' and 'depth' in i.message for i in issues)
     deep_indent = ''.join(' ' * (2 * n) + f'k{n}:\n' for n in range(200))
-    assert any('deep' in i.message for i in _issues(make_definition({'factory.yaml': _factory() + 'x-deep:\n' + deep_indent})))
+    assert any('depth' in i.message for i in _issues(make_definition({'factory.yaml': _factory() + 'x-deep:\n' + deep_indent})))
 
 
 def test_non_string_keys_are_an_issue_not_a_crash(make_definition):
@@ -343,3 +343,35 @@ def test_a_secret_used_as_a_key_is_not_echoed_in_the_path_of_a_nested_issue(make
     text = _factory('policy:\n  ' + secret + ': ' + secret + '\n')
     issues = _issues(make_definition({'factory.yaml': text}))
     assert issues and secret not in json.dumps([i.as_dict() for i in issues])
+
+
+def test_block_sequence_indicators_on_one_line_count_as_nesting(make_definition):
+    for nest in ('- ' * 3000 + 'x', '? ' * 3000 + 'x'):
+        issues = _issues(make_definition({'mcp/docs.yaml': 'command: x\nargs:\n' + nest + '\n'}))
+        assert any(i.file == 'mcp/docs.yaml' for i in issues)  # refused by depth or by profile, never a crash
+
+
+def test_a_file_swapped_for_a_link_after_the_walk_is_not_read(make_definition, tmp_path):
+    root = make_definition()
+    outside = tmp_path / 'outside.yaml'
+    outside.write_text('x: 1\n', encoding='utf-8')
+    swapped = root / 'mcp' / 'docs.yaml'
+    swapped.parent.mkdir(exist_ok=True)
+    try:
+        os.symlink(outside, swapped)
+    except (OSError, NotImplementedError):
+        pytest.skip('symbolic links need a privilege this machine does not grant')
+    with pytest.raises(definition._FileProblem):
+        definition._read(root, 'mcp/docs.yaml')
+
+
+def test_a_huge_integer_is_an_issue_not_a_crash(make_definition):
+    text = _factory().replace('tokensPerRun: 100000', 'tokensPerRun: ' + '9' * 5000)
+    assert any(i.file == 'factory.yaml' for i in _issues(make_definition({'factory.yaml': text})))
+
+
+def test_the_credential_scan_is_linear_on_hostile_text(make_definition):
+    import time
+    started = time.monotonic()
+    _issues(make_definition({'agents/builder/agent.md': agent_md(*BUILDER, body='x' * 200_000)}))
+    assert time.monotonic() - started < 5
