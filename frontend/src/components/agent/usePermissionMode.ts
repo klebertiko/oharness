@@ -15,13 +15,15 @@ export function usePermissionMode(threadId: string | null) {
   const mode = usePermissionStore((s) => s.modeFor(threadId));
   const [error, setError] = useState<string | null>(null);
   const edits = useRef(0);
+  // Threads born here: their mode is being handed to the sidecar, so asking it now would read a stale answer.
+  const adopted = useRef(new Set<string>());
 
   useEffect(() => {
     setError(null);
     if (!threadId) return;
-    // A thread on the default has nothing to reconcile (and costs no request). Only a
-    // cached non-default mode is checked against what the sidecar actually holds.
-    if (usePermissionStore.getState().modeFor(threadId) === DEFAULT_PERMISSION_MODE) return;
+    // Every conversation is checked, not only those cached off the default: a lost or cleared cache must not
+    // show "Ask" while the sidecar still holds Plan (or Full).
+    if (adopted.current.has(threadId)) return;
     let cancelled = false;
     const seen = edits.current;
     chatToolsApi.getPermission(threadId).then(
@@ -55,9 +57,11 @@ export function usePermissionMode(threadId: string | null) {
   const adopt = useCallback(async (newThreadId: string): Promise<PermissionMode> => {
     const store = usePermissionStore.getState();
     const chosen = store.modeFor(null);
+    adopted.current.add(newThreadId);
     store.resetDraft();
     if (chosen === DEFAULT_PERMISSION_MODE) {
       store.setMode(newThreadId, chosen);
+      adopted.current.delete(newThreadId);
       return chosen;
     }
     try {
@@ -68,6 +72,9 @@ export function usePermissionMode(threadId: string | null) {
       usePermissionStore.getState().setMode(newThreadId, DEFAULT_PERMISSION_MODE);
       setError(tr("chat.permission.saveFailed"));
       return DEFAULT_PERMISSION_MODE;
+    } finally {
+      // Delivered (or given up): from here on this conversation is checked like any other.
+      adopted.current.delete(newThreadId);
     }
   }, []);
 
