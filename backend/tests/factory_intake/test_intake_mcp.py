@@ -1,7 +1,5 @@
 import io
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -176,14 +174,17 @@ def test_stdio_loop_handles_lines_garbage_and_oversize():
     assert replies[1]["error"]["code"] == -32700 and replies[2]["error"]["code"] == -32600
 
 
-def test_the_cli_entrypoint_speaks_mcp_over_stdio():
-    env = {**os.environ, "OH_FACTORY_PORT": "factory_intake.memory:MemoryFactory"}
+def test_the_cli_entrypoint_speaks_mcp_over_stdio(monkeypatch):
+    from oharness.cli import main
+
+    monkeypatch.setenv("OH_FACTORY_PORT", "factory_intake.memory:MemoryFactory")
     msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "t"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "forja_submit", "arguments": {"title": "hello"}}}]
-    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    done = subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); from oharness.cli import main; raise SystemExit(main(['forja', 'mcp']))", str(BACKEND)],
-                          input="\n".join(json.dumps(m) for m in msgs) + "\n", capture_output=True, text=True, env=env, cwd=BACKEND, timeout=60)
-    assert done.returncode == 0, done.stderr
-    replies = [json.loads(x) for x in done.stdout.splitlines()]
+    sent = io.BytesIO(("\n".join(json.dumps(m) for m in msgs) + "\n").encode("utf-8"))
+    received = io.BytesIO()
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(sent, encoding="utf-8", newline="\n"))
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(received, encoding="utf-8", newline="\n", write_through=True))
+    assert main(["forja", "mcp"]) == 0  # the real entry point, with its stdio swapped for pipes held by the test
+    replies = [json.loads(x) for x in received.getvalue().decode("utf-8").splitlines()]
     assert replies[0]["result"]["serverInfo"]["name"] == "oharness-forja"
     assert json.loads(replies[1]["result"]["content"][0]["text"])["outcome"] == "created"
