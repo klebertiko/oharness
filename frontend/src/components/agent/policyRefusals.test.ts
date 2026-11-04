@@ -11,8 +11,8 @@ const denied = (id: string, reason: string, note: string, mode?: string) => (sta
 
 describe("policyRefusals", () => {
   it("names the command and the reason of a call the permission mode refused", () => {
-    const state = denied("c1", "policy", "Read-only preset: this command could change files, so it was not run.", "read_only")(called("c1", ["touch", "a.txt"])(seeded));
-    expect(policyRefusals(state)).toEqual([{ callId: "c1", command: "touch a.txt", note: "Read-only preset: this command could change files, so it was not run.", mode: "read_only" }]);
+    const state = denied("c1", "policy", "Read-only mode: this command could change files, so it was not run.", "read_only")(called("c1", ["touch", "a.txt"])(seeded));
+    expect(policyRefusals(state)).toEqual([{ callId: "c1", command: "touch a.txt", note: "Read-only mode: this command could change files, so it was not run.", mode: "read_only" }]);
   });
 
   it("ignores a policy denial that is about invalid arguments, not about the mode", () => {
