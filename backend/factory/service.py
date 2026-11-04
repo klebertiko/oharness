@@ -70,7 +70,10 @@ async def create(db: AsyncSession, body: WorkItemCreate, actor: tuple[str, str |
     previous = await db.scalar(select(WorkItem).where(WorkItem.factory_id == body.factory_id, WorkItem.source_kind == src.kind,
                                                       WorkItem.source_ref == ref).order_by(WorkItem.created_at.desc()).limit(1))
     text, truncated = _clip(redact_value(body.origin_context.text))
-    item = WorkItem(factory_id=body.factory_id, title=redact_value(body.title), source_kind=src.kind, source_subtype=src.subtype,
+    from factory import versions  # imported here: versions needs FactoryError from this module
+    item_id = str(uuid.uuid4())
+    item = WorkItem(id=item_id, factory_version=await versions.version_for_new_item(db, body.factory_id, item_id),
+                    factory_id=body.factory_id, title=redact_value(body.title), source_kind=src.kind, source_subtype=src.subtype,
                     source_ref=ref, source_url=redact_value(src.url) if src.url else None,
                     thread_ref=redact_value(src.thread_ref) if src.thread_ref else None, origin_text=text, origin_truncated=truncated,
                     origin_attachments_json=json.dumps(redact_value([a.model_dump() for a in body.origin_context.attachments])),
