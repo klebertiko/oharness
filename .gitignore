@@ -47,3 +47,5 @@ __pycache__/
 
 # Local capture/build output (site screenshots, reports)
 /artifacts/
+frontend/.e2e-out/
+frontend/next-env.d.ts
