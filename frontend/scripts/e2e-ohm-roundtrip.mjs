@@ -5,10 +5,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
+import { evidenceDir } from "./e2e-evidence.mjs";
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixture = JSON.parse(readFileSync(resolve(frontend, "src/lib/fixtures/ohm-roundtrip.json"), "utf8"));
-const output = resolve(frontend, "../.harness/sprint-2026-09-12/story-OHM-ROUNDTRIP-ASTRA/evidence/e2e");
+const output = evidenceDir("ohm-roundtrip");
 mkdirSync(output, { recursive: true });
 const startedAt = new Date().toISOString();
 const resultPath = resolve(output, "result.json");
