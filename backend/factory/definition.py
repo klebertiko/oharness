@@ -25,6 +25,7 @@ FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automa
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
+                           r'|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|gsk_[A-Za-z0-9]{30,}'
                            r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]+:[^\s/@]{3,}@')
 _CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|pass|passwd|password|credential|auth)[A-Za-z0-9-]*$', re.IGNORECASE)
 _PLAIN_NAME = re.compile(r'^[A-Za-z0-9_./-]{1,80}$')

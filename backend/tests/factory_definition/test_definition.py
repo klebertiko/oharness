@@ -263,7 +263,7 @@ def test_the_mock_check_fails_when_review_cannot_be_independent(make_definition)
 # ---- SEC review: secrets that the shared patterns miss, echoed values, hostile files, pinned activation
 
 COMMON_SECRETS = ['sk-ant-api03-' + 'A1b2' * 8, 'AIza' + 'Sy' * 18, 'Bearer eyJ' + 'a' * 30, 'sk_live_' + 'x1' * 14,
-                  'github_pat_' + 'a1' * 20, 'https://user:' + 'p4ss' * 3 + '@host.example/x']
+                  'github_pat_' + 'a1' * 20, 'sk-proj-' + 'Ab3d' * 10, 'glpat-' + 'x1' * 12, 'npm_' + 'a1' * 20, 'hf_' + 'a1' * 20, 'gsk_' + 'a1' * 20, 'https://user:' + 'p4ss' * 3 + '@host.example/x']
 
 
 @pytest.mark.parametrize('secret', COMMON_SECRETS)
