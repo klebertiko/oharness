@@ -38,6 +38,7 @@ const stubs = {
   "GET /providers/connections": { connections },
   "GET /bundles/examples": { examples: [] },
   "GET /harnesses/": [],
+  "GET /flow/config": { enabled: false },
   "GET /usage/summary": usage,
 };
 

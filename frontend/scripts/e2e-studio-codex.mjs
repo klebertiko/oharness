@@ -26,7 +26,7 @@ await context.route('**/*', async route => {
   if (url.origin !== 'http://127.0.0.1:18099') { unexpected.push(req.method() + ' ' + url.origin + url.pathname); return route.abort(); }
   const key = req.method() + ' ' + url.pathname;
   const responses = {
-    'GET /health': { status: 'ok' }, 'GET /bundles/default': fixture,
+    'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /bundles/default': fixture,
     'GET /cowork/projects': { projects: [] },
     'GET /harnesses/': [], 'GET /bundles/examples': { examples: [] },
     'GET /providers/connections': { connections: [
