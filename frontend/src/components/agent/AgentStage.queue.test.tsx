@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useThreadStore } from "@/store/threadStore";
 import { usePermissionStore } from "@/store/permissionStore";
-import { useMessageQueueStore } from "@/store/messageQueueStore";
+import { MAX_QUEUED, MAX_QUEUED_CHARS, useMessageQueueStore } from "@/store/messageQueueStore";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { startDirectRun } from "@/components/agent-run/runClient";
@@ -42,7 +42,7 @@ describe("AgentStage message queue", () => {
     localStorage.clear();
     useThreadStore.setState({ threads: [], activeThreadId: null, messagesByThread: {} });
     usePermissionStore.setState({ byThread: {}, draft: "ask" });
-    useMessageQueueStore.setState({ byThread: {} });
+    useMessageQueueStore.setState({ byThread: {}, pausedThreads: {} });
     useHarnessSessionStore.setState({ hydrated: true, enabled: false, activeBundle: null });
     useCanvasStore.setState({ executionMode: "mock", isRunning: false });
     HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -149,6 +149,39 @@ describe("AgentStage message queue", () => {
     type("only");
     send();
     await waitFor(() => expect(startDirectRun).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("region", { name: "Queued messages" })).toBeNull();
+  });
+
+  it("a queue restored after a reload is paused: it does not run on its own, and Send next runs it", async () => {
+    const thread = useThreadStore.getState().createThread("Earlier chat");
+    useMessageQueueStore.setState({ byThread: { [thread]: [{ id: "q1", text: "left over" }] }, pausedThreads: { [thread]: true } });
+    render(<AgentStage />);
+    const region = await screen.findByRole("region", { name: "Queued messages" });
+    expect(region.textContent).toMatch(/paused/i);
+    expect(startDirectRun).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send next" }));
+    await waitFor(() => expect(startDirectRun).toHaveBeenCalledTimes(1));
+    expect(instructions()).toEqual(["left over"]);
+  });
+
+  it("a full queue says so and keeps what was typed", async () => {
+    await firstTurnRunning();
+    const thread = useThreadStore.getState().activeThreadId!;
+    for (let i = 0; i < MAX_QUEUED; i++) useMessageQueueStore.getState().enqueue(thread, `m${i}`);
+    type("one too many");
+    send();
+    expect(await screen.findByText(/queue is full/i)).toBeTruthy();
+    expect(input().value).toBe("one too many");
+    expect(useMessageQueueStore.getState().byThread[thread]).toHaveLength(MAX_QUEUED);
+  });
+
+  it("a message too long for the queue says so and keeps what was typed", async () => {
+    await firstTurnRunning();
+    const long = "x".repeat(MAX_QUEUED_CHARS + 1);
+    type(long);
+    send();
+    expect(await screen.findByText(/too long to queue/i)).toBeTruthy();
+    expect(input().value).toBe(long);
     expect(screen.queryByRole("region", { name: "Queued messages" })).toBeNull();
   });
 });

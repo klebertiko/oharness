@@ -51,10 +51,27 @@ it("trusts the backend over the local cache when a thread opens", async () => {
   await waitFor(() => expect(result.current.mode).toBe("ask"));
 });
 
-it("does not call the backend for a thread that is on the default", async () => {
-  renderHook(() => usePermissionMode("t-default"));
+it("checks every conversation, so a lost cache never shows Ask while the sidecar holds Plan", async () => {
+  api.getPermission.mockResolvedValue({ thread_id: "t-lost", mode: "plan" });
+  const { result } = renderHook(() => usePermissionMode("t-lost"));
+  expect(result.current.mode).toBe("ask"); // nothing cached yet
+  await waitFor(() => expect(result.current.mode).toBe("plan"));
+  expect(api.getPermission).toHaveBeenCalledWith("t-lost");
+});
+
+it("a conversation that was just adopted is not checked against a stale answer: the chosen mode wins", async () => {
+  usePermissionStore.getState().setMode(null, "plan");
+  let stored: (v: { thread_id: string; mode: "plan" }) => void = () => {};
+  api.setPermission.mockReturnValue(new Promise((resolve) => { stored = resolve; }));
+  api.getPermission.mockResolvedValue({ thread_id: "t9", mode: "ask" }); // the sidecar has not heard of Plan yet
+  const { result, rerender } = renderHook(({ id }) => usePermissionMode(id), { initialProps: { id: null as string | null } });
+  let adopting: Promise<unknown> = Promise.resolve();
+  act(() => { adopting = result.current.adopt("t9"); });
+  rerender({ id: "t9" });
   await act(async () => { await Promise.resolve(); });
-  expect(api.getPermission).not.toHaveBeenCalled();
+  await act(async () => { stored({ thread_id: "t9", mode: "plan" }); await adopting; });
+  expect(result.current.mode).toBe("plan");
+  expect(api.getPermission).not.toHaveBeenCalledWith("t9");
 });
 
 it("a late answer from the backend never overwrites a change made in the meantime", async () => {

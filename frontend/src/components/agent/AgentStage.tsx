@@ -13,7 +13,7 @@ import { policyRefusals } from "@/components/agent/policyRefusals";
 import { PlanArtifactCard } from "@/components/agent/PlanArtifactCard";
 import { usePlanArtifact } from "@/components/agent/usePlanArtifact";
 import { QueuedMessages } from "@/components/agent/QueuedMessages";
-import { useMessageQueueStore } from "@/store/messageQueueStore";
+import { MAX_QUEUED, MAX_QUEUED_CHARS, queueRefusal, useMessageQueueStore } from "@/store/messageQueueStore";
 import { PERMISSION_LABEL, isPermissionMode, type PermissionMode } from "@/lib/permissionMode";
 import type { ToolPreset } from "@/components/agent/chatCommands";
 import { ChatProviderPicker } from "@/components/agent/ChatProviderPicker";
@@ -254,6 +254,9 @@ export function AgentStage() {
   const queueKey = activeThreadId ?? "new";
   const queued = useMessageQueueStore((state) => state.byThread[queueKey]);
   const queue = useMemo(() => queued ?? [], [queued]);
+  // A queue restored after a reload waits for a person, exactly like one behind a stopped turn.
+  const queueRestored = useMessageQueueStore((state) => Boolean(state.pausedThreads[queueKey]));
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
 
   /** A `/` Tool was chosen: one run whose first act is the preset (contract §2.4).
       `exec` parks on the approval gate; the user sees the card before anything runs. */
@@ -283,7 +286,10 @@ export function AgentStage() {
   const onStart = () => {
     if (canQueue) {
       // A turn is running: the message waits, visibly, and runs after it.
-      if (useMessageQueueStore.getState().enqueue(queueKey, instruction)) setInstruction("");
+      const refusal = queueRefusal(queueKey, instruction);
+      if (refusal === "full") setQueueNotice(t("chat.queue.full", { n: MAX_QUEUED }));
+      else if (refusal === "long") setQueueNotice(t("chat.queue.long", { n: MAX_QUEUED_CHARS }));
+      else if (useMessageQueueStore.getState().enqueue(queueKey, instruction)) { setQueueNotice(null); setInstruction(""); }
       return;
     }
     if (!canStart || !provider) return;
@@ -327,8 +333,10 @@ export function AgentStage() {
     });
   };
 
+  const [approveBlocked, setApproveBlocked] = useState(false);
   const approvePlan = async () => {
-    if (!provider) return; // approving consumes the plan: only do it when the approved turn can actually be sent
+    // Approving consumes the plan: only do it when the approved turn can actually be sent. Otherwise say why.
+    if (!provider) { setApproveBlocked(true); return; }
     const text = await planArtifact.approve();
     if (text === null) return;
     send(`Carry out this approved plan:\n\n${text}`, "Plan approved. Carry it out.", "ask");
@@ -348,11 +356,12 @@ export function AgentStage() {
   useEffect(() => {
     if (live || run.status !== "complete" || !run.runId || !activeThreadId || ownerThreadId !== activeThreadId) return;
     if (drainedFor.current === run.runId || !(useMessageQueueStore.getState().byThread[activeThreadId]?.length)) return;
+    if (useMessageQueueStore.getState().pausedThreads[activeThreadId]) return; // restored after a reload: a person resumes it
     if (savedRunFor.current !== run.runId && summarizeRunOutput(run)) return; // wait for the answer to be saved
     drainedFor.current = run.runId;
     sendNextQueued();
   }, [live, run, activeThreadId, ownerThreadId, queue]);
-  const queuePaused = !live && runInCurrentChat && (run.status === "error" || run.status === "stopped");
+  const queuePaused = queueRestored || (!live && runInCurrentChat && (run.status === "error" || run.status === "stopped"));
 
   const gateSeg = run.plan?.find((s) => s.state === "gate" && s.gate);
   const suggestions = [
@@ -504,7 +513,7 @@ export function AgentStage() {
             )}
 
             {planArtifact.plan && !live && (
-              <PlanArtifactCard text={planArtifact.plan.text} busy={planArtifact.busy} error={planArtifact.error}
+              <PlanArtifactCard text={planArtifact.plan.text} busy={planArtifact.busy} error={planArtifact.error ?? (approveBlocked && !provider ? t("chat.plan.noProvider") : null)}
                 onApprove={() => void approvePlan()} onDiscard={() => void planArtifact.discard()} />
             )}
 
@@ -542,7 +551,8 @@ export function AgentStage() {
               </Notice>
             </div>
           )}
-          <QueuedMessages items={queue} paused={queuePaused} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
+          {queueNotice && <Notice tone="warn" className="mb-2">{queueNotice}</Notice>}
+          <QueuedMessages items={queue} paused={queuePaused} restored={queueRestored} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
             onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
           <ChatComposer
             key={activeThreadId ?? "no-thread"}
