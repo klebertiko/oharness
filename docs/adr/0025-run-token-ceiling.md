@@ -15,3 +15,6 @@ Status: accepted (#164)
 - Tool loop: the ceiling is checked after each provider turn, only when the model asked for more work; the event reports `skipped_calls`. A turn that finishes the answer is never relabelled. A turn can overshoot by itself.
 - Single turn (no tools): the stream stops once the length estimate crosses the ceiling.
 - Compaction never touches results the model has not read yet (after the last assistant message).
+
+## Adendo (#340): uso reportado em todo caminho
+O adapter OpenAI-compatível agora implementa `stream_events` sobre `stream_turn` (com `stream_options.include_usage`), então nós de harness, subagentes e turno simples recebem o `usage` do provedor (prompt incluído; `total_tokens`, ou prompt + completion). A estimativa por tamanho só entra quando o provedor não reporta. No turno simples o texto chega antes do uso: o teto também dispara pelo valor reportado ao fim do stream, e quando a estimativa interrompe o stream o total do turno é o mesmo número do `budget_exceeded`.

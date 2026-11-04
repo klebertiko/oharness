@@ -18,12 +18,34 @@ MAX_PROBE_MODELS = 2000
 MAX_MODEL_ID_LEN = 200
 
 
+def reported_tokens(usage) -> int | None:
+    """The provider's own count for one call (prompt included), or None when it reported none."""
+    if not isinstance(usage, dict):
+        return None
+    total = usage.get('total_tokens')
+    if isinstance(total, int) and not isinstance(total, bool):
+        return total
+    parts = [usage.get('prompt_tokens'), usage.get('completion_tokens')]
+    if any(isinstance(part, int) and not isinstance(part, bool) for part in parts):
+        return sum(part for part in parts if isinstance(part, int) and not isinstance(part, bool))
+    return None
+
+
 class OpenAICompatibleAdapter(AgentAdapter):
     def __init__(self, *, transport: httpx.BaseTransport | None = None) -> None:
         # Injectable so tests can assert on real request/response handling
         # without hitting the network (see tests/test_openai_compatible.py) —
         # None (the default) is ordinary httpx behavior, a real connection.
         self._transport = transport
+
+    async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
+        """Harness nodes, subagents and simple turns: the text, then the provider's usage report when it sends one."""
+        messages = [{'role': 'system', 'content': config.system_prompt}] if config.system_prompt else []
+        messages.append({'role': 'user', 'content': prompt})
+        yield {'kind': 'phase', 'phase': 'writing', 'detail': config.model or config.adapter}
+        async for event in self.stream_turn(messages, config):
+            if event['kind'] in ('text', 'usage'):
+                yield event
 
     async def stream_turn(self, messages: list[dict], config: AdapterConfig, tools: list[dict] | None = None) -> AsyncIterator[dict]:
         """One HTTP turn; assemble streamed function arguments before exposing calls."""
@@ -48,9 +70,9 @@ class OpenAICompatibleAdapter(AgentAdapter):
                         data = json.loads(line[6:])
                     except ValueError:
                         continue
-                    usage = data.get('usage') or {}
-                    if 'total_tokens' in usage:
-                        yield {'kind': 'usage', 'tokens': usage['total_tokens']}
+                    tokens = reported_tokens(data.get('usage'))
+                    if tokens is not None:
+                        yield {'kind': 'usage', 'tokens': tokens}
                     choices = data.get('choices') or []
                     if not choices:
                         continue
