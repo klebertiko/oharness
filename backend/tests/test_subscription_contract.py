@@ -43,8 +43,11 @@ def _linux_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     # The contract is about the shape of what would be spawned, not the host OS.
     for _pid, _cls, module in VIA:
         monkeypatch.setattr(f"{module}.find_cli", lambda name: f"/usr/local/bin/{name}")
+    # Each adapter gates on its own platform check: Codex only runs on Windows (SEC-6),
+    # Cursor only off Windows (SEC-2). Pin both so the contract is host-independent.
     monkeypatch.setattr("adapters.cli_shared.is_windows", lambda: False)
-    monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: False, raising=False)
+    monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: False)
+    monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: True)
     for var in CRED_VARS:
         monkeypatch.setenv(var, f"leak-{var}")
 
