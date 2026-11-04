@@ -12,6 +12,11 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+  # A published release rebuilds the site so its download links follow the new tag.
+  # The release event runs on the tag ref, which the github-pages environment
+  # rejects, so the `redeploy` job only re-dispatches this workflow on main.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions: {}
@@ -25,8 +30,22 @@ env:
   NODE_VERSION: 22.20.0
 
 jobs:
+  redeploy:
+    name: rebuild on main
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # dispatch this workflow on main
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main
+
   build:
     name: build site
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -39,9 +58,21 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: Newest published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Includes pre-releases (never "Latest"); drafts are excluded. Empty before the first release.
+          tag="$(gh api "repos/${GH_REPO}/releases?per_page=20" --jq '[.[] | select(.draft | not)][0].tag_name // ""')"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Release tag for the site: ${tag:-none}"
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Build public files
         working-directory: website
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         # The destination must not exist yet; build-pages.mjs refuses to reuse one.
         run: npm run build:pages -- "${RUNNER_TEMP}/pages-site"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

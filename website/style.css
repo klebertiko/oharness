@@ -1916,3 +1916,6 @@ h1, h2, h3 { word-spacing: .025em; }
   .req-table tbody th small { display: inline; margin: 0 0 0 8px; }
 }
 .requirements-section .ecosystem-copy p a, .requirements-section .download-limits a, .download-limits a[href^="#"], .source-note a[href^="#"] { color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; }
+
+.feature-list { max-width: 880px; margin-top: 8px; }
+.product-section .download-limits { color: inherit; opacity: .82; }
