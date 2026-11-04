@@ -51,3 +51,7 @@ Escolhas que o texto acima deixava abertas ou que o código já ocupava:
 - **Rotas** em `/factory/definition` (`validate`, `activate`, `promote`, `abort`, `rollback`, `diff`, `versions`). Quem escolhe a pasta é o projeto registrado no app, nunca um caminho enviado pelo cliente. Mudar a versão ativa exige a credencial humana (ADR 0055).
 - **`factory validate --check`** percorre três work items de exemplo (correção pequena, precisa de spec, ambíguo) pelos estágios que a definição liga e falha se um estágio obrigatório não roda ou se a revisão não pode ser independente.
 - Guia de uso e workflow de exemplo para o PR: `docs/factory/definition.md`.
+- **Leitura de YAML** pelo codec do OHM (`oharness.codec`, ADR 0003): um documento mapeamento, sem âncoras, aliases, tags nem chaves duplicadas, com os limites de profundidade, tamanho e tempo aplicados nos eventos do parser. Cada arquivo é aberto sem seguir link e lido dessa mesma alça; a raiz `.oharness/factory` também não pode ser link.
+- **Ativação fixada no que a pessoa revisou:** `activate` exige `expected_hash` (o hash que o `validate` mostrou); se a pasta mudou entre a revisão e o clique, responde `409 changed_since_review`.
+- **Nome da fábrica.** O `factory_id` vem do `name` da definição e a ativação é humana, mostrando esse nome; este corte não amarra um projeto a um nome. Risco aceito: um projeto registrado que ativar uma definição com o nome de outra fábrica passa a escrever no log dela (o histórico é append-only e o rollback volta). Amarrar projeto e fábrica fica para a sala de controle (#261).
+
