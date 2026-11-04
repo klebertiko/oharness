@@ -23,6 +23,10 @@ def add_parser(sub) -> argparse.ArgumentParser:
     serve.add_argument("--dir", type=Path, default=Path(".oharness/factory"), help="the factory definition directory (webhooks/<name>.yaml)")
     serve.add_argument("--allow-remote", action="store_true", help="bind beyond loopback; put your own authenticated tunnel or proxy in front")
 
+    validate = group.add_parser("validate", help="check a factory definition folder (exit 0 valid, 1 invalid, 2 folder missing); prints JSON")
+    validate.add_argument("dir", type=Path, help="the definition folder, usually .oharness/factory")
+    validate.add_argument("--check", action="store_true", help="also walk example work items through the definition (no provider, no network)")
+
     token = group.add_parser("token", help="client tokens for the integration API (kept hashed in the secrets store)")
     actions = token.add_subparsers(dest="token_cmd", required=True)
     create = actions.add_parser("create", help="create a token; it is printed once")
@@ -83,6 +87,12 @@ def run(args: argparse.Namespace) -> int:
             factory_cli._fail("no_factory", str(exc), args.json)
             return EXIT_USAGE
         return factory_cli.run(args, port)
+    if args.factory_cmd == "validate":
+        from factory.definition import cli_validate
+
+        code, payload = cli_validate(args.dir, args.check)
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return code
     if args.factory_cmd == "mcp":
         from .loader import FoundationMissing, load_port
         from .mcp import serve_stdio

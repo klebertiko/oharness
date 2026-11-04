@@ -93,3 +93,23 @@ class WorkItemArtifact(Base):
     ref: Mapped[str] = mapped_column(String(2048), nullable=False)
     label: Mapped[str] = mapped_column(String(200), default='')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class DefinitionVersion(Base):
+    """Append-only log of definition activations (ADR 0056). Each row carries an immutable snapshot of the validated definition; the
+    current stable version and the open canary are folded from the log, never stored twice. `kind`: activate, canary, promote,
+    abort, rollback; `mode` is `canary` only for a canary row."""
+    __tablename__ = 'factory_versions'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    factory_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    definition_json: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default='stable')
+    percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    previous_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    activated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    activated_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    __table_args__ = (Index('ix_factory_versions_factory', 'factory_id', 'id'),)

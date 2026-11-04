@@ -40,3 +40,14 @@ Mudar a fábrica = mudar arquivos num branch e abrir PR. Agentes (inclusive o fo
 
 ## Escolhas conservadoras
 YAML restrito (sem tags, âncoras limitadas), tamanho máximo por arquivo 256 KB. Docker e outros runners entram no schema só quando existirem no runtime (ADR 0057).
+
+## Implementação (#256)
+Escolhas que o texto acima deixava abertas ou que o código já ocupava:
+- **Nome do schema.** `factory.schema.json` já descreve a saída `--json` do `oharness factory` (ADR 0064). O schema da definição é `backend/oharness/schema/factory-definition.schema.json`, **gerado** de uma tabela única de regras (`backend/factory/definition_rules.py`) e comparado por teste com o arquivo versionado; o validador e o espelho da UI saem da mesma tabela.
+- **Modo de permissão.** O campo é `permissions.mode` (os modos do ADR 0021), não `preset`; o teto da fábrica é `policy.maxPermissionMode` (padrão `workspace_write`), e `harness:` só vale com `plan` ou `read_only`.
+- **Runners** só por arquivo (`runners/<id>.yaml`); `factory.yaml` não repete `runners`, `agents`, `skills` ou `mcp` (vêm do layout). `automations/` e `webhooks/` são validados pelos parsers do pacote B e o texto entra na versão; `scorers/` e `benchmarks/` ficam reservados.
+- **Tabela `factory_versions`** é o log de ativações (`kind`: activate, canary, promote, abort, rollback) com o snapshot canônico em cada linha; a versão estável e o canary em curso são calculados do log. Com canary aberto, nem nova ativação nem rollback: promote ou abort primeiro.
+- **YAML:** âncoras e aliases são recusados (em vez de "âncoras limitadas"); chaves duplicadas e tags também. Links simbólicos e junções não são seguidos; ids que o Windows não cria (`con`, `nul`…) são recusados para o checkout valer em qualquer sistema; CRLF e LF dão o mesmo hash.
+- **Rotas** em `/factory/definition` (`validate`, `activate`, `promote`, `abort`, `rollback`, `diff`, `versions`). Quem escolhe a pasta é o projeto registrado no app, nunca um caminho enviado pelo cliente. Mudar a versão ativa exige a credencial humana (ADR 0055).
+- **`factory validate --check`** percorre três work items de exemplo (correção pequena, precisa de spec, ambíguo) pelos estágios que a definição liga e falha se um estágio obrigatório não roda ou se a revisão não pode ser independente.
+- Guia de uso e workflow de exemplo para o PR: `docs/factory/definition.md`.
