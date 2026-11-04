@@ -335,31 +335,22 @@ def _default_ref(runner, repo: Path) -> str | None:
 async def observe_merge(db: AsyncSession, item: WorkItem, repo: Path | str) -> bool:
     """Read-only git: the item is done when the commit its run produced is an ancestor of the default branch. Nothing is written or fetched.
 
-    A branch that points at the base proves nothing (it is an ancestor of everything), so the recorded tip must differ from the recorded
-    base, and a branch with no recorded tip counts only if it holds commits the default branch does not simply equal."""
+    It fails closed: without the tip and base the foreman recorded, a branch name proves nothing, and a tip equal to the base is no work."""
     if item.stage != 'handoff' or item.status != 'waiting_merge':
         return False
-    arts = [a for a in await service.artifacts(db, item.id) if a.kind == 'diff']
-    branch = arts[-1].ref if arts else ''
-    if not _BRANCH.fullmatch(branch) or '..' in branch:  # a ref that could be read as an option or a range never reaches git
+    # Only the foreman's own record counts: a branch an agent attached on release carries no recorded commits and proves nothing.
+    arts = [(a, _RECORD.search(a.label or '')) for a in await service.artifacts(db, item.id) if a.kind == 'diff']
+    arts = [(a, r) for a, r in arts if r and r.group(2)]
+    if not arts:
+        return False
+    art, recorded = arts[-1]
+    branch, tip, start = art.ref, recorded.group(1), recorded.group(2)
+    if not _BRANCH.fullmatch(branch) or '..' in branch or tip == start:  # a ref that looks like an option never reaches git; no new commit, no work
         return False
     from workspaces.service import WorkspaceService
     runner = WorkspaceService().runner
     default = _default_ref(runner, Path(repo))
     if default is None or branch == default.rsplit('/', 1)[-1]:
-        return False
-    recorded = _RECORD.search(arts[-1].label or '')
-    tip = recorded.group(1) if recorded else None
-    if tip is None:
-        for ref in (f'refs/heads/{branch}', f'refs/remotes/origin/{branch}'):
-            found = runner.run(repo, ['rev-parse', '--verify', '--quiet', ref], check=False)
-            if found.returncode == 0:
-                tip = found.text().strip()
-                break
-        default_tip = runner.run(repo, ['rev-parse', '--verify', '--quiet', default], check=False).text().strip()
-        if tip is None or tip == default_tip:  # nothing recorded to tell finished work from an untouched branch
-            return False
-    elif recorded.group(2) and recorded.group(2) == tip:
         return False
     if runner.run(repo, ['cat-file', '-e', f'{tip}^{{commit}}'], check=False).returncode != 0:
         return False
