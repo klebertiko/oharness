@@ -17,3 +17,6 @@ aprovação fora do workspace e sem atalho de bypass. As ferramentas do broker s
 
 ## Consequências
 Adicionar um modo é editar um arquivo; sem regra para toda classe, o import do backend falha. O sandbox continua sendo política, não isolamento de SO: por isso Workspace write só automatiza o que a política consegue verificar.
+
+## Adendo (#339): comandos de arquivo no Windows
+O `exec` não usa shell e o PATH nativo do Windows não tem `mkdir|touch|cp|mv|ls|pwd`. Quando `shutil.which` não acha o programa, o sidecar executa esses seis comandos em processo (`sandbox/builtins.py`), só com as opções que a política lista; qualquer outra opção sai com código 2, sem ser ignorada, e cópia recursiva nunca segue symlink. Com o programa no PATH (Git Bash, Linux, macOS) nada muda. Programa ausente que não é um dos seis recusa com "The program 'x' is not installed or not on PATH", no lugar da mensagem genérica. A política continua sendo o único árbitro: o embutido só roda o que ela já aprovou.
