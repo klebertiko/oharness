@@ -336,3 +336,10 @@ def test_a_whole_float_is_the_same_value_as_the_integer(make_definition):
     plain = definition.load(make_definition())
     floaty = definition.load(make_definition({'factory.yaml': _factory().replace('tokensPerRun: 100000', 'tokensPerRun: 100000.0')}))
     assert floaty.ok and floaty.hash == plain.hash
+
+
+def test_a_secret_used_as_a_key_is_not_echoed_in_the_path_of_a_nested_issue(make_definition):
+    secret = 'sk-ant-api03-' + 'A1b2' * 8
+    text = _factory('policy:\n  ' + secret + ': ' + secret + '\n')
+    issues = _issues(make_definition({'factory.yaml': text}))
+    assert issues and secret not in json.dumps([i.as_dict() for i in issues])

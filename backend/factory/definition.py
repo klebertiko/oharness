@@ -276,7 +276,8 @@ def _agent(fm, body: str, factory_defaults: dict, local_skills: dict) -> dict:
 def _render(path) -> str:
     out = ''
     for part in path:
-        out += f'[{part}]' if isinstance(part, int) else (f'.{part}' if out else str(part))
+        name = part if isinstance(part, int) else _safe_name(part)  # a key can be a pasted secret: never print one
+        out += f'[{name}]' if isinstance(part, int) else (f'.{name}' if out else name)
     return out
 
 
