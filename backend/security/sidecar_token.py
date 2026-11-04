@@ -32,6 +32,7 @@ packaged.
 
 from __future__ import annotations
 
+import getpass
 import os
 import platform
 import secrets
