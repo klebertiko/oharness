@@ -32,6 +32,7 @@ packaged.
 
 from __future__ import annotations
 
+import getpass
 import os
 import platform
 import secrets
@@ -53,29 +54,33 @@ def _token_path() -> Path:
     return _token_dir() / "sidecar.token"
 
 
-def _restrict_to_current_user(path: Path) -> None:
-    """Best-effort: strip access for anyone but the current account.
+def restrict_to_current_user(path: Path) -> bool:
+    """Strip access for anyone but the current account; True only when that is known to have worked.
 
     Not a hard guarantee (a local admin can always override ACLs/chmod —
     that is true of any secret-on-disk scheme, including this app's own
     FileSecrets store), but it raises the bar past "any process that can
-    open a file this user's shell can also open."
+    open a file this user's shell can also open." Callers that must not
+    leave a secret exposed (a token file) check the result; the sidecar's
+    own token keeps it best-effort.
     """
     if platform.system() == "Windows":
+        user = os.environ.get("USERNAME") or getpass.getuser()
         try:
-            subprocess.run(
-                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{os.environ.get('USERNAME', '')}:F"],
+            done = subprocess.run(
+                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
                 capture_output=True,
                 timeout=5,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
-            pass
-    else:
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
+            return False
+        return done.returncode == 0
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        return False
+    return True
 
 
 def get_or_create_token() -> str:
@@ -99,5 +104,5 @@ def get_or_create_token() -> str:
 
     token = secrets.token_urlsafe(32)
     path.write_text(token, encoding="utf-8")
-    _restrict_to_current_user(path)
+    restrict_to_current_user(path)
     return token
