@@ -1,6 +1,6 @@
 """Factory MCP (ADR 0063): a local MCP server over stdio, newline-delimited JSON-RPC 2.0, with no new dependency.
 
-The client (Claude Code, Codex, Cursor...) starts it as a child process, so it runs as the owner and talks to the factory through the same
+The client (Claude Code, Codex, Cursor...) starts it as a child process, so it runs as the owner and talks to the Forja through the same
 ``FactoryPort`` the CLI uses. Tools can submit, inspect, comment on, cancel, claim and release work. They cannot approve a spec, answer a
 checkpoint question, confirm a merge, activate a definition, merge or push: those do not exist here. Text that came from outside (issue
 titles, messages) is returned fenced and redacted as untrusted data, never as something to obey.
@@ -36,18 +36,18 @@ def _schema(props: dict, required: tuple = ()) -> dict:
 
 _ID_PROP = {"type": "string", "minLength": 1, "maxLength": 64}
 TOOLS: dict[str, tuple[str, dict]] = {
-    "forja_submit": ("Put new work into the factory. The note is what the foreman starts from: state the goal, the context and constraints, and any work already done. "
+    "forja_submit": ("Put new work into the Forja. The note is what the foreman starts from: state the goal, the context and constraints, and any work already done. "
                        "If it builds on local changes, push the branch first and name it in the note.",
                        _schema({"title": {"type": "string", "minLength": 1, "maxLength": MAX_TITLE}, "note": {"type": "string", "maxLength": MAX_BODY}, "ref": {"type": "string", "maxLength": 120}}, ("title",))),
     "forja_list": ("List work items, newest first (state 'awaiting_human' is the inbox).", _schema({"state": {"enum": STATES}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}})),
     "forja_inbox": ("Work items waiting for a person's decision (read only; deciding is a person's job in the app).", _schema({})),
     "forja_status": ("One work item: state, stage, cost, claim, pull request.", _schema({"id": _ID_PROP}, ("id",))),
     "forja_search": ("Find work items whose title contains the text.", _schema({"text": {"type": "string", "minLength": 1, "maxLength": 200}}, ("text",))),
-    "forja_comment": ("Tell the factory something about an item: progress, a question, a blocker. It does not move the item or hand anything back.",
+    "forja_comment": ("Tell the Forja something about an item: progress, a question, a blocker. It does not move the item or hand anything back.",
                         _schema({"id": _ID_PROP, "text": {"type": "string", "minLength": 1, "maxLength": MAX_COMMENT}}, ("id", "text"))),
     "forja_cancel": ("Cancel an item this client created (items from GitHub or other sources are cancelled by their owner).", _schema({"id": _ID_PROP}, ("id",))),
     "forja_metrics": ("Throughput and cost figures.", _schema({"window_days": {"type": "integer", "minimum": 1, "maximum": 365}})),
-    "forja_claim": ("Take an item to work on locally. The factory's own run is suspended while you hold it. Returns suggested git commands for an isolated worktree; "
+    "forja_claim": ("Take an item to work on locally. The Forja's own run is suspended while you hold it. Returns suggested git commands for an isolated worktree; "
                       "this server changes no files, run them yourself. Push your branch before releasing.",
                       _schema({"id": _ID_PROP, "holder": {"type": "string", "minLength": 1, "maxLength": 60}}, ("id", "holder"))),
     "forja_release": ("Give a claimed item back with a summary and the pushed branch. 'needs_review' sends it to review (never to done); 'abandoned' puts it back in the queue.",

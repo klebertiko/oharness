@@ -1,4 +1,4 @@
-"""``oharness factory submit|list|status|comment|cancel|claim|release|metrics|inbox`` (ADR 0064).
+"""``oharness forja submit|list|status|comment|cancel|claim|release|metrics|inbox`` (ADR 0064).
 
 Every command takes ``--json`` and then prints exactly one JSON object that was validated against ``oharness/schema/factory.schema.json``
 before it left; errors are a JSON object on stderr. Exit codes: 0 ok, 1 the factory refused or failed, 2 usage or no factory here. Nothing
@@ -38,14 +38,14 @@ def add_commands(group) -> None:
         parser.add_argument("--json", action="store_true", help="print one JSON object (schema/factory.schema.json)")
         return parser
 
-    command("submit", "put work into the factory", ("title", {}), ("--note", {"default": "", "help": "what the foreman starts from"}),
+    command("submit", "put work into the Forja", ("title", {}), ("--note", {"default": "", "help": "what the foreman starts from"}),
             ("--ref", {"help": "your own id for this work; the same ref twice is one item"}))
     command("list", "list work items, newest first", ("--state", {"choices": STATES}), ("--limit", {"type": int, "default": 20}))
     command("inbox", "items waiting for a person's decision")
     command("status", "one work item", ("id", {}))
-    command("comment", "tell the factory something about an item", ("id", {}), ("text", {}))
+    command("comment", "tell the Forja something about an item", ("id", {}), ("text", {}))
     command("cancel", "cancel an item", ("id", {}))
-    command("claim", "take an item to work on locally (the factory's own run is suspended)", ("id", {}),
+    command("claim", "take an item to work on locally (the Forja's own run is suspended)", ("id", {}),
                     ("--holder", {"help": "who holds it (default: cli/<your user>)"}),
                     ("--worktree", {"type": Path, "metavar": "REPO", "help": "also make a managed git worktree of this repository and record it on the claim"}))
     command("release", "give a claimed item back; it goes to review, never to done", ("id", {}), ("--summary", {"required": True}),
@@ -153,7 +153,7 @@ def run(args: argparse.Namespace, port) -> int:
             item = _item(claimed)
             _emit(name, {"item": item, "worktree": None if made is None else {"id": made[0], "path": made[1]}}, as_json,
                   lambda: [_line(item)] + ([f"worktree: {_plain(made[1])}  (detached: create a branch there, e.g. git switch -c forja/{args.id})"] if made else [])
-                  + [f"when done: push your branch, then oharness factory release {args.id} --summary ... --branch <branch>"])
+                  + [f"when done: push your branch, then oharness forja release {args.id} --summary ... --branch <branch>"])
         elif name == "release":
             item = _item(port.release(args.id, ReleaseResult(summary=args.summary, branch=args.branch, status=args.status)))
             _emit(name, {"item": item}, as_json, lambda: [_line(item)])
