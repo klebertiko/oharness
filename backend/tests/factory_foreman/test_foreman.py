@@ -644,3 +644,33 @@ def test_a_recovered_item_has_a_question_a_person_can_answer(db_ready):
         return item.status
 
     assert run(case) == 'queued'
+
+
+def test_malformed_assignments_on_a_skipped_stage_are_ignored_or_refused_never_a_crash(db_ready):
+    for odd in ('abc', 5, [1], [{'x': 1}], {'a': 1}):
+        plan = copy.deepcopy(GOOD_PLAN)
+        plan['stages'][0]['assignments'] = odd
+
+        async def case(db, plan=plan):
+            item = await _new(db, f'odd-{type(odd).__name__}-{str(odd)[:3]}')
+            await foreman.make_plan(db, item, defn(), planner_returning(json.dumps(plan)))
+            return item.stage
+
+        assert run(case) == 'implement'
+
+
+def test_require_spec_makes_the_spec_stage_required_even_if_the_stage_says_otherwise():
+    definition = defn(policy={'requireSpec': True}, stages={'spec': {'required': False}})
+    assert any('spec' in p for p in problems(GOOD_PLAN, definition))
+
+
+def test_planning_does_not_run_over_an_item_a_person_holds(db_ready):
+    async def case(db):
+        item = await _new(db)
+        item.status = 'claimed'
+        await db.commit()
+        with pytest.raises(service.FactoryError):
+            await foreman.make_plan(db, item, defn(), planner_returning(json.dumps(GOOD_PLAN)))
+        return item.stage, item.status
+
+    assert run(case) == ('intake', 'claimed')

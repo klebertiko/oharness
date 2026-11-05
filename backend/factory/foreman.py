@@ -173,6 +173,7 @@ async def _skip(db: AsyncSession, item: WorkItem, stage: str, reason: str, actor
 
 async def make_plan(db: AsyncSession, item: WorkItem, definition: dict, planner: Planner) -> dict:
     """One provider turn (retried once with the reasons if the plan is refused). Two refusals: the item waits for a person."""
+    _need(item, 'intake', 'triage')  # planning starts a fresh item; it never runs over one a person holds
     feedback: list[str] | None = None
     for _ in range(MAX_ATTEMPTS):
         system, user = build_prompt(item, definition, feedback)
@@ -195,7 +196,7 @@ async def _accept(db: AsyncSession, item: WorkItem, plan: dict) -> dict:
             break
         await _skip(db, item, entry['stage'], entry['reason'])
     await _enter(db, item, first['stage'], FOREMAN)
-    summary = [{'stage': e['stage'], 'action': e['action'], 'reason': e['reason'], 'agents': [a['agent'] for a in (e.get('assignments') or [])]}
+    summary = [{'stage': e['stage'], 'action': e['action'], 'reason': e['reason'], 'agents': [a['agent'] for a in e['assignments']] if e['action'] == 'run' else []}
                for e in plan['stages']]
     await service.add_event(db, item, 'plan_accepted', FOREMAN, {'stages': summary})
     await db.commit()
