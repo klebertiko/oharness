@@ -367,7 +367,7 @@ def stage_flags(definition: dict) -> dict[str, dict[str, bool]]:
     for stage in rules.CONFIGURABLE_STAGES:
         explicit = stages.get(stage, {})
         available = any(a['role'] == rules.STAGE_ROLE[stage] and a['enabled'] for a in definition['agents'].values())
-        required = explicit.get('required', (stage == 'review' and available) or (stage == 'spec' and policy['requireSpec']))
+        required = explicit.get('required', stage == 'review' and available) or (stage == 'spec' and policy['requireSpec'])
         out[stage] = {'available': available, 'enabled': explicit.get('enabled', available), 'required': bool(required)}
     return out
 
