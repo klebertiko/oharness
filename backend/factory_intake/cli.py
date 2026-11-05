@@ -91,7 +91,7 @@ def run(args: argparse.Namespace) -> int:
         try:
             port = load_port()
         except FoundationMissing as exc:
-            factory_cli._fail("no_factory", str(exc), args.json)
+            factory_cli._fail("no_forja", str(exc), args.json)
             return EXIT_USAGE
         return factory_cli.run(args, port)
     if args.factory_cmd == "validate":

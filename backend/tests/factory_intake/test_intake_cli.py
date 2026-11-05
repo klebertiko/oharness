@@ -140,7 +140,7 @@ def test_plain_output_cannot_forge_rows_or_reorder_text(port, capsys):
 def test_json_errors_are_json_on_every_path(monkeypatch, capsys):
     monkeypatch.delenv("OH_FACTORY_PORT", raising=False)
     code, out, err = run(capsys, "status", "x", "--json")
-    assert code == 2 and out == "" and json.loads(err)["error"]["code"] == "no_factory"
+    assert code == 2 and out == "" and json.loads(err)["error"]["code"] == "no_forja"
     assert not list(Draft202012Validator(SCHEMA["$defs"]["error"] | {"$defs": SCHEMA["$defs"]}).iter_errors(json.loads(err)))
 
 

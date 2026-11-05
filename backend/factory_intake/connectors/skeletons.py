@@ -25,7 +25,7 @@ from ..port import SourceRef, WorkItemDraft, clamp_draft
 from ..security import Rejected, vault_key, verify_hmac_sha256, verify_shared_secret
 
 EXPERIMENTAL = True
-MARKER = "<!-- oharness-factory -->"  # replies will carry it (when implemented): the factory never reacts to its own words
+MARKER = "<!-- oharness-forja -->"  # replies will carry it (when implemented): the Forja never reacts to its own words
 
 
 @dataclass(frozen=True)

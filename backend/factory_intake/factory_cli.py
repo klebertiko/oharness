@@ -35,7 +35,7 @@ def add_commands(group) -> None:
         parser = group.add_parser(name, help=help_text)
         for flag, kwargs in arguments:
             parser.add_argument(flag, **kwargs)
-        parser.add_argument("--json", action="store_true", help="print one JSON object (schema/factory.schema.json)")
+        parser.add_argument("--json", action="store_true", help="print one JSON object (the published schema, oharness/schema/factory.schema.json)")
         return parser
 
     command("submit", "put work into the Forja", ("title", {}), ("--note", {"default": "", "help": "what the foreman starts from"}),
