@@ -27,6 +27,13 @@ def add_parser(sub) -> argparse.ArgumentParser:
     validate.add_argument("dir", type=Path, help="the definition folder, usually .oharness/forja")
     validate.add_argument("--check", action="store_true", help="also walk example work items through the definition (no provider, no network)")
 
+    init = group.add_parser("init", help="write a valid Forja folder: the foreman plus the roles you choose (never overwrites)")
+    init.add_argument("dir", type=Path, help="where to write it, usually .oharness/forja")
+    init.add_argument("--name", required=True, help="the Forja's id (lowercase letters, digits, -)")
+    init.add_argument("--model", required=True, help="default model, provider/model")
+    init.add_argument("--review-model", help="model of the review agent; it must differ from the implement model")
+    init.add_argument("--role", action="append", default=[], help="a role to include (triage, spec, implement, review, verify, monitor); repeat the flag")
+
     token = group.add_parser("token", help="client tokens for the integration API (kept hashed in the secrets store)")
     actions = token.add_subparsers(dest="token_cmd", required=True)
     create = actions.add_parser("create", help="create a token; it is printed once")
@@ -94,6 +101,21 @@ def run(args: argparse.Namespace) -> int:
             factory_cli._fail("no_forja", str(exc), args.json)
             return EXIT_USAGE
         return factory_cli.run(args, port)
+    if args.factory_cmd == "init":
+        from factory.agents import AgentError, starter_files, write_starter
+
+        try:
+            files = starter_files(args.name, args.model, args.review_model, args.role)
+        except AgentError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        try:
+            write_starter(args.dir, files)
+        except FileExistsError:
+            print("refused: that folder already has files; nothing was written", file=sys.stderr)
+            return EXIT_FAILED
+        print(json.dumps({"ok": True, "written": sorted(files)}, indent=2))
+        return EXIT_OK
     if args.factory_cmd == "validate":
         from factory.definition import cli_validate
 

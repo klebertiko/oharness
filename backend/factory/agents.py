@@ -96,3 +96,52 @@ def system_prompt(definition: dict, agent_id: str) -> str:
 def assignable(definition: dict, stage: str) -> list[str]:
     """Enabled agents that can take a stage. With none, the work waits for a person (partial adoption)."""
     return [name for name, a in definition['agents'].items() if a['role'] == stage and a['enabled']]
+
+
+STARTER_ROLES = tuple(role for role in DEFAULT_AGENTS if role != 'foreman')
+
+
+def starter_files(name: str, model: str, review_model: str | None = None, roles: list[str] | None = None) -> dict[str, str]:
+    """A valid Forja folder as {relative path: text}: the foreman plus the roles asked for, written from the default agents.
+
+    It refuses what the definition would refuse (a name that is not an id, a role that is not standard, a review that would repeat the
+    implement model), so what it returns loads and checks clean."""
+    import re
+
+    roles = list(dict.fromkeys(roles or []))
+    if not re.fullmatch(rules.ID_PATTERN, name) or name in rules.WINDOWS_RESERVED:
+        raise AgentError('the name must be lowercase letters, digits and "-"')
+    if not re.fullmatch(rules.MODEL_PATTERN, model) or (review_model and not re.fullmatch(rules.MODEL_PATTERN, review_model)):
+        raise AgentError('a model is written like provider/model')
+    unknown = [r for r in roles if r not in STARTER_ROLES]
+    if unknown:
+        raise AgentError(f'not a standard role: {", ".join(unknown)}')
+    review_model = review_model or None
+    if 'review' in roles and 'implement' in roles and review_model in (None, model):
+        raise AgentError('review must differ from implement: give a different --review-model')
+    models = [model, *([review_model] if review_model and review_model != model else [])]
+    lines = ['kind: forja', 'schemaVersion: 1.0.0', f'name: {name}', f'alias: {name}', 'defaults:', f'  model: {model}', 'repositories:',
+             '  - id: app', '    path: .', '    protectedBranches: [main]', 'tiers:', '  default:', f'    models: [{", ".join(models)}]',
+             'ceilings:', '  tokensPerWorkItem: 500000', '  tokensPerRun: 100000']
+    if 'review' in roles:
+        lines += ['stages:', '  review:', '    required: true']
+    files = {'forja.yaml': '\n'.join(lines) + '\n'}
+    for role in ['foreman', *roles]:
+        default = default_agent(role)
+        header = ['---', 'kind: agent', f'role: {role}', *([f'model: {review_model}'] if role == 'review' and review_model else []),
+                  'permissions:', f'  mode: {default["permissions"]["mode"]}', '---']
+        files[f'agents/{role}/agent.md'] = '\n'.join(header) + '\n' + default['instructions'] + '\n'
+    return files
+
+
+def write_starter(directory, files: dict[str, str]) -> None:
+    """Writes the files into a folder that does not exist yet or is empty; nothing that is already there is touched."""
+    from pathlib import Path
+
+    root = Path(directory)
+    if root.exists() and any(root.iterdir()):
+        raise FileExistsError(str(root))
+    for rel, text in files.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding='utf-8', newline='\n')
