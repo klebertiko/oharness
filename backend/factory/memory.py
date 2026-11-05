@@ -18,6 +18,11 @@ from factory.service import FactoryError
 from run_store import redact_value
 
 
+def _clean(text: str) -> str:
+    """One line, printable: a note cannot add structure to the block it is shown in."""
+    return ''.join(c for c in ' '.join(redact_value(text).split()) if c.isprintable())
+
+
 async def limits_for(db: AsyncSession, factory_id: str, agent_id: str) -> dict[str, int]:
     """The agent limits from the active definition; the Forja-wide caps when there is none (the definition can only lower them)."""
     limits = dict(rules.MEMORY_LIMITS)
@@ -47,7 +52,7 @@ async def _fit(db: AsyncSession, factory_id: str, agent_id: str, text: str, igno
 
 async def add(db: AsyncSession, factory_id: str, agent_id: str, text: str, *, origin: str, pinned: bool = False,
               source_run_id: str | None = None) -> AgentMemory:
-    clean = redact_value(text).strip()
+    clean = _clean(text)
     await _fit(db, factory_id, agent_id, clean)
     note = AgentMemory(factory_id=factory_id, agent_id=agent_id, text=clean, origin=origin, pinned=pinned and origin == 'human',
                        reviewed=origin == 'human', source_run_id=redact_value(source_run_id) if source_run_id else None)
@@ -66,7 +71,7 @@ async def get(db: AsyncSession, note_id: str) -> AgentMemory:
 async def update(db: AsyncSession, note_id: str, *, text: str | None = None, pinned: bool | None = None, reviewed: bool | None = None) -> AgentMemory:
     note = await get(db, note_id)
     if text is not None:
-        clean = redact_value(text).strip()
+        clean = _clean(text)
         await _fit(db, note.factory_id, note.agent_id, clean, ignoring=note.id)
         note.text = clean
     if pinned is not None:

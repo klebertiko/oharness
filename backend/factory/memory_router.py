@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from factory import memory
 from factory.auth import actor_for
-from factory.orm import AgentMemory
+from factory.orm import AgentMemory, WorkItem, WorkItemRun
 from factory.service import FactoryError
 
 router = APIRouter(prefix='/factory/memory', tags=['factory'])
@@ -43,6 +44,14 @@ def _human(request: Request) -> None:
         raise HTTPException(status_code=403, detail={'code': 'human_only', 'message': 'Editing or clearing memory needs the human credential of the app.'})
 
 
+async def _had_run(db: AsyncSession, body: NoteBody) -> bool:
+    if not body.source_run_id:
+        return False
+    found = await db.scalar(select(WorkItemRun.run_id).join(WorkItem, WorkItem.id == WorkItemRun.work_item_id)
+                            .where(WorkItemRun.run_id == body.source_run_id, WorkItemRun.agent_id == body.agent_id, WorkItem.factory_id == body.factory_id))
+    return found is not None
+
+
 @router.get('')
 async def list_notes(factory_id: str, agent_id: str, db: AsyncSession = Depends(get_db)):
     return {'notes': [_json(n) for n in await memory.notes(db, factory_id, agent_id)]}
@@ -51,6 +60,8 @@ async def list_notes(factory_id: str, agent_id: str, db: AsyncSession = Depends(
 @router.post('', status_code=201)
 async def add_note(body: NoteBody, request: Request, db: AsyncSession = Depends(get_db)):
     origin = 'human' if actor_for(request)[0] == 'human' else 'agent'
+    if origin == 'agent' and not await _had_run(db, body):  # an agent writes only to its own space, from a run it really had
+        raise HTTPException(status_code=403, detail={'code': 'run_mismatch', 'message': 'An agent can only write notes from a run of its own.'})
     try:
         return _json(await memory.add(db, body.factory_id, body.agent_id, body.text, origin=origin, pinned=body.pinned, source_run_id=body.source_run_id))
     except FactoryError as exc:
