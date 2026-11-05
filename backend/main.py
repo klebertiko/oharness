@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     from run_store import recover_interrupted
     await recover_interrupted()
+    from factory.foreman import recover_items
+    async with SessionLocal() as db:  # items that were running when the sidecar stopped wait for a person (ADR 0055)
+        await recover_items(db)
     # OH_SECRETS=memory|file|keychain (default memory for tests / ephemeral).
     if not hasattr(app.state, "secrets_store") or app.state.secrets_store is None:
         app.state.secrets_store = build_secrets_store()

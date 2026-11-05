@@ -238,6 +238,9 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
             raise FactoryError('stale_revision')
         item.spec_text, item.spec_revision, item.approved_revision = redact_value(body.text), item.spec_revision + 1, None
         await add_event(db, item, 'spec_edited', actor, {'revision': item.spec_revision})
+        if item.stage == 'implement':  # the approval is void: the item goes back to the spec checkpoint for a new one
+            _move(item, 'spec', 'awaiting_human')
+            await add_event(db, item, 'checkpoint_requested', actor, {'kind': 'spec', 'question': '', 'question_id': str(uuid.uuid4())})
     elif a == 'approve_spec':
         if item.stage != 'spec' or item.status != 'awaiting_human':
             raise FactoryError('no_spec_checkpoint')
