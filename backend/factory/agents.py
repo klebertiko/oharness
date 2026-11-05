@@ -120,15 +120,15 @@ def starter_files(name: str, model: str, review_model: str | None = None, roles:
     if 'review' in roles and 'implement' in roles and review_model in (None, model):
         raise AgentError('review must differ from implement: give a different --review-model')
     models = [model, *([review_model] if review_model and review_model != model else [])]
-    lines = ['kind: forja', 'schemaVersion: 1.0.0', f'name: {name}', f'alias: {name}', 'defaults:', f'  model: {model}', 'repositories:',
-             '  - id: app', '    path: .', '    protectedBranches: [main]', 'tiers:', '  default:', f'    models: [{", ".join(models)}]',
+    lines = ['kind: forja', 'schemaVersion: 1.0.0', f'name: {name}', f'alias: {name}', 'defaults:', f'  model: "{model}"', 'repositories:',
+             '  - id: app', '    path: .', '    protectedBranches: [main]', 'tiers:', '  default:', f'    models: [{", ".join(chr(34) + m + chr(34) for m in models)}]',
              'ceilings:', '  tokensPerWorkItem: 500000', '  tokensPerRun: 100000']
     if 'review' in roles:
         lines += ['stages:', '  review:', '    required: true']
     files = {'forja.yaml': '\n'.join(lines) + '\n'}
     for role in ['foreman', *roles]:
         default = default_agent(role)
-        header = ['---', 'kind: agent', f'role: {role}', *([f'model: {review_model}'] if role == 'review' and review_model else []),
+        header = ['---', 'kind: agent', f'role: {role}', *([f'model: "{review_model}"'] if role == 'review' and review_model else []),
                   'permissions:', f'  mode: {default["permissions"]["mode"]}', '---']
         files[f'agents/{role}/agent.md'] = '\n'.join(header) + '\n' + default['instructions'] + '\n'
     return files

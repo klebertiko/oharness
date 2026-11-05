@@ -114,6 +114,9 @@ def run(args: argparse.Namespace) -> int:
         except FileExistsError:
             print("refused: that folder already has files; nothing was written", file=sys.stderr)
             return EXIT_FAILED
+        except OSError:
+            print("refused: that folder cannot be written", file=sys.stderr)
+            return EXIT_FAILED
         print(json.dumps({"ok": True, "written": sorted(files)}, indent=2))
         return EXIT_OK
     if args.factory_cmd == "validate":

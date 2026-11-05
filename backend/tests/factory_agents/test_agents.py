@@ -148,3 +148,22 @@ def test_init_writes_the_folder_and_never_overwrites(tmp_path, capsys):
     capsys.readouterr()
     assert main(args) == 1 and 'already' in capsys.readouterr().err  # an existing folder is left alone
     assert main(['forja', 'init', str(tmp_path / 'x'), '--name', 'Bad Name', '--model', 'openai/gpt-4o']) == 2
+
+
+def test_models_that_look_like_yaml_values_are_written_as_text(tmp_path):
+    from factory import definition
+    for odd in ('true', 'null', '123', '1e3', '0x1F', '1.5'):
+        files = agents.starter_files('n1', model=odd, roles=['triage'])
+        folder = tmp_path / f'f{abs(hash(odd))}'
+        agents.write_starter(folder, files)
+        loaded = definition.load(folder)
+        assert loaded.ok, (odd, [i.as_dict() for i in loaded.issues])
+        assert loaded.definition['defaults']['model'] == odd
+
+
+def test_init_into_a_file_is_a_refusal_not_a_traceback(tmp_path, capsys):
+    from oharness.cli import main
+    blocker = tmp_path / 'afile'
+    blocker.write_text('x', encoding='utf-8')
+    assert main(['forja', 'init', str(blocker), '--name', 'payments', '--model', 'openai/gpt-4o']) == 1
+    assert 'refused' in capsys.readouterr().err
