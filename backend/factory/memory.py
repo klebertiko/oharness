@@ -21,9 +21,12 @@ from run_store import redact_value
 
 
 def _clean(text: str) -> str:
-    """One line, printable: a note cannot add structure to the block it is shown in."""
-    safe = _MORE_SECRETS.sub('[redacted:credential]', redact_value(text))  # bearer tokens, vendor keys and URLs with a password too
-    return ''.join(c for c in ' '.join(safe.split()) if c.isprintable())
+    """One line, printable, then redacted: normalising first means a secret cannot hide behind invisible characters, and a second pass
+    catches anything the first one assembled."""
+    plain = ''.join(c for c in ' '.join(text.split()) if c.isprintable())
+    for _ in range(2):
+        plain = _MORE_SECRETS.sub('[redacted:credential]', redact_value(plain))  # bearer tokens, vendor keys and URLs with a password too
+    return plain
 
 
 async def limits_for(db: AsyncSession, factory_id: str, agent_id: str) -> dict[str, int]:

@@ -188,3 +188,10 @@ def test_credentials_the_shared_patterns_miss_are_redacted_in_notes(client):
     url = 'postgres://user:' + 'p4ss' * 3 + '@db.example/x'
     text = add(client, f'call with {bearer} and {url}').json()['text']
     assert bearer not in text and 'p4ss' not in text
+
+
+def test_a_credential_split_by_invisible_characters_is_still_redacted(client):
+    key = 'sk-ant-api03-' + 'A1b2' * 8
+    broken = key[:12] + chr(0) + key[12:20] + chr(0x200b) + key[20:]
+    text = add(client, f'use {broken} now').json()['text']
+    assert key not in text and 'A1b2A1b2' not in text
