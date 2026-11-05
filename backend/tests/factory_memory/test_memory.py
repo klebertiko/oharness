@@ -101,14 +101,17 @@ def test_editing_and_clearing_are_a_persons_decisions(client):
     for call in (lambda: client.patch(f"/factory/memory/{note['id']}", json={'text': 'x'}),
                  lambda: client.delete(f"/factory/memory/{note['id']}"),
                  lambda: client.delete('/factory/memory', params={'factory_id': 'payments', 'agent_id': 'builder'})):
-        assert call().status_code == 403
+        refused = call()
+        assert refused.status_code == 403
     edited = client.patch(f"/factory/memory/{agent_note['id']}", json={'text': 'fixed', 'reviewed': True, 'pinned': True}, headers=HUMAN).json()
     assert edited['text'] == 'fixed' and edited['reviewed'] is True and edited['pinned'] is True and edited['origin'] == 'agent'
-    assert client.patch(f"/factory/memory/{note['id']}", json={'text': 'z' * 401}, headers=HUMAN).status_code == 422
-    assert client.delete(f"/factory/memory/{note['id']}", headers=HUMAN).status_code == 204
+    too_long = client.patch(f"/factory/memory/{note['id']}", json={'text': 'z' * 401}, headers=HUMAN)
+    deleted = client.delete(f"/factory/memory/{note['id']}", headers=HUMAN)
+    assert too_long.status_code == 422 and deleted.status_code == 204
     cleared = client.delete('/factory/memory', params={'factory_id': 'payments', 'agent_id': 'builder'}, headers=HUMAN)
     assert cleared.status_code == 200 and cleared.json()['deleted'] == 1 and listing(client) == []
-    assert client.delete('/factory/memory/nope', headers=HUMAN).status_code == 404
+    missing = client.delete('/factory/memory/nope', headers=HUMAN)
+    assert missing.status_code == 404
 
 
 def test_notes_do_not_leak_between_agents_or_factories(client):
