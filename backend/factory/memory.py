@@ -6,6 +6,7 @@ notes are a delimited block of data, never a system instruction.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 
 from sqlalchemy import delete, func, select
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from factory import definition_rules as rules
 from factory import versions
+from factory.definition import _MORE_SECRETS
 from factory.orm import AgentMemory
 from factory.service import FactoryError
 from run_store import redact_value
@@ -20,7 +22,8 @@ from run_store import redact_value
 
 def _clean(text: str) -> str:
     """One line, printable: a note cannot add structure to the block it is shown in."""
-    return ''.join(c for c in ' '.join(redact_value(text).split()) if c.isprintable())
+    safe = _MORE_SECRETS.sub('[redacted:credential]', redact_value(text))  # bearer tokens, vendor keys and URLs with a password too
+    return ''.join(c for c in ' '.join(safe.split()) if c.isprintable())
 
 
 async def limits_for(db: AsyncSession, factory_id: str, agent_id: str) -> dict[str, int]:
@@ -50,10 +53,18 @@ async def _fit(db: AsyncSession, factory_id: str, agent_id: str, text: str, igno
         raise FactoryError('memory_too_large', 409, f'An agent keeps at most {limits["maxTotalBytes"]} bytes of notes. Remove some first.')
 
 
+_WRITES = asyncio.Lock()  # one process owns the database: the count is read and the note written as one step
+
+
 async def add(db: AsyncSession, factory_id: str, agent_id: str, text: str, *, origin: str, pinned: bool = False,
               source_run_id: str | None = None) -> AgentMemory:
     clean = _clean(text)
-    await _fit(db, factory_id, agent_id, clean)
+    async with _WRITES:
+        await _fit(db, factory_id, agent_id, clean)
+        return await _insert(db, factory_id, agent_id, clean, origin, pinned, source_run_id)
+
+
+async def _insert(db: AsyncSession, factory_id: str, agent_id: str, clean: str, origin: str, pinned: bool, source_run_id: str | None) -> AgentMemory:
     note = AgentMemory(factory_id=factory_id, agent_id=agent_id, text=clean, origin=origin, pinned=pinned and origin == 'human',
                        reviewed=origin == 'human', source_run_id=redact_value(source_run_id) if source_run_id else None)
     db.add(note)
@@ -72,8 +83,10 @@ async def update(db: AsyncSession, note_id: str, *, text: str | None = None, pin
     note = await get(db, note_id)
     if text is not None:
         clean = _clean(text)
-        await _fit(db, note.factory_id, note.agent_id, clean, ignoring=note.id)
-        note.text = clean
+        async with _WRITES:
+            await _fit(db, note.factory_id, note.agent_id, clean, ignoring=note.id)
+            note.text = clean
+            await db.commit()
     if pinned is not None:
         note.pinned = pinned
     if reviewed is not None:

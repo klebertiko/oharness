@@ -162,3 +162,29 @@ def test_a_note_cannot_add_structure_to_the_block(client):
             return await memory.run_block(db, 'payments', 'builder')
     lines = anyio.run(block).splitlines()
     assert len([line for line in lines if line.startswith('-')]) == 2  # one line per note, whatever the text says
+
+
+def test_concurrent_writes_cannot_pass_the_limit(client):
+    import asyncio
+
+    async def burst():
+        results = []
+
+        async def one(n):
+            async with SessionLocal() as db:
+                try:
+                    await memory.add(db, 'payments', 'builder', f'note {n}', origin='human')
+                    results.append(True)
+                except Exception:
+                    results.append(False)
+        await asyncio.gather(*[one(n) for n in range(80)])
+        return results.count(True)
+    assert anyio.run(burst) == 50
+    assert len(listing(client)) == 50
+
+
+def test_credentials_the_shared_patterns_miss_are_redacted_in_notes(client):
+    bearer = 'Bearer eyJ' + 'a' * 30
+    url = 'postgres://user:' + 'p4ss' * 3 + '@db.example/x'
+    text = add(client, f'call with {bearer} and {url}').json()['text']
+    assert bearer not in text and 'p4ss' not in text
