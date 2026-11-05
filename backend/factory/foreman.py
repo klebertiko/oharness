@@ -42,7 +42,7 @@ def _clip(value: object, size: int = 40) -> str:
 
 # ------------------------------------------------------------------------------------------------------------------------- plan
 
-def check_plan(plan: object, definition: dict) -> list[str]:
+def check_plan(plan: object, definition: dict, item_ceiling: int | None = None) -> list[str]:
     """Every reason the plan is not acceptable. The definition decides; the model's wishes do not."""
     if not isinstance(plan, dict) or not isinstance(plan.get('stages'), list) or not plan['stages']:
         return ['the plan must be an object with a non-empty stages list']
@@ -51,7 +51,8 @@ def check_plan(plan: object, definition: dict) -> list[str]:
     tier_models = {m for tier in definition.get('tiers', {}).values() for m in tier['models']}
     run_cap = definition.get('ceilings', {}).get('tokensPerRun')
     seen: list[str] = []
-    pairs: dict[str, set[tuple[object, object]]] = {}
+    pairs: dict[str, set[tuple[str, str | None]]] = {}
+    total = 0
     for index, entry in enumerate(plan['stages']):
         if not isinstance(entry, dict):
             problems.append(f'stages[{index}] must be an object')
@@ -87,25 +88,33 @@ def check_plan(plan: object, definition: dict) -> list[str]:
             if configured['role'] != stage:
                 problems.append(f'{where}: agent {given["agent"]} has role {configured["role"]}, not {stage}')
             model = given.get('model')
-            if not isinstance(model, str) or (tier_models and model not in tier_models):
+            allowed = tier_models or {configured['model']}  # no tiers: only the model the agent is configured with
+            if not isinstance(model, str) or model not in allowed:
                 problems.append(f'{where}: model {_clip(model)!r} is not allowed (see the tiers)')
             harness = given.get('harness')
-            if harness is not None and configured['permissions']['mode'] not in rules.HARNESS_SAFE_MODES:
-                problems.append(f'{where}: a harness only serves agents that cannot write')
+            if harness is not None and (not isinstance(harness, str) or configured['permissions']['mode'] not in rules.HARNESS_SAFE_MODES):
+                problems.append(f'{where}: a harness is an id and only serves agents that cannot write')
             tokens = given.get('maxTokens')
             if not isinstance(tokens, int) or isinstance(tokens, bool) or tokens < 1 or (run_cap and tokens > run_cap):
                 problems.append(f'{where}: maxTokens must be between 1 and the run ceiling')
+            else:
+                total += tokens
             context = given.get('context', [])
             if not isinstance(context, list) or any(c not in CONTEXTS for c in context):
                 problems.append(f'{where}: context may only contain {", ".join(CONTEXTS)}')
-            pairs.setdefault(stage, set()).add((model, harness))
+            if isinstance(model, str) and (harness is None or isinstance(harness, str)):
+                pairs.setdefault(stage, set()).add((model, harness))
     for stage, flag in flags.items():
         if flag['required'] and stage not in seen:
             problems.append(f'stage {stage} is required and must be in the plan')
     if not any(isinstance(e, dict) and e.get('action') == 'run' for e in plan['stages']):
         problems.append('the plan must run at least one stage')
-    if policy['reviewIndependence'] == 'require' and pairs.get('implement') and pairs.get('review') \
-            and not any(r not in pairs['implement'] for r in pairs['review']):
+    budget = [cap for cap in (definition.get('ceilings', {}).get('tokensPerWorkItem'), item_ceiling) if cap]
+    if budget and total > min(budget):
+        which = 'the item ceiling' if item_ceiling and total > item_ceiling else 'tokensPerWorkItem'
+        problems.append(f'the assignments ask for {total} tokens, more than {which} allows')
+    repeats = pairs.get('implement', set()) & pairs.get('review', set())
+    if policy['reviewIndependence'] == 'require' and pairs.get('implement') and pairs.get('review') and repeats:
         problems.append('review is not independent: it must differ from implement in model or harness (reviewIndependence)')
     return problems
 
@@ -168,7 +177,7 @@ async def make_plan(db: AsyncSession, item: WorkItem, definition: dict, planner:
         text, tokens = await planner(system, user)
         item.cost_tokens += int(tokens)
         plan = _parse(text)
-        feedback = check_plan(plan, definition) if plan is not None else ['the reply was not a JSON object']
+        feedback = check_plan(plan, definition, getattr(item, 'token_ceiling', None)) if plan is not None else ['the reply was not a JSON object']
         if not feedback:
             return await _accept(db, item, plan)
         await service.add_event(db, item, 'plan_rejected', FOREMAN, {'problems': feedback})
@@ -208,6 +217,8 @@ async def _after(db: AsyncSession, item: WorkItem, definition: dict, order: tupl
     for stage in order:
         flag = flags[stage]
         if not (flag['available'] and flag['enabled']):
+            if flag['required']:
+                raise FactoryError('required_stage_unavailable', 409, f'Stage {stage} is required but has no enabled agent.')
             continue
         reason = await _planned_skip(db, item, stage)
         if reason is not None and not flag['required']:
@@ -229,7 +240,7 @@ async def _returns(db: AsyncSession, item: WorkItem) -> int:
 
 
 def _need(item: WorkItem, *stages: str) -> None:
-    if item.stage not in stages or item.status in service.CLOSED_STATUSES:
+    if item.stage not in stages or item.status not in ('queued', 'running'):  # a person holding, parking or deciding on the item is not interrupted
         raise FactoryError('stage_not_allowed', detail=f'{item.stage}/{item.status}')
 
 
@@ -238,6 +249,8 @@ def _need(item: WorkItem, *stages: str) -> None:
 async def triage_done(db: AsyncSession, item: WorkItem, definition: dict, outcome: str, question: str = '') -> None:
     """Triage ends in implement (small and clear), spec, or wait (a question for a person, never a guess)."""
     _need(item, 'intake', 'triage')
+    if outcome not in ('implement', 'spec', 'wait'):
+        raise FactoryError('invalid_outcome', 422, 'Triage ends in implement, spec or wait.')
     if item.stage == 'intake':
         await _enter(db, item, 'triage', FOREMAN, 'running')
     if outcome == 'wait':
@@ -269,6 +282,8 @@ async def spec_proposed(db: AsyncSession, item: WorkItem, definition: dict, text
 async def implement_done(db: AsyncSession, item: WorkItem, definition: dict, branch: str, sha: str | None = None, base: str | None = None) -> None:
     """`sha` is the branch tip the run produced and `base` the commit it started from: the merge check compares those commits, not a name."""
     _need(item, 'implement')
+    if (item.spec_revision > 0 or definition['policy']['requireSpec']) and item.approved_revision != item.spec_revision:
+        raise FactoryError('spec_not_approved', 409, 'The current spec revision has not been approved.')
     label = 'implementation branch'
     if sha and _SHA.fullmatch(sha):
         label += f' sha={sha}' + (f' base={base}' if base and _SHA.fullmatch(base) else '')

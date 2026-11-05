@@ -465,3 +465,88 @@ def test_the_merge_observation_endpoint_reads_git_of_a_registered_project(db_rea
         assert unknown.status_code == 404
         seen = client.post(f'/factory/work-items/{item_id}/check-landing', json={'workspace': str(repo)}, headers=HUMAN_HEADER)
         assert seen.status_code == 200 and seen.json()['merged'] is True and seen.json()['status'] == 'done'
+
+
+# ---- QA/SEC review round
+
+def test_plans_with_odd_types_are_refused_not_a_crash():
+    plan = copy.deepcopy(GOOD_PLAN)
+    plan['stages'][2]['assignments'][0]['harness'] = ['x']
+    plan['stages'][3]['assignments'][0]['model'] = {'a': 1}
+    assert problems(plan)
+
+
+def test_every_review_assignment_must_differ_from_implement():
+    plan = copy.deepcopy(GOOD_PLAN)
+    plan['stages'][3]['assignments'].append(step('review', agent_id='reviewer', model='openai/gpt-4o')['assignments'][0])  # one of them repeats implement
+    assert any('independen' in p for p in problems(plan))
+
+
+def test_without_tiers_a_model_must_be_the_agents_own():
+    definition = defn(tiers={})
+    definition['tiers'] = {}
+    plan = copy.deepcopy(GOOD_PLAN)
+    plan['stages'][2]['assignments'][0]['model'] = 'evil/model'
+    assert any('model' in p for p in problems(plan, definition))
+    assert problems(GOOD_PLAN, definition) == []
+
+
+def test_the_plan_cannot_ask_for_more_tokens_than_the_item_may_spend():
+    definition = defn(ceilings={'tokensPerRun': 100000, 'tokensPerWorkItem': 1500})
+    assert any('tokensPerWorkItem' in p for p in problems(GOOD_PLAN, definition))  # 1000 + 1000
+    assert any('item ceiling' in p for p in foreman.check_plan(GOOD_PLAN, defn(), item_ceiling=1500))
+
+
+def test_stage_results_are_refused_while_a_person_holds_the_item(db_ready):
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'review')
+        item.status = 'claimed'
+        await db.commit()
+        with pytest.raises(service.FactoryError):
+            await foreman.review_done(db, item, defn(), 'approved')
+        return item.status
+
+    assert run(case) == 'claimed'
+
+
+def test_triage_outcome_must_be_one_of_three(db_ready):
+    async def case(db):
+        item = await _new(db)
+        with pytest.raises(service.FactoryError):
+            await foreman.triage_done(db, item, defn(policy={'requireSpec': True}), 'review')
+        return item.stage
+
+    assert run(case) == 'intake'
+
+
+def test_a_required_stage_that_is_turned_off_stops_the_flow(db_ready):
+    definition = defn()
+    definition['agents']['reviewer']['enabled'] = False
+
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        with pytest.raises(service.FactoryError):
+            await foreman.implement_done(db, item, definition, 'forja/x')
+        return item.stage
+
+    assert run(case) == 'implement'
+
+
+def test_implementation_needs_the_approved_spec_revision(db_ready):
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        item.spec_revision, item.approved_revision = 2, 1  # the spec was edited after the approval
+        await db.commit()
+        with pytest.raises(service.FactoryError):
+            await foreman.implement_done(db, item, defn(), 'forja/x')
+        gate = defn(policy={'requireSpec': True})
+        other = await _new(db, 'o2')
+        await _at(db, other, 'implement')
+        with pytest.raises(service.FactoryError):
+            await foreman.implement_done(db, other, gate, 'forja/x')  # requireSpec and no approved spec at all
+        return item.stage
+
+    assert run(case) == 'implement'
