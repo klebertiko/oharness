@@ -178,18 +178,22 @@ def test_a_person_stores_a_secret_and_nothing_ever_returns_the_value(client):
     assert VALUE not in listing.text and [s['name'] for s in listing.json()['secrets']] == ['npm-token'] and 'updated_at' in listing.json()['secrets'][0]
     client.put('/factory/secrets/npm-token', json={'value': VALUE + 'v2'}, headers=HUMAN)  # replace
     assert len(client.get('/factory/secrets').json()['secrets']) == 1 and app.state.secrets_store.get('forja/npm-token') == VALUE + 'v2'
-    assert client.delete('/factory/secrets/npm-token', headers=HUMAN).status_code == 204
+    removed = client.delete('/factory/secrets/npm-token', headers=HUMAN)
+    assert removed.status_code == 204
     assert client.get('/factory/secrets').json()['secrets'] == [] and not app.state.secrets_store.exists('forja/npm-token')
 
 
 def test_secrets_are_a_persons_decision_and_names_and_sizes_are_checked(client):
-    assert client.put('/factory/secrets/x', json={'value': VALUE}).status_code == 403
-    assert client.delete('/factory/secrets/x').status_code == 403
+    refused_put = client.put('/factory/secrets/x', json={'value': VALUE})
+    refused_delete = client.delete('/factory/secrets/x')
+    assert refused_put.status_code == 403 and refused_delete.status_code == 403
     for bad in ('bad name', 'a' * 101, '..'):
-        assert client.put(f'/factory/secrets/{bad}', json={'value': VALUE}, headers=HUMAN).status_code in (404, 422)
-    assert client.put('/factory/secrets/big', json={'value': 'v' * 9000}, headers=HUMAN).status_code == 422
-    assert client.put('/factory/secrets/empty', json={'value': ''}, headers=HUMAN).status_code == 422
-    assert client.delete('/factory/secrets/never-stored', headers=HUMAN).status_code == 204  # deleting twice is fine
+        bad_name = client.put(f'/factory/secrets/{bad}', json={'value': VALUE}, headers=HUMAN)
+        assert bad_name.status_code in (404, 422)
+    too_big = client.put('/factory/secrets/big', json={'value': 'v' * 9000}, headers=HUMAN)
+    empty = client.put('/factory/secrets/empty', json={'value': ''}, headers=HUMAN)
+    again = client.delete('/factory/secrets/never-stored', headers=HUMAN)  # deleting twice is fine
+    assert too_big.status_code == 422 and empty.status_code == 422 and again.status_code == 204
 
 
 def test_no_route_of_the_sidecar_can_read_a_secret_value():
@@ -229,4 +233,22 @@ def test_two_references_cannot_share_one_variable():
 def test_a_rejected_secret_body_does_not_echo_the_value(client):
     resp = client.put('/factory/secrets/big', json={'value': 'v' * 9000}, headers=HUMAN)
     assert resp.status_code == 422 and 'v' * 50 not in resp.text
-    assert client.put('/factory/secrets/big', content=b'not json', headers=HUMAN).status_code == 422
+    not_json = client.put('/factory/secrets/big', content=b'not json', headers=HUMAN)
+    assert not_json.status_code == 422
+
+
+# ---- second review round
+
+@pytest.mark.parametrize('command', [
+    'git --attr-source=HEAD push origin main', 'git --bare push origin main', 'GIT.EXE push origin main', 'git.cmd push origin main',
+    '(git push origin main)', 'echo $(git push origin main)', 'x=`git push origin main`', 'true; git push origin main', 'false || git push origin main',
+    'git push origin main' + chr(10), 'gh api repos/o/r/pulls/1/merge --input body.json', 'gh api graphql -F query=@merge.graphql',
+])
+def test_the_guard_reads_commands_the_way_a_shell_would(command):
+    assert runner.deny_command(command, ['main'])
+
+
+def test_a_secret_prefix_before_the_truncation_marker_is_removed():
+    redactor = runner.RunRedactor([VALUE])
+    cut = 'out ' + VALUE[:9] + chr(10) + '[truncated]'
+    assert VALUE[:6] not in redactor.redact(cut, truncated=True) and redactor.redact(cut, truncated=True).endswith('[truncated]')

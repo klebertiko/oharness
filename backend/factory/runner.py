@@ -22,6 +22,9 @@ MIN_SECRET_LENGTH = 4  # a shorter value would only mangle ordinary output when 
 _NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$')
 
 
+_CUT_MARKER = re.compile('(' + chr(10) + '?(?:…)?' + re.escape('[truncated') + '[^]]*[]])')
+
+
 class RunnerError(ValueError):
     """A run cannot be set up, with a reason that never contains a secret value."""
 
@@ -44,17 +47,22 @@ class RunRedactor:
         self._forms = sorted((f for f in forms if len(f) >= MIN_SECRET_LENGTH), key=len, reverse=True)
 
     def redact(self, text: str, truncated: bool = False) -> str:
-        """`truncated`: the output was cut, so a secret may end the text half-written; any prefix of one at the very end is dropped too."""
+        """`truncated`: the output was cut, so a secret may be half written just before a cut marker or at the very end; any prefix of one
+        sitting there is dropped too."""
         for form in self._forms:
             text = text.replace(form, '[redacted:secret]')
         if truncated:
-            for form in self._forms:
-                for size in range(len(form) - 1, MIN_SECRET_LENGTH - 1, -1):
-                    marker = '[truncated]'
-                    body = text[:-len(marker)] if text.endswith(marker) else text
-                    if body.endswith(form[:size]):
-                        text = body[:-size] + (marker if body is not text else '')
-                        break
+            parts = _CUT_MARKER.split(text)  # text, marker, text, marker... with the markers kept
+            for position in range(0, len(parts), 2):
+                parts[position] = self._drop_partial(parts[position])
+            text = ''.join(parts)
+        return text
+
+    def _drop_partial(self, text: str) -> str:
+        for form in self._forms:
+            for size in range(len(form) - 1, MIN_SECRET_LENGTH - 1, -1):
+                if text.endswith(form[:size]):
+                    return text[:-size]
         return text
 
 
@@ -95,36 +103,45 @@ async def run_as_agent(definition: dict, agent_id: str, argv: list[str], cwd, st
     return result
 
 
-_GIT_VALUE_OPTIONS = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env'}
-_PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec', '--force-with-lease-x'}
+_GIT_PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec'}
 _GH_VALUE_OPTIONS = {'-R', '--repo', '--hostname'}
+_SEPARATORS = {';', '&&', '||', '|', '&'}
+_SHELL_PUNCTUATION = re.compile('[;&|()`<>' + chr(10) + chr(13) + ']')
+_EXECUTABLE_SUFFIX = re.compile(r'\.(exe|cmd|bat|com)$')
 
 
 def _tokens(command: str | list[str], depth: int = 0) -> list[str]:
-    """Words of a command, with quoting undone and nested shell strings (`sh -c "..."`) opened up."""
+    """Words of a command, with quoting undone, shell punctuation turned into separators and nested shell strings (`sh -c "..."`) opened."""
     import shlex
 
     if isinstance(command, list):
         words = [str(w) for w in command]
     else:
+        spaced = _SHELL_PUNCTUATION.sub(lambda m: f' {m.group()} ' if m.group() in '&|' else ' ; ', command.replace('$(', ' ; '))
         try:
-            words = shlex.split(command)
+            words = shlex.split(spaced)
         except ValueError:
-            words = command.split()
+            words = spaced.split()
     out: list[str] = []
     for word in words:
-        if depth < 3 and (' ' in word or ';' in word or '&' in word):
-            out += _tokens(re.sub(r'[;&|]', ' ; ', word), depth + 1)
+        if depth < 3 and (word.strip() != word or ' ' in word or _SHELL_PUNCTUATION.search(word) or '$(' in word):
+            out += _tokens(word, depth + 1)
         else:
             out.append(word)
     return out
 
 
-def _after_options(tokens: list[str], start: int, value_options: set[str]) -> int:
-    i = start
-    while i < len(tokens) and tokens[i].startswith('-'):
-        i += 2 if tokens[i] in value_options else 1
-    return i
+def _name(word: str) -> str:
+    return _EXECUTABLE_SUFFIX.sub('', word.replace(chr(92), '/').rsplit('/', 1)[-1].lower())
+
+
+def _segment(words: list[str], start: int) -> list[str]:
+    out = []
+    for word in words[start:]:
+        if word in _SEPARATORS:
+            break
+        out.append(word)
+    return out
 
 
 def deny_command(command: str | list[str], protected: list[str]) -> str | None:
@@ -132,32 +149,27 @@ def deny_command(command: str | list[str], protected: list[str]) -> str | None:
     (aliases, scripts and indirection get past it); the guarantee is the credential scope and the branch protection on the server."""
     words = _tokens(command)
     for index, word in enumerate(words):
-        name = word.replace(chr(92), '/').rsplit('/', 1)[-1].removesuffix('.exe')
+        name = _name(word)
         if name == 'gh':
-            rest = [w.lower() for w in words[_after_options(words, index + 1, _GH_VALUE_OPTIONS):]]
-            head = rest[:1]
-            span = []
-            for w in rest:  # the words of this gh command, up to a separator
-                if w in (';', '&&', '||', '|'):
-                    break
-                span.append(w)
-            if head == ['alias'] or (head == ['pr'] and 'merge' in span) or (head == ['api'] and any('merge' in w for w in span)):
+            rest = [w.lower() for w in _segment(words, index + 1)]
+            skip = 0
+            while skip < len(rest) and rest[skip].startswith('-'):
+                skip += 2 if rest[skip] in {o.lower() for o in _GH_VALUE_OPTIONS} else 1
+            head, span = rest[skip:skip + 1], rest[skip:]
+            api_file = any(w.startswith('@') or w == '--input' or '=@' in w for w in span)
+            if head == ['alias'] or (head == ['pr'] and 'merge' in span) or (head == ['api'] and (api_file or any('merge' in w for w in span))):
                 return 'The Forja never merges: a person merges outside it.'
         if name == 'git':
-            at = _after_options(words, index + 1, _GIT_VALUE_OPTIONS)
-            if words[at:at + 1] != ['push']:
+            segment = _segment(words, index + 1)
+            if 'push' not in segment:  # any `push` after git in the same command counts, whatever options come first
                 continue
-            args = []
-            for w in words[at + 1:]:
-                if w in (';', '&&', '||', '|'):
-                    break
-                args.append(w)
+            args = segment[segment.index('push') + 1:]
             if any(w in ('--all', '--mirror') for w in args):
                 return 'This push could reach a protected branch.'
             positional, i = [], 0
             while i < len(args):
                 if args[i].startswith('-'):
-                    i += 2 if args[i] in _PUSH_VALUE_OPTIONS else 1
+                    i += 2 if args[i] in _GIT_PUSH_VALUE_OPTIONS else 1
                 else:
                     positional.append(args[i])
                     i += 1
