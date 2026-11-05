@@ -252,3 +252,18 @@ def test_a_secret_prefix_before_the_truncation_marker_is_removed():
     redactor = runner.RunRedactor([VALUE])
     cut = 'out ' + VALUE[:9] + chr(10) + '[truncated]'
     assert VALUE[:6] not in redactor.redact(cut, truncated=True) and redactor.redact(cut, truncated=True).endswith('[truncated]')
+
+
+@pytest.mark.parametrize('command', [
+    'git push origin ' + chr(92) + chr(10) + 'main', 'git push origin main', 'gh api repos/o/r/pulls/1/merge --input=body.json', 'gh api graphql -f query=x',
+])
+def test_third_review_round_shell_forms(command):
+    assert runner.deny_command(command, ['main'])
+
+
+def test_only_the_marker_the_sandbox_writes_counts_as_a_cut():
+    redactor = runner.RunRedactor([VALUE])
+    fake = 'user wrote ' + VALUE[:9] + chr(10) + '[truncated by me] more'
+    assert redactor.redact(fake, truncated=True) == fake  # not the sandbox marker: nothing to cut there
+    real = 'out ' + VALUE[:9] + chr(10) + '…[truncated at 65536 bytes]'
+    assert VALUE[:6] not in redactor.redact(real, truncated=True)

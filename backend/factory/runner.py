@@ -22,7 +22,7 @@ MIN_SECRET_LENGTH = 4  # a shorter value would only mangle ordinary output when 
 _NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$')
 
 
-_CUT_MARKER = re.compile('(' + chr(10) + '?(?:…)?' + re.escape('[truncated') + '[^]]*[]])')
+_CUT_MARKER = re.compile('(' + chr(10) + '…' + re.escape('[truncated at ') + '[0-9]{1,9}' + re.escape(' bytes]') + '|' + chr(10) + re.escape('[truncated]') + ')')
 
 
 class RunnerError(ValueError):
@@ -117,6 +117,7 @@ def _tokens(command: str | list[str], depth: int = 0) -> list[str]:
     if isinstance(command, list):
         words = [str(w) for w in command]
     else:
+        command = command.replace(chr(92) + chr(13) + chr(10), '').replace(chr(92) + chr(10), '')  # a backslash before a newline joins the lines, as in a shell
         spaced = _SHELL_PUNCTUATION.sub(lambda m: f' {m.group()} ' if m.group() in '&|' else ' ; ', command.replace('$(', ' ; '))
         try:
             words = shlex.split(spaced)
@@ -156,7 +157,7 @@ def deny_command(command: str | list[str], protected: list[str]) -> str | None:
             while skip < len(rest) and rest[skip].startswith('-'):
                 skip += 2 if rest[skip] in {o.lower() for o in _GH_VALUE_OPTIONS} else 1
             head, span = rest[skip:skip + 1], rest[skip:]
-            api_file = any(w.startswith('@') or w == '--input' or '=@' in w for w in span)
+            api_file = any(w.startswith('@') or w == '--input' or w.startswith('--input=') or '=@' in w for w in span) or 'graphql' in span
             if head == ['alias'] or (head == ['pr'] and 'merge' in span) or (head == ['api'] and (api_file or any('merge' in w for w in span))):
                 return 'The Forja never merges: a person merges outside it.'
         if name == 'git':
