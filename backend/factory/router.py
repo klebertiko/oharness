@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,3 +116,26 @@ async def post_action(item_id: str, body: ActionBody, request: Request, db: Asyn
         await db.rollback()
         raise HTTPException(status_code=409, detail={'code': 'conflict', 'message': 'A concurrent request changed this item; retry.'})
     return _item_json(item)
+
+
+class ObserveBody(BaseModel):
+    workspace: str = Field(min_length=1, max_length=4096)
+
+
+@router.post('/work-items/{item_id}/check-landing')
+async def observe_merge(item_id: str, body: ObserveBody, request: Request, db: AsyncSession = Depends(get_db)):
+    """Read-only: asks git of a registered project whether the item's branch reached the default branch (ADR 0055). It cannot merge."""
+    from routers.execution import _validated_project_cwd
+
+    from factory import foreman
+    if actor_for(request)[0] != 'human':  # this check can complete an item, so it is a person's call like the other decisions
+        raise HTTPException(status_code=403, detail={'code': 'human_only', 'message': 'This check needs the human credential of the app.'})
+    cwd = await _validated_project_cwd(db, body.workspace)
+    if cwd is None:
+        raise HTTPException(status_code=404, detail={'code': 'unknown_workspace', 'message': 'The workspace is not a project registered in OHarness.'})
+    try:
+        item = await service.get(db, item_id)
+    except service.FactoryError as exc:
+        raise _http(exc)
+    merged = await foreman.observe_merge(db, item, cwd)
+    return {'merged': merged, 'status': item.status, 'stage': item.stage}
