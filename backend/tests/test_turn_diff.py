@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adapters.base import AgentAdapter
+from link_support import make_dir_link, make_symlink
 from main import app
 from sandbox.turn_diff import (RevertRefused, TURN_DIFF_RULES, compute_changes, revert_file, snapshot)
 
@@ -77,8 +78,8 @@ def test_symlinks_are_not_followed_or_tracked(tmp_path):
     write(outside, 'f.txt', 'secret-ish')
     root = tmp_path / 'ws'
     root.mkdir()
-    os.symlink(outside, root / 'link')
-    os.symlink(outside / 'f.txt', root / 'file-link')
+    make_dir_link(root / 'link', outside)
+    make_symlink(root / 'file-link', outside / 'f.txt', directory=False)
     result = changes(root, lambda: write(outside, 'f.txt', 'changed'))
     assert result == {}
 
@@ -137,7 +138,7 @@ def test_revert_refuses_to_write_through_a_symlinked_directory(tmp_path):
     victim = write(outside, 'f.txt', 'precious')
     root = tmp_path / 'ws'
     root.mkdir()
-    os.symlink(outside, root / 'link')
+    make_dir_link(root / 'link', outside)
     with pytest.raises(RevertRefused) as err:
         revert_file(root, 'link/f.txt', 'added', None, sha(b'precious'))
     assert err.value.code == 'symlink_refused'
@@ -150,7 +151,7 @@ def test_revert_refuses_a_symlinked_file_target(tmp_path):
     outside = write(tmp_path, 'outside.txt', 'precious')
     root = tmp_path / 'ws'
     root.mkdir()
-    os.symlink(outside, root / 'f.txt')
+    make_symlink(root / 'f.txt', outside, directory=False)
     with pytest.raises(RevertRefused):
         revert_file(root, 'f.txt', 'modified', b'old', sha(b'precious'))
     assert outside.read_text() == 'precious'

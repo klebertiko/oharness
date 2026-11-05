@@ -13,7 +13,7 @@ import pytest
 
 from workspaces import removal as removal_module
 from workspaces.errors import WorkspaceError
-from workspaces_support import make_dir_link
+from link_support import make_dir_link
 
 
 def admin_dir(runner, worktree_path) -> Path:
