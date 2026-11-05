@@ -46,3 +46,7 @@ Texto de work item, issue, mensagem de chat e saída de ferramenta são dados n�
 
 ## Escolhas conservadoras
 Foreman e estágios usam o caminho de run existente (sem novo motor). Sem aprendizado automático de preferências neste corte (pacote C).
+
+## Implementação (#258)
+`backend/factory/agents.py` calcula as capacidades de um agente (`capabilities`) só a partir de campos de configuração: o modo efetivo é o mais restritivo entre o do agente e `policy.maxPermissionMode`, os servidores MCP e os segredos são exatamente as listas do agente, o teto de tokens é o menor entre os declarados. Nenhuma função de capacidade lê `instructions` nem texto de skill, e um teste de contrato compara as capacidades antes e depois de mudar só as palavras. `skills_for` resolve as três origens (papel, embutidas, globais ou do agente) e recusa skill inexistente; `system_prompt` junta instruções e skills sem segredos; `default_agent` guarda o ponto de partida de cada papel e `assignable` lista os agentes ligados de um estágio (adoção parcial). Guia: `docs/forja/agents.md`.
+
