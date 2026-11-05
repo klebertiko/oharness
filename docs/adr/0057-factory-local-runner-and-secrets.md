@@ -13,7 +13,7 @@ Status: proposta (issue #244, pacote A). Depende de 0019, 0021 e 0056.
 ### Quatro fronteiras de credencial
 1. **Credenciais de inferência** (conexões de Provider): ficam no cofre do sidecar e são usadas na fronteira do sidecar com o provedor; nunca entram no ambiente do worktree/comando (ADR 0045). Harness por CLI (Claude Code, Codex) usa a autenticação do próprio CLI no ambiente da run, configurada à parte da lista de segredos.
 2. **Segredos de execução** (APIs, registries): lista de permissão **por agente**; sem lista, nenhum segredo (padrão).
-3. **Identidade de repositório**: `credentialStrategy: user` (usa o git do usuário local; só para trabalho que a pessoa inicia) ou `factory` (padrão: sem credencial de push; as branches ficam locais, ou usa um `secretRef` com escopo `factory/*`, ADR 0055).
+3. **Identidade de repositório**: `credentialStrategy: user` (usa o git do usuário local; só para trabalho que a pessoa inicia) ou `factory` (padrão: sem credencial de push; as branches ficam locais, ou usa um `secretRef` com escopo `forja/*`, ADR 0055).
 4. **Redação** é retaguarda, não substituto de permissões estreitas e rotação externa.
 
 ### Segredos da fábrica

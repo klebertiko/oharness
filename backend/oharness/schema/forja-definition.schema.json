@@ -1,5 +1,5 @@
 {
-  "$id": "https://oharness.dev/schema/factory-definition.schema.json",
+  "$id": "https://oharness.dev/schema/forja-definition.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -121,7 +121,7 @@
             },
             "secrets": {
               "items": {
-                "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
                 "type": "string"
               },
               "maxItems": 50,
@@ -168,9 +168,6 @@
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
       "type": "string"
     },
-    "apiVersion": {
-      "const": "oharness.factory/v1"
-    },
     "ceilings": {
       "additionalProperties": false,
       "properties": {
@@ -201,6 +198,9 @@
       },
       "type": "object"
     },
+    "kind": {
+      "const": "forja"
+    },
     "mcp": {
       "additionalProperties": false,
       "maxProperties": 50,
@@ -229,7 +229,7 @@
                   "maxProperties": 50,
                   "patternProperties": {
                     "^[A-Z_][A-Z0-9_]{0,63}$": {
-                      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                      "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
                       "type": "string"
                     }
                   },
@@ -249,7 +249,7 @@
                   "maxProperties": 50,
                   "patternProperties": {
                     "^[A-Za-z0-9-]{1,100}$": {
-                      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+                      "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
                       "type": "string"
                     }
                   },
@@ -383,13 +383,8 @@
           "properties": {
             "credentialStrategy": {
               "enum": [
-                "factory",
+                "forja",
                 "user"
-              ]
-            },
-            "kind": {
-              "enum": [
-                "local"
               ]
             },
             "maxConcurrentRuns": {
@@ -398,12 +393,17 @@
               "type": "integer"
             },
             "pushSecretRef": {
-              "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$",
+              "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
               "type": "string"
+            },
+            "type": {
+              "enum": [
+                "local"
+              ]
             }
           },
           "required": [
-            "kind",
+            "type",
             "maxConcurrentRuns",
             "credentialStrategy"
           ],
@@ -411,6 +411,9 @@
         }
       },
       "type": "object"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
     },
     "skills": {
       "additionalProperties": false,
@@ -539,7 +542,8 @@
     }
   },
   "required": [
-    "apiVersion",
+    "kind",
+    "schemaVersion",
     "name",
     "alias",
     "defaults",
@@ -554,6 +558,6 @@
     "mcp",
     "reserved"
   ],
-  "title": "OHarness factory definition (the merged form of .oharness/factory)",
+  "title": "Forja definition (the merged form of .oharness/forja)",
   "type": "object"
 }

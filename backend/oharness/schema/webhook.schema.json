@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oharness.dev/schema/webhook.schema.json",
-  "title": "OHarness factory webhook (webhooks/<id>.yaml); secrets are references only",
+  "title": "OHarness Forja webhook (webhooks/<id>.yaml); secrets are references only",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -20,7 +20,7 @@
     },
     "secretRef": {
       "type": "string",
-      "pattern": "^factory/[A-Za-z0-9_.-]{1,100}$"
+      "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$"
     },
     "enabled": {
       "type": "boolean"

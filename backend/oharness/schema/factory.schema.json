@@ -391,5 +391,5 @@
       "type": "object"
     }
   ],
-  "title": "oharness factory --json: one object on stdout per command; failures are the `error` definition on stderr"
+  "title": "oharness forja --json: one object on stdout per command; failures are the `error` definition on stderr"
 }

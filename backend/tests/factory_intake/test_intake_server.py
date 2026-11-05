@@ -25,13 +25,13 @@ def sig(secret: bytes, body: bytes) -> str:
 def env(tmp_path):
     secrets = MemorySecrets()
     for name, value in {"hook-token": "tok-secret", "hook-gh": "gh-secret", "hook-generic": "gen-secret", "hook-std": "whsec_" + base64.b64encode(b"std-key").decode()}.items():
-        secrets.put(f"factory/{name}", value)
+        secrets.put(f"forja/{name}", value)
     hooks = {
-        "ci": parse_webhook("ci", "authMode: token\nsecretRef: factory/hook-token\n"),
-        "gh": parse_webhook("gh", "authMode: signature\nsignatureScheme: github\nsecretRef: factory/hook-gh\ngithub:\n  repos: [acme/payments]\n  handle: '@payments'\n  labels: [factory]\n"),
-        "gen": parse_webhook("gen", "authMode: signature\nsignatureScheme: generic\nsecretRef: factory/hook-generic\ndeliveryIdHeader: X-Event-Id\n"),
-        "std": parse_webhook("std", "authMode: signature\nsignatureScheme: standard\nsecretRef: factory/hook-std\n"),
-        "off": parse_webhook("off", "authMode: token\nsecretRef: factory/hook-token\nenabled: false\n"),
+        "ci": parse_webhook("ci", "authMode: token\nsecretRef: forja/hook-token\n"),
+        "gh": parse_webhook("gh", "authMode: signature\nsignatureScheme: github\nsecretRef: forja/hook-gh\ngithub:\n  repos: [acme/payments]\n  handle: '@payments'\n  labels: [factory]\n"),
+        "gen": parse_webhook("gen", "authMode: signature\nsignatureScheme: generic\nsecretRef: forja/hook-generic\ndeliveryIdHeader: X-Event-Id\n"),
+        "std": parse_webhook("std", "authMode: signature\nsignatureScheme: standard\nsecretRef: forja/hook-std\n"),
+        "off": parse_webhook("off", "authMode: token\nsecretRef: forja/hook-token\nenabled: false\n"),
     }
     port, log = MemoryFactory(), DeliveryLog(tmp_path / "d.db")
     seen = []
@@ -132,7 +132,7 @@ def test_a_failed_handler_is_a_500_without_details_and_the_delivery_can_be_retri
             raise RuntimeError("database password=hunter2hunter2")
         return []
 
-    app = create_app(port, secrets, {"ci": parse_webhook("ci", "authMode: token\nsecretRef: factory/hook-token\n")}, log, generic_handler=handler)
+    app = create_app(port, secrets, {"ci": parse_webhook("ci", "authMode: token\nsecretRef: forja/hook-token\n")}, log, generic_handler=handler)
     c = TestClient(app)
     h = {"authorization": "Bearer tok-secret"}
     r = c.post("/hooks/ci", content=b'{"a":1}', headers=h)
@@ -217,7 +217,7 @@ def test_revoked_tokens_stop_working_and_only_a_hash_is_stored(env):
     tokens = ClientTokens(secrets)
     raw = tokens.create("temp", ["work:read"])
     assert client.get("/api/work-items", headers={"authorization": f"Bearer {raw}"}).status_code == 200
-    assert raw not in secrets.get("factory/api-tokens")
+    assert raw not in secrets.get("forja/api-tokens")
     assert tokens.revoke("temp") and client.get("/api/work-items", headers={"authorization": f"Bearer {raw}"}).status_code == 401
 
 
@@ -261,18 +261,18 @@ def test_only_the_claiming_client_can_release(env):
 
 def test_an_unreadable_token_map_is_503_not_an_empty_one(env):
     client, _, _, secrets, _ = env
-    secrets.put("factory/api-tokens", "{not json")
+    secrets.put("forja/api-tokens", "{not json")
     assert client.get("/api/work-items", headers={"authorization": "Bearer ohf_x"}).status_code == 503
     with pytest.raises(Exception):
         ClientTokens(secrets).create("new", ["work:read"])
-    assert secrets.get("factory/api-tokens") == "{not json"  # nothing was overwritten
+    assert secrets.get("forja/api-tokens") == "{not json"  # nothing was overwritten
 
 
 def test_a_webhook_starts_work_only_through_a_subscribed_automation(env, tmp_path):
     from factory_intake.automations import AutomationEngine, parse_automation
 
     client, port, log, secrets, _ = env
-    hooks = {"ci": parse_webhook("ci", "authMode: token\nsecretRef: factory/hook-token\n")}
+    hooks = {"ci": parse_webhook("ci", "authMode: token\nsecretRef: forja/hook-token\n")}
     text = "---\nagent: foreman\ntriggers:\n  - provider: webhook\n    event: received\n    filter:\n      webhooks: [ci]\n      payload: {env: [prod]}\n---\nCheck it.\n"
     engine = AutomationEngine(port, {"deploys": parse_automation("deploys", text)}, tmp_path / "auto.db")
     c = TestClient(create_app(port, secrets, hooks, log, automations=engine))

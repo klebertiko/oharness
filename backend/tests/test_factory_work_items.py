@@ -193,10 +193,10 @@ def test_claim_and_release_never_complete(client):
     claimed = _act(client, item['id'], action='claim', holder='local-session').json()
     assert claimed['status'] == 'claimed' and claimed['claim']['holder'] == 'local-session' and claimed['column'] == 'claimed'
     assert _act(client, item['id'], action='claim', holder='other').status_code == 409
-    released = _act(client, item['id'], action='release', status='needs_review', summary='done', branch='factory/x').json()
+    released = _act(client, item['id'], action='release', status='needs_review', summary='done', branch='forja/x').json()
     assert (released['stage'], released['status']) == ('review', 'queued') and released['claim'] is None
     arts = client.get(f"/factory/work-items/{item['id']}").json()['artifacts']
-    assert arts[0]['kind'] == 'diff' and arts[0]['ref'] == 'factory/x'
+    assert arts[0]['kind'] == 'diff' and arts[0]['ref'] == 'forja/x'
     _act(client, item['id'], action='claim', holder='h')
     abandoned = _act(client, item['id'], action='release', status='abandoned', summary='gave up').json()
     assert abandoned['status'] == 'queued' and abandoned['stage'] == 'review'

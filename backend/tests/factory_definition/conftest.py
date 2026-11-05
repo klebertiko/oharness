@@ -13,7 +13,7 @@ from factory_definition_files import FILES
 def make_definition(tmp_path):
     """make_definition({path: text}): write the base definition; an entry replaces a file, None removes it."""
     def build(changes: dict[str, str | None] | None = None) -> Path:
-        root = tmp_path / '.oharness' / 'factory'
+        root = tmp_path / '.oharness' / 'forja'
         shutil.rmtree(root, ignore_errors=True)
         files = {**FILES, **(changes or {})}
         for rel, text in files.items():

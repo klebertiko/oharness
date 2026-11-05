@@ -1,6 +1,6 @@
 """`/factory/definition` routes (ADR 0056). The sidecar token gates every route; changing which version is active needs the human credential.
 
-The definition is read from the `.oharness/factory` folder of a project registered in OHarness. The sidecar reads it and never writes
+The definition is read from the `.oharness/forja` folder of a project registered in OHarness. The sidecar reads it and never writes
 to it; the client names the project, never a path of its own.
 """
 from __future__ import annotations
@@ -63,9 +63,9 @@ async def _load(db: AsyncSession, workspace: str) -> definition.Loaded:
     if cwd is None:
         raise HTTPException(status_code=404, detail={'code': 'unknown_workspace', 'message': 'The workspace is not a project registered in OHarness.'})
     try:
-        return await anyio.to_thread.run_sync(definition.load, Path(cwd) / '.oharness' / 'factory')
+        return await anyio.to_thread.run_sync(definition.load, Path(cwd) / '.oharness' / 'forja')
     except definition.DefinitionNotFound:
-        raise HTTPException(status_code=404, detail={'code': 'no_definition', 'message': 'This project has no .oharness/factory folder.'}) from None
+        raise HTTPException(status_code=404, detail={'code': 'no_definition', 'message': 'This project has no .oharness/forja folder.'}) from None
 
 
 @router.post('/validate')

@@ -14,7 +14,7 @@ def _create(tmp_path, monkeypatch, name="agent-a"):
     monkeypatch.setenv("OH_SECRETS", "file")
     monkeypatch.setenv("OH_SECRETS_DIR", str(tmp_path / "vault"))
     out = tmp_path / f"{name}.token"
-    return out, main(["factory", "token", "create", name, "--scope", "work:read", "--out", str(out)])
+    return out, main(["forja", "token", "create", name, "--scope", "work:read", "--out", str(out)])
 
 
 @pytest.mark.skipif(os.name != "nt", reason="reads the Windows ACL")
@@ -42,7 +42,7 @@ def test_a_token_is_never_written_when_the_file_cannot_be_restricted(tmp_path, m
     monkeypatch.undo()
     monkeypatch.setenv("OH_SECRETS", "file")
     monkeypatch.setenv("OH_SECRETS_DIR", str(tmp_path / "vault"))
-    assert main(["factory", "token", "check", "agent-a"]) == 1  # the failed attempt left no client behind
+    assert main(["forja", "token", "check", "agent-a"]) == 1  # the failed attempt left no client behind
 
 
 def test_the_restriction_reports_a_failed_icacls(tmp_path, monkeypatch):

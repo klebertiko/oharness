@@ -1,6 +1,6 @@
-"""Factory definition as code (ADR 0056): read `.oharness/factory`, merge it into one definition, validate it, hash it, diff it.
+"""Forja definition as code (ADR 0056, 0067): read `.oharness/forja`, merge it into one definition, validate it, hash it, diff it.
 
-A definition never holds a secret: every object of the schema is closed, secrets are `factory/<name>` references only, and every string
+A definition never holds a secret: every object of the schema is closed, secrets are `forja/<name>` references only, and every string
 value is scanned for credential patterns. Issues name the file and the field, never the value. The folder is read, never written, and
 nothing in it is followed through a link or executed.
 """
@@ -33,7 +33,7 @@ _LONG_TOKEN = re.compile(r'[A-Za-z0-9_+/=.~-]{20,}')
 _ID = re.compile(rules.ID_PATTERN)
 _SECTIONS_FROM_LAYOUT = ('agents', 'skills', 'mcp', 'runners', 'reserved')
 _HINTS = {
-    rules.SECRET_REF_PATTERN: 'must be a secret reference like factory/<name>; the value itself never goes in the definition',
+    rules.SECRET_REF_PATTERN: 'must be a secret reference like forja/<name>; the value itself never goes in the definition',
     rules.RELATIVE_PATH_PATTERN: 'must be a relative path inside the repository, written with / (no .., no drive letter, no leading /)',
     rules.ID_PATTERN: 'must be lowercase letters, digits and "-", starting with a letter or digit',
     rules.MODEL_PATTERN: 'must be a model id such as provider/model',
@@ -96,6 +96,14 @@ class Change:
         return {'path': self.path, 'op': self.op, 'before': self.before, 'after': self.after}
 
 
+def _pop_kind(rel: str, data, expected: str, issues: list) -> None:
+    """Every file but the root is one OHM-style document with a `kind` header (ADR 0067); the header is not part of the merged definition."""
+    if isinstance(data, dict):
+        found = data.pop('kind', None)
+        if found != expected:
+            issues.append(Issue(rel, 'kind', f'must be {expected}' if found is not None else f'is required: write kind: {expected}'))
+
+
 class _FileProblem(Exception):
     pass
 
@@ -117,7 +125,7 @@ def hash_of(definition: dict) -> str:
 
 def _classify(parts: tuple[str, ...]) -> tuple[str, tuple[str, ...]] | None:
     n = len(parts)
-    if parts == ('factory.yaml',):
+    if parts == ('forja.yaml',):
         return 'factory', ()
     if n == 3 and parts[0] == 'agents' and parts[2] == 'agent.md':
         return 'agent', (parts[1],)
@@ -267,7 +275,7 @@ def _file_of(path: tuple) -> str:
         return f'skills/{head[1]}/SKILL.md'
     if len(head) >= 2 and head[0] in ('mcp', 'runners'):
         return f'{head[0]}/{head[1]}.yaml'
-    return 'factory.yaml'
+    return 'forja.yaml'
 
 
 def _schema_issues(definition: dict) -> list[Issue]:
@@ -377,7 +385,7 @@ def _semantic_issues(definition: dict) -> list[Issue]:
     agents, policy = definition['agents'], definition['policy']
     foremen = [name for name, a in agents.items() if a['role'] == 'foreman']
     if len(foremen) != 1:
-        add('agents', 'the factory needs exactly one agent with role foreman' + (f' (found {len(foremen)})' if foremen else ''))
+        add('agents', 'the Forja needs exactly one agent with role foreman' + (f' (found {len(foremen)})' if foremen else ''))
     elif not agents[foremen[0]]['enabled']:
         add(f'agents.{foremen[0]}.enabled', 'the foreman cannot be turned off')
     tier_models = {m for tier in definition['tiers'].values() for m in tier['models']}
@@ -405,7 +413,7 @@ def _semantic_issues(definition: dict) -> list[Issue]:
                 add(f'{where}.mcp[{i}]', 'names an MCP server that does not exist (mcp/<id>.yaml)')
         mode = agent['permissions']['mode']
         if rules.mode_rank(mode) > limit_rank:
-            add(f'{where}.permissions.mode', f'exceeds the factory limit policy.maxPermissionMode ({policy["maxPermissionMode"]}); raising it is an explicit change')
+            add(f'{where}.permissions.mode', f'exceeds the Forja limit policy.maxPermissionMode ({policy["maxPermissionMode"]}); raising it is an explicit change')
         if agent.get('harness') and mode not in rules.HARNESS_SAFE_MODES:
             add(f'{where}.harness', 'a harness run gives the model no tools, so it only serves agents that cannot write (mode plan or read_only)')
         ceiling = agent.get('tokenCeiling')
@@ -427,8 +435,8 @@ def _semantic_issues(definition: dict) -> list[Issue]:
     if len(set(ids)) != len(ids):
         add('repositories', 'repository ids must be unique')
     for name, runner in definition['runners'].items():
-        if runner.get('pushSecretRef') and runner['credentialStrategy'] != 'factory':
-            add(f'runners.{name}.pushSecretRef', 'only applies to credentialStrategy factory')
+        if runner.get('pushSecretRef') and runner['credentialStrategy'] != 'forja':
+            add(f'runners.{name}.pushSecretRef', 'only applies to credentialStrategy forja')
     for stage, flag in stage_flags(definition).items():
         explicit = definition['stages'].get(stage, {})
         if explicit.get('enabled') and not flag['available']:
@@ -469,7 +477,7 @@ def load(directory: str | Path) -> Loaded:
     for rel in files:
         classified = _classify(tuple(rel.split('/')))
         if classified is None:
-            problem(_safe_name(rel), 'unexpected file: the definition layout is factory.yaml, agents/, skills/, mcp/, runners/, automations/, webhooks/')
+            problem(_safe_name(rel), 'unexpected file: the definition layout is forja.yaml, agents/, skills/, mcp/, runners/, automations/, webhooks/')
             continue
         kind, ids = classified
         if kind == 'ignored':
@@ -486,11 +494,14 @@ def load(directory: str | Path) -> Loaded:
                 factory_raw = _yaml(text)
             elif kind == 'agent':
                 agents[ids[0]] = _front_matter(text)
+                _pop_kind(rel, agents[ids[0]][0], 'agent', issues)
             elif kind in ('agent_skill', 'skill'):
                 body = text.strip()
                 (local_skills.setdefault(ids[0], {}) if kind == 'agent_skill' else parts['skills']).update({ids[-1]: {'text': body}})
             elif kind in ('mcp', 'runner'):
-                parts['mcp' if kind == 'mcp' else 'runners'][ids[0]] = _yaml(text)
+                loaded_yaml = _yaml(text)
+                _pop_kind(rel, loaded_yaml, kind, issues)
+                parts['mcp' if kind == 'mcp' else 'runners'][ids[0]] = loaded_yaml
             else:  # automation, webhook: package B parses them; the text itself is part of the version
                 texts[rel] = text
                 parts['automations' if kind == 'automation' else 'webhooks'][ids[0]] = text
@@ -498,15 +509,15 @@ def load(directory: str | Path) -> Loaded:
             problem(rel, str(exc))
     _check_reserved(parts, texts, issues)
     if factory_raw is None:
-        if not any(i.file == 'factory.yaml' for i in issues):
-            problem('factory.yaml', 'is required')
+        if not any(i.file == 'forja.yaml' for i in issues):
+            problem('forja.yaml', 'is required')
         return Loaded(None, sorted(issues, key=lambda i: (i.file, i.path)))
     if not isinstance(factory_raw, dict):
-        problem('factory.yaml', 'must be a mapping')
+        problem('forja.yaml', 'must be a mapping')
         return Loaded(None, issues)
     for section in _SECTIONS_FROM_LAYOUT:
         if section in factory_raw:
-            issues.append(Issue('factory.yaml', section, 'comes from the folder layout, not from factory.yaml'))
+            issues.append(Issue('forja.yaml', section, 'comes from the folder layout, not from forja.yaml'))
             del factory_raw[section]
     defaults = factory_raw.get('defaults') if isinstance(factory_raw.get('defaults'), dict) else {}
     merged = {
@@ -629,7 +640,7 @@ def check(definition: dict) -> Report:
 # --------------------------------------------------------------------------------------------------------------------------- CLI
 
 def cli_validate(directory: str | Path, run_check: bool = False) -> tuple[int, dict]:
-    """`oharness factory validate <dir> [--check]`: 0 valid, 1 invalid, 2 usage (the convention of `oharness validate`)."""
+    """`oharness forja validate <dir> [--check]`: 0 valid, 1 invalid, 2 usage (the convention of `oharness validate`)."""
     try:
         loaded = load(directory)
     except DefinitionNotFound:
