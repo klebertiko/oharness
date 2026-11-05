@@ -1,14 +1,14 @@
-# Definição da fábrica como código
+# Definição da Forja como código
 
-A fábrica local do OHarness é descrita por arquivos versionados no repositório do projeto, em `.oharness/factory/`. Mudar a fábrica é mudar esses arquivos num branch e abrir um PR. O desenho está no [ADR 0056](../adr/0056-factory-definition-as-code.md).
+A Forja do OHarness é descrita por arquivos versionados no repositório do projeto, em `.oharness/forja/`. Mudar a Forja é mudar esses arquivos num branch e abrir um PR. O desenho está no [ADR 0056](../adr/0056-factory-definition-as-code.md).
 
-Nunca há segredo nesses arquivos. Um valor sensível é sempre uma **referência opaca** `factory/<nome>` (`secretRef`), resolvida só em execução pelo cofre do sidecar.
+Nunca há segredo nesses arquivos. Um valor sensível é sempre uma **referência opaca** `forja/<nome>` (`secretRef`), resolvida só em execução pelo cofre do sidecar.
 
 ## Estrutura
 
 ```
-.oharness/factory/
-  factory.yaml                       # nome, alias do foreman, repositórios, tiers, tetos, política, estágios
+.oharness/forja/
+  forja.yaml                       # nome, alias do foreman, repositórios, tiers, tetos, política, estágios
   agents/<id>/agent.md               # front matter (configuração) + corpo (instruções)
   agents/<id>/skills/<id>/SKILL.md   # skills de um agente
   skills/<id>/SKILL.md               # skills globais
@@ -20,11 +20,16 @@ Nunca há segredo nesses arquivos. Um valor sensível é sempre uma **referênci
 
 O caminho identifica o recurso: `agents/reviewer/agent.md` define o agente `reviewer`. Arquivo fora desta estrutura é **erro**, nunca ignorado em silêncio (`README.md` é a exceção). `scorers/` e `benchmarks/` são reservados e ainda não são lidos. Links simbólicos não são seguidos. Cada arquivo tem até 256 KB, em UTF-8; final de linha CRLF ou LF dá a mesma versão. Os ids usam letras minúsculas, dígitos e `-`, e não podem ser nomes reservados do Windows (`con`, `nul`, `com1`…).
 
-## `factory.yaml`
+## Formato
+
+Os arquivos seguem o modelo `.ohm` (ADR 0003): YAML 1.2 restrito, um documento por arquivo, raiz objeto, sem âncoras, aliases, chaves duplicadas nem tags, com os mesmos limites do codec do app. Todo arquivo declara o seu `kind` (`forja` na raiz, junto de `schemaVersion`; `agent` no front matter de `agent.md`; `mcp`; `runner`). Fora da raiz, o `kind` é só cabeçalho e não entra na definição mesclada. Um runner diz o tipo em `type: local`.
+
+## `forja.yaml`
 
 ```yaml
-apiVersion: oharness.factory/v1
-name: payments            # id da fábrica (o mesmo `factory_id` dos work items)
+kind: forja
+schemaVersion: 1.0.0
+name: payments            # id da Forja (o mesmo `factory_id` dos work items)
 alias: payments           # handle do foreman: @payments
 defaults: { model: openai/gpt-4o }
 repositories:
@@ -49,13 +54,14 @@ stages:
 
 ```markdown
 ---
+kind: agent
 role: review                  # foreman | triage | spec | implement | review | verify | monitor | custom
 model: anthropic/claude-opus  # precisa estar em algum tier
 permissions: { mode: read_only }  # plan | read_only | ask | auto_workspace | workspace_write | full
 tokenCeiling: 50000
 skills: [lint]
 mcp: [docs]
-secrets: [factory/npm-registry]
+secrets: [forja/npm-registry]
 enabled: true
 ---
 Instruções do agente (o corpo do arquivo).
@@ -68,14 +74,14 @@ Regras que o validador impõe:
 - `harness:` só em agente que não escreve (`plan` ou `read_only`): a execução por harness não dá ferramentas ao modelo.
 - Estágio obrigatório precisa de um agente ligado com o papel correspondente.
 - Com `reviewIndependence: require`, o agente de review precisa diferir do implement em modelo ou harness.
-- Agentes `custom` não recebem as skills embutidas (`factory-definition`, `factory-intake`).
+- Agentes `custom` não recebem as skills embutidas (`forja-definition`, `forja-intake`).
 - Instruções e skills dão orientação, não acesso: o que um agente alcança vem só dos campos de configuração.
 
 ## Validar
 
 ```bash
-python -m oharness factory validate .oharness/factory
-python -m oharness factory validate .oharness/factory --check
+python -m oharness forja validate .oharness/forja
+python -m oharness forja validate .oharness/forja --check
 ```
 
 Saída: um objeto JSON com `ok`, `hash`, `errors` e `warnings`. Código de saída `0` válido, `1` inválido, `2` pasta ausente. `--check` roda exemplos de work items pela definição no modo mock (sem provedor, sem rede) e confere que cada estágio obrigatório pode rodar.
@@ -101,10 +107,10 @@ O canary encaminha novos work items de forma determinística (hash do id do item
 Um workflow de exemplo que roda a verificação em todo PR que muda a definição:
 
 ```yaml
-name: factory-definition
+name: forja-definition
 on:
   pull_request:
-    paths: [".oharness/factory/**"]
+    paths: [".oharness/forja/**"]
 permissions:
   contents: read
 jobs:
@@ -115,7 +121,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r backend/requirements.txt
-      - run: python -m oharness factory validate "$GITHUB_WORKSPACE/.oharness/factory" --check
+      - run: python -m oharness forja validate "$GITHUB_WORKSPACE/.oharness/forja" --check
         working-directory: backend
 ```
 

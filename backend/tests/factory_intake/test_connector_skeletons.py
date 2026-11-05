@@ -158,7 +158,7 @@ def test_time_default_is_the_real_clock():
 def test_the_factorys_own_accounts_and_marker_never_start_work():
     own = GitLab(make(GitLab, "gl-secret")._secrets, now=lambda: NOW, self_ids={"Alice"})
     assert own.parse(gitlab("gitlab_note_mention"), RULES) == []
-    raw = json.dumps(json.loads(body("jira_comment")) | {"comment": {"id": "9", "body": "@payments done <!-- oharness-factory -->", "author": {"accountId": "z"}}}).encode()
+    raw = json.dumps(json.loads(body("jira_comment")) | {"comment": {"id": "9", "body": "@payments done <!-- oharness-forja -->", "author": {"accountId": "z"}}}).encode()
     assert make(Jira, "ji-secret").parse(Delivery({"x-hub-signature": hexsig(b"ji-secret", raw, "sha256=")}, raw), RULES) == []
 
 

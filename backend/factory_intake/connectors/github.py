@@ -26,7 +26,7 @@ _ISSUE_EVENTS = {"opened", "reopened", "labeled"}  # an edit is not new content:
 _PR_EVENTS = {"opened", "reopened", "ready_for_review", "labeled"}
 MAX_REPLY = 60_000
 MAX_PAGES = 10
-MARKER = "<!-- oharness-factory -->"  # on every reply: the factory never reacts to its own comments, whoever the token belongs to
+MARKER = "<!-- oharness-forja -->"  # on every reply: the Forja never reacts to its own comments, whoever the token belongs to
 
 
 class ConnectorError(Exception):
@@ -69,7 +69,7 @@ class GitHubConnector:
     def _token(self) -> str:
         token = (self._secrets.get(self._token_ref) if self._secrets else None) or ""
         if not token:
-            raise ConnectorError("no GitHub token is stored for the factory")
+            raise ConnectorError("no GitHub token is stored for the Forja")
         return token
 
     @staticmethod

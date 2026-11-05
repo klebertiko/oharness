@@ -87,7 +87,7 @@ def create_app(port: FactoryPort, secrets_store, webhooks: dict[str, WebhookConf
                generic_handler: GenericHandler | None = None, automations: AutomationEngine | None = None, max_body: int = DEFAULT_MAX_BODY_BYTES) -> FastAPI:
     """Handlers are plain ``def`` (run in the threadpool): the secrets store, the port and the delivery log do blocking I/O, and one slow
     call must not stall every other request. Only the body read, which needs the event loop, is ``async`` (a dependency)."""
-    app = FastAPI(title="OHarness factory intake", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="OHarness Forja intake", docs_url=None, redoc_url=None, openapi_url=None)
     clients = ClientTokens(secrets_store)
     replay = ReplayGuard()
     hook_rate = RateLimiter(per_second=1.0, burst=60)            # 60 deliveries per minute per webhook
@@ -330,6 +330,6 @@ def serve(host: str, port_number: int, directory, allow_remote: bool = False) ->
 
     threading.Thread(target=schedule_loop, daemon=True, name="factory-schedule").start()
     app = create_app(factory_port, store, webhooks, DeliveryLog(data / "factory_intake.db"), automations=automations)
-    print(f"factory intake listening on {host}:{port_number} ({len(webhooks)} webhook(s))", file=sys.stderr)
+    print(f"Forja intake listening on {host}:{port_number} ({len(webhooks)} webhook(s))", file=sys.stderr)
     uvicorn.run(app, host=host.strip("[]"), port=port_number, log_level="warning")
     return 0

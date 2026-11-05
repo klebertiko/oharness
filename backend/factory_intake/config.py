@@ -16,7 +16,7 @@ from sandbox.secrets import redact
 
 MAX_FILE_BYTES = 256 * 1024
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-_SECRET_REF = re.compile(r"^factory/[A-Za-z0-9_.-]{1,100}$")
+_SECRET_REF = re.compile(r"^forja/[A-Za-z0-9_.-]{1,100}$")
 _HEADER = re.compile(r"^[A-Za-z0-9-]{1,100}$")
 AUTH_MODES = ("token", "signature")
 SCHEMES = ("github", "generic", "standard")
@@ -84,7 +84,7 @@ def parse_webhook(name: str, text: str) -> WebhookConfig:
         raise ConfigError(f"{where}: signatureScheme only applies to authMode signature")
     ref = data.get("secretRef")
     if not isinstance(ref, str) or not _SECRET_REF.fullmatch(ref):
-        raise ConfigError(f"{where}: secretRef must be a reference like factory/<name>")
+        raise ConfigError(f"{where}: secretRef must be a reference like forja/<name>")
     enabled = data.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ConfigError(f"{where}: enabled must be true or false")

@@ -1,6 +1,6 @@
 # ADR 0053 — Fábrica local: work item (modelo, armazenamento e contrato da API)
 
-Status: proposta (issue #244, pacote A). Contrato compartilhado com o pacote B (entrada e Factory MCP): mudanças aqui são combinadas com a sessão do B.
+Status: proposta (issue #244, pacote A). **Nome:** a partir do [ADR 0067](0067-forja-name-and-ohm-format.md) a fábrica local se chama **Forja**; este texto e os ADRs 0054–0064 mantêm "fábrica" como termo de projeto. Contrato compartilhado com o pacote B (entrada e Factory MCP): mudanças aqui são combinadas com a sessão do B.
 
 **Fontes dos conceitos.** O desenho parte de conceitos públicos de "software factory" (documentação e posts de Warp Factories: ciclo do work item, foreman, checkpoints, definição como código, métricas). Só os **conceitos** foram aproveitados; nomes, formatos, schemas e textos são do OHarness. Fontes: docs.warp.dev/factories (visão geral, "How Warp Factories work", "Factory definition syntax", "Factory dashboard", "Measure and improve") e os posts "software-factory-as-code", "the-factory-stack" e "using-llm-as-a-judge-scoring…" em warp.dev/blog. Ficam fora de escopo: agentes em nuvem, execução hospedada, runners hospedados, app web hospedado, créditos.
 

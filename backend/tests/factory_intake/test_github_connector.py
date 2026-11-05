@@ -120,7 +120,7 @@ def test_the_factorys_own_comments_never_start_work_even_from_a_user_token():
     payload = json.loads((FIX / "issue_comment_mention.json").read_text())
     own = GitHubConnector(frozenset({"acme/payments"}), secrets(), self_logins={"Alice"})
     assert own.parse_event("issue_comment", payload, "d", RULES) == []
-    payload["comment"]["body"] = "@payments status ... <!-- oharness-factory -->"
+    payload["comment"]["body"] = "@payments status ... <!-- oharness-forja -->"
     assert connector().parse_event("issue_comment", payload, "d", RULES) == []
 
 
@@ -141,7 +141,7 @@ def test_reply_posts_to_the_same_issue_with_the_token_and_redacts_the_text():
     c = connector(httpx.Client(transport=httpx.MockTransport(handler)))
     c.reply(SourceRef(kind="github", ref="x", thread_ref="acme/payments#7"), "done, see " + TOKEN)
     assert seen["url"] == "https://api.github.com/repos/acme/payments/issues/7/comments"
-    assert seen["auth"] == f"Bearer {TOKEN}" and TOKEN not in seen["body"]["body"] and seen["body"]["body"].endswith("<!-- oharness-factory -->")
+    assert seen["auth"] == f"Bearer {TOKEN}" and TOKEN not in seen["body"]["body"] and seen["body"]["body"].endswith("<!-- oharness-forja -->")
 
 
 @pytest.mark.parametrize("thread", ["evil/other#1", "acme/payments#1/../../x", "acme/payments", None, "acme/payments#7?x=1"])

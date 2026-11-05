@@ -17,7 +17,7 @@ from typing import Callable
 
 from sandbox.secrets import redact
 
-SECRET_REF_PREFIX = "factory/"
+SECRET_REF_PREFIX = "forja/"
 DEFAULT_MAX_BODY_BYTES = 256 * 1024
 
 
