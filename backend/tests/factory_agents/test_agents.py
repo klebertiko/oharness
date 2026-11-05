@@ -167,3 +167,13 @@ def test_init_into_a_file_is_a_refusal_not_a_traceback(tmp_path, capsys):
     blocker.write_text('x', encoding='utf-8')
     assert main(['forja', 'init', str(blocker), '--name', 'payments', '--model', 'openai/gpt-4o']) == 1
     assert 'refused' in capsys.readouterr().err
+
+
+def test_names_that_look_like_yaml_values_are_written_as_text(tmp_path):
+    from factory import definition
+    for odd in ('123', 'true', 'null', '0', '0x1', '0o7', '1e3', '007', 'yes', 'no', 'on', 'off'):
+        folder = tmp_path / f'n-{odd}'
+        agents.write_starter(folder, agents.starter_files(odd, model='openai/gpt-4o', roles=['triage']))
+        loaded = definition.load(folder)
+        assert loaded.ok, (odd, [i.as_dict() for i in loaded.issues])
+        assert loaded.definition['name'] == odd and loaded.definition['alias'] == odd
