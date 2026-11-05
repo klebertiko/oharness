@@ -32,3 +32,7 @@ Ver também a fonte dos conceitos no ADR 0053. O painel permite escolher o inter
 
 ## Escolhas conservadoras
 Métricas só leem; nenhum agente usa a métrica para mudar a fábrica por conta própria (auto-melhoria é o pacote C, sempre por PR). ROI em moeda fica fora (depende de preço que o app pode não conhecer).
+
+## Implementação (#263 — caixa de entrada)
+`backend/factory/inbox.py` e `GET /factory/inbox`. A caixa é **derivada** dos work items a cada leitura: nada é gravado sobre o que espera, então a entrada sai sozinha quando deixa de valer. Seis tipos: `question` (pergunta aberta), `question_answered` (informativa; só com `include_info=true` e só até o item seguir adiante), `spec_review`, `handoff_ready`, `blocked` (aguardando pessoa sem pergunta nem spec) e `failed` (últimos 7 dias); `blocked` e `failed` só aparecem quando mais nada no item espera a pessoa. Cada entrada traz o item, o resumo e as ações possíveis (que continuam sendo executadas em `/actions`, com a credencial humana). A contagem não inclui as informativas nem as resolvidas à mão. Resolver à mão (`POST /factory/inbox/{id}/resolve`) e desfazer (`DELETE`) são da pessoa; a única coisa gravada é essa escolha (`factory_inbox_dismissals`), e uma nova pergunta no mesmo item é uma entrada nova. A tela (lista com ação por item, contagem e a11y) entra na sala de controle (#261).
+
