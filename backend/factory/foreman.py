@@ -79,7 +79,7 @@ def check_plan(plan: object, definition: dict, item_ceiling: int | None = None) 
             continue
         for number, given in enumerate(assignments):
             where = f'stage {stage} assignment {number}'
-            if not isinstance(given, dict) or given.get('agent') not in agents:
+            if not isinstance(given, dict) or not isinstance(given.get('agent'), str) or given['agent'] not in agents:
                 problems.append(f'{where}: agent {_clip(given.get("agent") if isinstance(given, dict) else given)!r} does not exist')
                 continue
             configured = agents[given['agent']]
@@ -150,9 +150,11 @@ def _parse(text: str) -> object:
     cleaned = text.strip()
     if cleaned.startswith('```'):
         cleaned = cleaned.strip('`').removeprefix('json').strip()
+    if len(cleaned) > 200_000:
+        return None
     try:
         return json.loads(cleaned)
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
 
 
@@ -193,7 +195,7 @@ async def _accept(db: AsyncSession, item: WorkItem, plan: dict) -> dict:
             break
         await _skip(db, item, entry['stage'], entry['reason'])
     await _enter(db, item, first['stage'], FOREMAN)
-    summary = [{'stage': e['stage'], 'action': e['action'], 'reason': e['reason'], 'agents': [a['agent'] for a in e.get('assignments', [])]}
+    summary = [{'stage': e['stage'], 'action': e['action'], 'reason': e['reason'], 'agents': [a['agent'] for a in (e.get('assignments') or [])]}
                for e in plan['stages']]
     await service.add_event(db, item, 'plan_accepted', FOREMAN, {'stages': summary})
     await db.commit()
@@ -256,8 +258,8 @@ async def triage_done(db: AsyncSession, item: WorkItem, definition: dict, outcom
     if outcome == 'wait':
         await service.request_checkpoint(db, item, FOREMAN, 'question', redact_value(question) or 'More information is needed to continue.')
     else:
-        if outcome == 'implement' and definition['policy']['requireSpec']:
-            await service.add_event(db, item, 'note', FOREMAN, {'text': 'policy.requireSpec: the spec stage cannot be skipped'})
+        if outcome == 'implement' and (definition['policy']['requireSpec'] or stage_flags(definition)['spec']['required']):
+            await service.add_event(db, item, 'note', FOREMAN, {'text': 'the spec stage is required and cannot be skipped'})
             outcome = 'spec'
         if outcome == 'implement':
             await _skip(db, item, 'spec', 'small and clear')
@@ -353,12 +355,12 @@ async def observe_merge(db: AsyncSession, item: WorkItem, repo: Path | str) -> b
     It fails closed: without the tip and base the foreman recorded, a branch name proves nothing, and a tip equal to the base is no work."""
     if item.stage != 'handoff' or item.status != 'waiting_merge':
         return False
-    # Only the foreman's own record counts: a branch an agent attached on release carries no recorded commits and proves nothing.
-    arts = [(a, _RECORD.search(a.label or '')) for a in await service.artifacts(db, item.id) if a.kind == 'diff']
-    arts = [(a, r) for a, r in arts if r and r.group(2)]
-    if not arts:
+    # Only the foreman's own latest implementation record counts: an older iteration, or a branch an agent attached on release, proves nothing.
+    mine = [a for a in await service.artifacts(db, item.id) if a.kind == 'diff' and (a.label or '').startswith('implementation branch')]
+    recorded = _RECORD.search(mine[-1].label) if mine else None
+    if recorded is None or not recorded.group(2):
         return False
-    art, recorded = arts[-1]
+    art = mine[-1]
     branch, tip, start = art.ref, recorded.group(1), recorded.group(2)
     if not _BRANCH.fullmatch(branch) or '..' in branch or tip == start:  # a ref that looks like an option never reaches git; no new commit, no work
         return False
@@ -367,7 +369,10 @@ async def observe_merge(db: AsyncSession, item: WorkItem, repo: Path | str) -> b
     default = _default_ref(runner, Path(repo))
     if default is None or branch == default.rsplit('/', 1)[-1]:
         return False
-    if runner.run(repo, ['cat-file', '-e', f'{tip}^{{commit}}'], check=False).returncode != 0:
+    for sha in (tip, start):
+        if runner.run(repo, ['cat-file', '-e', f'{sha}^{{commit}}'], check=False).returncode != 0:
+            return False
+    if runner.run(repo, ['merge-base', '--is-ancestor', start, tip], check=False).returncode != 0:  # the base has to lead to the tip
         return False
     if runner.run(repo, ['merge-base', '--is-ancestor', tip, default], check=False).returncode != 0:
         return False
@@ -382,8 +387,8 @@ async def recover_items(db: AsyncSession) -> int:
     """After a restart no process backs a `running` item: it waits for a person (the interrupted run can be continued, ADR 0044)."""
     items = list(await db.scalars(select(WorkItem).where(WorkItem.status == 'running')))
     for item in items:
-        service._move(item, item.stage, 'awaiting_human')
         await service.add_event(db, item, 'recovered', SYSTEM, {'reason': 'the sidecar restarted while this item was running'})
+        await service.request_checkpoint(db, item, SYSTEM, 'question', 'The app restarted while this item was running. Answer to continue from where the last run stopped.')
     await db.commit()
     return len(items)
 

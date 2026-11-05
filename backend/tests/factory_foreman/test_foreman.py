@@ -550,3 +550,97 @@ def test_implementation_needs_the_approved_spec_revision(db_ready):
         return item.stage
 
     assert run(case) == 'implement'
+
+
+# ---- last review round
+
+def test_only_the_latest_implementation_record_counts_for_a_merge(db_ready, tmp_path):
+    runner, repo, base, sha = _repo_with_branch(tmp_path, 'forja/item-5')
+    _git(runner, repo, *COMMIT[:4], 'merge', '-q', '--ff-only', 'forja/item-5')  # the first iteration is already in main
+
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        await foreman.implement_done(db, item, defn(), 'forja/item-5', sha=sha, base=base)
+        await foreman.review_done(db, item, defn(), 'changes_requested', 'more')
+        await foreman.implement_done(db, item, defn(), 'forja/item-5')  # the second iteration recorded no commits
+        await foreman.review_done(db, item, defn(), 'approved')
+        return await foreman.observe_merge(db, item, repo), item.status
+
+    assert run(case) == (False, 'waiting_merge')
+
+
+def test_the_recorded_base_must_lead_to_the_tip(db_ready, tmp_path):
+    runner, repo, base, sha = _repo_with_branch(tmp_path, 'forja/item-6')
+    _git(runner, repo, *COMMIT[:4], 'merge', '-q', '--ff-only', 'forja/item-6')
+    _git(runner, repo, *COMMIT, '-m', 'newer')
+    newer = _tip(runner, repo, 'HEAD')
+
+    async def case(db):
+        item = await _new(db)
+        await _at(db, item, 'implement')
+        await foreman.implement_done(db, item, defn(), 'forja/item-6', sha=base, base=newer)  # base is not behind the tip
+        await foreman.review_done(db, item, defn(), 'approved')
+        return await foreman.observe_merge(db, item, repo)
+
+    assert run(case) is False
+
+
+def test_plan_shapes_that_used_to_crash(db_ready):
+    for agent_value in (['x'], {'a': 1}, None, 5):
+        plan = copy.deepcopy(GOOD_PLAN)
+        plan['stages'][2]['assignments'][0]['agent'] = agent_value
+        assert problems(plan)
+    skipped = copy.deepcopy(GOOD_PLAN)
+    skipped['stages'][0]['assignments'] = None
+    assert problems(skipped) == []
+
+    async def case(db):
+        item = await _new(db)
+        await foreman.make_plan(db, item, defn(), planner_returning(json.dumps(skipped)))
+        with pytest.raises(service.FactoryError):
+            await foreman.make_plan(db, await _new(db, 'deep'), defn(), planner_returning('[' * 100_000))
+        return item.stage
+
+    assert run(case) == 'implement'
+
+
+def test_a_required_spec_stage_is_not_skipped_by_triage(db_ready):
+    definition = defn(stages={'spec': {'required': True}})
+
+    async def case(db):
+        item = await _new(db)
+        await foreman.triage_done(db, item, definition, 'implement')
+        return item.stage
+
+    assert run(case) == 'spec'
+
+
+def test_editing_an_approved_spec_sends_the_item_back_to_a_checkpoint(db_ready):
+    from factory.models import ActionBody
+
+    async def case(db):
+        item = await _new(db)
+        await foreman.triage_done(db, item, defn(), 'spec')
+        await foreman.spec_proposed(db, item, defn(), 'Do X.')
+        await service.apply_action(db, item, ActionBody(action='approve_spec', revision=1), HUMAN)
+        await service.apply_action(db, item, ActionBody(action='edit_spec', text='Do Y.', base_revision=1), HUMAN)
+        waiting = (item.stage, item.status, item.approved_revision)
+        await service.apply_action(db, item, ActionBody(action='approve_spec', revision=2), HUMAN)
+        return waiting, item.stage
+
+    assert run(case) == (('spec', 'awaiting_human', None), 'implement')
+
+
+def test_a_recovered_item_has_a_question_a_person_can_answer(db_ready):
+    from factory.models import ActionBody
+
+    async def case(db):
+        item = await _new(db)
+        item.status = 'running'
+        await db.commit()
+        await foreman.recover_items(db)
+        await service.apply_action(db, item, ActionBody(action='answer', text='Continue from the last run.'), HUMAN)
+        return item.status
+
+    assert run(case) == 'queued'
