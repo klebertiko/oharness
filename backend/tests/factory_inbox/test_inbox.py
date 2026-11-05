@@ -165,3 +165,63 @@ def test_the_inbox_only_reads_it_never_decides(client):
     before = client.get(f'/factory/work-items/{q}').json()['status']
     inbox(client)
     assert client.get(f'/factory/work-items/{q}').json()['status'] == before == 'awaiting_human'
+
+
+# ---- review round
+
+def test_old_waiting_items_are_not_pushed_out_by_newer_quiet_ones(client):
+    q = make(client, 'old')
+    drive(q, ask)
+    for n in range(210):
+        make(client, f'quiet-{n}')  # newer, queued: nothing for a person to do
+    assert inbox(client)['count'] == 1 and kinds(client) == ['question']
+
+
+def test_a_spec_to_review_and_an_open_question_are_both_listed(client):
+    item = make(client)
+
+    async def both(db, it):
+        await spec_ready(db, it)
+        await service.request_checkpoint(db, it, ('foreman', 'foreman'), 'question', 'Which API version?')
+        service._move(it, 'spec', 'awaiting_human')
+    drive(item, both)
+    assert kinds(client) == ['question', 'spec_review']
+
+
+def test_a_new_spec_revision_is_a_new_entry_after_the_old_one_was_resolved(client):
+    item = make(client)
+    drive(item, spec_ready)
+    first = inbox(client)['entries'][0]
+    client.post(f"/factory/inbox/{first['id']}/resolve", headers=HUMAN)
+    assert kinds(client) == []
+    client.post(f'/factory/work-items/{item}/actions', json={'action': 'edit_spec', 'text': 'Do Y.', 'base_revision': 1}, headers=HUMAN)
+    entries = inbox(client)['entries']
+    assert [e['type'] for e in entries] == ['spec_review'] and entries[0]['id'] != first['id']
+
+
+def test_a_note_does_not_bring_back_a_resolved_blocked_entry(client):
+    item = make(client)
+    drive(item, lambda db, it: service.enter_stage(db, it, 'implement', ('foreman', 'foreman')))
+    drive(item, lambda db, it: _block(db, it))
+    entry = inbox(client)['entries'][0]
+    client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    client.post(f'/factory/work-items/{item}/actions', json={'action': 'note', 'text': 'fyi'}, headers=HUMAN)
+    assert kinds(client) == []
+
+
+async def _block(db, item):
+    service._move(item, 'implement', 'awaiting_human')
+
+
+def test_summaries_are_short(client):
+    item = make(client)
+    drive(item, lambda db, it: ask(db, it, 'x' * 5000))
+    assert len(inbox(client)['entries'][0]['summary']) <= 500
+
+
+def test_the_answered_notice_is_not_shown_for_an_item_a_person_holds(client):
+    q = make(client)
+    drive(q, ask)
+    client.post(f'/factory/work-items/{q}/actions', json={'action': 'answer', 'text': 'staging'}, headers=HUMAN)
+    client.post(f'/factory/work-items/{q}/actions', json={'action': 'claim', 'holder': 'me'}, headers=HUMAN)
+    assert kinds(client, include_info='true') == []
