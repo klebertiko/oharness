@@ -132,8 +132,8 @@ def test_files_validate_against_the_published_schemas_and_parse():
         assert parse_automation("x", text).triggers
     hook_schema = Draft202012Validator(json.loads((SCHEMAS / "webhook.schema.json").read_text()))
     Draft202012Validator.check_schema(hook_schema.schema)
-    assert not list(hook_schema.iter_errors({"authMode": "signature", "signatureScheme": "github", "secretRef": "factory/x"}))
-    assert list(hook_schema.iter_errors({"secretRef": "factory/x", "token": "abc"}))
+    assert not list(hook_schema.iter_errors({"authMode": "signature", "signatureScheme": "github", "secretRef": "forja/x"}))
+    assert list(hook_schema.iter_errors({"secretRef": "forja/x", "token": "abc"}))
 
 
 @pytest.mark.parametrize("text", [
@@ -326,8 +326,8 @@ def test_github_automations_respect_the_connector_checks_and_replace_default_rou
     import hmac
 
     port, secrets = MemoryFactory(), MemorySecrets()
-    secrets.put("factory/gh", "s")
-    hooks = {"gh": parse_webhook("gh", "authMode: signature\nsignatureScheme: github\nsecretRef: factory/gh\ngithub:\n  repos: [acme/payments]\n  handle: '@payments'\n  allowedAuthors: [alice]\n")}
+    secrets.put("forja/gh", "s")
+    hooks = {"gh": parse_webhook("gh", "authMode: signature\nsignatureScheme: github\nsecretRef: forja/gh\ngithub:\n  repos: [acme/payments]\n  handle: '@payments'\n  allowedAuthors: [alice]\n")}
     engine = AutomationEngine(port, {"review": parse_automation("review", REVIEW)}, tmp_path / "a.db")
     client = TestClient(create_app(port, secrets, hooks, DeliveryLog(tmp_path / "d.db"), automations=engine))
 

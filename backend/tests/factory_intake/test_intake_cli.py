@@ -21,7 +21,7 @@ def port(monkeypatch):
 
 
 def run(capsys, *argv):
-    code = main(["factory", *argv])
+    code = main(["forja", *argv])
     out = capsys.readouterr()
     return code, out.out, out.err
 
@@ -59,7 +59,7 @@ def test_claim_and_release_go_to_review_not_done(port, capsys):
     assert code == 0 and claimed["item"]["state"] == "claimed" and claimed["worktree"] is None
     code, out, err = run(capsys, "claim", item_id, "--json")
     assert code == 1 and json.loads(err)["error"]["code"] == "not_claimable" and out == ""
-    code, out, _ = run(capsys, "release", item_id, "--summary", "did it", "--branch", "factory/x", "--json")
+    code, out, _ = run(capsys, "release", item_id, "--summary", "did it", "--branch", "forja/x", "--json")
     assert code == 0 and json.loads(out)["item"]["state"] == "awaiting_human"
     assert json.loads(run(capsys, "inbox", "--json")[1])["items"][0]["id"] == item_id
 
@@ -140,7 +140,7 @@ def test_plain_output_cannot_forge_rows_or_reorder_text(port, capsys):
 def test_json_errors_are_json_on_every_path(monkeypatch, capsys):
     monkeypatch.delenv("OH_FACTORY_PORT", raising=False)
     code, out, err = run(capsys, "status", "x", "--json")
-    assert code == 2 and out == "" and json.loads(err)["error"]["code"] == "no_factory"
+    assert code == 2 and out == "" and json.loads(err)["error"]["code"] == "no_forja"
     assert not list(Draft202012Validator(SCHEMA["$defs"]["error"] | {"$defs": SCHEMA["$defs"]}).iter_errors(json.loads(err)))
 
 

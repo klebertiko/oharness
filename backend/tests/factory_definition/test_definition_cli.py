@@ -12,7 +12,7 @@ from oharness.cli import main
 
 
 def _run(capsys, *args):
-    code = main(['factory', 'validate', *map(str, args)])
+    code = main(['forja', 'validate', *map(str, args)])
     return code, json.loads(capsys.readouterr().out)
 
 
@@ -39,7 +39,7 @@ def test_check_runs_the_mock_walk(make_definition, capsys):
 
 def test_the_module_entry_point_works_from_a_terminal(make_definition, capsys, monkeypatch):
     root = make_definition()
-    monkeypatch.setattr(sys, 'argv', ['oharness', 'factory', 'validate', str(root)])
+    monkeypatch.setattr(sys, 'argv', ['oharness', 'forja', 'validate', str(root)])
     with pytest.raises(SystemExit) as stop:
         runpy.run_module('oharness', run_name='__main__')  # what `python -m oharness` does
     assert stop.value.code == 0

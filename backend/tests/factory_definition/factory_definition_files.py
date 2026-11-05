@@ -3,7 +3,8 @@ from __future__ import annotations
 
 
 FACTORY = """\
-apiVersion: oharness.factory/v1
+kind: forja
+schemaVersion: 1.0.0
 name: payments
 alias: payments
 defaults:
@@ -27,7 +28,7 @@ stages:
 
 
 def agent_md(role: str, model: str | None = None, mode: str | None = None, extra: str = '', body: str = 'Do the job.') -> str:
-    lines = [f'role: {role}']
+    lines = ['kind: agent', f'role: {role}']
     if model:
         lines.append(f'model: {model}')
     if mode:
@@ -36,7 +37,7 @@ def agent_md(role: str, model: str | None = None, mode: str | None = None, extra
 
 
 FILES = {
-    'factory.yaml': FACTORY,
+    'forja.yaml': FACTORY,
     'agents/foreman/agent.md': agent_md('foreman'),
     'agents/builder/agent.md': agent_md('implement', 'openai/gpt-4o', 'workspace_write'),
     'agents/reviewer/agent.md': agent_md('review', 'anthropic/claude-opus', 'read_only'),

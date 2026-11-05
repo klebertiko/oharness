@@ -1,17 +1,19 @@
-"""The one table of rules for the factory definition (ADR 0056). The JSON Schema and the validator are built from it, so a rule
+"""The one table of rules for the Forja definition (ADR 0056, 0067). The JSON Schema and the validator are built from it, so a rule
 exists in one place only; the control room (#261) mirrors it for the UI with a parity test.
 
 The schema has no field that can hold a credential: every object is closed (`additionalProperties: false`) and the only places that
-accept a secret reference are `secretRef`, `pushSecretRef` and the items of `secrets[]`, all of them `factory/<name>`.
+accept a secret reference are `secretRef`, `pushSecretRef` and the items of `secrets[]`, all of them `forja/<name>`.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-API_VERSION = 'oharness.factory/v1'
-SCHEMA_ID = 'https://oharness.dev/schema/factory-definition.schema.json'
-SCHEMA_PATH = Path(__file__).resolve().parent.parent / 'oharness' / 'schema' / 'factory-definition.schema.json'
+KIND = 'forja'  # the `kind` of the root file; the other files declare theirs (ADR 0067, the OHM model of ADR 0003)
+SCHEMA_VERSION = '1.0.0'
+FILE_KINDS = {'agent': 'agent', 'mcp': 'mcp', 'runner': 'runner'}
+SCHEMA_ID = 'https://oharness.dev/schema/forja-definition.schema.json'
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / 'oharness' / 'schema' / 'forja-definition.schema.json'
 PERMISSION_MODES_PATH = Path(__file__).resolve().parent.parent / 'sandbox' / 'permission_modes.json'
 
 MAX_FILE_BYTES = 256 * 1024
@@ -20,7 +22,7 @@ MAX_FOLDERS = 300
 MAX_TREE_DEPTH = 8
 MAX_YAML_DEPTH = 40
 ID_PATTERN = r'^[a-z0-9][a-z0-9-]{0,62}$'
-SECRET_REF_PATTERN = r'^factory/[A-Za-z0-9_.-]{1,100}$'
+SECRET_REF_PATTERN = r'^forja/[A-Za-z0-9_.-]{1,100}$'
 MODEL_PATTERN = r'^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$'
 BRANCH_PATTERN = r'^[A-Za-z0-9][A-Za-z0-9._/*-]{0,199}$'
 # A path inside the repository: relative, forward slashes only, no `.`/`..` segments, no drive letter (a definition written on one
@@ -40,10 +42,10 @@ MODE_ORDER = ('plan', 'read_only', 'ask', 'auto_workspace', 'workspace_write', '
 HARNESS_SAFE_MODES = ('plan', 'read_only')
 DEFAULT_MODE = 'read_only'
 DEFAULT_MAX_MODE = 'workspace_write'
-EMBEDDED_SKILLS = ('factory-definition', 'factory-intake')
+EMBEDDED_SKILLS = ('forja-definition', 'forja-intake')
 SPEC_APPROVALS = ('required', 'optional')
 REVIEW_INDEPENDENCE = ('require', 'warn', 'off')
-CREDENTIAL_STRATEGIES = ('factory', 'user')
+CREDENTIAL_STRATEGIES = ('forja', 'user')
 RUNNER_KINDS = ('local',)  # Docker is reserved until it has proven isolation (ADR 0057)
 MEMORY_LIMITS = {'maxNotes': 50, 'maxNoteChars': 400, 'maxTotalBytes': 20 * 1024}
 INSTRUCTIONS_MAX_CHARS = 20_000
@@ -53,7 +55,7 @@ MAX_CONCURRENT_RUNS_CAP = 8
 MAX_REVIEW_RETURNS_CAP = 10
 POLICY_DEFAULTS = {'requireSpec': False, 'specApproval': 'required', 'maxReviewReturns': 3, 'reviewIndependence': 'require',
                    'maxPermissionMode': DEFAULT_MAX_MODE}
-RUNNER_DEFAULTS = {'kind': 'local', 'maxConcurrentRuns': 2, 'credentialStrategy': 'factory'}
+RUNNER_DEFAULTS = {'type': 'local', 'maxConcurrentRuns': 2, 'credentialStrategy': 'forja'}
 # The layout (ADR 0056). `reserved` folders belong to packages B (parsed by their own code) and C (not read yet).
 RESERVED_FOR_INTAKE = ('automations', 'webhooks')
 RESERVED_FOR_SCORING = ('scorers', 'benchmarks')
@@ -103,9 +105,10 @@ def build_schema() -> dict:
     return {
         '$schema': 'https://json-schema.org/draft/2020-12/schema',
         '$id': SCHEMA_ID,
-        'title': 'OHarness factory definition (the merged form of .oharness/factory)',
+        'title': 'Forja definition (the merged form of .oharness/forja)',
         **_object({
-            'apiVersion': {'const': API_VERSION},
+            'kind': {'const': KIND},
+            'schemaVersion': {'const': SCHEMA_VERSION},
             'name': ident,
             'alias': ident,
             'defaults': _object({'model': model, 'harness': ident}),
@@ -123,9 +126,9 @@ def build_schema() -> dict:
             }, tuple(POLICY_DEFAULTS)),
             'stages': _object({stage: _object({'enabled': {'type': 'boolean'}, 'required': {'type': 'boolean'}}) for stage in CONFIGURABLE_STAGES}),
             'runners': {'type': 'object', 'additionalProperties': False, 'maxProperties': 10, 'patternProperties': {ID_PATTERN: _object({
-                'kind': {'enum': list(RUNNER_KINDS)}, 'maxConcurrentRuns': _ints(1, MAX_CONCURRENT_RUNS_CAP),
+                'type': {'enum': list(RUNNER_KINDS)}, 'maxConcurrentRuns': _ints(1, MAX_CONCURRENT_RUNS_CAP),
                 'credentialStrategy': {'enum': list(CREDENTIAL_STRATEGIES)}, 'pushSecretRef': secret_ref,
-            }, ('kind', 'maxConcurrentRuns', 'credentialStrategy'))}},
+            }, ('type', 'maxConcurrentRuns', 'credentialStrategy'))}},
             'agents': {'type': 'object', 'additionalProperties': False, 'minProperties': 1, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: agent}},
             'skills': {'type': 'object', 'additionalProperties': False, 'maxProperties': 100, 'patternProperties': {ID_PATTERN: _object({'text': _text(SKILL_MAX_CHARS, 1)}, ('text',))}},
             'mcp': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: {
@@ -141,7 +144,7 @@ def build_schema() -> dict:
                 'automations': {'type': 'object', 'additionalProperties': {'type': 'string'}},
                 'webhooks': {'type': 'object', 'additionalProperties': {'type': 'string'}},
             }),
-        }, ('apiVersion', 'name', 'alias', 'defaults', 'repositories', 'tiers', 'ceilings', 'policy', 'stages', 'runners', 'agents',
+        }, ('kind', 'schemaVersion', 'name', 'alias', 'defaults', 'repositories', 'tiers', 'ceilings', 'policy', 'stages', 'runners', 'agents',
             'skills', 'mcp', 'reserved')),
     }
 

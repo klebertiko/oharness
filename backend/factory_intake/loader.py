@@ -29,7 +29,7 @@ def load_port(target: str | None = None) -> FactoryPort:
         module = importlib.import_module(module_name)  # nosemgrep: opengrep-rules.python.lang.security.audit.non-literal-import
         port = getattr(module, attr)()
     except (ImportError, AttributeError, TypeError):
-        raise FoundationMissing(f"the factory foundation is not available here ({target} not found); install it or set OH_FACTORY_PORT=module:callable") from None
+        raise FoundationMissing(f"the Forja foundation is not available here ({target} not found); install it or set OH_FACTORY_PORT=module:callable") from None
     if not isinstance(port, FactoryPort):
         raise FoundationMissing(f"{target} did not return a FactoryPort")
     return port

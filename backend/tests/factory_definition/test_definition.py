@@ -54,11 +54,11 @@ def test_missing_directory_is_not_found(tmp_path):
 
 
 def test_missing_factory_yaml(make_definition):
-    assert 'factory.yaml' in {i.file for i in _issues(make_definition({'factory.yaml': None}))}
+    assert 'forja.yaml' in {i.file for i in _issues(make_definition({'forja.yaml': None}))}
 
 
 def test_unknown_field_is_rejected_by_not_existing(make_definition):
-    issues = _issues(make_definition({'factory.yaml': _factory('apiToken: ' + 'abcdefgh' + '12345\n')}))
+    issues = _issues(make_definition({'forja.yaml': _factory('apiToken: ' + 'abcdefgh' + '12345\n')}))
     assert any('apiToken' in i.message for i in issues)
     assert 'abcdefgh' + '12345' not in json.dumps([i.as_dict() for i in issues])
 
@@ -71,19 +71,19 @@ def test_a_credential_in_instructions_is_rejected_without_echoing_it(make_defini
 
 
 def test_secret_refs_have_one_shape(make_definition):
-    good = make_definition({'agents/builder/agent.md': agent_md(*BUILDER, extra='secrets: [factory/npm-registry]')})
+    good = make_definition({'agents/builder/agent.md': agent_md(*BUILDER, extra='secrets: [forja/npm-registry]')})
     assert definition.load(good).ok
-    for bad in ('oharness/x', 'factory/', 'ghp_' + 'x' * 36, 'factory/has space'):
+    for bad in ('oharness/x', 'forja/', 'ghp_' + 'x' * 36, 'forja/has space'):
         root = make_definition({'agents/builder/agent.md': agent_md(*BUILDER, extra=f'secrets: ["{bad}"]')})
         issues = _issues(root)
         assert 'agents.builder.secrets[0]' in _paths(issues), bad
-        assert len(bad) < 10 or bad not in json.dumps([i.as_dict() for i in issues])  # the hint itself spells factory/<name>
+        assert len(bad) < 10 or bad not in json.dumps([i.as_dict() for i in issues])  # the hint itself spells forja/<name>
 
 
 @pytest.mark.parametrize('path', ['../outside', '/etc', 'C:\\\\repo', 'a\\\\b', 'a/../b', './a', 'a//b', '~/x', 'a/.git/../b'])
 def test_repository_paths_cannot_leave_the_repository(make_definition, path):
     text = _factory().replace('path: .', f'path: "{path}"')
-    assert 'repositories[0].path' in _paths(_issues(make_definition({'factory.yaml': text})))
+    assert 'repositories[0].path' in _paths(_issues(make_definition({'forja.yaml': text})))
 
 
 def test_exactly_one_foreman(make_definition):
@@ -101,19 +101,19 @@ def test_cross_references(make_definition):
 
 def test_skills_and_mcp_resolve(make_definition):
     root = make_definition({
-        'agents/builder/agent.md': agent_md(*BUILDER, extra='skills: [lint, own, factory-definition]\nmcp: [docs]'),
+        'agents/builder/agent.md': agent_md(*BUILDER, extra='skills: [lint, own, forja-definition]\nmcp: [docs]'),
         'skills/lint/SKILL.md': '# lint\nRun the linter.\n',
         'agents/builder/skills/own/SKILL.md': '# own\n',
-        'mcp/docs.yaml': 'command: docs-server\nargs: [--stdio]\nenv:\n  DOCS_KEY: factory/docs-key\n',
+        'mcp/docs.yaml': 'kind: mcp\ncommand: docs-server\nargs: [--stdio]\nenv:\n  DOCS_KEY: forja/docs-key\n',
     })
     loaded = definition.load(root)
     assert loaded.ok, [i.as_dict() for i in loaded.issues]
-    assert loaded.definition['mcp']['docs']['env'] == {'DOCS_KEY': 'factory/docs-key'}
+    assert loaded.definition['mcp']['docs']['env'] == {'DOCS_KEY': 'forja/docs-key'}
     assert 'own' in loaded.definition['agents']['builder']['localSkills']
 
 
 def test_custom_agents_do_not_get_embedded_skills(make_definition):
-    root = make_definition({'agents/helper/agent.md': agent_md('custom', 'openai/gpt-4o', 'read_only', 'skills: [factory-intake]')})
+    root = make_definition({'agents/helper/agent.md': agent_md('custom', 'openai/gpt-4o', 'read_only', 'skills: [forja-intake]')})
     assert 'agents.helper.skills[0]' in _paths(_issues(root))
 
 
@@ -127,7 +127,7 @@ def test_a_harness_only_goes_on_an_agent_that_cannot_write(make_definition):
 def test_an_agent_never_exceeds_the_mode_the_factory_declares(make_definition):
     full = agent_md('implement', 'openai/gpt-4o', 'full')
     assert 'agents.builder.permissions.mode' in _paths(_issues(make_definition({'agents/builder/agent.md': full})))
-    raised = make_definition({'factory.yaml': _factory('policy:\n  maxPermissionMode: full\n'), 'agents/builder/agent.md': full})
+    raised = make_definition({'forja.yaml': _factory('policy:\n  maxPermissionMode: full\n'), 'agents/builder/agent.md': full})
     assert definition.load(raised).ok
 
 
@@ -139,13 +139,13 @@ def test_ceilings_bound_the_agents(make_definition):
 def test_required_stage_needs_an_enabled_agent(make_definition):
     off = make_definition({'agents/reviewer/agent.md': agent_md(*REVIEWER, extra='enabled: false')})
     assert 'stages.review' in _paths(_issues(off))
-    spec = make_definition({'factory.yaml': _factory('policy:\n  requireSpec: true\n')})
+    spec = make_definition({'forja.yaml': _factory('policy:\n  requireSpec: true\n')})
     assert 'stages.spec' in _paths(_issues(spec))
 
 
 def test_partial_adoption_is_valid(make_definition):
     # only the foreman and a triage agent: nothing else is required, the rest of the work waits for a person
-    root = make_definition({'factory.yaml': _factory().replace('stages:\n  review:\n    required: true\n', ''),
+    root = make_definition({'forja.yaml': _factory().replace('stages:\n  review:\n    required: true\n', ''),
                             'agents/builder/agent.md': None, 'agents/reviewer/agent.md': None,
                             'agents/triager/agent.md': agent_md('triage', 'openai/gpt-4o-mini', 'read_only')})
     assert definition.load(root).ok
@@ -159,8 +159,8 @@ def test_unexpected_files_are_errors_not_ignored(make_definition):
 
 def test_yaml_aliases_and_duplicate_keys_are_refused(make_definition):
     aliased = _factory().replace('models: [openai/gpt-4o-mini]', 'models: &m [openai/gpt-4o-mini]').replace('models: [openai/gpt-4o, anthropic/claude-opus]', 'models: *m')
-    assert any(i.file == 'factory.yaml' and 'anchor' in i.message.lower() for i in _issues(make_definition({'factory.yaml': aliased})))
-    assert any(i.file == 'factory.yaml' for i in _issues(make_definition({'factory.yaml': _factory('alias: other\n')})))
+    assert any(i.file == 'forja.yaml' and 'anchor' in i.message.lower() for i in _issues(make_definition({'forja.yaml': aliased})))
+    assert any(i.file == 'forja.yaml' for i in _issues(make_definition({'forja.yaml': _factory('alias: other\n')})))
 
 
 def test_files_over_the_size_limit_are_refused(make_definition):
@@ -187,11 +187,11 @@ def test_symbolic_links_are_not_followed(make_definition, tmp_path):
 
 
 def test_a_utf8_bom_is_tolerated(make_definition):
-    assert definition.load(make_definition({'factory.yaml': '\ufeff' + _factory()})).ok
+    assert definition.load(make_definition({'forja.yaml': '\ufeff' + _factory()})).ok
 
 
 def test_reserved_intake_files_are_checked_by_their_own_parsers(make_definition):
-    assert definition.load(make_definition({'webhooks/gh.yaml': 'authMode: token\nsecretRef: factory/gh\n'})).ok
+    assert definition.load(make_definition({'webhooks/gh.yaml': 'authMode: token\nsecretRef: forja/gh\n'})).ok
     bad = make_definition({'webhooks/gh.yaml': 'authMode: token\nsecretRef: oops\n'})
     assert any(i.file == 'webhooks/gh.yaml' for i in _issues(bad))
 
@@ -236,7 +236,7 @@ def test_diff_reports_added_removed_and_changed_fields(make_definition):
         'agents/builder/agent.md': agent_md(*BUILDER, body='New words.'),
         'agents/reviewer/agent.md': None,
         'agents/extra/agent.md': agent_md('custom', 'openai/gpt-4o', 'read_only'),
-        'factory.yaml': _factory().replace('stages:\n  review:\n    required: true\n', ''),
+        'forja.yaml': _factory().replace('stages:\n  review:\n    required: true\n', ''),
     })).definition
     changes = {c.path: c for c in definition.diff(first, second)}
     assert changes['agents.builder.instructions'].op == 'changed' and changes['agents.builder.instructions'].after == 'New words.'
@@ -256,7 +256,7 @@ def test_the_mock_check_fails_when_review_cannot_be_independent(make_definition)
     report = definition.check(definition.load(same).definition)
     assert not report.ok and any('independen' in problem for problem in report.problems)
     relaxed = make_definition({'agents/reviewer/agent.md': agent_md('review', 'openai/gpt-4o', 'read_only'),
-                               'factory.yaml': _factory('policy:\n  reviewIndependence: off\n')})
+                               'forja.yaml': _factory('policy:\n  reviewIndependence: off\n')})
     assert definition.check(definition.load(relaxed).definition).ok
 
 
@@ -275,7 +275,7 @@ def test_common_credential_shapes_are_refused_and_never_echoed(make_definition, 
 
 
 def test_a_credential_flag_in_mcp_args_is_refused(make_definition):
-    root = make_definition({'mcp/docs.yaml': 'command: docs-server\nargs: [--api-key, ' + 'abcdefgh' + '12345678]\n'})
+    root = make_definition({'mcp/docs.yaml': 'kind: mcp\ncommand: docs-server\nargs: [--api-key, ' + 'abcdefgh' + '12345678]\n'})
     issues = _issues(root)
     assert any(i.file == 'mcp/docs.yaml' for i in issues) and ('abcdefgh' + '12345678') not in json.dumps([i.as_dict() for i in issues])
 
@@ -283,9 +283,9 @@ def test_a_credential_flag_in_mcp_args_is_refused(make_definition):
 def test_secret_looking_names_are_not_echoed_in_any_issue(make_definition):
     secret = 'sk-ant-api03-' + 'A1b2' * 8
     cases = [
-        {'factory.yaml': _factory(f'{secret}: 1\n')},
+        {'forja.yaml': _factory(f'{secret}: 1\n')},
         {f'{secret}.txt': 'x'},
-        {'webhooks/gh.yaml': f'authMode: token\nsecretRef: factory/gh\n{secret}: 1\n'},
+        {'webhooks/gh.yaml': f'authMode: token\nsecretRef: forja/gh\n{secret}: 1\n'},
         {'automations/job/automation.md': f'---\nprovider: {secret}\n---\nbody\n'},
     ]
     for changes in cases:
@@ -295,14 +295,14 @@ def test_secret_looking_names_are_not_echoed_in_any_issue(make_definition):
 
 def test_deeply_nested_yaml_is_refused_not_a_crash(make_definition):
     for nest in ('[' * 30000, '{a: ' * 3000):
-        issues = _issues(make_definition({'mcp/docs.yaml': 'command: x\nargs: ' + nest + '\n'}))
+        issues = _issues(make_definition({'mcp/docs.yaml': 'kind: mcp\ncommand: x\nargs: ' + nest + '\n'}))
         assert any(i.file == 'mcp/docs.yaml' and 'depth' in i.message for i in issues)
     deep_indent = ''.join(' ' * (2 * n) + f'k{n}:\n' for n in range(200))
-    assert any('depth' in i.message for i in _issues(make_definition({'factory.yaml': _factory() + 'x-deep:\n' + deep_indent})))
+    assert any('depth' in i.message for i in _issues(make_definition({'forja.yaml': _factory() + 'x-deep:\n' + deep_indent})))
 
 
 def test_non_string_keys_are_an_issue_not_a_crash(make_definition):
-    assert any(i.file == 'factory.yaml' for i in _issues(make_definition({'factory.yaml': _factory('1: a\n')})))
+    assert any(i.file == 'forja.yaml' for i in _issues(make_definition({'forja.yaml': _factory('1: a\n')})))
 
 
 def test_a_linked_definition_root_is_not_followed(tmp_path, make_definition):
@@ -316,13 +316,13 @@ def test_a_linked_definition_root_is_not_followed(tmp_path, make_definition):
 
 
 def test_a_trailing_newline_does_not_pass_a_single_line_field(make_definition):
-    assert not definition.load(make_definition({'factory.yaml': _factory().replace('name: payments', 'name: "payments\n"')})).ok
+    assert not definition.load(make_definition({'forja.yaml': _factory().replace('name: payments', 'name: "payments\n"')})).ok
 
 
 def test_repository_paths_avoid_windows_device_names(make_definition):
     for bad in ('con', 'src/aux', 'nul.txt', 'a/trailing.'):
         text = _factory().replace('path: .', f'path: {bad}')
-        assert 'repositories[0].path' in _paths(_issues(make_definition({'factory.yaml': text}))), bad
+        assert 'repositories[0].path' in _paths(_issues(make_definition({'forja.yaml': text}))), bad
 
 
 def test_too_many_folders_are_refused(make_definition):
@@ -334,20 +334,20 @@ def test_too_many_folders_are_refused(make_definition):
 
 def test_a_whole_float_is_the_same_value_as_the_integer(make_definition):
     plain = definition.load(make_definition())
-    floaty = definition.load(make_definition({'factory.yaml': _factory().replace('tokensPerRun: 100000', 'tokensPerRun: 100000.0')}))
+    floaty = definition.load(make_definition({'forja.yaml': _factory().replace('tokensPerRun: 100000', 'tokensPerRun: 100000.0')}))
     assert floaty.ok and floaty.hash == plain.hash
 
 
 def test_a_secret_used_as_a_key_is_not_echoed_in_the_path_of_a_nested_issue(make_definition):
     secret = 'sk-ant-api03-' + 'A1b2' * 8
     text = _factory('policy:\n  ' + secret + ': ' + secret + '\n')
-    issues = _issues(make_definition({'factory.yaml': text}))
+    issues = _issues(make_definition({'forja.yaml': text}))
     assert issues and secret not in json.dumps([i.as_dict() for i in issues])
 
 
 def test_block_sequence_indicators_on_one_line_count_as_nesting(make_definition):
     for nest in ('- ' * 3000 + 'x', '? ' * 3000 + 'x'):
-        issues = _issues(make_definition({'mcp/docs.yaml': 'command: x\nargs:\n' + nest + '\n'}))
+        issues = _issues(make_definition({'mcp/docs.yaml': 'kind: mcp\ncommand: x\nargs:\n' + nest + '\n'}))
         assert any(i.file == 'mcp/docs.yaml' for i in issues)  # refused by depth or by profile, never a crash
 
 
@@ -367,7 +367,7 @@ def test_a_file_swapped_for_a_link_after_the_walk_is_not_read(make_definition, t
 
 def test_a_huge_integer_is_an_issue_not_a_crash(make_definition):
     text = _factory().replace('tokensPerRun: 100000', 'tokensPerRun: ' + '9' * 5000)
-    assert any(i.file == 'factory.yaml' for i in _issues(make_definition({'factory.yaml': text})))
+    assert any(i.file == 'forja.yaml' for i in _issues(make_definition({'forja.yaml': text})))
 
 
 def test_the_credential_scan_is_linear_on_hostile_text(make_definition):
@@ -384,3 +384,46 @@ def test_the_url_password_pattern_is_fast_on_hostile_shapes():
         definition.looks_secret(text)
     assert time.monotonic() - started < 3
     assert definition.looks_secret('https://user:' + 'p4ss' * 40 + '@host.example/x')  # a long password is still caught
+
+
+# ---- Forja: the OHM model (one `kind` per file, `schemaVersion` at the root) and the new name
+
+def test_every_file_declares_its_kind(make_definition):
+    assert any(i.file == 'forja.yaml' and i.path == 'kind' for i in _issues(make_definition({'forja.yaml': _factory().replace('kind: forja\n', '')})))
+    assert any(i.file == 'forja.yaml' and i.path == 'kind' for i in _issues(make_definition({'forja.yaml': _factory().replace('kind: forja', 'kind: agent')})))
+    no_kind = make_definition({'agents/builder/agent.md': agent_md(*BUILDER).replace('kind: agent\n', '')})
+    assert any(i.file == 'agents/builder/agent.md' and i.path == 'kind' for i in _issues(no_kind))
+    wrong = make_definition({'agents/builder/agent.md': agent_md(*BUILDER).replace('kind: agent', 'kind: mcp')})
+    assert any(i.file == 'agents/builder/agent.md' and i.path == 'kind' for i in _issues(wrong))
+    assert any(i.file == 'mcp/docs.yaml' and i.path == 'kind' for i in _issues(make_definition({'mcp/docs.yaml': 'command: docs-server' + chr(10)})))
+
+
+def test_the_schema_version_is_checked(make_definition):
+    assert any(i.path == 'schemaVersion' for i in _issues(make_definition({'forja.yaml': _factory().replace('schemaVersion: 1.0.0', 'schemaVersion: 2.0.0')})))
+    assert any(i.path == 'schemaVersion' for i in _issues(make_definition({'forja.yaml': _factory().replace('schemaVersion: 1.0.0\n', '')})))
+    loaded = definition.load(make_definition())
+    assert loaded.definition['kind'] == 'forja' and loaded.definition['schemaVersion'] == '1.0.0'
+    assert 'kind' not in loaded.definition['agents']['builder']  # the file kind is a header, not part of the agent
+
+
+def test_a_runner_names_its_type_not_a_second_kind(make_definition):
+    ok = make_definition({'runners/main.yaml': 'kind: runner' + chr(10) + 'type: local' + chr(10) + 'maxConcurrentRuns: 3' + chr(10)})
+    loaded = definition.load(ok)
+    assert loaded.ok, [i.as_dict() for i in loaded.issues]
+    assert loaded.definition['runners']['main']['type'] == 'local' and loaded.definition['runners']['main']['maxConcurrentRuns'] == 3
+    bad = make_definition({'runners/main.yaml': 'kind: runner' + chr(10) + 'type: docker' + chr(10)})
+    assert 'runners.main.type' in _paths(_issues(bad))
+
+
+def test_the_old_name_does_not_appear_in_what_a_person_reads(make_definition):
+    cases = [{'forja.yaml': _factory('policy:' + chr(10) + '  maxPermissionMode: nope' + chr(10))},
+             {'agents/builder/agent.md': agent_md(*BUILDER, extra='secrets: [oharness/x]')},
+             {'forja.yaml': _factory().replace('path: .', 'path: /abs')}, {'stray.txt': 'x'}]
+    for changes in cases:
+        issues = _issues(make_definition(changes))
+        assert issues and 'factory' not in json.dumps([i.as_dict() for i in issues]).lower(), changes
+
+
+def test_the_secret_reference_prefix_is_forja(make_definition):
+    root = make_definition({'agents/builder/agent.md': agent_md(*BUILDER, extra='secrets: [factory/old-style]')})
+    assert 'agents.builder.secrets[0]' in _paths(_issues(root))
