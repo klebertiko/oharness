@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,10 +14,6 @@ from factory.secrets_orm import SecretIndex
 router = APIRouter(prefix='/factory/secrets', tags=['factory'])
 NAME = r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$'
 MAX_VALUE_CHARS = 8192
-
-
-class SecretBody(BaseModel):
-    value: str = Field(min_length=1, max_length=MAX_VALUE_CHARS)
 
 
 def _human(request: Request) -> None:
@@ -37,9 +32,15 @@ async def list_secrets(db: AsyncSession = Depends(get_db)):
 
 
 @router.put('/{name}')
-async def put_secret(request: Request, body: SecretBody, name: str = Path(pattern=NAME), db: AsyncSession = Depends(get_db)):
+async def put_secret(request: Request, name: str = Path(pattern=NAME), db: AsyncSession = Depends(get_db)):
     _human(request)
-    _store(request).put(f'forja/{name}', body.value)
+    try:  # parsed by hand: a validation error from the framework would echo the value back
+        value = (await request.json()).get('value')
+    except (ValueError, AttributeError):
+        value = None
+    if not isinstance(value, str) or not 1 <= len(value) <= MAX_VALUE_CHARS:
+        raise HTTPException(status_code=422, detail={'code': 'invalid_value', 'message': f'The value must be text of 1 to {MAX_VALUE_CHARS} characters.'})
+    _store(request).put(f'forja/{name}', value)
     row = await db.get(SecretIndex, name)
     if row is None:
         db.add(SecretIndex(name=name))

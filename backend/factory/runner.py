@@ -20,8 +20,6 @@ from sandbox import exec as sandbox_exec
 
 MIN_SECRET_LENGTH = 4  # a shorter value would only mangle ordinary output when redacted
 _NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$')
-_PUSH = re.compile(r'git\s+(?:-\S+\s+)*push\b([^;&|\n"\']*)')
-_MERGE = re.compile(r'\bgh\s+pr\s+merge\b|\bgh\s+api\b[^\n]*\bmerge\b', re.IGNORECASE)
 
 
 class RunnerError(ValueError):
@@ -45,9 +43,18 @@ class RunRedactor:
                       base64.b64encode(raw).decode().rstrip('=')}
         self._forms = sorted((f for f in forms if len(f) >= MIN_SECRET_LENGTH), key=len, reverse=True)
 
-    def redact(self, text: str) -> str:
+    def redact(self, text: str, truncated: bool = False) -> str:
+        """`truncated`: the output was cut, so a secret may end the text half-written; any prefix of one at the very end is dropped too."""
         for form in self._forms:
             text = text.replace(form, '[redacted:secret]')
+        if truncated:
+            for form in self._forms:
+                for size in range(len(form) - 1, MIN_SECRET_LENGTH - 1, -1):
+                    marker = '[truncated]'
+                    body = text[:-len(marker)] if text.endswith(marker) else text
+                    if body.endswith(form[:size]):
+                        text = body[:-size] + (marker if body is not text else '')
+                        break
         return text
 
 
@@ -64,6 +71,8 @@ def secrets_for(definition: dict, agent_id: str, store) -> tuple[dict[str, str],
         value = store.get(ref)
         if value is None:
             missing.append(ref)
+        elif env_name(ref) in env:
+            raise RunnerError('two of these secrets map to the same variable: rename one of them')
         else:
             env[env_name(ref)] = value
     if missing:
@@ -82,24 +91,80 @@ async def run_as_agent(definition: dict, agent_id: str, argv: list[str], cwd, st
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)
     result = await sandbox_exec.run(argv, Path(cwd), timeout_s, env)
-    result['result'] = redactor.redact(result['result'])
+    result['result'] = redactor.redact(result['result'], truncated=bool(result.get('truncated')))
     return result
 
 
+_GIT_VALUE_OPTIONS = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env'}
+_PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec', '--force-with-lease-x'}
+_GH_VALUE_OPTIONS = {'-R', '--repo', '--hostname'}
+
+
+def _tokens(command: str | list[str], depth: int = 0) -> list[str]:
+    """Words of a command, with quoting undone and nested shell strings (`sh -c "..."`) opened up."""
+    import shlex
+
+    if isinstance(command, list):
+        words = [str(w) for w in command]
+    else:
+        try:
+            words = shlex.split(command)
+        except ValueError:
+            words = command.split()
+    out: list[str] = []
+    for word in words:
+        if depth < 3 and (' ' in word or ';' in word or '&' in word):
+            out += _tokens(re.sub(r'[;&|]', ' ; ', word), depth + 1)
+        else:
+            out.append(word)
+    return out
+
+
+def _after_options(tokens: list[str], start: int, value_options: set[str]) -> int:
+    i = start
+    while i < len(tokens) and tokens[i].startswith('-'):
+        i += 2 if tokens[i] in value_options else 1
+    return i
+
+
 def deny_command(command: str | list[str], protected: list[str]) -> str | None:
-    """A push to a protected branch or a merge: the reason it is refused, or None. Text matching is a defence in depth, not the guarantee."""
-    text = ' '.join(command) if isinstance(command, list) else command
-    if _MERGE.search(text):
-        return 'The Forja never merges: a person merges outside it.'
-    for match in _PUSH.finditer(text):
-        words = match.group(1).split()
-        if any(w in ('--all', '--mirror') for w in words):
-            return 'This push could reach a protected branch.'
-        targets = [w for w in words if not w.startswith('-')][1:]  # the first word is the remote
-        for target in targets:
-            branch = target.lstrip('+').rsplit(':', 1)[-1].removeprefix('refs/heads/')
-            if any(fnmatch.fnmatchcase(branch, pattern) for pattern in protected):
-                return f'Pushing to the protected branch {branch} is not allowed.'
+    """A push to a protected branch or a merge: the reason it is refused, or None. Matching the words of a command is a defence in depth
+    (aliases, scripts and indirection get past it); the guarantee is the credential scope and the branch protection on the server."""
+    words = _tokens(command)
+    for index, word in enumerate(words):
+        name = word.replace(chr(92), '/').rsplit('/', 1)[-1].removesuffix('.exe')
+        if name == 'gh':
+            rest = [w.lower() for w in words[_after_options(words, index + 1, _GH_VALUE_OPTIONS):]]
+            head = rest[:1]
+            span = []
+            for w in rest:  # the words of this gh command, up to a separator
+                if w in (';', '&&', '||', '|'):
+                    break
+                span.append(w)
+            if head == ['alias'] or (head == ['pr'] and 'merge' in span) or (head == ['api'] and any('merge' in w for w in span)):
+                return 'The Forja never merges: a person merges outside it.'
+        if name == 'git':
+            at = _after_options(words, index + 1, _GIT_VALUE_OPTIONS)
+            if words[at:at + 1] != ['push']:
+                continue
+            args = []
+            for w in words[at + 1:]:
+                if w in (';', '&&', '||', '|'):
+                    break
+                args.append(w)
+            if any(w in ('--all', '--mirror') for w in args):
+                return 'This push could reach a protected branch.'
+            positional, i = [], 0
+            while i < len(args):
+                if args[i].startswith('-'):
+                    i += 2 if args[i] in _PUSH_VALUE_OPTIONS else 1
+                else:
+                    positional.append(args[i])
+                    i += 1
+            for target in positional[1:]:  # the first positional is the remote
+                branch = target.lstrip('+').rsplit(':', 1)[-1].removeprefix('refs/heads/')
+                if any(fnmatch.fnmatchcase(branch, pattern) for pattern in protected):
+                    return f'Pushing to the protected branch {branch} is not allowed.'
     return None
 
 

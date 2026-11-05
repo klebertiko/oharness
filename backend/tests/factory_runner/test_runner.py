@@ -196,3 +196,37 @@ def test_no_route_of_the_sidecar_can_read_a_secret_value():
     paths = {path: spec for path, spec in app.openapi()['paths'].items() if path.startswith('/factory/secrets')}
     assert set(paths) == {'/factory/secrets', '/factory/secrets/{name}'}
     assert set(paths['/factory/secrets']) == {'get'} and set(paths['/factory/secrets/{name}']) == {'put', 'delete'}  # a read only lists names
+
+
+# ---- review round
+
+@pytest.mark.parametrize('command', [
+    'git -C /repo push origin main', 'git -c push.default=current push origin main', "git push origin 'main'", 'git push --repo=origin origin main',
+    'git --git-dir=.git push origin HEAD:refs/heads/main', 'gh -R o/r pr merge 4', 'gh pr --repo o/r merge 4', 'gh api graphql -f query=mutation{mergePullRequest}',
+    "bash -lc 'git push origin main'", 'gh alias set m "pr merge"',
+])
+def test_more_ways_to_push_or_merge_are_denied(command):
+    assert runner.deny_command(command, ['main', 'release/*'])
+
+
+def test_a_secret_cut_in_half_by_truncation_leaves_no_prefix():
+    redactor = runner.RunRedactor([VALUE])
+    cut = 'output ' + VALUE[:9]
+    assert VALUE[:6] not in redactor.redact(cut, truncated=True)
+    assert redactor.redact(cut) == cut  # not truncated: a short coincidence stays
+
+
+def test_two_references_cannot_share_one_variable():
+    store = MemorySecrets()
+    store.put('forja/npm-token', VALUE)
+    store.put('forja/npm_token', VALUE + 'x')
+    definition = defn()
+    definition['agents']['builder']['secrets'] = ['forja/npm-token', 'forja/npm_token']
+    with pytest.raises(runner.RunnerError):
+        runner.secrets_for(definition, 'builder', store)
+
+
+def test_a_rejected_secret_body_does_not_echo_the_value(client):
+    resp = client.put('/factory/secrets/big', json={'value': 'v' * 9000}, headers=HUMAN)
+    assert resp.status_code == 422 and 'v' * 50 not in resp.text
+    assert client.put('/factory/secrets/big', content=b'not json', headers=HUMAN).status_code == 422
