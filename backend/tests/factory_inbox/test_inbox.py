@@ -127,13 +127,16 @@ def test_manual_resolve_hides_the_entry_and_undo_brings_it_back(client):
     q = make(client)
     drive(q, ask)
     entry = inbox(client)['entries'][0]
-    assert client.post(f"/factory/inbox/{entry['id']}/resolve").status_code == 403  # a personal queue: the human credential
-    assert client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    agent_try = client.post(f"/factory/inbox/{entry['id']}/resolve")  # a personal queue: the human credential
+    resolved = client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    assert agent_try.status_code == 403 and resolved.status_code == 204
     assert kinds(client) == [] and inbox(client)['count'] == 0
     assert kinds(client, include_resolved='true') == ['question']
-    assert client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204  # undo
+    undone = client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    assert undone.status_code == 204
     assert kinds(client) == ['question']
-    assert client.post('/factory/inbox/question:nope:1/resolve', headers=HUMAN).status_code == 404
+    unknown = client.post('/factory/inbox/question:nope:1/resolve', headers=HUMAN)
+    assert unknown.status_code == 404
 
 
 def test_a_new_question_on_the_same_item_is_a_new_entry(client):
@@ -202,7 +205,7 @@ def test_a_new_spec_revision_is_a_new_entry_after_the_old_one_was_resolved(clien
 def test_a_note_does_not_bring_back_a_resolved_blocked_entry(client):
     item = make(client)
     drive(item, lambda db, it: service.enter_stage(db, it, 'implement', ('foreman', 'foreman')))
-    drive(item, lambda db, it: _block(db, it))
+    drive(item, _block)
     entry = inbox(client)['entries'][0]
     client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
     client.post(f'/factory/work-items/{item}/actions', json={'action': 'note', 'text': 'fyi'}, headers=HUMAN)
