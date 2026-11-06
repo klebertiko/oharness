@@ -14,13 +14,14 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from database import DATABASE_URL, Base
 from factory import service
 from factory.models import ActionBody, Source, WorkItemCreate
 from factory.orm import WorkItem, WorkItemArtifact
-from factory_intake.port import Claim, FactoryError, ReleaseResult, SourceRef, SubmitResult, WorkItemDraft, WorkItemView
+from factory_intake.port import CLAIMABLE, Claim, FactoryError, ReleaseResult, SourceRef, SubmitResult, WorkItemDraft, WorkItemView
 
 DEFAULT_FACTORY = 'default'
 TIMEOUT_S = 60
@@ -35,31 +36,51 @@ class ForjaPort:
         self._thread.start()
         self._engine = create_async_engine(database_url, echo=False)
         self._sessions = async_sessionmaker(self._engine, expire_on_commit=False)
-        self._call(self._create_tables())
+        self._closed = False
+        try:
+            self._call(self._create_tables())
+        except BaseException:
+            self.close()
+            raise
 
     # ------------------------------------------------------------------------------------------------------------------ bridge
 
     def _call(self, coroutine):
-        return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result(TIMEOUT_S)
+        if self._closed or self._loop.is_closed():
+            coroutine.close()
+            raise FactoryError('closed', 'This connection to the Forja was closed.')
+        future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+        try:
+            return future.result(TIMEOUT_S)
+        except TimeoutError:
+            future.cancel()  # the work stops with the wait
+            raise FactoryError('timeout', 'The Forja did not answer in time.') from None
 
     async def _create_tables(self) -> None:
-        """Only what the port touches, so a bare database (the CLI before the app ever ran) works."""
-        from factory.orm import WorkItemEvent, WorkItemRun
-
-        tables = [m.__table__ for m in (WorkItem, WorkItemEvent, WorkItemRun, WorkItemArtifact)]
+        """Every table the Forja has, so a bare database (the CLI before the app ever ran) works."""
+        import factory.orm  # noqa: F401 — the tables register themselves on the shared Base
+        import factory.secrets_orm  # noqa: F401
+        try:
+            import factory.inbox_orm  # noqa: F401
+        except ImportError:  # not part of every build
+            pass
         async with self._engine.begin() as connection:
-            await connection.run_sync(lambda sync: Base.metadata.create_all(sync, tables=tables))
+            await connection.run_sync(Base.metadata.create_all)
 
     def close(self) -> None:
-        if self._loop.is_closed():
+        if self._closed:
             return
-        self._call(self._engine.dispose())
+        self._closed = True
+        try:
+            asyncio.run_coroutine_threadsafe(self._engine.dispose(), self._loop).result(10)
+        except Exception:  # the engine may never have connected
+            pass
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(timeout=10)
         self._loop.close()
 
     def _run(self, work):
-        """`work(db)` inside one session on the adapter loop; the service errors become port errors with the same stable code."""
+        """`work(db)` inside one session on the adapter loop. Errors reach the caller as port errors with a stable code and no SQL."""
         async def go():
             async with self._sessions() as db:
                 return await work(db)
@@ -67,6 +88,10 @@ class ForjaPort:
             return self._call(go())
         except service.FactoryError as exc:
             raise FactoryError(exc.code, exc.detail) from None
+        except ValidationError:
+            raise FactoryError('invalid_argument', 'An argument is too long or not acceptable.') from None
+        except SQLAlchemyError:
+            raise FactoryError('unavailable', 'The Forja database is busy or unavailable. Try again.') from None
 
     # ---------------------------------------------------------------------------------------------------------------------- view
 
@@ -99,9 +124,15 @@ class ForjaPort:
             return SubmitResult(item=await self._view(db, item), created=created, replay=replay)
         return self._run(work)
 
+    async def _mine(self, db, item_id: str) -> WorkItem:
+        item = await service.get(db, item_id)
+        if item.factory_id != self.factory_id:  # an id of another Forja is as good as unknown
+            raise service.FactoryError('not_found', 404)
+        return item
+
     def get(self, item_id: str) -> WorkItemView:
         async def work(db):
-            return await self._view(db, await service.get(db, item_id))
+            return await self._view(db, await self._mine(db, item_id))
         return self._run(work)
 
     def list(self, state=None, source=None, limit: int = 50) -> list[WorkItemView]:
@@ -110,23 +141,32 @@ class ForjaPort:
             return [await self._view(db, i) for i in items]
         return self._run(work)
 
+    @staticmethod
+    def _body(**fields) -> ActionBody:
+        try:
+            return ActionBody(**fields)
+        except ValidationError:
+            raise FactoryError('invalid_argument', 'An argument is too long or not acceptable.') from None
+
     def _act(self, item_id: str, body: ActionBody, actor=_ACTOR) -> WorkItemView:
         async def work(db):
-            item = await service.apply_action(db, await service.get(db, item_id), body, actor)
+            item = await service.apply_action(db, await self._mine(db, item_id), body, actor)
             return await self._view(db, item)
         return self._run(work)
 
     def comment(self, item_id: str, text: str, author: str) -> None:
-        self._act(item_id, ActionBody(action='note', text=text[:20000]), ('source', author[:200]))
+        self._act(item_id, self._body(action='note', text=text[:20000]), ('source', author[:200]))
 
     def cancel(self, item_id: str) -> WorkItemView:
-        return self._act(item_id, ActionBody(action='cancel'))
+        return self._act(item_id, self._body(action='cancel'))
 
     def claim(self, item_id: str, holder: str, worktree_ref: str | None = None) -> WorkItemView:
-        return self._act(item_id, ActionBody(action='claim', holder=holder, worktree_ref=worktree_ref))
+        if self.get(item_id).state not in CLAIMABLE:
+            raise FactoryError('cannot_claim', 'This item is not in a state that can be claimed.')
+        return self._act(item_id, self._body(action='claim', holder=holder, worktree_ref=worktree_ref))
 
     def release(self, item_id: str, result: ReleaseResult) -> WorkItemView:
-        return self._act(item_id, ActionBody(action='release', summary=result.summary, branch=result.branch, status=result.status))
+        return self._act(item_id, self._body(action='release', summary=result.summary, branch=result.branch, status=result.status))
 
     def metrics(self, window_days: int = 7) -> dict:
         from factory import metrics

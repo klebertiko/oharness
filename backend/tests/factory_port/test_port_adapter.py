@@ -133,7 +133,7 @@ def test_service_errors_become_port_errors_with_stable_codes(port):
     port.cancel(item.id)
     with pytest.raises(FactoryError) as raised:
         port.claim(item.id, 'someone')
-    assert raised.value.code == 'closed'
+    assert raised.value.code == 'cannot_claim'  # a closed item is not claimable
     with pytest.raises(FactoryError) as invalid:
         port.submit(draft('k9', ref='9', agent='Not A Valid Agent Id'))
     assert invalid.value.code == 'invalid_draft'
@@ -173,3 +173,72 @@ def test_the_cli_submits_through_the_adapter(monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     anyio.run(_reset)
     assert code == 0 and out['outcome'] == 'created' and out['item']['title'] == 'Fix the login page' and out['item']['state'] == 'queued'
+
+
+# ---- review round
+
+def test_a_bare_database_works_before_the_app_ever_ran(tmp_path):
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'fresh.db').as_posix()}"
+    fresh = port_adapter.ForjaPort('payments', url)
+    try:
+        assert fresh.submit(draft()).created  # versions, items, events: every table the service reads exists
+    finally:
+        fresh.close()
+
+
+def test_oversized_arguments_are_port_errors_not_validation_errors(port):
+    item = port.submit(draft()).item
+    with pytest.raises(FactoryError) as too_long:
+        port.claim(item.id, 'h' * 500)
+    assert too_long.value.code == 'invalid_argument'
+    port.claim(item.id, 'cli/alice')
+    with pytest.raises(FactoryError) as summary:
+        port.release(item.id, ReleaseResult(summary='s' * 9000, status='abandoned'))
+    assert summary.value.code == 'invalid_argument'
+
+
+def test_a_closed_port_says_so(port):
+    item = port.submit(draft()).item
+    port.close()
+    with pytest.raises(FactoryError) as raised:
+        port.get(item.id)
+    assert raised.value.code == 'closed'
+    port.close()  # twice is fine
+
+
+def test_a_forja_cannot_touch_the_items_of_another(port):
+    other = port_adapter.build_port('billing')
+    try:
+        item = port.submit(draft()).item
+        for call in (lambda: other.get(item.id), lambda: other.cancel(item.id), lambda: other.claim(item.id, 'x'),
+                     lambda: other.comment(item.id, 'hi', 'bob')):
+            with pytest.raises(FactoryError) as raised:
+                call()
+            assert raised.value.code == 'not_found'
+        assert port.get(item.id).state == 'queued'
+    finally:
+        other.close()
+
+
+def test_only_claimable_items_can_be_claimed(port):
+    item = port.submit(draft()).item
+
+    async def to_waiting(db):
+        row = await service.get(db, item.id)
+        row.status, row.stage = 'waiting_merge', 'handoff'
+        await db.commit()
+    read(to_waiting)
+    with pytest.raises(FactoryError) as raised:
+        port.claim(item.id, 'cli/alice')
+    assert raised.value.code == 'cannot_claim'
+
+
+def test_a_busy_database_is_a_port_error_without_sql(port, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    async def locked(*args, **kwargs):
+        raise OperationalError('INSERT INTO factory_work_items VALUES (?)', {}, Exception('database is locked'))
+    monkeypatch.setattr(service, 'create', locked)
+    with pytest.raises(FactoryError) as raised:
+        port.submit(draft('busy', ref='busy'))
+    assert raised.value.code == 'unavailable' and 'INSERT' not in str(raised.value)
