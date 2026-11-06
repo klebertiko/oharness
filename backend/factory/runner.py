@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from factory import definition_rules as rules
+from sandbox.secrets import redact as redact_patterns
 from sandbox import exec as sandbox_exec
 
 MIN_SECRET_LENGTH = 4  # a shorter value would only mangle ordinary output when redacted
@@ -73,6 +74,8 @@ def env_name(reference: str) -> str:
 def secrets_for(definition: dict, agent_id: str, store) -> tuple[dict[str, str], RunRedactor]:
     """The environment and the redactor for one agent: exactly the secrets it lists, nothing else, and a refusal if one is not stored."""
     refs = definition['agents'][agent_id]['secrets']
+    if any(not re.fullmatch(rules.SECRET_REF_PATTERN, ref) for ref in refs):  # the vault also holds provider keys: only forja/<name> is ever read here
+        raise RunnerError('a secret reference must look like forja/<name>')
     env: dict[str, str] = {}
     missing = []
     for ref in refs:
@@ -98,8 +101,11 @@ async def run_as_agent(definition: dict, agent_id: str, argv: list[str], cwd, st
     if denied:
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)
-    result = await sandbox_exec.run(argv, Path(cwd), timeout_s, env)
-    result['result'] = redactor.redact(result['result'], truncated=bool(result.get('truncated')))
+    if not _in_run_workspace(cwd):
+        raise RunnerError('commands run only inside a run workspace made by the runner')
+    result = await sandbox_exec.run(argv, Path(cwd), timeout_s, env, redact_output=False)
+    exact = redactor.redact(result['result'], truncated=bool(result.get('truncated')))  # exact values first, so a secret that contains a known pattern goes whole
+    result['result'], result['redactions'] = redact_patterns(exact)
     return result
 
 
@@ -143,6 +149,16 @@ def _segment(words: list[str], start: int) -> list[str]:
             break
         out.append(word)
     return out
+
+
+def _in_run_workspace(cwd) -> bool:
+    """True when `cwd` is inside the root of the worktrees the workspace manager made, never the main checkout or anywhere else."""
+    from workspaces.config import Settings
+
+    try:
+        return Path(cwd).resolve().is_relative_to(Settings.from_env().managed_root.resolve())
+    except OSError:
+        return False
 
 
 def deny_command(command: str | list[str], protected: list[str]) -> str | None:
