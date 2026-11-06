@@ -10,10 +10,12 @@ export function useLoad<T>(fn: () => Promise<T>): { result: LoadState<T>; reload
   const [result, setResult] = useState<LoadState<T>>({ state: "loading" });
   const latest = useRef(fn);
   latest.current = fn;
+  const sequence = useRef(0);
   const reload = useCallback(() => {
+    const mine = ++sequence.current; // only the newest call may set the result: a slow older answer is dropped
     latest.current().then(
-      (data) => setResult({ state: "ready", data }),
-      () => setResult({ state: "offline" }),
+      (data) => mine === sequence.current && setResult({ state: "ready", data }),
+      () => mine === sequence.current && setResult({ state: "offline" }),
     );
   }, []);
   useEffect(() => {

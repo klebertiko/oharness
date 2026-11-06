@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Button, Input, Notice, Panel } from "@/components/ui";
+import { Button, ConfirmInline, Input, Notice, Panel } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { forjaApi, type MemoryNote, type SecretRow, type Validation } from "./forjaApi";
 import { OfflineNotice } from "./Offline";
@@ -29,6 +29,7 @@ function Versions() {
   const [validation, setValidation] = useState<Validation | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [factory, setFactory] = useState("");
+  const [confirmRollback, setConfirmRollback] = useState(false);
   const state = useLoad(() => (factory ? forjaApi.state(factory) : Promise.resolve({ stable: null, canary: null })));
   useEffect(() => {
     state.reload();
@@ -78,7 +79,12 @@ function Versions() {
               <Button size="sm" variant="ghost" onClick={() => void change(() => forjaApi.abort(factory))}>{t("forja.setup.abort")}</Button>
             </>
           ) : (
-            current.stable && <Button size="sm" variant="ghost" onClick={() => void change(() => forjaApi.rollback(factory))}>{t("forja.setup.rollback")}</Button>
+            current.stable &&
+            (confirmRollback ? (
+              <ConfirmInline prompt={t("forja.confirm.rollback")} confirmLabel={t("forja.confirm.rollbackYes")} onConfirm={() => { setConfirmRollback(false); void change(() => forjaApi.rollback(factory)); }} onCancel={() => setConfirmRollback(false)} />
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setConfirmRollback(true)}>{t("forja.setup.rollback")}</Button>
+            ))
           )}
         </div>
         {list.length === 0 ? (
@@ -87,7 +93,7 @@ function Versions() {
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1">
               <span className="font-medium text-ink-dim">{t("forja.setup.project")}</span>
-              <select className="h-control-md rounded-control border border-line-strong bg-sub-000 px-2 text-title" value={workspace} onChange={(e) => { setWorkspace(e.target.value); setValidation(null); }}>
+              <select className="h-control-md rounded-control border border-line-strong bg-sub-000 px-2 text-title" value={workspace} onChange={(e) => { setWorkspace(e.target.value); setValidation(null); setFactory(""); }}>
                 <option value="" />
                 {list.map((p) => (
                   <option key={p.id} value={p.rootPath}>{p.name}</option>
@@ -128,10 +134,12 @@ function Secrets() {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const run = async (call: () => Promise<unknown>) => {
     try {
       await call();
       setMessage(null);
+      setConfirming(null);
       reload();
     } catch (e) {
       setMessage(explain(e));
@@ -150,9 +158,13 @@ function Secrets() {
             {rows.map((s) => (
               <li key={s.name} className="flex items-center justify-between gap-2">
                 <span className="font-mono">{s.reference}</span>
-                <Button size="sm" variant="ghost" aria-label={t("forja.setup.secretDelete", { name: s.name })} onClick={() => void run(() => forjaApi.deleteSecret(s.name))}>
-                  {t("forja.setup.secretDelete", { name: s.name })}
-                </Button>
+                {confirming === s.name ? (
+                  <ConfirmInline prompt={t("forja.confirm.secret")} confirmLabel={t("forja.confirm.secretYes")} onConfirm={() => void run(() => forjaApi.deleteSecret(s.name))} onCancel={() => setConfirming(null)} />
+                ) : (
+                  <Button size="sm" variant="ghost" aria-label={t("forja.setup.secretDelete", { name: s.name })} onClick={() => setConfirming(s.name)}>
+                    {t("forja.setup.secretDelete", { name: s.name })}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -176,6 +188,7 @@ function Memory() {
   const [agent, setAgent] = useState("");
   const [text, setText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const { result, reload } = useLoad(() => (factory && agent ? forjaApi.memory(factory, agent) : Promise.resolve({ notes: [] as MemoryNote[] })));
   useEffect(() => {
     reload();
@@ -184,6 +197,7 @@ function Memory() {
     try {
       await call();
       setMessage(null);
+      setConfirming(null);
       reload();
     } catch (e) {
       setMessage(explain(e));
@@ -208,7 +222,11 @@ function Memory() {
                 {!n.reviewed && <span className="text-warn-text">{t("forja.setup.memoryUnreviewed")}</span>}
                 <span className="flex gap-2">
                   {!n.reviewed && <Button size="sm" variant="ghost" onClick={() => void run(() => forjaApi.editNote(n.id, { reviewed: true }))}>{t("forja.setup.memoryReview")}</Button>}
-                  <Button size="sm" variant="ghost" onClick={() => void run(() => forjaApi.deleteNote(n.id))}>{t("forja.setup.memoryDelete")}</Button>
+                  {confirming === n.id ? (
+                    <ConfirmInline prompt={t("forja.confirm.note")} confirmLabel={t("forja.confirm.noteYes")} onConfirm={() => void run(() => forjaApi.deleteNote(n.id))} onCancel={() => setConfirming(null)} />
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => setConfirming(n.id)}>{t("forja.setup.memoryDelete")}</Button>
+                  )}
                 </span>
               </li>
             ))}

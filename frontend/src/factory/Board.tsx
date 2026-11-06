@@ -57,7 +57,7 @@ function Column({ column, list, onOpen }: { column: FactoryColumn; list: import(
               >
                 <span className="text-title text-ink">{item.title}</span>
                 <span className="flex flex-wrap items-center gap-2 text-body text-ink-dim">
-                  <Badge tone={statusTone(item.status)}>{item.stage}</Badge>
+                  <Badge tone={statusTone(item.status)}>{t(`forja.stage.${item.stage}` as MessageKey)}</Badge>
                   <span>{item.source.kind}</span>
                 </span>
               </button>

@@ -96,6 +96,52 @@ describe("an item", () => {
   });
 });
 
+describe("an item, further", () => {
+  const question = { sequence: 3, type: "checkpoint_requested", actor: { kind: "foreman", id: "foreman" }, data: { kind: "question", question: "Which environment?", question_id: "q-1" }, at: "2026-11-01T10:05:00Z" };
+  const openItem = async (events: unknown[] = [], over: Record<string, unknown> = {}) => {
+    routes["GET /factory/work-items"] = { body: { items: [item(over)] } };
+    routes["GET /factory/work-items/i1"] = { body: { ...item(over), artifacts: [], runs: [] } };
+    routes["GET /factory/work-items/i1/events"] = { body: { events } };
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: /Fix login/ }));
+    return screen.findByRole("dialog");
+  };
+
+  it("shows an open question and sends the answer with that question's id", async () => {
+    routes["POST /factory/work-items/i1/actions"] = { body: item() };
+    const dialog = await openItem([question], { stage: "triage" });
+    expect(await within(dialog).findByText("Which environment?")).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Your answer"), "staging");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send answer" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ action: "answer", text: "staging", question_id: "q-1" });
+  });
+
+  it("asks before cancelling an item and does nothing until it is confirmed", async () => {
+    routes["POST /factory/work-items/i1/actions"] = { body: item() };
+    const dialog = await openItem();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel this item" }));
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel the item" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({ action: "cancel" }));
+  });
+
+  it("offers a retry when the item cannot be loaded", async () => {
+    routes["GET /factory/work-items"] = { body: { items: [item()] } };
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    expect(await screen.findByText("Couldn't load this item.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("names stages and statuses in the language of the interface", async () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    const dialog = await openItem();
+    expect(within(dialog).getByText("Esperando você")).toBeTruthy();
+    expect(within(dialog).getAllByText("Especificação").length).toBeGreaterThan(0);
+  });
+});
+
 describe("the inbox", () => {
   const entry = { id: "question:i1:3", type: "question", work_item_id: "i1", title: "Fix login", stage: "triage", status: "awaiting_human", since: "x", summary: "Which environment?", actions: ["answer"], resolved: false };
 

@@ -1,5 +1,5 @@
 import type { BadgeTone } from "@/components/ui";
-import type { FactoryAction, FactoryColumn, FactoryStatus, WorkItem } from "./types";
+import type { FactoryAction, FactoryColumn, FactoryStatus, WorkItem, WorkItemEvent } from "./types";
 
 /** The board shows these columns, left to right; `closed` (cancelled, failed) stays behind a filter (ADR 0053). */
 export const BOARD_COLUMNS: FactoryColumn[] = ["new", "triaged", "planned", "implementing", "in_review", "verifying", "handoff", "monitoring", "claimed", "needs_you", "parked", "done"];
@@ -28,4 +28,11 @@ export function actionsFor(item: WorkItem): FactoryAction[] {
   else if (item.status !== "claimed") out.push("park");
   out.push("note", "cancel");
   return out;
+}
+
+/** The question a person has not answered yet, from the item's history: the last `question` checkpoint whose id no resolution names. */
+export function openQuestion(events: WorkItemEvent[]): { id: string; text: string } | null {
+  const resolved = new Set(events.filter((e) => e.type === "checkpoint_resolved").map((e) => String(e.data.question_id ?? "")));
+  const asked = [...events].reverse().find((e) => e.type === "checkpoint_requested" && e.data.kind === "question" && !resolved.has(String(e.data.question_id ?? "")));
+  return asked ? { id: String(asked.data.question_id), text: String(asked.data.question ?? "") } : null;
 }
