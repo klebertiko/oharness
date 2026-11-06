@@ -46,3 +46,7 @@ Texto de work item, issue, mensagem de chat e saída de ferramenta são dados n�
 
 ## Escolhas conservadoras
 Foreman e estágios usam o caminho de run existente (sem novo motor). Sem aprendizado automático de preferências neste corte (pacote C).
+
+## Implementação (#259)
+Memória por agente em `backend/factory/memory.py` e `/factory/memory`. A tabela `factory_memories` ganhou `factory_id` (os ids de agente são por fábrica) e `reviewed` (a nota que um agente escreveu fica sem revisão até uma pessoa olhar). Os limites são os da definição do agente, que só pode baixar os tetos de 50 notas, 400 caracteres por nota e 20 KB; uma gravação que estoura recusa com o motivo (`note_too_long`, `too_many_notes`, `memory_too_large`), nada é descartado em silêncio. Toda gravação passa por `redact_value`. Uma pessoa escreve (pode fixar), edita, revisa, apaga e limpa; a credencial de agente só adiciona nota própria, sem fixar e marcada como não revisada. Na run a memória é um bloco de dado (`<memory-notes>`) com as notas fixadas primeiro, as não revisadas rotuladas e `<` escapado, nunca instrução de sistema. A tela de memória entra na sala de controle (#261). Notas ficam em uma linha (espaços e quebras colapsados, caracteres não imprimíveis removidos), para que um texto não crie estrutura no bloco; uma credencial de agente só grava com um `source_run_id` de run vinculada a esse agente e a essa fábrica.
+

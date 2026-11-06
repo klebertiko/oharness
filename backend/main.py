@@ -19,6 +19,7 @@ from routers.turn_diff import router as turn_diff_router
 from routers.studio_copilot import router as studio_copilot_router
 from routers.studio_assist import router as studio_assist_router
 from factory.definition_router import router as factory_definition_router
+from factory.memory_router import router as factory_memory_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
 from secret_store.factory import build_secrets_store
@@ -127,6 +128,7 @@ app.include_router(studio_assist_router)
 app.include_router(factory_secrets_router)
 app.include_router(factory_router)
 app.include_router(factory_definition_router)
+app.include_router(factory_memory_router)
 
 
 @app.get("/health")

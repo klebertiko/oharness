@@ -7,6 +7,7 @@ schedule check) is local SQLite. Missed schedule slots while the app was closed 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -162,7 +163,7 @@ def load_automations(directory: Path) -> dict[str, Automation]:
             file = folder / "automation.md"
             if not file.exists():
                 raise AutomationError(f"automations/{folder.name}: missing automation.md")
-            if file.is_symlink() or folder.is_symlink():
+            if file.is_symlink() or folder.is_symlink() or os.path.isjunction(folder):  # a Windows junction is not a symlink
                 raise AutomationError(f"automations/{folder.name}: symbolic links are not followed")
             try:
                 if file.stat().st_size > MAX_FILE_BYTES:

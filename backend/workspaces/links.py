@@ -114,7 +114,8 @@ def scan_tree(root: str | Path, *, digest: bool = False) -> TreeScan:
                     hasher.update(f"L|{rel}|{link.target}\0".encode("utf-8", "surrogateescape"))
                 continue
             if hasher:
-                hasher.update(f"{'D' if stat.S_ISDIR(st.st_mode) else 'F'}|{rel}|{st.st_size}|{st.st_mtime_ns}\0".encode("utf-8", "surrogateescape"))
+                # A directory is its name and its entries: its own size and mtime are refreshed lazily by NTFS and add nothing.
+                hasher.update((f"D|{rel}\0" if stat.S_ISDIR(st.st_mode) else f"F|{rel}|{st.st_size}|{st.st_mtime_ns}\0").encode("utf-8", "surrogateescape"))
             if stat.S_ISDIR(st.st_mode):
                 pending.append(rel)
     scan.links.sort(key=lambda link: link.path)
