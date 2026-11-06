@@ -84,7 +84,7 @@ async def _terminate(proc, tree):
 
 
 async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, str] | None = None, *,
-              stdin_data: bytes | None = None, reap_descendants: bool = False) -> dict:
+              stdin_data: bytes | None = None, reap_descendants: bool = False, redact_output: bool = True) -> dict:
     started = time.monotonic()
     if argv[0] in BUILTINS and stdin_data is None and shutil.which(argv[0]) is None:
         return await _run_builtin(argv, cwd, timeout_s, started)
@@ -135,7 +135,8 @@ async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, 
                 await asyncio.gather(completion, return_exceptions=True)
             tree.close()
     text = '\n'.join(data.decode('utf-8', 'replace') + ('\n…[truncated at 65536 bytes]' if truncated else '') for data, truncated in (out, err) if data or truncated)
-    text, redactions = redact(text)
+    # redact_output=False hands the raw text to a caller that must remove exact values first and only then apply the patterns
+    text, redactions = redact(text) if redact_output else (text, 0)
     return {'ok': not timed_out and proc.returncode == 0, 'result': text,
             'exit_code': None if timed_out else proc.returncode, 'timed_out': timed_out,
             'truncated': out[1] or err[1], 'redactions': redactions,
