@@ -13,7 +13,8 @@ import pytest
 from workspaces import removal as removal_module
 from workspaces.errors import WorkspaceError
 from workspaces.removal import RemovalMixin
-from workspaces_support import Repo, make_dir_link, make_symlink, remove_dir_link
+from link_support import make_dir_link, make_symlink, remove_dir_link
+from workspaces_support import Repo
 
 LEAKED_NAMES = {"secret.txt", "victim.txt", "deep.txt"}
 
