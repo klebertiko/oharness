@@ -5,6 +5,8 @@ r"""P3 follow-ups of the #146 security review (issue #147).
 * the git that runs is the git the policy looked at.
 """
 import shutil
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -82,4 +84,7 @@ def test_exec_runs_the_git_the_policy_resolved(monkeypatch):
 
 
 def test_exec_still_searches_path_for_other_programs():
-    assert sandbox_exec._argv(['python3', '-V'])[0].endswith('python3')
+    # `python3` is `python3.EXE` on Windows, and absent from some PATHs: compare the stem and fall back to this interpreter.
+    name = 'python3' if shutil.which('python3') else Path(sys.executable).stem.lower()
+    resolved = sandbox_exec._argv([name, '-V'])[0]
+    assert resolved == shutil.which(name) and Path(resolved).stem.lower() == name
