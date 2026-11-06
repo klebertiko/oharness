@@ -95,15 +95,16 @@ def _protected(definition: dict) -> list[str]:
     return [b for repo in definition['repositories'] for b in repo['protectedBranches']]
 
 
-async def run_as_agent(definition: dict, agent_id: str, argv: list[str], cwd, store, timeout_s: float = 60) -> dict:
-    """One command with the agent secrets for this call only (never global) and the values removed from the result."""
+async def run_as_agent(definition: dict, agent_id: str, argv: list[str], workspace: dict, store, timeout_s: float = 60) -> dict:
+    """One command with the agent secrets for this call only (never global) and the values removed from the result. `workspace` is what
+    `create_run_workspace` returned: the command runs at the root of that run worktree and nowhere else."""
     denied = deny_command(argv, _protected(definition))
     if denied:
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)
-    if not _in_run_workspace(cwd):
-        raise RunnerError('commands run only inside a run workspace made by the runner')
-    result = await sandbox_exec.run(argv, Path(cwd), timeout_s, env, redact_output=False)
+    if not _is_run_workspace(workspace):
+        raise RunnerError('commands run only at the root of a run workspace made by the runner')
+    result = await sandbox_exec.run(argv, Path(workspace['path']), timeout_s, env, redact_output=False)
     exact = redactor.redact(result['result'], truncated=bool(result.get('truncated')))  # exact values first, so a secret that contains a known pattern goes whole
     result['result'], result['redactions'] = redact_patterns(exact)
     return result
@@ -151,13 +152,15 @@ def _segment(words: list[str], start: int) -> list[str]:
     return out
 
 
-def _in_run_workspace(cwd) -> bool:
-    """True when `cwd` is inside the root of the worktrees the workspace manager made, never the main checkout or anywhere else."""
+def _is_run_workspace(workspace: dict) -> bool:
+    """True when `workspace` is the root of a worktree the workspace manager made (managed root / repository / workspace id) and its id is the
+    folder name: not the root itself, not a folder inside a worktree, not the worktree of another run under this run's id."""
     from workspaces.config import Settings
 
     try:
-        return Path(cwd).resolve().is_relative_to(Settings.from_env().managed_root.resolve())
-    except OSError:
+        path = Path(workspace['path']).resolve()
+        return path.name == workspace['id'] and path.parent.parent == Settings.from_env().managed_root.resolve() and (path / '.git').exists()
+    except (OSError, KeyError, TypeError):
         return False
 
 

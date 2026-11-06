@@ -25,13 +25,13 @@ class ProgramNotFound(OSError):
         super().__init__(f"The program '{self.program}' is not installed or not on PATH, so it was not run.")
 
 
-async def _run_builtin(argv: list[str], cwd: Path, timeout_s: float, started: float) -> dict:
+async def _run_builtin(argv: list[str], cwd: Path, timeout_s: float, started: float, redact_output: bool = True) -> dict:
     timed_out, code, text = False, None, ''
     try:
         code, text = await asyncio.wait_for(asyncio.to_thread(run_builtin, argv, cwd), timeout_s)
     except asyncio.TimeoutError:
         timed_out = True
-    text, redactions = redact(text)
+    text, redactions = redact(text) if redact_output else (text, 0)
     return {'ok': not timed_out and code == 0, 'result': text, 'exit_code': code, 'timed_out': timed_out, 'truncated': False,
             'redactions': redactions, 'duration_ms': int((time.monotonic() - started) * 1000)}
 
@@ -87,7 +87,7 @@ async def run(argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, 
               stdin_data: bytes | None = None, reap_descendants: bool = False, redact_output: bool = True) -> dict:
     started = time.monotonic()
     if argv[0] in BUILTINS and stdin_data is None and shutil.which(argv[0]) is None:
-        return await _run_builtin(argv, cwd, timeout_s, started)
+        return await _run_builtin(argv, cwd, timeout_s, started, redact_output)
     options = {'creationflags': 0x08000000} if os.name == 'nt' else {'start_new_session': True}
     tree = ProcessTree()
     proc = None
