@@ -148,7 +148,6 @@ def test_it_works_from_inside_a_running_event_loop(port):
 
 
 def test_metrics_reuse_the_forja_figures(port):
-    pytest.importorskip('factory.metrics')
     port.submit(draft())
     figures = port.metrics(7)
     assert figures['schemaVersion'] == 1 and 'throughput' in figures
@@ -242,3 +241,41 @@ def test_a_busy_database_is_a_port_error_without_sql(port, monkeypatch):
     with pytest.raises(FactoryError) as raised:
         port.submit(draft('busy', ref='busy'))
     assert raised.value.code == 'unavailable' and 'INSERT' not in str(raised.value)
+
+
+# ---- review round 2
+
+GHP = 'ghp_' + 'A1b2C3d4' * 4 + 'A1b2'
+
+
+def test_secrets_in_ids_titles_and_comments_are_redacted_before_they_are_cut_or_stored(port):
+    item = port.submit(draft(title='x' * 195 + GHP, requested_by=f'user-{GHP}')).item
+    assert 'ghp_' not in item.title
+
+    async def events(db):
+        rows = await db.scalars(select(WorkItemEvent).where(WorkItemEvent.work_item_id == item.id))
+        return json.dumps([(e.actor_id, e.data_json) for e in rows])
+    port.comment(item.id, 'y' * 19_990 + GHP, f'author-{GHP}')
+    stored = read(events)
+    assert 'ghp_' not in stored and 'A1b2C3d4' not in stored
+
+
+def test_an_inaccessible_database_is_a_stable_error_and_the_loader_explains_it(tmp_path, monkeypatch):
+    missing = f"sqlite+aiosqlite:///{(tmp_path / 'no' / 'such' / 'dir' / 'x.db').as_posix()}"
+    with pytest.raises(FactoryError) as raised:
+        port_adapter.ForjaPort('payments', missing)
+    assert raised.value.code == 'unavailable' and 'sqlalchemy' not in str(raised.value).lower() and str(tmp_path) not in str(raised.value)
+    from factory_intake.loader import FoundationMissing, load_port
+    monkeypatch.setattr(port_adapter, 'DATABASE_URL', missing)
+    monkeypatch.setattr(port_adapter.ForjaPort.__init__, '__defaults__', (missing,))
+    with pytest.raises(FoundationMissing):
+        load_port('factory.port_adapter:build_port')
+
+
+def test_a_bad_forja_id_is_said_clearly(monkeypatch):
+    monkeypatch.setenv('OH_FORJA_ID', 'Not A Valid Id!')
+    with pytest.raises(FactoryError) as raised:
+        port_adapter.build_port()
+    assert raised.value.code == 'invalid_forja_id' and 'OH_FORJA_ID' in str(raised.value)
+    with pytest.raises(FactoryError):
+        port_adapter.build_port('UPPER')

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -21,6 +22,7 @@ from database import DATABASE_URL, Base
 from factory import service
 from factory.models import ActionBody, Source, WorkItemCreate
 from factory.orm import WorkItem, WorkItemArtifact
+from run_store import redact_value
 from factory_intake.port import CLAIMABLE, Claim, FactoryError, ReleaseResult, SourceRef, SubmitResult, WorkItemDraft, WorkItemView
 
 DEFAULT_FACTORY = 'default'
@@ -29,7 +31,8 @@ _ACTOR = ('agent', 'port')
 
 
 class ForjaPort:
-    def __init__(self, factory_id: str, database_url: str = DATABASE_URL):
+    def __init__(self, factory_id: str, database_url: str | None = None):
+        database_url = database_url or DATABASE_URL
         self.factory_id = factory_id
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, name='forja-port', daemon=True)
@@ -39,6 +42,12 @@ class ForjaPort:
         self._closed = False
         try:
             self._call(self._create_tables())
+        except FactoryError:
+            self.close()
+            raise
+        except (SQLAlchemyError, OSError):  # the path and the driver message stay out of what a caller sees
+            self.close()
+            raise FactoryError('unavailable', 'The Forja database could not be opened.') from None
         except BaseException:
             self.close()
             raise
@@ -111,15 +120,15 @@ class ForjaPort:
 
     def submit(self, draft: WorkItemDraft) -> SubmitResult:
         try:
-            body = WorkItemCreate(factory_id=self.factory_id, title=draft.title[:200], source=Source(kind=draft.source.kind, ref=draft.source.ref, url=draft.source.url,
+            body = WorkItemCreate(factory_id=self.factory_id, title=redact_value(draft.title)[:200], source=Source(kind=draft.source.kind, ref=draft.source.ref, url=draft.source.url,
                                                                                                    thread_ref=draft.source.thread_ref),
-                                  origin_context={'text': draft.body}, labels=list(draft.labels), requested_by=draft.requested_by or None,
+                                  origin_context={'text': draft.body}, labels=list(draft.labels), requested_by=redact_value(draft.requested_by)[:200] or None,
                                   idempotency_key=draft.idempotency_key, agent=draft.agent, automation=draft.automation)
         except ValidationError:
             raise FactoryError('invalid_draft', 'The request does not fit the Forja: check the agent and automation ids and the field sizes.') from None
 
         async def work(db):
-            item, created, replay = await service.create(db, body, ('source', (draft.requested_by or draft.source.kind)[:200]),
+            item, created, replay = await service.create(db, body, ('source', redact_value(draft.requested_by or draft.source.kind)[:200]),
                                                          instructions=draft.instructions or None, token_ceiling=draft.token_ceiling)
             return SubmitResult(item=await self._view(db, item), created=created, replay=replay)
         return self._run(work)
@@ -155,7 +164,7 @@ class ForjaPort:
         return self._run(work)
 
     def comment(self, item_id: str, text: str, author: str) -> None:
-        self._act(item_id, self._body(action='note', text=text[:20000]), ('source', author[:200]))
+        self._act(item_id, self._body(action='note', text=redact_value(text)[:20000]), ('source', redact_value(author)[:200]))
 
     def cancel(self, item_id: str) -> WorkItemView:
         return self._act(item_id, self._body(action='cancel'))
@@ -181,4 +190,8 @@ class ForjaPort:
 
 def build_port(factory_id: str | None = None) -> ForjaPort:
     """The port for one Forja: the id given, else `OH_FORJA_ID`, else `default`."""
-    return ForjaPort(factory_id or os.environ.get('OH_FORJA_ID') or DEFAULT_FACTORY)
+    chosen = factory_id or os.environ.get('OH_FORJA_ID') or DEFAULT_FACTORY
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}', chosen):
+        source = 'the id given' if factory_id else 'OH_FORJA_ID'
+        raise FactoryError('invalid_forja_id', f'{source} must be lowercase letters, digits and "-".')
+    return ForjaPort(chosen)
