@@ -284,7 +284,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
     elif a == 'claim':
         if item.status == 'claimed' or not body.holder:
             raise FactoryError('cannot_claim')
-        item.claim_json = json.dumps({'holder': redact_value(body.holder), 'from_status': item.status})
+        item.claim_json = json.dumps({'holder': redact_value(body.holder), 'worktree_ref': redact_value(body.worktree_ref) if body.worktree_ref else None, 'from_status': item.status})
         _move(item, item.stage, 'claimed')
         await add_event(db, item, 'claimed', actor, {'holder': body.holder})
     elif a == 'release':

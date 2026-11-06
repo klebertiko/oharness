@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib
 import os
 
-from .port import FactoryPort
+from .port import FactoryError, FactoryPort
 
 DEFAULT_TARGET = "factory.port_adapter:build_port"
 ALLOWED_PACKAGES = frozenset({"factory", "factory_intake"})
@@ -30,6 +30,8 @@ def load_port(target: str | None = None) -> FactoryPort:
         port = getattr(module, attr)()
     except (ImportError, AttributeError, TypeError):
         raise FoundationMissing(f"the Forja foundation is not available here ({target} not found); install it or set OH_FACTORY_PORT=module:callable") from None
+    except FactoryError as exc:  # found but unable to start (its database, its id): say why, in its own words
+        raise FoundationMissing(f"the Forja could not start: {exc.message}") from None
     if not isinstance(port, FactoryPort):
         raise FoundationMissing(f"{target} did not return a FactoryPort")
     return port

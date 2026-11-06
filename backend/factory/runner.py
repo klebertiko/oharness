@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from factory import definition_rules as rules
+from sandbox.secrets import redact as redact_patterns
 from sandbox import exec as sandbox_exec
 
 MIN_SECRET_LENGTH = 4  # a shorter value would only mangle ordinary output when redacted
@@ -73,6 +74,8 @@ def env_name(reference: str) -> str:
 def secrets_for(definition: dict, agent_id: str, store) -> tuple[dict[str, str], RunRedactor]:
     """The environment and the redactor for one agent: exactly the secrets it lists, nothing else, and a refusal if one is not stored."""
     refs = definition['agents'][agent_id]['secrets']
+    if any(not re.fullmatch(rules.SECRET_REF_PATTERN, ref) for ref in refs):  # the vault also holds provider keys: only forja/<name> is ever read here
+        raise RunnerError('a secret reference must look like forja/<name>')
     env: dict[str, str] = {}
     missing = []
     for ref in refs:
@@ -92,14 +95,18 @@ def _protected(definition: dict) -> list[str]:
     return [b for repo in definition['repositories'] for b in repo['protectedBranches']]
 
 
-async def run_as_agent(definition: dict, agent_id: str, argv: list[str], cwd, store, timeout_s: float = 60) -> dict:
-    """One command with the agent secrets for this call only (never global) and the values removed from the result."""
+async def run_as_agent(definition: dict, agent_id: str, argv: list[str], workspace: dict, store, timeout_s: float = 60) -> dict:
+    """One command with the agent secrets for this call only (never global) and the values removed from the result. `workspace` is what
+    `create_run_workspace` returned: the command runs at the root of that run worktree and nowhere else."""
     denied = deny_command(argv, _protected(definition))
     if denied:
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)
-    result = await sandbox_exec.run(argv, Path(cwd), timeout_s, env)
-    result['result'] = redactor.redact(result['result'], truncated=bool(result.get('truncated')))
+    if not _is_run_workspace(workspace):
+        raise RunnerError('commands run only at the root of a run workspace made by the runner')
+    result = await sandbox_exec.run(argv, Path(workspace['path']), timeout_s, env, redact_output=False)
+    exact = redactor.redact(result['result'], truncated=bool(result.get('truncated')))  # exact values first, so a secret that contains a known pattern goes whole
+    result['result'], result['redactions'] = redact_patterns(exact)
     return result
 
 
@@ -143,6 +150,18 @@ def _segment(words: list[str], start: int) -> list[str]:
             break
         out.append(word)
     return out
+
+
+def _is_run_workspace(workspace: dict) -> bool:
+    """True when `workspace` is the root of a worktree the workspace manager made (managed root / repository / workspace id) and its id is the
+    folder name: not the root itself, not a folder inside a worktree, not the worktree of another run under this run's id."""
+    from workspaces.config import Settings
+
+    try:
+        path = Path(workspace['path']).resolve()
+        return path.name == workspace['id'] and path.parent.parent == Settings.from_env().managed_root.resolve() and (path / '.git').exists()
+    except (OSError, KeyError, TypeError):
+        return False
 
 
 def deny_command(command: str | list[str], protected: list[str]) -> str | None:
