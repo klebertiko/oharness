@@ -113,3 +113,21 @@ class DefinitionVersion(Base):
     activated_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     __table_args__ = (Index('ix_factory_versions_factory', 'factory_id', 'id'),)
+
+
+class AgentMemory(Base):
+    """A note an agent carries between runs (ADR 0054). Local, editable by a person; written text is redacted before it is stored.
+    `origin` is who wrote it; a note an agent wrote stays `reviewed = False` until a person looks at it."""
+    __tablename__ = 'factory_memories'
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    factory_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    origin: Mapped[str] = mapped_column(String(8), nullable=False)
+    source_run_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (Index('ix_factory_memories_agent', 'factory_id', 'agent_id'),)

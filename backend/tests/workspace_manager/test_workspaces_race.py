@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from workspaces.errors import WorkspaceError
-from workspaces_support import make_dir_link, remove_dir_link
+from link_support import make_dir_link, remove_dir_link
 
 TRIALS = int(os.environ.get("OH_RACE_TRIALS", "24"))
 

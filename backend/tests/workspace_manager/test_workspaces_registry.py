@@ -13,7 +13,7 @@ from starlette.testclient import TestClient
 from main import app
 from workspaces.errors import WorkspaceError
 from workspaces.paths import canonical
-from workspaces_support import make_dir_link
+from link_support import make_dir_link
 
 
 def state_file(oh_env) -> Path:
