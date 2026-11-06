@@ -35,7 +35,7 @@ def build(ref, born, events, *, version='v1', factory='payments', cost=0, status
     """events: [(minutes after birth, type, actor_kind, data)]; artifacts: [(minutes after birth, ref, label)]."""
     async def go():
         async with SessionLocal() as db:
-            item = WorkItem(factory_id=factory, factory_version=version, title=ref, source_kind='manual', source_ref=ref, created_at=born, updated_at=born,
+            item = WorkItem(factory_id=factory, factory_version=version, title=ref, source_kind='manual', source_ref=ref, created_at=born, updated_at=born + timedelta(minutes=max([m for m, *_ in events] + [0])),
                             cost_tokens=cost, status=status, stage='handoff')
             db.add(item)
             await db.flush()
@@ -81,7 +81,8 @@ def test_the_numbers_follow_the_events_in_the_window(client):
     assert m['schemaVersion'] == 1 and m['window'] == '30d'
     assert m['throughput'] == {'prs_opened': 4, 'prs_merged': 1, 'items_opened': 3, 'items_merged': 1, 'items_completed': 1}
     assert m['cost']['median_tokens_per_pr'] == 1250 and m['cost']['total_tokens'] == 4500  # 1000, 1500, 1500, 500
-    assert m['quality'] == {'items_reviewed': 2, 'approved_first_review': 0.5, 'avg_returns_to_implement': 0.5, 'verify_failures': 1}
+    assert m['quality'] == {'items_reviewed': 2, 'approved_first_review': 0.5, 'avg_returns_to_implement': 0.5, 'verify_failures': 1,
+                          'changes_requested_after_verify': 0}
     assert m['cycle_time']['run_to_pr_median_s'] == 3600 and m['cycle_time']['run_to_first_review_median_s'] == 9000
     assert m['cycle_time']['run_to_merge_median_s'] == 1380 * 60
 
@@ -137,3 +138,47 @@ def test_metrics_carry_no_personal_data(client):
     seed()
     text = json.dumps(metrics(client, window='30d'))
     assert 'forja/a' not in text and 'Item' not in text and 'payments' not in text  # counts and durations only
+
+
+# ---- review round
+
+def test_dates_with_a_zone_or_out_of_range_are_handled(client):
+    seed()
+    aware = client.get('/factory/metrics', params={'since': (NOW - timedelta(days=10)).isoformat() + '+03:00'})
+    assert aware.status_code == 200 and aware.json()['window'] == 'custom'
+    zulu = client.get('/factory/metrics', params={'since': (NOW - timedelta(days=10)).strftime('%Y-%m-%dT%H:%M:%S') + 'Z'})
+    assert zulu.status_code == 200
+    huge = client.get('/factory/metrics', params={'until': '9999-12-31'})
+    assert huge.status_code == 422
+
+
+def test_merged_counts_only_the_prs_opened_in_the_window(client):
+    day = timedelta(days=1)
+    build('M', NOW - 20 * day, [(60, 'run_linked', 'foreman', {}), (120, 'artifact_added', 'agent', {'kind': 'diff'}),
+                                (60 * 24 * 3, 'artifact_added', 'agent', {'kind': 'diff'}), (60 * 24 * 4, 'merge_observed', 'system', {})],
+          cost=2000, status='done', artifacts=[(120, 'forja/m1', ''), (60 * 24 * 3, 'forja/m2', '')])
+    m = metrics(client, since=(NOW - 25 * day).date().isoformat(), until=(NOW - 15 * day).date().isoformat())
+    assert m['throughput']['prs_opened'] == 2 and m['throughput']['prs_merged'] == 2  # both PRs opened in the range, the merge (day 4) too
+    narrow = metrics(client, since=(NOW - 25 * day).date().isoformat(), until=(NOW - 19 * day).date().isoformat())
+    assert narrow['throughput']['prs_opened'] == 1 and narrow['throughput']['prs_merged'] == 0  # the merge was not known yet at the end of that range
+    assert m['cost']['basis'] == 'lifetime tokens of the items touched in the window'
+
+
+def test_a_reopened_item_uses_the_completion_inside_the_window(client):
+    day = timedelta(days=1)
+    build('R', NOW - 40 * day, [(60, 'completed', 'system', {}), (60 * 24 * 35, 'completed', 'system', {})], cost=1, status='done')
+    recent = metrics(client, window='7d')
+    assert recent['throughput']['items_completed'] == 1 and recent['cycle_time']['created_to_done_median_s'] == 35 * 24 * 3600
+    first = metrics(client, since=(NOW - 45 * day).date().isoformat(), until=(NOW - 38 * day).date().isoformat())
+    assert first['throughput']['items_completed'] == 1 and first['cycle_time']['created_to_done_median_s'] == 3600
+
+
+def test_changes_requested_after_verification_is_counted(client):
+    build('V', NOW - timedelta(days=2), [(10, 'stage_entered', 'foreman', {'stage': 'verify'}), (20, 'review_verdict', 'foreman', {'verdict': 'changes_requested'})], cost=1)
+    build('W', NOW - timedelta(days=2), [(10, 'review_verdict', 'foreman', {'verdict': 'changes_requested'})], cost=1)
+    assert metrics(client, window='7d')['quality']['changes_requested_after_verify'] == 1
+
+
+def test_idle_old_items_are_not_loaded(client):
+    build('IDLE', NOW - timedelta(days=500), [], cost=5)
+    assert metrics(client, window='90d')['cost']['total_tokens'] == 0

@@ -17,6 +17,7 @@ from factory.service import FactoryError
 SCHEMA_VERSION = 1
 WINDOWS = {'7d': 7, '30d': 30, '90d': 90}
 MAX_RANGE = timedelta(days=366)
+MAX_ITEMS = 5000
 SIZE_CUTS = (('S', 100), ('M', 500), ('L', 1000))  # changed lines: below 100 is S, below 500 M, below 1000 L, the rest XL
 # Human events that mean the Forja needed help; the decisions a person is meant to take (approve the spec, confirm the merge) do not count.
 INTERVENTIONS = ('changes_requested', 'spec_edited', 'advanced', 'note')
@@ -34,16 +35,22 @@ def _size(label: str) -> str:
     return 'unknown'
 
 
+def _moment(text: str) -> datetime:
+    """A date or a date-time; a zone is converted to UTC and dropped, because the Forja stores UTC without a zone."""
+    parsed = datetime.fromisoformat(text)
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
 def resolve_range(window: str | None, since: str | None, until: str | None, now: datetime) -> tuple[str, datetime, datetime]:
     if since or until:
         try:
-            start = datetime.fromisoformat(since) if since else now - timedelta(days=30)
-            end = datetime.fromisoformat(until) + timedelta(days=1) if until and len(until) <= 10 else (datetime.fromisoformat(until) if until else now)
-        except ValueError:
+            start = _moment(since) if since else now - timedelta(days=30)
+            end = (_moment(until) + timedelta(days=1) if until and len(until) <= 10 else _moment(until)) if until else now
+        except (ValueError, OverflowError):
             raise FactoryError('invalid_range', 422, 'since and until are dates like 2026-11-01.') from None
         if end <= start or end - start > MAX_RANGE:
             raise FactoryError('invalid_range', 422, 'The range must be positive and at most one year.')
-        return 'custom', start.replace(tzinfo=None), end.replace(tzinfo=None)
+        return 'custom', start, end
     if window not in WINDOWS:
         raise FactoryError('invalid_window', 422, 'window is 7d, 30d or 90d.')
     return window, now - timedelta(days=WINDOWS[window]), now
@@ -63,13 +70,13 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
     by_size: dict[str, dict] = {}
     touched = []
     to_pr, to_review, to_merge, lifetime = [], [], [], []
-    first_pass, returns, reviewed, verify_failures, interventions = [], [], 0, 0, 0
+    first_pass, returns, reviewed, verify_failures, interventions, after_verify = [], [], 0, 0, 0, 0
     for item in items:
         evs, arts = events[item.id], artifacts[item.id]
         if inside(item.created_at) or any(inside(e.at) for e in evs):
             touched.append(item)
         in_window = [a for a in arts if inside(a.created_at)]
-        merge = next((e for e in evs if e.type == 'merge_observed' and inside(e.at)), None)
+        merge = next((e for e in evs if e.type == 'merge_observed' and e.at < end), None)
         if in_window:
             opened_items.add(item.id)
             prs_opened += len(in_window)
@@ -79,12 +86,13 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
                 size = by_size.setdefault(_size(art.label), {'prs': 0, 'median_tokens': []})
                 size['prs'] += 1
                 size['median_tokens'].append(share)
-        if merge is not None:
+        if merge is not None and in_window:
             merged_items.add(item.id)
-            prs_merged += len(arts)
-        if any(e.type == 'completed' and inside(e.at) for e in evs):
+            prs_merged += len(in_window)
+        done = next((e for e in evs if e.type == 'completed' and inside(e.at)), None)
+        if done is not None:
             completed += 1
-            lifetime.append((next(e.at for e in evs if e.type == 'completed') - item.created_at).total_seconds())
+            lifetime.append((done.at - item.created_at).total_seconds())
         run = first(item.id, 'run_linked')
         if run is not None and inside(run.at):
             pr = first(item.id, 'artifact_added')
@@ -96,10 +104,15 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
             merged = first(item.id, 'merge_observed')
             if merged is not None:
                 to_merge.append((merged.at - run.at).total_seconds())
-        verdicts = [e for e in evs if e.type == 'review_verdict' and inside(e.at)]
+        all_verdicts = [e for e in evs if e.type == 'review_verdict']
+        verdicts = [e for e in all_verdicts if inside(e.at)]
         if verdicts:
             reviewed += 1
-            first_pass.append(1.0 if json_verdict(verdicts[0]) == 'approved' else 0.0)
+            if inside(all_verdicts[0].at):  # the first review of the item decides, and only when it happened in the window
+                first_pass.append(1.0 if json_verdict(all_verdicts[0]) == 'approved' else 0.0)
+            verify_seen = next((e.sequence for e in evs if e.type == 'stage_entered' and json_stage(e) == 'verify'), None)
+            if verify_seen is not None and any(json_verdict(v) == 'changes_requested' and v.sequence > verify_seen for v in verdicts):
+                after_verify += 1
             returns.append(sum(1 for e in evs if e.type == 'returned_to_implement' and inside(e.at)))
         verify_failures += sum(1 for e in evs if e.type == 'verify_failed' and inside(e.at))
         interventions += sum(1 for e in evs if inside(e.at) and e.actor_kind == 'human' and (e.type in INTERVENTIONS or (e.type == 'checkpoint_resolved' and json_kind(e) == 'question')))
@@ -110,12 +123,12 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
     return {
         'throughput': {'prs_opened': prs_opened, 'prs_merged': prs_merged, 'items_opened': len(opened_items), 'items_merged': len(merged_items), 'items_completed': completed},
         'cost': {
-            'total_tokens': sum(i.cost_tokens for i in touched), 'median_tokens_per_pr': _median(shares),
+            'basis': 'lifetime tokens of the items touched in the window', 'total_tokens': sum(i.cost_tokens for i in touched), 'median_tokens_per_pr': _median(shares),
             'tokens_by_stage': {'available': False, 'runs': dict(sorted(stage_runs.items()))},
             'by_size': {name: {'prs': v['prs'], 'median_tokens': _median(v['median_tokens'])} for name, v in sorted(by_size.items())},
         },
         'quality': {'items_reviewed': reviewed, 'approved_first_review': statistics.mean(first_pass) if first_pass else None,
-                    'avg_returns_to_implement': statistics.mean(returns) if returns else None, 'verify_failures': verify_failures},
+                    'avg_returns_to_implement': statistics.mean(returns) if returns else None, 'verify_failures': verify_failures, 'changes_requested_after_verify': after_verify},
         'autonomy': {'merged_without_human_push': {'available': False, 'reason': 'needs the commit authors of the branch, which the Forja does not keep'},
                      'human_interventions_per_item': interventions / len(touched) if touched else None},
         'cycle_time': {'run_to_pr_median_s': _median(to_pr), 'run_to_first_review_median_s': _median(to_review), 'run_to_merge_median_s': _median(to_merge),
@@ -126,6 +139,11 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
 def json_verdict(event: WorkItemEvent) -> str:
     import json
     return json.loads(event.data_json).get('verdict', '')
+
+
+def json_stage(event: WorkItemEvent) -> str:
+    import json
+    return json.loads(event.data_json).get('stage', '')
 
 
 def json_kind(event: WorkItemEvent) -> str:
@@ -144,7 +162,8 @@ async def compute(db: AsyncSession, *, window: str | None = '7d', since: str | N
                   factory_version: str | None = None) -> dict:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     label, start, end = resolve_range(window, since, until, now)
-    query = select(WorkItem).where(WorkItem.created_at < end)
+    # An item untouched since the start has no event in the range; the load is bounded too.
+    query = select(WorkItem).where(WorkItem.created_at < end, WorkItem.updated_at >= start).order_by(WorkItem.created_at.desc()).limit(MAX_ITEMS)
     if factory_id:
         query = query.where(WorkItem.factory_id == factory_id)
     if factory_version:
