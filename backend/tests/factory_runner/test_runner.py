@@ -62,13 +62,15 @@ def test_a_missing_secret_stops_the_run_without_leaking_anything():
 
 def test_the_command_sees_the_secret_but_the_output_and_other_env_do_not(tmp_path, monkeypatch):
     monkeypatch.setenv('OPENAI_API_KEY', 'sk-sidecar-' + 'a' * 30)
+    _, repo = _repo(tmp_path, monkeypatch)
+    workspace = runner.create_run_workspace(repo, 'item-8', 'run-y')
     store = MemorySecrets()
     store.put('forja/npm-token', VALUE)
     code = "import os; v = os.environ['FORJA_SECRET_NPM_TOKEN']; print('len', len(v)); print('value', v); print('sidecar', os.environ.get('OPENAI_API_KEY'))"
-
-    async def go():
-        return await runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', code], tmp_path, store)
-    result = anyio.run(go)
+    try:
+        result = anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', code], workspace, store))
+    finally:
+        runner.remove_run_workspace(repo, workspace['id'])
     assert f'len {len(VALUE)}' in result['result'] and VALUE not in result['result'] and 'sidecar None' in result['result']
 
 
@@ -267,3 +269,93 @@ def test_only_the_marker_the_sandbox_writes_counts_as_a_cut():
     assert redactor.redact(fake, truncated=True) == fake  # not the sandbox marker: nothing to cut there
     real = 'out ' + VALUE[:9] + chr(10) + '…[truncated at 65536 bytes]'
     assert VALUE[:6] not in redactor.redact(real, truncated=True)
+
+
+# ---- references outside the namespace, redaction order, minimum length, run workspaces
+
+def test_a_reference_outside_the_forja_namespace_is_never_read_from_the_vault():
+    store = MemorySecrets()
+    store.put('openharness/provider-key', 'sk-provider-' + 'z' * 30)
+    definition = defn()
+    definition['agents']['builder']['secrets'] = ['openharness/provider-key']
+    with pytest.raises(runner.RunnerError) as raised:
+        runner.secrets_for(definition, 'builder', store)
+    assert 'zzzz' not in str(raised.value)
+
+
+def test_a_secret_that_contains_a_known_pattern_is_redacted_whole(tmp_path, monkeypatch):
+    git, repo = _repo(tmp_path, monkeypatch)
+    workspace = runner.create_run_workspace(repo, 'item-9', 'run-z')
+    value = 'pre-sk-' + 'a1b2' * 6 + '-post'
+    store = MemorySecrets()
+    store.put('forja/npm-token', value)
+    code = "import os; print(os.environ['FORJA_SECRET_NPM_TOKEN'])"
+    try:
+        result = anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', code], workspace, store))
+    finally:
+        runner.remove_run_workspace(repo, workspace['id'])
+    assert 'pre-' not in result['result'] and 'a1b2a1b2' not in result['result'] and '-post' not in result['result'] and 'redacted' in result['result']
+
+
+def test_the_run_must_happen_inside_a_run_workspace(tmp_path, monkeypatch):
+    git, repo = _repo(tmp_path, monkeypatch)
+    store = MemorySecrets()
+    store.put('forja/npm-token', VALUE)
+    with pytest.raises(runner.RunnerError):
+        anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', 'print(1)'], {'id': repo.name, 'path': str(repo)}, store))  # the main checkout
+    with pytest.raises(runner.RunnerError):
+        anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', 'print(1)'], {'id': 'x', 'path': str(tmp_path / '..')}, store))
+
+
+def test_a_secret_too_short_to_be_redacted_is_refused(client):
+    short = client.put('/factory/secrets/tiny', json={'value': 'abc'}, headers=HUMAN)
+    fine = client.put('/factory/secrets/ok', json={'value': 'abcd'}, headers=HUMAN)
+    assert short.status_code == 422 and fine.status_code == 200
+
+
+def test_the_workspace_must_be_the_root_of_that_run_and_not_another(tmp_path, monkeypatch):
+    _, repo = _repo(tmp_path, monkeypatch)
+    one = runner.create_run_workspace(repo, 'item-1', 'run-a')
+    two = runner.create_run_workspace(repo, 'item-1', 'run-b')
+    store = MemorySecrets()
+    store.put('forja/npm-token', VALUE)
+    from workspaces.config import Settings
+    root = Settings.from_env().managed_root
+    argv = [sys.executable, '-c', 'print(1)']
+    try:
+        ok = anyio.run(lambda: runner.run_as_agent(defn(), 'builder', argv, one, store))
+        assert ok['ok']
+        for bad in ({'id': one['id'], 'path': str(root)},  # the managed root itself
+                    {'id': one['id'], 'path': str(Path(one['path']) / 'sub')},  # a folder inside the worktree
+                    {'id': one['id'], 'path': two['path']},  # the worktree of another run under this run's id
+                    {'id': two['id'], 'path': one['path']}):
+            with pytest.raises(runner.RunnerError):
+                anyio.run(lambda bad=bad: runner.run_as_agent(defn(), 'builder', argv, bad, store))
+    finally:
+        runner.remove_run_workspace(repo, one['id'])
+        runner.remove_run_workspace(repo, two['id'])
+
+
+def test_builtin_commands_can_hand_back_raw_text(tmp_path):
+    import time
+    from sandbox import exec as sandbox_exec
+    folder = tmp_path / ('sk-' + 'a1b2' * 6)
+    folder.mkdir()
+    raw = anyio.run(lambda: sandbox_exec._run_builtin(['pwd'], folder, 5, time.monotonic(), redact_output=False))
+    assert 'a1b2a1b2' in raw['result'] and raw['redactions'] == 0
+    assert 'a1b2a1b2' not in anyio.run(lambda: sandbox_exec._run_builtin(['pwd'], folder, 5, time.monotonic()))['result']
+
+
+def test_a_failed_index_write_leaves_no_orphan_in_the_vault(client, monkeypatch):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def boom(self):
+        raise RuntimeError('disk full')
+    app.state.secrets_store.put('forja/kept', 'old-value-1234')
+    with monkeypatch.context() as patched:
+        patched.setattr(AsyncSession, 'commit', boom)
+        for name in ('fresh', 'kept'):
+            with pytest.raises(RuntimeError):
+                client.put(f'/factory/secrets/{name}', json={'value': 'brand-new-value'}, headers=HUMAN)
+    assert not app.state.secrets_store.exists('forja/fresh')  # a new secret that was not indexed is not left behind
+    assert app.state.secrets_store.get('forja/kept') == 'old-value-1234'  # a replacement that was not indexed puts the old value back
