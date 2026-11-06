@@ -9,7 +9,7 @@ import { create } from "zustand";
  * whole point of a desktop layout: the app comes back as the user left it.
  */
 
-export type RailSection = "chats" | "studio" | "providers";
+export type RailSection = "chats" | "studio" | "providers" | "forja";
 
 /** Studio is the only destination with its own right-hand inspector. */
 export const STUDIO_SECTION: RailSection = "studio";
@@ -32,7 +32,7 @@ const DEFAULTS: Persisted = {
   section: "chats",
 };
 
-const SECTIONS: RailSection[] = ["chats", "studio", "providers"];
+const SECTIONS: RailSection[] = ["chats", "studio", "providers", "forja"];
 
 export const LEFT_MIN = 188;
 export const LEFT_MAX = 380;

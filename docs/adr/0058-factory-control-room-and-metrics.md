@@ -32,3 +32,7 @@ Ver também a fonte dos conceitos no ADR 0053. O painel permite escolher o inter
 
 ## Escolhas conservadoras
 Métricas só leem; nenhum agente usa a métrica para mudar a fábrica por conta própria (auto-melhoria é o pacote C, sempre por PR). ROI em moeda fica fora (depende de preço que o app pode não conhecer).
+
+## Implementação (#261 — sala de controle)
+Destino **Forja** na barra (`Alt+4`), em `frontend/src/factory/`: quadro por colunas (cada cartão é um botão, sem arrastar), folha do item (especificação com a revisão a aprovar, texto original como dado, branches, runs, histórico e ações sem merge), caixa de entrada, configuração (versões, verificar/ativar/canary/promover/abortar/voltar, segredos só por nome, memória por agente) e métricas. A tabela de colunas é a do backend (`backend/factory/stages.py`); um teste do frontend compara os dois. Textos em pt-BR e en pelo catálogo, dois temas, axe e e2e em 320, 375 e 1280. Decisões usam `window.__OH_HUMAN__` (a credencial que o shell entrega); sem ela a tela explica em uma frase. Fora desta entrega: abrir uma run ao vivo a partir do cartão e a lista de automações (hoje `oharness forja automation`). Guia: `docs/forja/control-room.md`.
+
