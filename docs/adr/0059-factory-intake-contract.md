@@ -32,3 +32,7 @@ contrato (este) → GitHub (0060) → endpoints/webhook (0061) → automações 
 
 ## O que não foi verificado aqui
 Ambiente de nuvem sem rede e sem tokens: nada foi testado contra GitHub ou outro serviço real; os testes usam fixtures de payload, `httpx.MockTransport` e `MemoryFactory`.
+
+## Implementação do adaptador (#332)
+`factory.port_adapter:build_port()` (o alvo padrão do carregador do intake) implementa `FactoryPort` sobre `backend/factory/service.py`. A ponte entre a porta síncrona e o serviço assíncrono é uma thread com **loop próprio e engine próprio** sobre o mesmo banco (o sidecar mantém o seu), então nenhuma conexão é usada de dois loops e o chamador pode ser síncrono (CLI, servidor MCP) ou estar dentro de um loop em execução. O id da Forja vem do argumento, de `OH_FORJA_ID` ou é `default`. `instructions`, `token_ceiling`, `agent` e `automation` do draft vão para as colunas próprias do work item, separadas do texto de origem (não confiável); `comment()` grava um evento `note` com `actor.kind = source`; `claim(holder, worktree_ref)` guarda a referência na claim; `release abandoned` devolve o status anterior (nunca limpa um checkpoint humano) e `needs_review` leva a `review`, nunca a `done`; os erros do serviço viram `FactoryError` com o mesmo código estável; `metrics(window_days)` usa as métricas da Forja (#262).
+

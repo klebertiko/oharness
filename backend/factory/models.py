@@ -62,6 +62,7 @@ class ActionBody(BaseModel):
     question_id: str | None = None
     note: str | None = Field(default=None, max_length=4000)
     holder: str | None = Field(default=None, max_length=200)
+    worktree_ref: str | None = Field(default=None, max_length=500)
     summary: str | None = Field(default=None, max_length=4000)
     branch: str | None = Field(default=None, max_length=255)
     status: Literal['needs_review', 'abandoned'] | None = None
