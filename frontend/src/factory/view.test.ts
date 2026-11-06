@@ -5,7 +5,8 @@ import { FACTORY_COLUMNS, FACTORY_STAGES, FACTORY_STATUSES, type WorkItem } from
 import { actionsFor, BOARD_COLUMNS, groupByColumn, statusTone } from "./view";
 
 const backend = readFileSync(path.resolve(__dirname, "../../../backend/factory/stages.py"), "utf8");
-const tuple = (name: string) => [...(new RegExp(`${name} = \\(([^)]*)\\)`, "s").exec(backend)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+const PATTERNS = { STAGES: /STAGES = \(([^)]*)\)/, STATUSES: /STATUSES = \(([^)]*)\)/, COLUMNS: /COLUMNS = \(([^)]*)\)/ };
+const tuple = (name: keyof typeof PATTERNS) => [...(PATTERNS[name].exec(backend)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 
 const item = (over: Partial<WorkItem>): WorkItem =>
   ({ id: "1", title: "t", column: "new", stage: "intake", status: "queued", spec: { text: "", revision: 0, approved_revision: null }, ...over }) as WorkItem;
