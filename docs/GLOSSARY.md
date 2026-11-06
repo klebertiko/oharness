@@ -34,5 +34,9 @@ Two rules shape every word below:
 | **Design system** | The tokens, components and rules the interface follows: [`docs/design-system/`](design-system/README.md). |
 | **Nilo** | The OHarness assistant. |
 | **Subagent** | A task Nilo hands to a helper that works alongside it during one turn. The run detail shows Nilo and each subagent with its live state, and Cancel stops one subagent without ending the turn or the others. |
+| **Forja** | The local software factory: work items move through stages with human checkpoints, never merging on their own. A proper name, the same in every language. |
+| **Work item** | One task of the Forja, with the text it came from kept as untrusted data; it ends only with a merge someone observed or confirmed. |
+| **Foreman** | The Forja agent that plans the shortest path of stages; it proposes and the code checks. It is not Nilo. |
+| **Forja agent** | A long-lived actor of the Forja described in `.oharness/forja` (not the Agent node of a harness). |
 
 Code may keep older words (`example` in the `/bundles/examples` route, `copilot` in some module names); only text a person reads follows this glossary. Retired UI wording is mapped in the Copy standard of `CONTEXT.md`.

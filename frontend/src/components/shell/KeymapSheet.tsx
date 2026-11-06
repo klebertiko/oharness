@@ -34,6 +34,7 @@ const GROUPS: { title: MessageKey; rows: [string, MessageKey][] }[] = [
       ["Alt+1", "shell.rail.chats"],
       ["Alt+2", "shell.rail.studio"],
       ["Alt+3", "shell.rail.providers"],
+      ["Alt+4", "shell.rail.forja"],
     ],
   },
   {

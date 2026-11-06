@@ -68,7 +68,7 @@ def _item(client, n):
 
 def test_validate_reports_the_checkout_against_the_active_version(client, project, make_definition):
     first = client.post('/factory/definition/validate', json={'workspace': project}).json()
-    assert first['ok'] and first['active_hash'] is None and first['update_available'] is True
+    assert first['ok'] and first['active_hash'] is None and first['update_available'] is True and first['name'] == 'payments'
     assert _activate(client, project).status_code == 200
     again = client.post('/factory/definition/validate', json={'workspace': project}).json()
     assert again['active_hash'] == first['hash'] and again['update_available'] is False and again['changes'] == []

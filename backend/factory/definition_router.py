@@ -71,7 +71,7 @@ async def _load(db: AsyncSession, workspace: str) -> definition.Loaded:
 @router.post('/validate')
 async def validate(body: WorkspaceBody, db: AsyncSession = Depends(get_db)):
     loaded = await _load(db, body.workspace)
-    out: dict = {'ok': loaded.ok, 'hash': loaded.hash, 'errors': [i.as_dict() for i in loaded.issues if i.severity == 'error'],
+    out: dict = {'ok': loaded.ok, 'hash': loaded.hash, 'name': loaded.definition['name'] if loaded.definition else None, 'errors': [i.as_dict() for i in loaded.issues if i.severity == 'error'],
                  'warnings': [i.as_dict() for i in loaded.issues if i.severity == 'warning'], 'active_hash': None,
                  'update_available': False, 'changes': []}
     if loaded.definition is not None:

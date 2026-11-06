@@ -15,6 +15,7 @@ describe("shellNavCommands", () => {
       "go:chats",
       "go:studio",
       "go:providers",
+      "go:forja",
       "harness:library",
       "harness:on",
       "harness:off",

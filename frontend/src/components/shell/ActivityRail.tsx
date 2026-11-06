@@ -4,6 +4,7 @@ import { useT } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
 import {
   Boxes,
+  Hammer,
   Keyboard,
   MessagesSquare,
   Moon,
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { id: "chats", label: "shell.rail.chats", icon: MessagesSquare, chord: "Alt+1" },
   { id: "studio", label: "shell.rail.studio", icon: Boxes, chord: "Alt+2" },
   { id: "providers", label: "shell.rail.providers", icon: Plug, chord: "Alt+3" },
+  { id: "forja", label: "shell.rail.forja", icon: Hammer, chord: "Alt+4" },
 ];
 
 /** A hairline before the set-up-once group (Providers). Harnesses lives inside

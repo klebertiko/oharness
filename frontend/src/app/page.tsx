@@ -42,6 +42,7 @@ import { ValidateDock } from "@/components/studio/ValidateDock";
 import { AgentStage } from "@/components/agent/AgentStage";
 import { ThreadsSidebar } from "@/components/agent/ThreadsSidebar";
 import { ProvidersScreen } from "@/components/providers/ProvidersScreen";
+import { ForjaScreen } from "@/factory/ForjaScreen";
 
 import { useCanvasStore } from "@/store/canvasStore";
 import { useModeStore } from "@/store/modeStore";
@@ -293,7 +294,7 @@ export default function Home() {
   // The contextual left panel. Destinations that own the whole stage don't
   // get one.
   const left =
-    section === "providers"
+    section === "providers" || section === "forja"
       ? null
       : section === "studio"
         ? (studioView === "editor" ? <NodePalette /> : null)
@@ -330,6 +331,8 @@ export default function Home() {
   const stage =
     section === "providers" ? (
       <ProvidersScreen />
+    ) : section === "forja" ? (
+      <ForjaScreen />
     ) : isStudio ? (
       studioStage
     ) : (

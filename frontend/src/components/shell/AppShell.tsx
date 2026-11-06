@@ -90,6 +90,7 @@ const DESTINATION: Record<RailSection, MessageKey> = {
   chats: "shell.rail.chats",
   studio: "shell.title.studio",
   providers: "shell.rail.providers",
+  forja: "shell.rail.forja",
 };
 
 interface Props {
@@ -223,6 +224,7 @@ export function AppShell({
         ["Alt+1", "chats"],
         ["Alt+2", "studio"],
         ["Alt+3", "providers"],
+        ["Alt+4", "forja"],
       ];
       for (const [chord, target] of NAV_CHORDS) {
         if (matchesChord(e, chord, mac)) {

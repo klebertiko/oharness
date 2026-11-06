@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Boxes,
+  Hammer,
   MessagesSquare,
   Plug,
   Power,
@@ -45,6 +46,7 @@ export function shellNavCommands(): Command[] {
     { section: "chats", label: "shell.cmd.goChats", icon: MessagesSquare, chord: "Alt+1", keywords: "conversation thread agent" },
     { section: "studio", label: "shell.cmd.goStudio", icon: Boxes, chord: "Alt+2", keywords: "canvas design harness graph" },
     { section: "providers", label: "shell.cmd.goProviders", icon: Plug, chord: "Alt+3", keywords: "models keys anthropic openai ollama" },
+    { section: "forja", label: "shell.cmd.goForja", icon: Hammer, chord: "Alt+4", keywords: "factory work items inbox metrics agents secrets" },
   ];
 
   return [
