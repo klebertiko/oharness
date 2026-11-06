@@ -21,6 +21,7 @@ from routers.studio_assist import router as studio_assist_router
 from factory.definition_router import router as factory_definition_router
 from factory.memory_router import router as factory_memory_router
 from factory.router import router as factory_router
+from factory.secrets_router import router as factory_secrets_router
 from secret_store.factory import build_secrets_store
 from providers.store import load_all as load_provider_connections
 import models  # noqa: F401 — register ORM tables for create_all
@@ -124,6 +125,7 @@ app.include_router(flow_router)
 app.include_router(turn_diff_router)
 app.include_router(studio_copilot_router)
 app.include_router(studio_assist_router)
+app.include_router(factory_secrets_router)
 app.include_router(factory_router)
 app.include_router(factory_definition_router)
 app.include_router(factory_memory_router)
