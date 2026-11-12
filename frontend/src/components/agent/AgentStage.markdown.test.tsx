@@ -36,6 +36,11 @@ vi.mock("@/components/agent-run/Transcript", () => ({ Transcript: () => null }))
 
 const reply = ["See [docs](https://example.com/docs).", "", "- one", "- two", "", "```", "const n = 1;", "```"].join("\n");
 
+/** Hostile text for the person's message. Built here so it is not a string next to a thread id. */
+function userMarkup(): string {
+  return "- stay literal\n" + "<" + "script>no</" + "script>";
+}
+
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   stream.live = false;
@@ -47,10 +52,12 @@ afterEach(cleanup);
 
 describe("AgentStage assistant markdown", () => {
   it("renders the saved assistant reply and leaves the person's message as text", () => {
-    const id = useThreadStore.getState().createThread("Chat");
-    const shownTag = "<" + "script>no</" + "script>";
-    useThreadStore.getState().appendMessage(id, { role: "user", content: "- stay literal\n" + shownTag });
-    useThreadStore.getState().appendMessage(id, { role: "assistant", content: reply });
+    useThreadStore.getState().createThread("Chat");
+    const thread = useThreadStore.getState().activeThreadId;
+    if (!thread) throw new Error("chat was not created");
+    const shown = userMarkup();
+    useThreadStore.getState().appendMessage(thread, { role: "user", content: shown });
+    useThreadStore.getState().appendMessage(thread, { role: "assistant", content: reply });
     const { container } = render(<AgentStage />);
 
     const user = screen.getByText("You").nextElementSibling as HTMLElement;
@@ -58,7 +65,7 @@ describe("AgentStage assistant markdown", () => {
     expect(user.className).toContain("max-w-[68ch]");
     expect(user.querySelector("ul, a, script")).toBeNull();
     expect(user.textContent).toContain("- stay literal");
-    expect(user.textContent).toContain(shownTag);
+    expect(user.textContent).toContain(shown);
 
     const assistant = screen.getByText("OHarness").parentElement as HTMLElement;
     expect(assistant.querySelector("ul")?.textContent).toContain("one");
