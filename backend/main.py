@@ -25,6 +25,9 @@ from factory.memory_router import router as factory_memory_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
 from secret_store.factory import build_secrets_store
+from factory.auth import load_human_credential
+
+load_human_credential()  # the human credential leaves the environment before anything can spawn a child
 from providers.store import load_all as load_provider_connections
 import models  # noqa: F401 — register ORM tables for create_all
 
