@@ -57,14 +57,15 @@ def test_changing_only_the_words_changes_no_capability():
     assert agents.capabilities(more, 'builder') != before  # a configuration change is what adds access
 
 
-def test_skills_have_three_origins_and_extend_the_instructions():
+def test_skills_have_four_origins_and_extend_the_instructions():
     definition = defn()
     definition['agents']['builder']['skills'] = ['lint', 'own', EMBEDDED_SKILLS[0]]
     definition['agents']['builder']['localSkills'] = {'own': {'text': 'Only for the builder.'}}
     found = agents.skills_for(definition, 'builder')
     assert [(s['name'], s['origin']) for s in found] == [('lint', 'global'), ('own', 'agent'), (EMBEDDED_SKILLS[0], 'builtin')]
     assert all(s['text'] for s in found)
-    assert [s['name'] for s in agents.skills_for(definition, 'foreman')] == ['reply-to-origin']  # a role skill, built into the app
+    foreman_skills = agents.skills_for(definition, 'foreman')
+    assert [(s['name'], s['origin']) for s in foreman_skills] == [('reply-to-origin', 'role')]  # a role skill, ahead of the ones the agent names
     assert agents.skills_for(definition, 'helper') == []  # custom agents bring none of the built-in ones
 
 
@@ -167,6 +168,28 @@ def test_init_into_a_file_is_a_refusal_not_a_traceback(tmp_path, capsys):
     blocker.write_text('x', encoding='utf-8')
     assert main(['forja', 'init', str(blocker), '--name', 'payments', '--model', 'openai/gpt-4o']) == 1
     assert 'refused' in capsys.readouterr().err
+
+
+def test_a_failed_write_leaves_the_folder_empty_so_the_next_run_can_finish(tmp_path, monkeypatch):
+    from pathlib import Path
+    files = agents.starter_files('payments', model='openai/gpt-4o', roles=['triage'])
+    folder = tmp_path / 'forja'
+    folder.mkdir()  # empty, which is a legal destination; a partial write used to make the next run refuse it
+    original = Path.write_text
+
+    def fail_on_triage(self, text, *args, **kwargs):
+        if self.name == 'agent.md' and 'triage' in self.parts:
+            raise OSError('disk full')
+        return original(self, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'write_text', fail_on_triage)
+    with pytest.raises(OSError, match='disk full'):
+        agents.write_starter(folder, files)
+    assert list(folder.iterdir()) == []
+    assert list(tmp_path.glob('.forja.*')) == []  # the side folder is not left behind either
+    monkeypatch.setattr(Path, 'write_text', original)
+    agents.write_starter(folder, files)
+    assert {path.relative_to(folder).as_posix() for path in folder.rglob('*') if path.is_file()} == set(files)
 
 
 def test_names_that_look_like_yaml_values_are_written_as_text(tmp_path):
