@@ -15,6 +15,7 @@ import { useCanvasStore } from "@/store/canvasStore";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { useCopilotStore } from "@/store/copilotStore";
+import { useLocaleStore } from "@/i18n/store";
 import { CopilotPanel } from "./CopilotPanel";
 
 const mockPlan = vi.mocked(planGraphEdit);
@@ -125,6 +126,22 @@ describe("CopilotPanel with no provider", () => {
     renderPanel();
     await userEvent.setup().click(screen.getByRole("button", { name: "Connect a provider to send" }));
     expect(useShellStore.getState().section).toBe("providers");
+  });
+
+  it("says the empty-state and the Providers link from the catalogue, in pt-BR too (#395)", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    try {
+      useProviderStore.setState({ connections: [] });
+      useCopilotStore.setState({
+        turns: [{ id: "t1", role: "assistant", text: "", error: { text: "Sem verba.", link: "providers" } }],
+      });
+      renderPanel();
+      expect(screen.getByRole("button", { name: "Conecte um provedor para enviar" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Abrir Providers" })).toBeTruthy();
+      expect(screen.queryByText("Open Providers")).toBeNull();
+    } finally {
+      useLocaleStore.setState({ locale: "en" });
+    }
   });
 
   it("Use offline draft sends the typed prompt in mock mode and tags the answer", async () => {
