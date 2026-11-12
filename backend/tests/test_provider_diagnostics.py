@@ -54,7 +54,7 @@ def client():
 def _runner(logged_in: bool):
     async def run(argv, *, cwd, env, timeout, stdin=None):
         if argv[1] == "--version":
-            return CliRunResult(returncode=0, stdout=f"2.1.4 (Claude Code) {EMAIL}\n" if False else "2.1.4\n", stderr="")
+            return CliRunResult(returncode=0, stdout=f"2.1.4 (Claude Code) {EMAIL}\n", stderr="")
         if logged_in:
             return CliRunResult(returncode=0, stdout=CLAUDE_OK, stderr="")
         return CliRunResult(returncode=0, stdout=json.dumps({"loggedIn": False, "email": EMAIL}), stderr=f"Not logged in {EMAIL}")
@@ -66,7 +66,7 @@ def test_report_shape_and_no_canary_anywhere(client: TestClient) -> None:
     app.state.cli_runner = _runner(True)
     r = client.get("/providers/diagnostics")
     assert r.status_code == 200
-    for canary in (KEY, USER, EMAIL):
+    for canary in (KEY, USER, EMAIL, "oharness/openrouter"):
         assert canary not in r.text, canary
     body = r.json()
     assert set(body["app"]) == {"version", "os"} and body["app"]["version"]
@@ -79,7 +79,7 @@ def test_report_shape_and_no_canary_anywhere(client: TestClient) -> None:
     cli = rows["anthropic"]
     assert cli["credentialKind"] == "cli" and cli["credentialOrigin"] == "cli"
     assert cli["state"] == "ready" and cli["failureClass"] is None
-    assert cli["cli"]["version"] == "2.1.4"
+    assert cli["cli"]["version"] is None  # the probe printed an e-mail on the version line: clamped away, not echoed
     assert cli["cli"]["path"].startswith("~/") and USER not in cli["cli"]["path"]
     assert rows["ollama"]["credentialKind"] == "none" and rows["ollama"]["credentialOrigin"] == "none"
 
@@ -107,3 +107,23 @@ def test_mask_home_handles_windows_paths(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("C:/Users/" + USER)))
     assert mask_home(rf"C:\Users\{USER}\AppData\claude.exe") == "~/AppData/claude.exe"
     assert mask_home("/usr/local/bin/claude") == "/usr/local/bin/claude"
+
+
+def test_endpoint_keeps_ipv6_brackets_and_drops_non_http_schemes(client: TestClient) -> None:
+    app.state.cli_runner = _runner(True)
+    conns = app.state.provider_connections
+    conns["ollama"]["endpoint"] = "http://[::1]:8000/v1"
+    conns["openrouter"]["endpoint"] = f"ftp://u:{KEY}@openrouter.ai/api/v1"
+    r = client.get("/providers/diagnostics")
+    rows = {c["id"]: c for c in r.json()["connections"]}
+    assert rows["ollama"]["endpoint"] == "http://[::1]:8000/v1"
+    assert rows["openrouter"]["endpoint"] == ""
+    assert KEY not in r.text
+
+
+def test_mask_home_masks_other_profiles_outside_the_home() -> None:
+    from providers.diagnostics import mask_home
+
+    assert "otheruser" not in mask_home(r"D:\Users\otheruser\bin\claude.exe")
+    assert "otheruser" not in mask_home("/home/otheruser/bin/claude")
+    assert mask_home("/home/otheruser/bin/claude").endswith("/bin/claude")

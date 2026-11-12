@@ -11,11 +11,10 @@ No network call is made; CLI state comes from the same status-only probes as
 from __future__ import annotations
 
 import platform
-from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlsplit
 
 from adapters.catalog import get_provider
+from providers.display import mask_home, safe_endpoint
 from runtime.cli_detect import DETECTED, detect_clis
 
 _CLI_FAILURE = {
@@ -24,31 +23,6 @@ _CLI_FAILURE = {
     "unavailable": "cli-unavailable",
     "error": "cli-error",
 }
-
-
-def mask_home(path: str) -> str:
-    """Replace the user's home directory prefix with ``~`` (either slash style)."""
-    home = str(Path.home())
-    norm = path.replace("\\", "/")
-    home_norm = home.replace("\\", "/").rstrip("/")
-    if home_norm and norm.lower().startswith(home_norm.lower() + "/"):
-        return "~" + norm[len(home_norm):]
-    return norm
-
-
-def safe_endpoint(endpoint: str) -> str:
-    """scheme://host[:port]/path — no userinfo, query or fragment."""
-    if not endpoint:
-        return ""
-    try:
-        parts = urlsplit(endpoint)
-        host = parts.hostname or ""
-        port = f":{parts.port}" if parts.port else ""
-    except ValueError:
-        return ""
-    if not parts.scheme or not host:
-        return ""
-    return f"{parts.scheme}://{host}{port}{parts.path}"
 
 
 def _cli_path(cli: str, runner: Callable[..., Any]) -> str | None:

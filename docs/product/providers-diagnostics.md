@@ -1,6 +1,6 @@
 # Diagnóstico de Providers — `GET /providers/diagnostics` (R-PRV-07, #390)
 
-Relatório estilo doctor, sem segredos, sem rede. A tela e a CLI leem este JSON.
+Relatório estilo doctor, sem segredos, sem rede. Hoje só o endpoint HTTP o serve. Follow-up: ligar a tela e a CLI `oharness providers` a este JSON (ainda não existe; a CLI hoje lê direto o diretório de dados).
 
 ```json
 {
