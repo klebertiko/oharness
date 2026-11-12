@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { FAULT_CLASSES, type ProviderFaultClass } from "@/components/agent/chatProvider";
+import { FAULT_CLASSES, faultFromRunClass, type ProviderFaultClass } from "@/components/agent/chatProvider";
 import { en } from "@/i18n/messages.en";
 import { ptBR } from "@/i18n/messages.pt-BR";
 import { useLocaleStore } from "@/i18n/store";
@@ -81,5 +81,16 @@ describe("the empty states", () => {
     expect(missingProviderAction([conn({})], "gone")?.text).toBe(t(EMPTY_TABLE["pick-provider"].text));
     const cursor = conn({ id: "cu", provider: "cursor", label: "Cursor", enabled: true, health: "live" });
     expect(missingProviderAction([cursor], "cu")?.text).toBe(t(EMPTY_TABLE["agent-only"].text));
+  });
+});
+
+describe("faultFromRunClass by connection kind (subscription never gets a key action)", () => {
+  it("a subscription connection ignores key-rejected; an API-key connection ignores cli-* classes", () => {
+    expect(faultFromRunClass("key-rejected", "cli")).toBeNull();
+    expect(faultFromRunClass("cli-signin", "cli")).toBe("cli-signin");
+    expect(faultFromRunClass("cli-timeout", "cli")).toBe("cli-timeout");
+    expect(faultFromRunClass("key-rejected", "api-key")).toBe("key-rejected");
+    expect(faultFromRunClass("cli-signin", "api-key")).toBeNull();
+    expect(faultFromRunClass("nonsense", "cli")).toBeNull();
   });
 });

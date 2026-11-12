@@ -498,6 +498,7 @@ export const ptBR: Record<MessageKey, string> = {
   "empty.noConnection": "Conecte um provedor para enviar",
   "empty.pickProvider": "Escolha um provedor para enviar",
   "empty.openProviders": "Abrir Providers · {label}",
+  "empty.openProvidersLink": "Abrir Providers",
   "empty.agentOnly": "Esta conexão só executa agentes. Escolha outro provedor para conversar.",
 
   "step.replaceKey": "Trocar a chave",

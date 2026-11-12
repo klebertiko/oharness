@@ -496,6 +496,7 @@ export const en = {
   "empty.noConnection": "Connect a provider to send",
   "empty.pickProvider": "Pick a provider to send",
   "empty.openProviders": "Open Providers · {label}",
+  "empty.openProvidersLink": "Open Providers",
   "empty.agentOnly": "This connection runs agents only. Pick another provider to chat.",
 
   "step.replaceKey": "Replace key",

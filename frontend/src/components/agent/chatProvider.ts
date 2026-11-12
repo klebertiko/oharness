@@ -118,9 +118,14 @@ export const FAULT_CLASSES = [
 ] as const;
 export type ProviderFaultClass = (typeof FAULT_CLASSES)[number];
 
-/** A closed class the sidecar reported for a failed run (`provider_failure`), or null for anything else. */
-export function faultFromRunClass(value: unknown): ProviderFaultClass | null {
-  return typeof value === "string" && (FAULT_CLASSES as readonly string[]).includes(value) ? (value as ProviderFaultClass) : null;
+/** A closed class the sidecar reported for a failed run (`provider_failure`), or null for anything else.
+    The class must fit the connection's kind: a subscription (`cli`) connection never gets a key action,
+    and an API-key connection never gets a CLI one. */
+export function faultFromRunClass(value: unknown, kind: "api-key" | "cli" | "none"): ProviderFaultClass | null {
+  if (typeof value !== "string" || !(FAULT_CLASSES as readonly string[]).includes(value)) return null;
+  if (kind === "cli" && value === "key-rejected") return null;
+  if (kind !== "cli" && value.startsWith("cli-")) return null;
+  return value as ProviderFaultClass;
 }
 
 const FAULT_BY_STATUS: Record<number, ProviderFaultClass> = {
