@@ -22,6 +22,7 @@ import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
 import { WorktreeToggle } from "@/components/agent/WorktreeToggle";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
+import { EMPTY_TABLE } from "@/components/providers/stateTable";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
@@ -439,7 +440,7 @@ export function AgentStage() {
                 </>
               ) : (
                 <Button variant="ghost" size="sm" className="-ml-2 text-signal-text" onClick={() => requestProviderSetup(missing?.id ?? null)}>
-                  {missing?.text ?? "Connect a provider to send"}
+                  {missing?.text ?? t(EMPTY_TABLE["no-connection"].text)}
                 </Button>
               )}
             </p>

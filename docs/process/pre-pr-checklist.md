@@ -1,5 +1,7 @@
 # Checklist antes de pedir merge (obrigatório)
 
+**DoD completa (gates, QA/SEC, SHA na issue):** [`dor-dod.md`](dor-dod.md). Este arquivo cobre qualidade e higiene pré-push.
+
 Cada item abaixo já derrubou PR nosso. Não repita.
 
 ## Fluxo de PR
