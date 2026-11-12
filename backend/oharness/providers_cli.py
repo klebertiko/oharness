@@ -22,6 +22,8 @@ def add_parser(sub) -> None:
     listing = actions.add_parser("list", help="the stored connections (never their secrets)")
     listing.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
+    dump = actions.add_parser("dump-config", help="the effective configuration and where each field came from: default, app (stored connection) or env (this process's environment)")
+    dump.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
     test.add_argument("id", help="a connection id from `providers list`")
     test.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
@@ -142,9 +144,77 @@ async def _test(connection_id: str, as_json: bool) -> int:
     return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
+ENV_NAMES = ("OH_DATA_DIR", "OH_SECRETS", "OH_SECRETS_DIR", "DATABASE_URL")  # the only variables dump-config ever reads: never a credential, never a subprocess's environment (I5)
+
+
+def _field(value, origin: str) -> dict:
+    return {"value": value, "origin": origin}
+
+
+def _environment(given: dict) -> dict:
+    """Where the app's data lives, from this process (which stands in for the sidecar). `given` is what the environment held before the loader filled in the sidecar's own defaults."""
+    import os
+
+    from data_dir import resolve_data_dir
+    from secret_store.factory import _default_file_root
+
+    origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
+    backend = (os.environ.get("OH_SECRETS") or "memory").strip().lower()
+    env = {
+        "dataDir": _field(_shown_dir(resolve_data_dir(create=False), False), origin("OH_DATA_DIR")),
+        "secretsBackend": _field(backend, origin("OH_SECRETS")),
+        "secretsDir": _field(_shown_dir(_default_file_root(), False) if backend == "file" else None, origin("OH_SECRETS_DIR")),
+        "database": _field("other" if not (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "sqlite", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
+    }
+    return env
+
+
+def _connection_config(row: dict) -> dict:
+    from adapters.catalog import get_provider
+
+    spec = get_provider(row["provider"])
+    stored_endpoint = _endpoint(row.get("endpoint", ""))
+    default_endpoint = _endpoint((spec or {}).get("endpoint", {}).get("default", ""))
+    return {
+        "id": row["id"],
+        "provider": row["provider"],
+        "fields": {
+            "label": _field(row["label"], "app"),
+            "residence": _field(row["residence"], "app"),
+            "enabled": _field(bool(row.get("enabled", False)), "app"),
+            "endpoint": _field(stored_endpoint, "app") if stored_endpoint else _field(default_endpoint, "default"),
+            "defaultModel": _field(row["defaultModel"], "app") if row.get("defaultModel") else _field("", "default"),
+            "credentialKind": _field(_kind(row["provider"]), "default"),  # the catalog decides it, not the user
+            "secretStored": _field(bool(row.get("secretRef")), "app"),
+        },
+    }
+
+
+async def _dump_config(as_json: bool) -> int:
+    """Every connection's effective fields and their origin, plus the environment that locates the data. Never a secret."""
+    import os
+
+    given = {name: os.environ.get(name) for name in ENV_NAMES}  # before the loader applies the sidecar's defaults
+    connections, _ = await _load_runtime()
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given),
+           "connections": [_connection_config(row) for row in connections.values()]}
+    if as_json:
+        print(json.dumps(doc, ensure_ascii=False))
+        return EXIT_OK
+    for name, item in doc["environment"].items():
+        print(f"{name}	{item['value'] if item['value'] is not None else '-'}	({item['origin']})")
+    for conn in doc["connections"]:
+        print(f"{conn['id']} ({conn['provider']})")
+        for name, item in conn["fields"].items():
+            print(f"  {name}	{item['value']!s}	({item['origin']})")
+    return EXIT_OK
+
+
 def run(args) -> int:
     import asyncio
 
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
+    if args.providers_cmd == "dump-config":
+        return asyncio.run(_dump_config(args.json))
     return asyncio.run(_test(args.id, args.json))

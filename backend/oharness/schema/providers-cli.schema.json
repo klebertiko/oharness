@@ -5,9 +5,65 @@
   "description": "The document `oharness providers list --json` and `oharness providers test <id> --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
   "oneOf": [
     { "$ref": "#/$defs/list" },
-    { "$ref": "#/$defs/test" }
+    { "$ref": "#/$defs/test" },
+    { "$ref": "#/$defs/dumpConfig" }
   ],
   "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["value", "origin"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": ["string", "boolean", "null"] },
+        "origin": { "enum": ["default", "app", "env"], "description": "default: built in (the catalog, the platform); app: a connection the app stored; env: this process's environment. Never the environment of a CLI subprocess." }
+      }
+    },
+    "dumpConfig": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "environment", "connections"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "dump-config" },
+        "environment": {
+          "type": "object",
+          "required": ["dataDir", "secretsBackend", "secretsDir", "database"],
+          "additionalProperties": false,
+          "properties": {
+            "dataDir": { "$ref": "#/$defs/field" },
+            "secretsBackend": { "$ref": "#/$defs/field" },
+            "secretsDir": { "$ref": "#/$defs/field" },
+            "database": { "$ref": "#/$defs/field" }
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "fields"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "provider": { "type": "string" },
+              "fields": {
+                "type": "object",
+                "required": ["label", "residence", "enabled", "endpoint", "defaultModel", "credentialKind", "secretStored"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "$ref": "#/$defs/field" },
+                  "residence": { "$ref": "#/$defs/field" },
+                  "enabled": { "$ref": "#/$defs/field" },
+                  "endpoint": { "$ref": "#/$defs/field" },
+                  "defaultModel": { "$ref": "#/$defs/field" },
+                  "credentialKind": { "$ref": "#/$defs/field" },
+                  "secretStored": { "$ref": "#/$defs/field" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "list": {
       "type": "object",
       "required": ["schemaVersion", "command", "dataDir", "connections"],
