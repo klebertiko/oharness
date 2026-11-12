@@ -42,3 +42,7 @@ dd4e1864fcd50cd81f3b0d193535d08406cd9ffb:.harness/sprint-2026-09-18/story-CHAT-T
 50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_live_api.py:generic-api-key:52
 50c77979834276cfd7f9e50105bee2fe8478afa0:backend/tests/test_studio_llm.py:generic-api-key:51
 dbb2cd65d9c80c916dc1aa48b11b5cf254a79ac5:frontend/src/components/sidebar/FieldAssist.test.tsx:generic-api-key:71
+
+# Same false positive as the block above: a new "secretRef": "oharness/anthropic"
+# fixture in the subscription-contract test. It is a pointer name, not a credential.
+2743264c47d85f0b468096a97593829d1b0b5917:backend/tests/test_subscription_contract.py:generic-api-key:142
