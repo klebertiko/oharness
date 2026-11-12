@@ -63,6 +63,12 @@ class ClaudeCliAdapter(AgentAdapter):
         self._runner = runner
         self._timeout = timeout
 
+    def cli_argv_prefix(self) -> list[str] | None:
+        """Argv prefix that launches this CLI, or None when it is not installed.
+        Detection (``runtime/cli_detect.py``) appends ``--version`` to it."""
+        path = find_cli(CLI_NAME)
+        return [path] if path else None
+
     def _binary(self) -> str:
         path = find_cli(CLI_NAME)
         if not path:
@@ -154,6 +160,7 @@ class ClaudeCliAdapter(AgentAdapter):
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_installed",
                 detail="claude CLI not found on PATH. Install Claude Code, then run `claude login`.",
             )
 
@@ -163,23 +170,25 @@ class ClaudeCliAdapter(AgentAdapter):
         result = await self._runner([path, "auth", "status"], cwd=cwd, env=env, timeout=15)
 
         if result.timed_out:
-            return ProbeResult(ok=False, health="fault", detail="claude CLI did not respond to `claude auth status`.")
+            return ProbeResult(ok=False, health="fault", code="timeout", detail="claude CLI did not respond to `claude auth status`.")
         if result.returncode != 0:
             return ProbeResult(
                 ok=False,
                 health="fault",
+                code="error",
                 detail=_last_line(result.stderr) or f"claude auth status exited {result.returncode}.",
             )
 
         try:
             status = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return ProbeResult(ok=False, health="fault", detail="claude auth status returned unreadable output.")
+            return ProbeResult(ok=False, health="fault", code="error", detail="claude auth status returned unreadable output.")
 
         if not status.get("loggedIn"):
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_logged_in",
                 detail="claude CLI is installed but not logged in. Run `claude login`.",
             )
 

@@ -115,6 +115,12 @@ class CodexCliAdapter(AgentAdapter):
         self._runner = runner
         self._timeout = timeout
 
+    def cli_argv_prefix(self) -> list[str] | None:
+        """Argv prefix that launches this CLI, or None when it is not installed.
+        Detection (``runtime/cli_detect.py``) appends ``--version`` to it."""
+        path = find_cli(CLI_NAME)
+        return [path] if path else None
+
     def _binary(self) -> str:
         path = find_cli(CLI_NAME)
         if not path:
@@ -218,13 +224,14 @@ class CodexCliAdapter(AgentAdapter):
     async def probe(self, config: AdapterConfig) -> ProbeResult:
         gate = self._non_windows_gate()
         if gate:
-            return ProbeResult(ok=False, health="setup", detail=gate)
+            return ProbeResult(ok=False, health="setup", code="platform_unsupported", detail=gate)
 
         path = find_cli(CLI_NAME)
         if not path:
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_installed",
                 detail="codex CLI not found on PATH. Install it, then run `codex login`.",
             )
 
@@ -237,11 +244,12 @@ class CodexCliAdapter(AgentAdapter):
         result = await self._runner([path, "login", "status"], cwd=cwd, env=env, timeout=15)
 
         if result.timed_out:
-            return ProbeResult(ok=False, health="fault", detail="codex CLI did not respond to `codex login status`.")
+            return ProbeResult(ok=False, health="fault", code="timeout", detail="codex CLI did not respond to `codex login status`.")
         if result.returncode != 0:
             return ProbeResult(
                 ok=False,
                 health="fault",
+                code="error",
                 detail=_last_line(result.stderr) or f"codex login status exited {result.returncode}.",
             )
 
@@ -257,6 +265,7 @@ class CodexCliAdapter(AgentAdapter):
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_logged_in",
                 detail="codex CLI is installed but not logged in. Run `codex login`.",
             )
 
