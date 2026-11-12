@@ -1,0 +1,135 @@
+"""`oharness providers list|test`: the Provider connections stored in the data directory, from a terminal (R-PRV-17).
+
+`list` reads the same connections the desktop app shows (one data directory, `data_dir.resolve_data_dir`). `test <id>` runs the
+same probe the app's Test button runs (`routers.providers.probe_connection`): a status command for a subscription CLI, the
+vendor's no-cost model listing for an API key. Neither prints a secret, a secret reference or raw CLI output: a probe that
+crashes is reported as `fault`. A probe's own words (an account e-mail, a CLI's stderr) are never printed: the output is its state,
+latency, model count and one fixed sentence per state (en or pt-BR, from `OHARNESS_LANG`/`LANG`). `--json` follows
+`schema/providers-cli.schema.json` (versioned, validated by tests).
+"""
+from __future__ import annotations
+
+import json
+import sys
+
+SCHEMA_VERSION = 1
+EXIT_OK, EXIT_NOT_LIVE, EXIT_USAGE = 0, 1, 2
+
+
+def add_parser(sub) -> None:
+    providers = sub.add_parser("providers", help="list and test the Provider connections of the OHarness data directory")
+    actions = providers.add_subparsers(dest="providers_cmd", required=True)
+    listing = actions.add_parser("list", help="the stored connections (never their secrets)")
+    listing.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
+    test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
+    test.add_argument("id", help="a connection id from `providers list`")
+    test.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
+
+
+async def _load_runtime():
+    """The stored connections and the secrets store, as the sidecar loads them at startup."""
+    from . import headless
+
+    headless._backend_on_path()
+    from database import init_db
+
+    await init_db()  # a first-ever run has no tables yet
+    return await headless.load_runtime()
+
+
+def _kind(provider: str) -> str:
+    from adapters.catalog import get_provider
+
+    spec = get_provider(provider)
+    return spec["credential"]["kind"] if spec else "unknown"
+
+
+def _public(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "provider": row["provider"],
+        "label": row["label"],
+        "residence": row["residence"],
+        "endpoint": row.get("endpoint", ""),
+        "enabled": bool(row.get("enabled", False)),
+        "credentialKind": _kind(row["provider"]),
+        "hasSecret": bool(row.get("secretRef")),
+        "defaultModel": row.get("defaultModel", ""),
+    }
+
+
+async def _list(as_json: bool) -> int:
+    connections, _ = await _load_runtime()
+    from data_dir import resolve_data_dir
+
+    rows = [_public(row) for row in connections.values()]
+    if as_json:
+        print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "list", "dataDir": str(resolve_data_dir(create=False)), "connections": rows}, ensure_ascii=False))
+        return EXIT_OK
+    if not rows:
+        print("no connections yet: add one in the OHarness app (Providers)")
+        return EXIT_OK
+    for row in rows:
+        keyed = "key stored" if row["hasSecret"] else "-"
+        state = "enabled" if row["enabled"] else "disabled"
+        print(f"{row['id']}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{row['label']}")
+    return EXIT_OK
+
+
+MESSAGES = {  # one fixed sentence per state: what a probe says (an account e-mail, a CLI's own stderr) is never printed
+    "en": {
+        "live": "The connection is live.",
+        "setup": "Setup is needed: install the provider's CLI or sign in, then test again.",
+        "degraded": "The connection answers but is degraded.",
+        "fault": "The connection is not working. Check this provider in OHarness.",
+    },
+    "pt-BR": {
+        "live": "A conexão está ativa.",
+        "setup": "Falta configurar: instale a CLI do provedor ou entre na conta e teste de novo.",
+        "degraded": "A conexão responde, mas está degradada.",
+        "fault": "A conexão não está funcionando. Confira este provedor no OHarness.",
+    },
+}
+
+
+def _language() -> str:
+    import os
+
+    raw = os.environ.get("OHARNESS_LANG") or os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
+    return "pt-BR" if raw.lower().startswith("pt") else "en"
+
+
+async def _probe(connection_id: str, connections: dict, store) -> dict:
+    """Run the app's probe and keep only its state, its latency and how many models it listed."""
+    from routers.providers import probe_connection
+
+    try:
+        result = await probe_connection(connection_id, connections=connections, store=store)
+    except Exception:  # never echo the exception: it can hold CLI stderr, a prompt or a credential
+        return {"ok": False, "health": "fault", "latencyMs": 0, "modelCount": 0}
+    health = result["health"] if result["health"] in MESSAGES["en"] else "fault"
+    return {"ok": health == "live" and bool(result["ok"]), "health": health, "latencyMs": max(0, int(result["latencyMs"])), "modelCount": len(result["models"])}
+
+
+async def _test(connection_id: str, as_json: bool) -> int:
+    connections, store = await _load_runtime()
+    row = connections.get(connection_id)
+    if row is None:
+        print(f"no connection {connection_id!r}: see `oharness providers list`", file=sys.stderr)
+        return EXIT_USAGE
+    outcome = await _probe(connection_id, connections, store)
+    message = MESSAGES[_language()][outcome["health"]]
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "test", "id": row["id"], "provider": row["provider"], **outcome, "message": message}
+    if as_json:
+        print(json.dumps(doc, ensure_ascii=False))
+    else:
+        print(f"{row['id']}: {outcome['health']} - {message}")
+    return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
+
+
+def run(args) -> int:
+    import asyncio
+
+    if args.providers_cmd == "list":
+        return asyncio.run(_list(args.json))
+    return asyncio.run(_test(args.id, args.json))
