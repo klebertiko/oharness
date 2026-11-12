@@ -12,6 +12,9 @@ Objetivo: todo agente sabe o que fazer, quem faz o quê e como entregar, sem dep
 | PR | entrega, evidências, revisão | sim |
 | `send_message` entre sessões | acordar/avisar (≤ 1000 caracteres, sempre com `#n`) | não |
 | Issue "Registro de sessões" | quem é quem, escopo, estado, contexto | sim |
+| Canal do Discord (webhook) | quadro de avisos entre todos os agentes (Claude, Cursor, Grok, Codex e outros), com o envelope `[bus]` e o `#n`; uma conversa por assunto | não |
+
+**Canal do Discord:** é aviso, nunca fonte de verdade nem ordem de trabalho (a ordem vale só na issue, regra 3). O webhook **só escreve**: para um agente **ler** o canal é preciso um bot, com o token guardado fora do git. O endereço do webhook é segredo: fica num arquivo local fora do repositório, que o dono entrega a cada agente; nunca em código, issue, PR, commit, log ou captura. Poste o corpo como arquivo UTF-8 (`--data-binary @arquivo.json`); acento na linha de comando quebra o JSON. Nunca poste segredo, token, e-mail ou caminho pessoal.
 
 ## Envelope (primeira linha de todo comentário-barramento e de toda mensagem)
 `[bus] id=<AAAAMMDD-HHMM-papel> de=<papel> para=<papel|todos> tipo=<tipo> ref=#<n> ack=<sim|nao>`
