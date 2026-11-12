@@ -72,6 +72,22 @@ def test_the_default_directory_is_never_a_link_that_leads_elsewhere(tmp_path: Pa
     assert list(elsewhere.iterdir()) == []
 
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="junctions are a Windows thing")
+def test_the_default_directory_is_never_a_junction_that_leads_elsewhere(tmp_path: Path) -> None:
+    """A junction needs no privilege to create (a symlink does), so this is the planted-link case that can happen to a normal user."""
+    import _winapi
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    base = tmp_path / "local"
+    base.mkdir()
+    _winapi.CreateJunction(str(elsewhere), str(base / IDENTIFIER))
+    assert (base / IDENTIFIER).is_junction() and not (base / IDENTIFIER).is_symlink()  # `is_symlink` alone would let it through
+    with pytest.raises(data_dir.DataDirError, match="link"):
+        data_dir.resolve_data_dir(env={"LOCALAPPDATA": str(base)}, system="Windows")
+    assert list(elsewhere.iterdir()) == []
+
+
 def test_an_explicit_override_may_be_a_link_the_person_chose(tmp_path: Path) -> None:
     real = tmp_path / "real"
     real.mkdir()
@@ -98,9 +114,11 @@ def test_an_existing_directory_is_left_as_it_is(monkeypatch, tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(platform.system() == "Windows", reason="POSIX mode bits")
-def test_posix_creation_is_0700_from_the_first_instant(tmp_path: Path) -> None:
+def test_posix_creation_is_0700_from_the_first_instant(monkeypatch, tmp_path: Path) -> None:
+    """The mode is checked with the later chmod switched off: the directory must already be 0700 the instant `mkdir` returns."""
+    monkeypatch.setattr(sidecar_token, "restrict_to_current_user", lambda path: True)
     target = tmp_path / "private"
-    old = os.umask(0)  # even a permissive umask: the directory is born 0700, there is no window to chmod in
+    old = os.umask(0)  # a permissive umask would leave 0777 behind if the mode were not passed to mkdir
     try:
         data_dir.resolve_data_dir(env={"OH_DATA_DIR": str(target)})
     finally:
@@ -112,14 +130,14 @@ def test_posix_creation_is_0700_from_the_first_instant(tmp_path: Path) -> None:
 def test_windows_creation_leaves_only_the_current_user_with_inheritable_access(tmp_path: Path) -> None:
     target = tmp_path / "private"
     data_dir.resolve_data_dir(env={"OH_DATA_DIR": str(target)})
-    acl = subprocess.run(["icacls", str(target)], capture_output=True, text=True, check=True).stdout
+    acl = subprocess.run(["icacls", str(target)], capture_output=True, text=True, check=True).stdout  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     user = os.environ["USERNAME"]
     assert f"{user}:(OI)(CI)(F)" in acl, acl  # what a file written inside inherits
     broad = ("Everyone:", "BUILTIN\\Users:", "NT AUTHORITY\\Authenticated Users:", "NT AUTHORITY\\INTERACTIVE:")
     assert not [name for name in broad if name in acl], acl  # only the person (and the system's own accounts) remain
     child = target / "harness.db"
     child.write_text("x", encoding="utf-8")
-    child_acl = subprocess.run(["icacls", str(child)], capture_output=True, text=True, check=True).stdout
+    child_acl = subprocess.run(["icacls", str(child)], capture_output=True, text=True, check=True).stdout  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert not [name for name in broad if name in child_acl], child_acl
 
 
@@ -152,7 +170,7 @@ def test_the_cli_without_override_uses_the_directory_named_by_the_desktop_app(tm
     env.update({"LOCALAPPDATA": str(local), "XDG_DATA_HOME": str(local), "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)})
     code = "from oharness import headless; import os; headless._backend_on_path(); print(os.environ['DATABASE_URL'])"
     backend = Path(__file__).resolve().parents[1]
-    done = subprocess.run([sys.executable, "-c", code], env=env, cwd=backend, capture_output=True, text=True, timeout=60)
+    done = subprocess.run([sys.executable, "-c", code], env=env, cwd=backend, capture_output=True, text=True, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert done.returncode == 0, done.stderr
     system = platform.system()
     if system == "Windows":
