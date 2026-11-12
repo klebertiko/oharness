@@ -13,3 +13,8 @@
 - [ ] ADR (se decisão difícil de reverter); docs atualizadas se o comportamento mudou
 - [ ] `/code-review` high tratado; threads respondidas
 - [ ] CI completo concluído e verde no head final
+
+## Definition of Done
+Itens completos em `docs/process/dor-dod.md` (DoD) e `docs/process/pre-pr-checklist.md`; não repita o texto aqui. Para o merge, cole:
+- [ ] Veredito e SHA revisado de QA e de SEC (contexto limpo): ______ (o head final só pode diferir do SHA revisado por merge de `main`)
+- [ ] Issues dos achados baixos e das lacunas (números): ______ ou "nenhum"
