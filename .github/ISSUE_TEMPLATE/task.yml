@@ -26,3 +26,13 @@ body:
     attributes:
       label: Contexto
       description: Links para ADR, arquivos ou PRs. Sem texto longo.
+  - type: checkboxes
+    id: dor
+    attributes:
+      label: Definition of Ready (docs/process/backlog.md)
+      description: Só marque `status:ready` com todos marcados.
+      options:
+        - label: Critérios do "Pronto quando" são verificáveis e cabem em 1 PR pequeno
+        - label: Dependências resolvidas e rótulos (type, area, prio, size) completos
+        - label: Risco declarado (segurança, via de assinatura, UI)
+        - label: Contexto mínimo linkado (ADR, arquivos ou PRs) e sem pergunta aberta ao dono
