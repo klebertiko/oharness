@@ -2,6 +2,8 @@
 
 Desktop Agent + Harness Design Studio: run agents against Providers, and author harnesses as an OHarness Model (`.ohm`).
 
+**Processo (agentes):** antes de iniciar ou encerrar qualquer issue/story/PR, carregue e cumpra [`docs/process/dor-dod.md`](docs/process/dor-dod.md) (DoR na entrada, DoD na entrega). Comunicação entre sessões: [`docs/process/agent-bus.md`](docs/process/agent-bus.md).
+
 ## Language
 
 ### Model
