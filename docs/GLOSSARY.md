@@ -9,7 +9,9 @@ Two rules shape every word below:
 
 | Term | Meaning |
 | --- | --- |
-| **OHarness Model (OHM)** | The portable document (`.ohm`) that describes a harness: graph, content, connectors, runtime. |
+| **OHarness Model (`.ohm`)** | The Studio document that draws a harness and can export it, including as a Plugin. The layer that says how tasks and requests are served, on top of Claude, Codex, or DeepSeek Harness. |
+| **Plugin** | A harness package: agents, skills, scripts, hooks, commands, MCP, and instructions (mattpocock/skills, skills-framework, superpowers, claude-mem). |
+| **Cordis Plugin** | Code that extends a Node host, in the manner of DeepSeek Harness. Not a Plugin. |
 | **Harness** | Agents, Gates, HITL, Skills and Signals composed to orchestrate work. |
 | **Bundled harness** | A harness that ships in the app. Opening it makes an editable copy. The Agile Harness is the first one. |
 | **Starting points** | The Studio overview section listing the bundled harnesses. |

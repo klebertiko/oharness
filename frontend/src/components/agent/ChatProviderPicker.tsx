@@ -18,7 +18,7 @@ import { useChatModelStore, modelOverride, NEW_CHAT_KEY } from "@/store/chatMode
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { useThreadStore } from "@/store/threadStore";
 import { useT } from "@/i18n/store";
-import { nextStep, distanceToReady } from "@/components/providers/nextStep";
+import { nextStep, distanceToReady, needsActionDetail } from "@/components/providers/nextStep";
 import { AUTO_ID, buildComboOptions, filterComboOptions, modelOptionId, parseOptionId, selectedOptionId } from "./chatCombo";
 
 /** Dropdown-row dot per tone. A distinct pulsing "checking" state, and a
@@ -92,7 +92,7 @@ export function ChatProviderPicker({
         .map((c) => ({ c, d: distanceToReady(c), step: nextStep(c) }))
         .filter((x): x is typeof x & { d: number; step: NonNullable<typeof x.step> } => x.d !== null && x.step !== null)
         .sort((a, b) => a.d - b.d)
-        .map(({ c, step }) => ({ connection: c, detail: `${step.status ?? providerReadiness(c).label} · ${step.label}` })),
+        .map(({ c, step }) => ({ connection: c, detail: needsActionDetail(c, step) })),
     [connections, chosenId, rows],
   );
   const readyCount = rows.filter((r) => r.id !== null && r.ready).length;

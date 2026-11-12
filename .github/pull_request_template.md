@@ -15,6 +15,6 @@
 - [ ] CI completo concluído e verde no head final
 
 ## Definition of Done
-Os 9 itens estão em `docs/process/backlog.md` (seção DoD); não repita o texto aqui. Para o merge, cole:
+Itens completos em `docs/process/dor-dod.md` (DoD) e `docs/process/pre-pr-checklist.md`; não repita o texto aqui. Para o merge, cole:
 - [ ] Veredito e SHA revisado de QA e de SEC (contexto limpo): ______ (o head final só pode diferir do SHA revisado por merge de `main`)
 - [ ] Issues dos achados baixos e das lacunas (números): ______ ou "nenhum"

