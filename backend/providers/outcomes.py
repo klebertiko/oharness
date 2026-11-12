@@ -1,8 +1,13 @@
 """Safe provider failure evidence; task/CLI free text is never authentication proof."""
 import httpx
 
+from adapters.cli_shared import CLI_FAILURE_MESSAGES, CliFailure
+
 
 def failure_details(exc: Exception) -> dict:
+    if isinstance(exc, CliFailure):
+        # Closed class + fixed text: nothing the CLI printed travels with it (I10).
+        return {"provider_failure": exc.failure, "error": CLI_FAILURE_MESSAGES[exc.failure]}
     if isinstance(exc, httpx.HTTPStatusError):
         if exc.response.status_code in (401, 403):
             return {"provider_failure": "authentication", "error": "Provider rejected authentication. Check its credentials in Providers."}
