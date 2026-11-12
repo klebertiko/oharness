@@ -105,5 +105,5 @@ def test_mask_home_handles_windows_paths(monkeypatch: pytest.MonkeyPatch) -> Non
     from providers.diagnostics import mask_home
 
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("C:/Users/" + USER)))
-    assert mask_home("C:\Users\\" + USER + "\AppData\claude.exe") == "~/AppData/claude.exe"
+    assert mask_home(rf"C:\Users\{USER}\AppData\claude.exe") == "~/AppData/claude.exe"
     assert mask_home("/usr/local/bin/claude") == "/usr/local/bin/claude"
