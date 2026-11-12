@@ -32,22 +32,24 @@ def test_blank_override_is_ignored(tmp_path: Path) -> None:
     assert resolved == tmp_path / _app_identifier()
 
 
-@pytest.mark.parametrize(
-    ("system", "env", "expected"),
-    [
-        ("Windows", {"LOCALAPPDATA": "C:/local-data"}, Path("C:/local-data") / "dev.oharness.app"),
-        ("Darwin", {}, Path("/home/a") / "Library" / "Application Support" / "dev.oharness.app"),
-        ("Linux", {}, Path("/home/a") / ".local" / "share" / "dev.oharness.app"),
-        ("Linux", {"XDG_DATA_HOME": "/xdg"}, Path("/xdg") / "dev.oharness.app"),
-    ],
-)
-def test_default_follows_the_shell_per_platform(system: str, env: dict, expected: Path) -> None:
-    assert data_dir.resolve_data_dir(env=env, system=system, home=Path("/home/a"), create=False) == expected
+@pytest.mark.parametrize("system", ["Windows", "Darwin", "Linux", "LinuxXdg"])
+def test_default_follows_the_shell_per_platform(system: str, tmp_path: Path) -> None:
+    home, xdg = tmp_path / "home", tmp_path / "xdg"
+    env, expected = {}, None
+    if system == "Windows":
+        env, expected = {"LOCALAPPDATA": str(tmp_path / "local-data")}, tmp_path / "local-data" / "dev.oharness.app"
+    elif system == "Darwin":
+        expected = home / "Library" / "Application Support" / "dev.oharness.app"
+    elif system == "Linux":
+        expected = home / ".local" / "share" / "dev.oharness.app"
+    else:
+        system, env, expected = "Linux", {"XDG_DATA_HOME": str(xdg)}, xdg / "dev.oharness.app"
+    assert data_dir.resolve_data_dir(env=env, system=system, home=home, create=False) == expected
 
 
-def test_windows_without_localappdata_falls_back_to_home() -> None:
-    resolved = data_dir.resolve_data_dir(env={}, system="Windows", home=Path("/home/a"), create=False)
-    assert resolved == Path("/home/a") / "AppData" / "Local" / "dev.oharness.app"
+def test_windows_without_localappdata_falls_back_to_home(tmp_path: Path) -> None:
+    resolved = data_dir.resolve_data_dir(env={}, system="Windows", home=tmp_path, create=False)
+    assert resolved == tmp_path / "AppData" / "Local" / "dev.oharness.app"
 
 
 def test_sidecar_and_cli_resolve_the_same_directory(monkeypatch, tmp_path: Path) -> None:
