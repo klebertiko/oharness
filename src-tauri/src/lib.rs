@@ -73,6 +73,52 @@ fn initialization_script<S: AsRef<str> + serde::Serialize>(
     )
 }
 
+/// Defines `__OH_HUMAN__`, the person's own credential for decisions (ADR 0055).
+/// It is not the sidecar token: the sidecar token is what agents and the MCP
+/// use, the human one is what makes a request a person's. It goes only to a
+/// top-level document of the app itself, never into a URL, storage, log or event.
+fn human_initialization_script<S: AsRef<str> + serde::Serialize>(
+    human: &str,
+    origins: &[S],
+) -> String {
+    format!(
+        "if ({}.includes(window.location.origin) && window.top === window) {{ Object.defineProperty(window, \"__OH_HUMAN__\", {{ value: {}, writable: false }}); }}",
+        serde_json::to_string(origins).expect("origins serialize"),
+        serde_json::to_string(human).expect("human credential serializes"),
+    )
+}
+
+/// Everything the main window receives before any page script runs.
+fn webview_scripts<S: AsRef<str> + serde::Serialize>(
+    api: &str,
+    token: &str,
+    human: &str,
+    origins: &[S],
+) -> String {
+    format!(
+        "{}
+{}",
+        initialization_script(api, token, origins),
+        human_initialization_script(human, origins)
+    )
+}
+
+/// The sidecar's environment: its own token and, separately, the human
+/// credential the webview presents (the sidecar fails closed without it).
+fn sidecar_env(
+    port: u16,
+    token: &str,
+    human: &str,
+    data_dir: &std::path::Path,
+) -> Vec<(&'static str, String)> {
+    vec![
+        ("OH_PORT", port.to_string()),
+        ("OH_SIDECAR_TOKEN", token.to_string()),
+        ("OH_HUMAN_TOKEN", human.to_string()),
+        ("OH_DATA_DIR", data_dir.to_string_lossy().into_owned()),
+    ]
+}
+
 fn generate_token() -> Result<String, String> {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| format!("token generation failed: {e}"))?;
@@ -100,18 +146,18 @@ fn wait_until_ready(port: u16, timeout: Duration) -> bool {
     false
 }
 
-fn spawn_sidecar(app: &AppHandle, port: u16, token: &str) -> Result<(), String> {
+fn spawn_sidecar(app: &AppHandle, port: u16, token: &str, human: &str) -> Result<(), String> {
     let data_dir = app
         .path()
         .app_local_data_dir()
         .map_err(|e| format!("app data directory lookup failed: {e}"))?;
     let shell = app.shell();
-    let sidecar = shell
+    let mut sidecar = shell
         .sidecar(SIDECAR_NAME)
-        .map_err(|e| format!("sidecar lookup failed: {e}"))?
-        .env("OH_PORT", port.to_string())
-        .env("OH_SIDECAR_TOKEN", token)
-        .env("OH_DATA_DIR", data_dir);
+        .map_err(|e| format!("sidecar lookup failed: {e}"))?;
+    for (name, value) in sidecar_env(port, token, human, &data_dir) {
+        sidecar = sidecar.env(name, value);
+    }
 
     let (mut _rx, child) = sidecar
         .spawn()
@@ -206,8 +252,9 @@ pub fn run() {
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {
             let token = generate_token().map_err(std::io::Error::other)?;
+            let human = generate_token().map_err(std::io::Error::other)?;
             let port = reserve_port().map_err(std::io::Error::other)?;
-            spawn_sidecar(app.handle(), port, &token).map_err(std::io::Error::other)?;
+            spawn_sidecar(app.handle(), port, &token, &human).map_err(std::io::Error::other)?;
 
             // The config keeps `create: false` so this initialization script
             // runs before any frontend module can issue an authenticated fetch.
@@ -238,7 +285,7 @@ pub fn run() {
             )?)?;
 
             window_builder
-                .initialization_script(initialization_script(&api, &token, &origins))
+                .initialization_script(webview_scripts(&api, &token, &human, &origins))
                 // Navigation isn't governed by CSP. Refused URLs are dropped, never
                 // re-opened elsewhere. (tauri-runtime-wry allows URIs it can't parse
                 // without calling this; the origin-gated init script covers that.)
@@ -275,6 +322,92 @@ mod tests {
         assert!(script.contains("tok\\\"en"));
         assert!(script.contains("__OH_API__"));
         assert!(script.contains("__OH_TOKEN__"));
+    }
+
+    #[test]
+    fn the_human_credential_is_defined_only_for_the_app_origin_in_the_top_frame() {
+        // ADR 0055: the human credential is the person's, handed to the main window only.
+        let script = human_initialization_script("hum\"an", &APP_ORIGINS);
+        let origins_json = serde_json::to_string(&APP_ORIGINS).unwrap();
+        let guard = script.split("Object.defineProperty").next().unwrap();
+        assert_eq!(
+            guard,
+            format!(
+                "if ({origins_json}.includes(window.location.origin) && window.top === window) {{ "
+            )
+        );
+        assert!(script.contains("__OH_HUMAN__"));
+        assert!(
+            script.contains("hum\\\"an"),
+            "serialized, never spliced raw"
+        );
+        assert!(script.contains("writable: false"));
+        assert!(
+            !script.contains("__OH_TOKEN__"),
+            "the sidecar token is separate"
+        );
+    }
+
+    #[test]
+    fn the_two_credentials_never_share_a_script_or_a_value() {
+        let both = webview_scripts(
+            "http://127.0.0.1:1",
+            "sidecar-secret",
+            "human-secret",
+            &APP_ORIGINS,
+        );
+        let sidecar_only =
+            initialization_script("http://127.0.0.1:1", "sidecar-secret", &APP_ORIGINS);
+        assert!(!sidecar_only.contains("human-secret"));
+        assert!(both.contains("sidecar-secret") && both.contains("human-secret"));
+        assert!(both.contains("__OH_HUMAN__") && both.contains("__OH_TOKEN__"));
+    }
+
+    #[test]
+    fn the_sidecar_gets_the_human_credential_in_its_own_variable() {
+        let env = sidecar_env(
+            8123,
+            "sidecar-secret",
+            "human-secret",
+            std::path::Path::new("data"),
+        );
+        let get = |name: &str| {
+            env.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| v.as_str())
+        };
+        assert_eq!(get("OH_HUMAN_TOKEN"), Some("human-secret"));
+        assert_eq!(get("OH_SIDECAR_TOKEN"), Some("sidecar-secret"));
+        assert_eq!(get("OH_PORT"), Some("8123"));
+    }
+
+    #[test]
+    fn the_human_credential_never_leaves_through_logs_events_or_urls() {
+        // Everything above the test module is production code: no log, print, event or URL may carry it.
+        let source = include_str!("lib.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        for line in production
+            .lines()
+            .filter(|l| l.to_lowercase().contains("human"))
+        {
+            for banned in [
+                "println!",
+                "eprintln!",
+                "log::",
+                "tracing::",
+                "dbg!",
+                ".emit(",
+                "format!(\"http",
+                "?human",
+                "localStorage",
+                "sessionStorage",
+            ] {
+                assert!(
+                    !line.contains(banned),
+                    "human credential line uses {banned}: {line}"
+                );
+            }
+        }
     }
 
     #[test]
