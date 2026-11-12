@@ -14,8 +14,7 @@
 - [ ] `/code-review` high tratado; threads respondidas
 - [ ] CI completo concluído e verde no head final
 
-## Definition of Done (docs/process/backlog.md)
-- [ ] Cada critério do "Pronto quando" está provado acima (teste, tela ou comando); o que não foi verificado está dito
-- [ ] Revisão QA e SEC em contexto limpo, sem achado aberto, no SHA do head (quem mescla confere o SHA)
-- [ ] Contrato de assinatura verde; sem segredo; assinatura não inventa USD
-- [ ] Achados baixos e lacunas viraram issue com número; issue e épico atualizados
+## Definition of Done
+Os 9 itens estão em `docs/process/backlog.md` (seção DoD); não repita o texto aqui. Para o merge, cole:
+- [ ] Veredito e SHA revisado de QA e de SEC (contexto limpo): ______ (o head final só pode diferir do SHA revisado por merge de `main`)
+- [ ] Issues dos achados baixos e das lacunas (números): ______ ou "nenhum"

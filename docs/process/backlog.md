@@ -11,7 +11,7 @@ Abra uma tarefa por entrega que caiba em 1 PR pequeno. Se não cabe, é épico.
 - `agent-ready`: um agente de IA pode pegar sem decisão humana. `needs-human`: só o dono (segredo, tag, aprovação, dispositivo real).
 
 ## Fluxo
-1. Pegue uma tarefa `agent-ready` + `status:ready` ou `backlog` sem dono; comente "assumindo" e mude para `status:in-progress`.
+1. Pegue uma tarefa `agent-ready` + `status:ready` (só `ready` cumpre o DoR abaixo) sem dono; comente "assumindo" e mude para `status:in-progress`.
 2. Respeite **Depende de**. Não comece o que depende de issue aberta sem combinar.
 3. Um PR por tarefa, com `Closes #n`. Mude para `status:in-review` ao abrir o PR.
 4. Quem mescla fecha o issue (`status:done`). Lacuna achada no meio: abra tarefa nova, não esconda no PR.
@@ -31,13 +31,13 @@ Uma tarefa só vai para `status:ready` (e só pode ser assumida) se **todos** os
 Uma tarefa só vira `status:done` (e o épico só fecha) quando **todos** os itens valem. "Quase pronto" não existe.
 1. **Código na `main`** por PR squash com `Closes #n`, depois de seguir `docs/process/pre-pr-checklist.md` (inclui TDD: o teste falha no código antigo e passa no novo).
 2. **CI completo verde no head final**, sem `skip`, `xfail`, retry ou timeout maior para esconder falha.
-3. **Revisão independente limpa, presa ao SHA**: QA **e** SEC em contexto limpo (quem escreveu não revisa), sem achado aberto e feita no head que vai ser mesclado (commit de código depois exige nova revisão; merge de `main` não). Um comentário no GitHub não prova revisão: a conta é compartilhada.
+3. **Revisão independente limpa, presa ao SHA**: QA **e** SEC em contexto limpo (quem escreveu não revisa), sem achado aberto, feita no head que vai ser mesclado; commit de código depois exige nova revisão, commit de merge de `main` não (por isso `update-branch` antes do "pronto" não invalida). Evidência: o veredito e o SHA revisado de cada revisor ficam colados ou linkados no PR. Um comentário no GitHub não prova revisão: a conta é compartilhada.
 4. **Critérios do "Pronto quando" provados**: cada um com o teste, tela ou comando que o prova, no corpo do PR. O que o sandbox não verifica (rede, chaves, SO, dispositivo) é dito e listado, nunca declarado verificado.
 5. **Garantias preservadas**: `backend/tests/test_subscription_contract.py` verde; nenhum segredo em código, log, definição, issue ou PR; assinatura nunca inventa USD.
 6. **Texto e UI**: textos pelo catálogo i18n em pt-BR e en, sem chave crua; sem as palavras proibidas ('framework', 'sample', 'template', 'preset'); o assistente é Nilo; UI com tokens, dois temas, teclado, axe sem exceção nova, legível a 390 px.
 7. **Documentado**: ADR para decisão difícil de reverter; README, USAGE e GLOSSARY quando o comportamento visível mudou; achado baixo ou lacuna vira issue com número, não fica escondido no PR.
-8. **Rastro fechado**: issue `status:done`; sub-issues do épico todas fechadas antes do épico; handoff vivo atualizado se mudou estado, regra ou decisão.
-9. **Funciona no app que o usuário usa**, quando a tarefa tem efeito visível: verificado no app desktop reinstalado a partir da `main` (ou dito claramente que não foi possível e por quê).
+8. **Rastro fechado**: issue `status:done`; sub-issues do épico todas fechadas antes do épico; handoff vivo atualizado quando o PR muda uma regra, uma decisão ou o estado de uma frente de trabalho.
+9. **Funciona no app que o usuário usa**, quando o PR muda o que aparece ou age na UI, no CLI ou no instalador: verificado no app desktop reinstalado a partir da `main` (ou dito claramente que não foi possível e por quê).
 
 ## Kanban
 Crie um GitHub Project (Board) e use o campo Status com as colunas Backlog, Ready, In progress, In review, Done. O workflow "Auto-add to project" do Project, com filtro `is:issue repo:klebertiko/oharness`, põe cada issue nova no quadro.

@@ -34,4 +34,5 @@ body:
       options:
         - label: Critérios do "Pronto quando" são verificáveis e cabem em 1 PR pequeno
         - label: Dependências resolvidas e rótulos (type, area, prio, size) completos
-        - label: Risco declarado (segurança, via de assinatura, UI) e sem pergunta aberta ao dono
+        - label: Risco declarado (segurança, via de assinatura, UI)
+        - label: Contexto mínimo linkado (ADR, arquivos ou PRs) e sem pergunta aberta ao dono
