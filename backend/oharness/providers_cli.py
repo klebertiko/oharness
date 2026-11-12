@@ -21,6 +21,7 @@ def add_parser(sub) -> None:
     actions = providers.add_subparsers(dest="providers_cmd", required=True)
     listing = actions.add_parser("list", help="the stored connections (never their secrets)")
     listing.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
+    listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
     test.add_argument("id", help="a connection id from `providers list`")
     test.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
@@ -44,13 +45,40 @@ def _kind(provider: str) -> str:
     return spec["credential"]["kind"] if spec else "unknown"
 
 
+def _endpoint(raw: str) -> str:
+    """The endpoint without credentials: scheme, host, port and path only. Anything that is not a plain http(s) URL prints as empty."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(raw.strip())
+        host, port = parts.hostname, parts.port
+    except ValueError:
+        return ""
+    if parts.scheme not in ("http", "https") or not host:
+        return ""
+    shown = f"[{host}]" if ":" in host else host  # an IPv6 literal keeps its brackets
+    return f"{parts.scheme}://{shown}{f':{port}' if port else ''}{parts.path}"
+
+
+def _shown_dir(path, verbose: bool) -> str:
+    """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
+    from pathlib import Path
+
+    if verbose:
+        return str(path)
+    try:
+        return "~/" + Path(path).relative_to(Path.home()).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _public(row: dict) -> dict:
     return {
         "id": row["id"],
         "provider": row["provider"],
         "label": row["label"],
         "residence": row["residence"],
-        "endpoint": row.get("endpoint", ""),
+        "endpoint": _endpoint(row.get("endpoint", "")),
         "enabled": bool(row.get("enabled", False)),
         "credentialKind": _kind(row["provider"]),
         "hasSecret": bool(row.get("secretRef")),
@@ -58,13 +86,13 @@ def _public(row: dict) -> dict:
     }
 
 
-async def _list(as_json: bool) -> int:
+async def _list(as_json: bool, verbose: bool) -> int:
     connections, _ = await _load_runtime()
     from data_dir import resolve_data_dir
 
     rows = [_public(row) for row in connections.values()]
     if as_json:
-        print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "list", "dataDir": str(resolve_data_dir(create=False)), "connections": rows}, ensure_ascii=False))
+        print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "list", "dataDir": _shown_dir(resolve_data_dir(create=False), verbose), "connections": rows}, ensure_ascii=False))
         return EXIT_OK
     if not rows:
         print("no connections yet: add one in the OHarness app (Providers)")
@@ -131,5 +159,5 @@ def run(args) -> int:
     import asyncio
 
     if args.providers_cmd == "list":
-        return asyncio.run(_list(args.json))
+        return asyncio.run(_list(args.json, args.verbose))
     return asyncio.run(_test(args.id, args.json))
