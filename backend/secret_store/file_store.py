@@ -10,7 +10,7 @@ and any process running as the same user can read both. Mode ``0600`` (and
 the Windows ACL) stops other users. It does not stop other processes of this
 user. Prefer ``OH_SECRETS=keychain`` — which stores the credentials
 themselves in the keychain — or install ``keyring`` so only the wrapping
-secret is there. See ADR 0068.
+secret is there. See ADR 0070.
 
 The directory is created mode ``0700`` and each file mode ``0600``. On
 Windows the ACL comes from ``security.sidecar_token.restrict_to_current_user``.

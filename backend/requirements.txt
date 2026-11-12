@@ -20,5 +20,5 @@ cryptography==50.0.2
 # the event stream itself instead of trusting ruamel's own resolver).
 ruamel.yaml==0.19.1
 # Optional — OH_SECRETS=keychain, and the file store's per-install key when a
-# backend is available (without it the key is a user-only file; ADR 0068):
+# backend is available (without it the key is a user-only file; ADR 0070):
 # keyring>=25.0.0

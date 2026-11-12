@@ -1,4 +1,4 @@
-# ADR 0068 — Cofre em arquivo: permissão do usuário e chave por instalação
+# ADR 0070 — Cofre em arquivo: permissão do usuário e chave por instalação
 
 Status: aceita. Fecha o achado de SEC do PR #446 que já existia em `main` (issue #452). Não muda o diretório de dados (#409 / #446).
 
