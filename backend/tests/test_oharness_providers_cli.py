@@ -185,7 +185,11 @@ def test_real_process_lists_what_the_data_directory_holds(tmp_path):
         "        await store.upsert(db, {'id': 'cursor', 'provider': 'cursor', 'label': 'Cursor', 'residence': 'cloud', 'endpoint': '', 'enabled': True})\n"
         "asyncio.run(go())\n"
     )
+    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); exec(sys.argv[2])", str(BACKEND), seed], env=env, check=True, cwd=tmp_path, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
+    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     done = subprocess.run([sys.executable, "-m", "oharness", "providers", "list", "--json"], env=env, cwd=BACKEND, capture_output=True, text=True, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert done.returncode == 0, done.stderr
     doc = json.loads(done.stdout)
