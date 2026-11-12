@@ -16,8 +16,8 @@ def _default_file_root() -> Path:
         return Path(override)
     current = Path.home() / ".oharness" / "secrets"
     legacy = Path.home() / ".openharness" / "secrets"
-    # The file-store key is derived from this path, so a pre-rebrand store must
-    # keep being read from where it was written rather than being moved.
+    # Pre-rebrand ciphertext still lives here. Until the first open re-encrypts
+    # it, the old key is the path, so the directory must be opened in place.
     if not current.exists() and legacy.exists():
         return legacy
     return current

@@ -47,6 +47,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _REAL_DATA_DIR = (_BACKEND_DIR / "data").resolve()
 
@@ -98,3 +100,16 @@ def _authenticated_request(self, method, url, **kwargs):
 
 
 TestClient.request = _authenticated_request
+
+
+@pytest.fixture(autouse=True)
+def _file_store_does_not_touch_the_real_keychain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests must not write the file store's install secret into the OS keychain.
+
+    Production ``FileSecrets`` still calls ``_load_keyring`` when no backend is
+    injected. A test that covers that path replaces this stub.
+    """
+    import secret_store.file_store as file_store
+
+    if hasattr(file_store, "_load_keyring"):
+        monkeypatch.setattr(file_store, "_load_keyring", lambda: None)

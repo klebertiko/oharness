@@ -241,6 +241,8 @@ powershell -File scripts/smoke-desktop.ps1 -AppPath <path-to-exe>
 | `file` | Default when packaged — Fernet files under `%LOCALAPPDATA%/OHarness/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
 | `keychain` | OS keychain (`pip install keyring`) |
 
+With `file`, each value is encrypted with a per-install random secret. That secret is kept in the OS keychain when the optional `keyring` package has a working backend, and otherwise in a file only the current user can read, inside the store directory. Without a keychain, any process running as that user can read the key and the ciphertext; `keychain` stores the credentials themselves in the OS keychain. The directory is created mode `0700` and each file mode `0600` (on Windows, an ACL limited to the current user) before a secret is written. Files from older builds, whose key was only the store path, are re-encrypted in place the next time the store opens.
+
 ---
 
 ## OHarness Model (`.ohm`)

@@ -116,7 +116,7 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -r requirements.txt -r requirements-test.txt
       - name: Test
-        run: python -m pytest -q tests/test_turn_diff.py tests/test_sandbox_p3_followups.py tests/test_permission_policy.py tests/test_sandbox_paths.py tests/workspace_manager/test_workspaces_links.py tests/workspace_manager/test_workspaces_admin_links.py tests/workspace_manager/test_workspaces_registry.py tests/workspace_manager/test_workspaces_digest.py tests/factory_intake -k "link or junction or symlink or digest or orphan or python3 or path"
+        run: python -m pytest -q tests/test_turn_diff.py tests/test_sandbox_p3_followups.py tests/test_permission_policy.py tests/test_sandbox_paths.py tests/workspace_manager/test_workspaces_links.py tests/workspace_manager/test_workspaces_admin_links.py tests/workspace_manager/test_workspaces_registry.py tests/workspace_manager/test_workspaces_digest.py tests/factory_intake tests/test_secrets_store.py -k "link or junction or symlink or digest or orphan or python3 or path"
 
   rust-tauri:
     name: cargo fmt clippy test
