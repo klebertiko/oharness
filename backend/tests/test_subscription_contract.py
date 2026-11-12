@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,7 @@ from adapters.cli_codex import CodexCliAdapter
 from adapters.cli_cursor import CursorCliAdapter
 from adapters.cli_shared import CliRunResult
 from providers.resolution import resolve_node_provider
+from secret_store.file_store import FileSecrets
 from secret_store.memory import MemorySecrets
 from test_execution_provider_resolution import client, _sse_events  # noqa: F401
 
@@ -115,6 +117,49 @@ def test_i1_i8_a_secret_ref_on_a_cli_connection_is_ignored(pid) -> None:
         {"providerIds": [pid], "model": "m"}, "llm", "Node", connections=connections, secrets_store=store,
     )
     assert resolved.config.api_key == ""
+
+
+def test_i1_i8_cli_resolution_does_not_read_the_file_vault(tmp_path: Path) -> None:
+    """I1/I8 on the file vault: kind=cli never reads it, even when a secretRef is set."""
+    store = FileSecrets(tmp_path, use_keychain=False)
+    store.put("oharness/anthropic", "canary-secret-7d3e")
+    calls: list[str] = []
+    original_get = store.get
+    original_exists = store.exists
+
+    def counting_get(ref: str) -> str | None:
+        calls.append("get")
+        return original_get(ref)
+
+    def counting_exists(ref: str) -> bool:
+        calls.append("exists")
+        return original_exists(ref)
+
+    store.get = counting_get  # type: ignore[method-assign]
+    store.exists = counting_exists  # type: ignore[method-assign]
+    connections = {"anthropic": {
+        "id": "anthropic", "provider": "anthropic", "label": "anthropic", "residence": "cloud", "enabled": True,
+        "secretRef": "oharness/anthropic", "endpoint": "", "credential": {"kind": "cli"},
+    }}
+    resolved = resolve_node_provider(
+        {"providerIds": ["anthropic"], "model": "m"}, "llm", "Node", connections=connections, secrets_store=store,
+    )
+    assert resolved.config.api_key == ""
+    assert calls == []
+
+
+def test_i8_a_key_connection_does_read_the_file_vault(tmp_path: Path) -> None:
+    store = FileSecrets(tmp_path, use_keychain=False)
+    store.put("oharness/openrouter", "canary-secret-7d3e")
+    connections = {"openrouter": {
+        "id": "openrouter", "provider": "openrouter", "label": "OpenRouter", "residence": "cloud",
+        "enabled": True, "secretRef": "oharness/openrouter", "endpoint": "https://openrouter.ai/api/v1",
+        "credential": {"kind": "key"},
+    }}
+    resolved = resolve_node_provider(
+        {"providerIds": ["openrouter"], "model": "m"}, "llm", "Node", connections=connections, secrets_store=store,
+    )
+    assert resolved.config.api_key == "canary-secret-7d3e"
 
 
 def test_i8_positive_control_a_key_connection_does_read_its_secret() -> None:
