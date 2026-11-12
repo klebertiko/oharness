@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { access, mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import test from 'node:test'
 import { assertLoopbackBind } from '../src/server.ts'
 import { asRecord, call, httpGet, installConfirmed, packageRoot, preview, tempPackage, withHost } from './client.ts'
@@ -220,4 +221,14 @@ test('the process entry prints one loopback line and does not repeat the token o
     child.kill('SIGTERM')
     await new Promise((resolve) => child.once('exit', resolve))
   }
+})
+
+test('a package.json directory is rejected without reading a different file', async () => {
+  await withHost(async (host) => {
+    const dir = await tempPackage({ 'index.ts': 'export function apply() {}\n' })
+    await mkdir(path.join(dir, 'package.json'))
+    const refused = await call(host, '/v1/plugins/preview', { body: { packageDir: dir } })
+    assert.equal(refused.status, 400)
+    assert.equal(asRecord(refused.json).code, 'path-rejected')
+  })
 })

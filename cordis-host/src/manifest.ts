@@ -1,4 +1,4 @@
-import { realpath, readFile, stat } from 'node:fs/promises'
+import { open, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { HostError } from './errors.ts'
 import { installDigest, warningText, type WarningText } from './warnings.ts'
@@ -36,18 +36,40 @@ function contained(root: string, target: string): boolean {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
+}
+
+/** Read package.json from one file descriptor so the size check and the bytes are the same file. */
 async function readPackageJson(file: string): Promise<Record<string, unknown>> {
-  const info = await stat(file)
-  if (!info.isFile()) throw new HostError('path-rejected', 'package.json is not a file')
-  if (info.size > PACKAGE_JSON_LIMIT) throw new HostError('path-rejected', 'package.json is too large')
-  let parsed: unknown
+  let handle: Awaited<ReturnType<typeof open>>
   try {
-    parsed = JSON.parse(await readFile(file, 'utf8')) as unknown
-  } catch {
-    throw new HostError('path-rejected', 'package.json is not valid JSON')
+    handle = await open(file, 'r')
+  } catch (error) {
+    const code = errorCode(error)
+    if (code === 'ENOENT' || code === 'EISDIR') throw new HostError('path-rejected', 'package.json was not found')
+    throw error
   }
-  if (!isRecord(parsed)) throw new HostError('path-rejected', 'package.json must be an object')
-  return parsed
+  try {
+    const info = await handle.stat()
+    if (!info.isFile()) throw new HostError('path-rejected', 'package.json is not a file')
+    if (!Number.isSafeInteger(info.size) || info.size < 0 || info.size > PACKAGE_JSON_LIMIT) {
+      throw new HostError('path-rejected', 'package.json is too large')
+    }
+    const buffer = Buffer.alloc(info.size)
+    const { bytesRead } = await handle.read(buffer, 0, info.size, 0)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(buffer.subarray(0, bytesRead).toString('utf8')) as unknown
+    } catch {
+      throw new HostError('path-rejected', 'package.json is not valid JSON')
+    }
+    if (!isRecord(parsed)) throw new HostError('path-rejected', 'package.json must be an object')
+    return parsed
+  } finally {
+    await handle.close()
+  }
 }
 
 function readRuntime(oharness: Record<string, unknown> | undefined): { runtime: 'in-process'; runtimeDefaulted: boolean } {
@@ -122,8 +144,7 @@ async function resolveEntry(root: string, main: unknown): Promise<string> {
     try {
       real = await realpath(resolved)
     } catch (error) {
-      const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
-      if (code === 'ENOENT' && main === undefined) continue
+      if (errorCode(error) === 'ENOENT' && main === undefined) continue
       throw new HostError('path-rejected', 'plugin entry was not found inside the package directory')
     }
     if (!contained(root, real)) {
