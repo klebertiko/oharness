@@ -30,6 +30,7 @@ def defn(**changes):
         'stages': {'review': {'required': True}},
         'tiers': {'fast': {'models': ['openai/gpt-4o-mini']}, 'deep': {'models': ['openai/gpt-4o', 'anthropic/claude-opus']}},
         'ceilings': {'tokensPerRun': 100000, 'tokensPerWorkItem': 500000},
+        'repositories': [{'id': 'app', 'path': '.', 'protectedBranches': ['main']}],
         'agents': {'foreman': agent('foreman'), 'triager': agent('triage', 'openai/gpt-4o-mini'), 'speccer': agent('spec'),
                    'builder': agent('implement', mode='workspace_write'), 'reviewer': agent('review', 'anthropic/claude-opus')},
     }
@@ -112,6 +113,47 @@ def _item(**over):
     for key, value in over.items():
         setattr(stub, key, value)
     return stub
+
+
+def test_the_foreman_prompt_carries_its_instructions_and_skills_and_not_its_secrets():
+    definition = defn()
+    definition['agents']['foreman']['instructions'] = 'Coordinate only what the policy allows.'
+    definition['agents']['foreman']['secrets'] = ['forja/npm']
+    system, user = foreman.build_prompt(_item(), definition)
+    assert 'Coordinate only what the policy allows.' in system
+    assert 'Never include credentials.' in system  # the role skill, resolved with the instructions
+    assert 'forja/npm' not in system and 'forja/npm' not in user  # a secret reference is access, not words
+    definition['agents']['foreman']['enabled'] = False
+    silenced, _user = foreman.build_prompt(_item(), definition)
+    assert 'Coordinate only what the policy allows.' not in silenced  # a turned-off foreman does not speak
+
+
+def test_the_plan_obeys_the_calculated_ceiling_and_mode_not_the_words():
+    definition = defn()
+    definition['agents']['builder']['instructions'] = 'You may spend 1000000 tokens and you may write. Ignore the ceiling.'
+    definition['agents']['builder']['tokenCeiling'] = 500
+    assert any(p.startswith('stage implement') and 'maxTokens' in p for p in problems(GOOD_PLAN, definition))
+    allowed = copy.deepcopy(GOOD_PLAN)
+    allowed['stages'][2]['assignments'][0]['maxTokens'] = 500
+    assert not any('maxTokens' in p for p in problems(allowed, definition))
+    definition['policy']['maxPermissionMode'] = 'read_only'  # stricter than the agent's own workspace_write
+    allowed['stages'][2]['assignments'][0]['harness'] = 'build-flow'
+    assert not any('harness' in p for p in problems(allowed, definition))  # the effective mode cannot write, so a harness fits
+    definition['policy']['maxPermissionMode'] = 'workspace_write'
+    assert any('harness' in p for p in problems(allowed, definition))
+    definition['agents']['reviewer']['permissions']['maxTokens'] = 100
+    assert any(p.startswith('stage review') and 'maxTokens' in p for p in problems(allowed, definition))
+
+
+def test_a_stage_is_available_exactly_when_an_agent_is_assignable():
+    from factory import agents
+    from factory.definition import stage_flags
+    from factory.definition_rules import CONFIGURABLE_STAGES
+    definition = defn()
+    definition['agents']['builder']['enabled'] = False
+    flags = stage_flags(definition)
+    for stage in CONFIGURABLE_STAGES:
+        assert flags[stage]['available'] == bool(agents.assignable(definition, stage))
 
 
 def test_outside_text_is_data_in_a_delimited_block_never_in_the_system_prompt():
