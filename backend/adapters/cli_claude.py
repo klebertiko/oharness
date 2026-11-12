@@ -67,6 +67,9 @@ class ClaudeCliAdapter(AgentAdapter):
         return [path] if path else None
 
     def _binary(self) -> str:
+        # Injectable runner: tests record argv without requiring a real binary on PATH.
+        if self._runner is not run_cli:
+            return CLI_NAME
         path = find_cli(CLI_NAME)
         if not path:
             raise FileNotFoundError(
