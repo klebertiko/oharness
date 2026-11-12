@@ -3,6 +3,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import providers_cli
 from .headless import Refusal, parse_frame, run_graph
 from .validate import validate_path
 
@@ -110,10 +111,13 @@ def main(argv: list[str] | None = None) -> int:
     from factory_intake import cli as factory_cli  # argparse only: nothing is configured until a `factory` command runs
 
     factory_cli.add_parser(sub)
+    providers_cli.add_parser(sub)
 
     args = parser.parse_args(argv)
     if args.cmd == "forja":
         return factory_cli.run(args)
+    if args.cmd == "providers":
+        return providers_cli.run(args)
     if args.cmd == "validate":
         result = validate_path(args.path)
         print(json.dumps({"ok": result.ok, "errors": result.errors}, indent=2))
