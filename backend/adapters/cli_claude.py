@@ -36,7 +36,10 @@ from typing import Any, AsyncIterator, Callable, Coroutine
 from .base import AdapterConfig, AdapterResult, AgentAdapter, ProbeResult
 from .cli_shared import (
     DEFAULT_TIMEOUT_S,
+    CliFailure,
+    CliMissing,
     CliRunResult,
+    classify_cli_failure,
     find_cli,
     resolve_cwd,
     run_cli,
@@ -72,10 +75,7 @@ class ClaudeCliAdapter(AgentAdapter):
             return CLI_NAME
         path = find_cli(CLI_NAME)
         if not path:
-            raise FileNotFoundError(
-                "claude CLI not found on PATH. Install Claude Code and run "
-                "`claude login`, or switch this connection's runtime to API."
-            )
+            raise CliMissing()
         return path
 
     def build_argv(self, config: AdapterConfig) -> list[str]:
@@ -118,11 +118,12 @@ class ClaudeCliAdapter(AgentAdapter):
         result = await self._runner(argv, cwd=cwd, env=env, timeout=timeout, stdin=prompt)
 
         if result.timed_out:
-            return AdapterResult(content="", error=f"claude CLI timed out after {timeout:.0f}s")
+            return AdapterResult(content="", error=f"claude CLI timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
             return AdapterResult(
                 content="",
                 error=_last_line(result.stderr) or f"claude CLI exited {result.returncode}",
+                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
             )
 
         try:
@@ -131,10 +132,13 @@ class ClaudeCliAdapter(AgentAdapter):
             # --output-format json is always requested above; a non-JSON
             # stdout means something upstream changed. Fail loud rather than
             # guess at the shape.
-            return AdapterResult(content="", error="claude CLI returned unreadable output (expected JSON).")
+            return AdapterResult(content="", error="claude CLI returned unreadable output (expected JSON).", failure="cli-error")
 
         if payload.get("is_error"):
-            return AdapterResult(content="", error=str(payload.get("result") or "claude CLI reported an error"))
+            reported = str(payload.get("result") or "claude CLI reported an error")
+            return AdapterResult(
+                content="", error=reported, failure=classify_cli_failure(returncode=1, text=reported),
+            )
 
         usage = payload.get("usage") or {}
         tokens = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
@@ -150,7 +154,7 @@ class ClaudeCliAdapter(AgentAdapter):
         # reasonable stream for a single-shot invocation.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise RuntimeError(result.error)
+            raise CliFailure(result.failure)
         yield result.content
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:

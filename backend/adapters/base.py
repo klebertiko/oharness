@@ -21,6 +21,8 @@ class AdapterResult:
     tokens_used: int = 0
     model: str = ""
     error: str = ""
+    # Closed class of a CLI failure (cli-signin | cli-missing | cli-timeout | cli-error); "" otherwise.
+    failure: str = ""
 
 
 @dataclass
