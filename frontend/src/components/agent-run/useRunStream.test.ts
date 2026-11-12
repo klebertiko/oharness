@@ -335,6 +335,23 @@ it.each(["authentication", "transport"])("faults only the connection in structur
   expect(useProviderStore.getState().connections.map((c) => c.health)).toEqual(["live", "fault"]);
 });
 
+it("faults the connection on cli-signin provider_failure with safe backend copy", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live" })] });
+  const { onEvent } = startAndCapture("an", true);
+  const safe = "Sign in to the CLI, then test the connection again in Providers.";
+  act(() =>
+    onEvent("node_error", {
+      node_id: "direct",
+      connection_id: "an",
+      provider_failure: "cli-signin",
+      error: safe,
+    }),
+  );
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.health).toBe("fault");
+  expect(conn.detail).toBe(safe);
+});
+
 it("ignores completion and close callbacks from a superseded stream", () => {
   useProviderStore.setState({ connections: [connection({})] });
   const { result, onEvent } = startAndCapture("an");
