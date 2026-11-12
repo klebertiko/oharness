@@ -238,8 +238,12 @@ powershell -File scripts/smoke-desktop.ps1 -AppPath <path-to-exe>
 | `OH_SECRETS` | Store |
 | --- | --- |
 | `memory` | Process lifetime (tests / explicit dev) |
-| `file` | Default when packaged — Fernet files under `%LOCALAPPDATA%/OHarness/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
+| `file` | Default when packaged — Fernet files under `<data dir>/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
 | `keychain` | OS keychain (`pip install keyring`) |
+
+### Data directory
+
+The installed app and the `oharness` CLI use the same data directory (`harness.db` with your connections, and `secrets/`): `OH_DATA_DIR` when set, otherwise the app's own folder, named after its bundle identifier `dev.oharness.app` — `%LOCALAPPDATA%\dev.oharness.app` on Windows, `~/Library/Application Support/dev.oharness.app` on macOS, `$XDG_DATA_HOME` or `~/.local/share/dev.oharness.app` on Linux. One function (`backend/data_dir.py`) resolves it for both, and a test pins it to the identifier in `src-tauri/tauri.conf.json`. A CLI that used a release before this fix looked in `%LOCALAPPDATA%\OHarness`; run `oharness` with `OH_DATA_DIR` set to that folder if you kept data there.
 
 ---
 
