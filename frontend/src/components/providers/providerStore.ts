@@ -62,7 +62,13 @@ export interface Connection {
   modelsFromEndpoint?: boolean;
   enabled: boolean;
   lastProbe: string;
+  /** What `GET /providers/clis` said about this connection's subscription CLI, when it has one.
+      Detection only (it costs no token); a probe or a run result outranks it. */
+  cliState?: CliState;
 }
+
+export const CLI_STATES = ["ready", "not-logged-in", "not-installed", "unavailable", "error"] as const;
+export type CliState = (typeof CLI_STATES)[number];
 
 export function specOf(c: Connection): ProviderSpec {
   if (c.provider === "ollama") return c.residence === "cloud" ? OLLAMA_CLOUD : PROVIDERS.ollama;
@@ -454,6 +460,8 @@ interface ProviderState {
       call more than once — it's a no-op after the first successful run. */
   hydrate: () => Promise<void>;
   probe: (id: string) => Promise<void>;
+  /** Ask the sidecar which subscription CLIs are installed and signed in. Silent when it cannot answer. */
+  detectClis: () => Promise<void>;
   /** A real run just finished against this connection — not a Test click,
       but the thing a person actually cares about working. `ok: true` is at
       least as strong evidence as a probe, so it clears the untested
@@ -536,11 +544,32 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     }
   },
 
+  detectClis: async () => {
+    try {
+      const res = await fetch(apiUrl("/providers/clis"));
+      if (!res.ok) return;
+      const body = (await res.json()) as { clis?: { provider?: string; state?: string }[] };
+      const byProvider = new Map<string, CliState>();
+      for (const row of body.clis ?? []) {
+        if (row.provider && (CLI_STATES as readonly string[]).includes(row.state ?? "")) byProvider.set(row.provider, row.state as CliState);
+      }
+      set({
+        connections: get().connections.map((c) => {
+          const cliState = byProvider.get(c.provider);
+          return cliState && specOf(c).credential.kind === "cli" ? { ...c, cliState } : c;
+        }),
+      });
+    } catch {
+      // No sidecar, no detection: the rows keep what they know.
+    }
+  },
+
   /** Real reachability check against the sidecar — never a fixture replay. */
   probe: async (id) => {
     const before = get().connections.find((c) => c.id === id);
     if (!before) return;
-    set({ connections: patch(get().connections, id, (c) => ({ ...c, health: "probing" })) });
+    // A fresh test is newer than any detection: drop it so the probe's own answer is the one shown.
+    set({ connections: patch(get().connections, id, (c) => ({ ...c, health: "probing", cliState: undefined })) });
     await ensureBackendRow(before);
     await runProbe(id, set, get);
   },

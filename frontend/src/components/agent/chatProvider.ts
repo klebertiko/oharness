@@ -126,9 +126,12 @@ const FAULT_BY_STATUS: Record<number, ProviderFaultClass> = {
     `health: "setup"`, an HTTP failure `health: "fault"`; text that matches
     nothing is `unknown` (never a guess at a nearby class), and a connection
     that is neither faulted nor waiting on a CLI has no fault at all. */
-export function providerFault(c: Pick<Connection, "health" | "detail">): ProviderFaultClass | null {
+export function providerFault(c: Pick<Connection, "health" | "detail"> & { cliState?: Connection["cliState"] }): ProviderFaultClass | null {
   const text = (c.detail ?? "").trim().toLowerCase();
   if (c.health === "setup") {
+    // Detection before any run (R-PRV-01): the CLI's own state, when the sidecar has told us.
+    if (c.cliState === "not-installed") return "cli-missing";
+    if (c.cliState === "not-logged-in") return "cli-signin";
     if (text.includes(" cli not found on path.")) return "cli-missing";
     if (text.includes(" cli is installed but not logged in.")) return "cli-signin";
     return null;
