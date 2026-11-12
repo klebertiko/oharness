@@ -352,6 +352,17 @@ it("faults the connection on cli-signin provider_failure with safe backend copy"
   expect(conn.detail).toBe(safe);
 });
 
+it("ignores an unknown cli-* class and never shows backend text for a known one", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live", detail: "keep" })] });
+  const { onEvent } = startAndCapture("an", true);
+  act(() => onEvent("node_error", { node_id: "direct", connection_id: "an", provider_failure: "cli-weird", error: "x" }));
+  expect(useProviderStore.getState().connections[0].detail).toBe("keep");
+  act(() => onEvent("node_error", { node_id: "direct", connection_id: "an", provider_failure: "cli-timeout", error: "CANARY-backend-text" }));
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.health).toBe("fault");
+  expect(conn.detail).not.toContain("CANARY");
+});
+
 it("ignores completion and close callbacks from a superseded stream", () => {
   useProviderStore.setState({ connections: [connection({})] });
   const { result, onEvent } = startAndCapture("an");

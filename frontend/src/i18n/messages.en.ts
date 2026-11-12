@@ -489,6 +489,10 @@ export const en = {
   "fault.rateLimited": "Rate limited",
   "fault.outOfCredits": "Out of credits",
   "fault.signIn": "Sign-in needed",
+  "run.cliFailure.cli-signin": "Sign in to the CLI, then test the connection again in Providers.",
+  "run.cliFailure.cli-missing": "Install the CLI, sign in, then test the connection in Providers.",
+  "run.cliFailure.cli-timeout": "The CLI did not finish in time. Try again or test the connection in Providers.",
+  "run.cliFailure.cli-error": "The CLI run failed. Sign in or test the connection in Providers.",
   "fault.notInstalled": "Not installed",
   "fault.unknown": "Test failed",
 
