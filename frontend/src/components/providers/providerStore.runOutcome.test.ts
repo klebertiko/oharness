@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { providerFault } from "../agent/chatProvider";
 import { isProviderLevelFailure, useProviderStore, type Connection } from "./providerStore";
 
 /**
@@ -103,5 +104,29 @@ describe("providerStore.reportRunOutcome", () => {
     const before = useProviderStore.getState().connections;
     useProviderStore.getState().reportRunOutcome("does-not-exist", { ok: true });
     expect(useProviderStore.getState().connections).toEqual(before);
+  });
+});
+
+describe("providerStore.reportRunOutcome — expired CLI session (R-PRV-04)", () => {
+  it("a cli-signin run failure turns a Verified connection into Sign-in needed, with no new click", () => {
+    seed({ label: "Claude", health: "live", enabled: true, detail: "Signed in on the CLI." });
+    useProviderStore.getState().reportRunOutcome("an", { ok: false, cliFailure: "cli-signin", detail: "Sign in to the CLI, then test the connection again in Providers." });
+    const c = useProviderStore.getState().connections.find((x) => x.id === "an")!;
+    expect(c.health).toBe("setup");
+    expect(providerFault(c)).toBe("cli-signin");
+  });
+
+  it("a cli-missing run failure becomes Not installed", () => {
+    seed({ label: "Claude", health: "live", enabled: true });
+    useProviderStore.getState().reportRunOutcome("an", { ok: false, cliFailure: "cli-missing", detail: "x" });
+    expect(providerFault(useProviderStore.getState().connections.find((x) => x.id === "an")!)).toBe("cli-missing");
+  });
+
+  it("a later successful live outcome restores Verified", () => {
+    seed({ label: "Claude", health: "live", enabled: true });
+    const s = useProviderStore.getState();
+    s.reportRunOutcome("an", { ok: false, cliFailure: "cli-signin", detail: "d" });
+    s.reportRunOutcome("an", { ok: true });
+    expect(useProviderStore.getState().connections.find((x) => x.id === "an")?.health).toBe("live");
   });
 });

@@ -29,7 +29,7 @@ body:
   - type: checkboxes
     id: dor
     attributes:
-      label: Definition of Ready (docs/process/backlog.md)
+      label: Definition of Ready (docs/process/dor-dod.md)
       description: Só marque `status:ready` com todos marcados.
       options:
         - label: Critérios do "Pronto quando" são verificáveis e cabem em 1 PR pequeno

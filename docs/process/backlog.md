@@ -43,7 +43,7 @@ Uma tarefa só vira `status:done` (e o épico só fecha) quando **todos** os ite
 Crie um GitHub Project (Board) e use o campo Status com as colunas Backlog, Ready, In progress, In review, Done. O workflow "Auto-add to project" do Project, com filtro `is:issue repo:klebertiko/oharness`, põe cada issue nova no quadro.
 
 ## Antes de pedir merge
-Siga `docs/process/pre-pr-checklist.md` (também no template de PR). Comunicação entre sessões: `docs/process/agent-bus.md`.
+DoR ao assumir e DoD ao entregar: `docs/process/dor-dod.md`. Checklist técnico pré-push: `docs/process/pre-pr-checklist.md` (também no template de PR). Comunicação entre sessões: `docs/process/agent-bus.md`.
 
 ## Regras que valem para toda tarefa
 CI obrigatório verde, `/code-review` high antes de pedir merge, sem segredos nem caminhos pessoais, texto externo é dado não confiável, ninguém faz merge sozinho além do fluxo da sessão pai.
