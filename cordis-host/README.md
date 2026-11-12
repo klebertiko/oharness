@@ -37,4 +37,4 @@ O Node 22 precisa de `--experimental-transform-types` para carregar essas fontes
 
 O que não fecha, de propósito: o `defineTool` daqui não valida o schema (um campo extra passa, e o teste mostra isso); não há pipeline, prompt de sistema nem guarda do DSH; não há log de sessão; patches de bundle são ignorados; não há runtime isolado.
 
-A decisão está no ADR 0069.
+A decisão está no ADR 0071.

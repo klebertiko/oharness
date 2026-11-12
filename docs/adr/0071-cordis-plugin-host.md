@@ -1,6 +1,6 @@
-# ADR 0069 — Host Node de Cordis plugins
+# ADR 0071 — Host Node de Cordis plugins
 
-Status: proposta desta sessão (2026-11-12), spike da issue #466 (parte de #441). O número 0068 fica com o PR #444.
+Status: proposta desta sessão (2026-11-12), spike da issue #466 (parte de #441). 0068 está no PR #444 e 0069 no PR #467; este documento é o 0071.
 
 ## Contexto
 
