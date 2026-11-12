@@ -11,7 +11,9 @@ A destinação **Forja** do app (barra lateral, `Alt+4`) junta o que a Forja loc
 
 ## Decisões são de uma pessoa
 
-Aprovar uma especificação, responder, confirmar o merge, ativar uma versão e mexer em segredos e memória pedem a credencial da pessoa, que o app de desktop entrega à tela (`window.__OH_HUMAN__`, ADR 0055). Sem ela, a tela explica em uma frase que a decisão é de uma pessoa, em vez de mostrar um erro.
+Aprovar ou editar uma especificação, responder, pedir mudanças, avançar um estágio, confirmar o merge, verificar o pouso, ler e resolver a caixa de entrada, ativar uma versão e mexer em segredos e memória pedem a credencial da pessoa. Cancelar, estacionar, retomar e assumir um item não pedem (se devem pedir é decisão pendente do dono, #442). **No app de desktop** o shell a gera a cada abertura, entrega ao sidecar (`OH_HUMAN_TOKEN`) e à janela principal (`window.__OH_HUMAN__`), só em memória: ela não aparece em URL, armazenamento do navegador, log nem evento, e não é o token que agentes, a CLI e o MCP usam (ADR 0055). Por isso essas decisões funcionam na tela do app e **só nela**: um agente, o MCP ou a CLI recebem 403 `human_only`.
+
+Onde não há o shell do app, nada define a credencial e a tela explica em uma frase que a decisão é de uma pessoa, em vez de mostrar um erro. Isso vale para abrir o frontend num navegador ou rodar só o backend; para desenvolver, `OH_FACTORY_DEV_HUMAN=1` no backend é a ponte explícita (mais fraca: qualquer cliente local passa por pessoa).
 
 ## Ainda não está nesta tela
 
