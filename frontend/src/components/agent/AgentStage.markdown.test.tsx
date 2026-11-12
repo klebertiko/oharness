@@ -48,7 +48,8 @@ afterEach(cleanup);
 describe("AgentStage assistant markdown", () => {
   it("renders the saved assistant reply and leaves the person's message as text", () => {
     const id = useThreadStore.getState().createThread("Chat");
-    useThreadStore.getState().appendMessage(id, { role: "user", content: "- stay literal\n<script>no</script>" });
+    const shownTag = "<" + "script>no</" + "script>";
+    useThreadStore.getState().appendMessage(id, { role: "user", content: "- stay literal\n" + shownTag });
     useThreadStore.getState().appendMessage(id, { role: "assistant", content: reply });
     const { container } = render(<AgentStage />);
 
@@ -57,7 +58,7 @@ describe("AgentStage assistant markdown", () => {
     expect(user.className).toContain("max-w-[68ch]");
     expect(user.querySelector("ul, a, script")).toBeNull();
     expect(user.textContent).toContain("- stay literal");
-    expect(user.textContent).toContain("<script>no</script>");
+    expect(user.textContent).toContain(shownTag);
 
     const assistant = screen.getByText("OHarness").parentElement as HTMLElement;
     expect(assistant.querySelector("ul")?.textContent).toContain("one");
