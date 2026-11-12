@@ -35,7 +35,7 @@ def test_blank_override_is_ignored(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("system", "env", "expected"),
     [
-        ("Windows", {"LOCALAPPDATA": "C:/Users/a/AppData/Local"}, Path("C:/Users/a/AppData/Local") / "dev.oharness.app"),
+        ("Windows", {"LOCALAPPDATA": "C:/local-data"}, Path("C:/local-data") / "dev.oharness.app"),
         ("Darwin", {}, Path("/home/a") / "Library" / "Application Support" / "dev.oharness.app"),
         ("Linux", {}, Path("/home/a") / ".local" / "share" / "dev.oharness.app"),
         ("Linux", {"XDG_DATA_HOME": "/xdg"}, Path("/xdg") / "dev.oharness.app"),
