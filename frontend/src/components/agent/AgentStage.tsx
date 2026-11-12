@@ -5,6 +5,7 @@ import { ArrowUp, Code2, ListChecks, Search, Square } from "lucide-react";
 
 import { HarnessBar } from "@/components/agent/HarnessBar";
 import { ChatComposer, presetFromSlashText } from "@/components/agent/ChatComposer";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 import { MessageActions } from "./MessageActions";
 import { useChatTools } from "@/components/agent/useChatTools";
 import { usePermissionMode } from "@/components/agent/usePermissionMode";
@@ -469,9 +470,11 @@ export function AgentStage() {
                 <span className="text-body font-medium text-ink-mute">
                   {m.role === "user" ? "You" : m.providerLabel ? `OHarness · ${m.providerLabel}` : "OHarness"}
                 </span>
-                <div className={["max-w-[68ch] whitespace-pre-wrap text-reading wrap-anywhere", m.role === "user" ? "text-ink" : "text-ink-dim"].join(" ")}>
-                  {m.content}
-                </div>
+                {m.role === "user" ? (
+                  <div className="max-w-[68ch] whitespace-pre-wrap text-reading wrap-anywhere text-ink">{m.content}</div>
+                ) : (
+                  <AssistantMarkdown text={m.content} />
+                )}
                 <MessageActions content={m.content} onReuse={!live ? () => applySuggestion(m.content) : undefined} />
                 {m.role === "assistant" && m.runId && (
                   <HistoricalRunDetail
@@ -495,7 +498,11 @@ export function AgentStage() {
                   elapsed={elapsed}
                   tokens={run.totals.tokens}
                 />
-                {liveAnswer && <div role="region" aria-label="Live answer" className="mt-3 max-w-[68ch] whitespace-pre-wrap text-reading text-ink-dim wrap-anywhere">{liveAnswer}</div>}
+                {liveAnswer && (
+                  <div role="region" aria-label="Live answer" className="mt-3">
+                    <AssistantMarkdown text={liveAnswer} />
+                  </div>
+                )}
                 {gateSeg && (
                   <div className="mt-2">
                     <Gate segment={gateSeg} onResolve={resolveGate} />
