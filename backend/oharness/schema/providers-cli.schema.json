@@ -15,7 +15,7 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "command": { "const": "list" },
-        "dataDir": { "type": "string" },
+        "dataDir": { "type": "string", "description": "Relative to the profile (`~/...`) when it lives there; the full path with `--verbose`." },
         "connections": {
           "type": "array",
           "items": {
@@ -27,7 +27,7 @@
               "provider": { "type": "string" },
               "label": { "type": "string" },
               "residence": { "enum": ["local", "cloud"] },
-              "endpoint": { "type": "string" },
+              "endpoint": { "type": "string", "description": "Scheme, host, port and path only: never userinfo, query or fragment; empty when it is not an http(s) URL." },
               "enabled": { "type": "boolean" },
               "credentialKind": { "enum": ["cli", "api-key", "none", "unknown"] },
               "hasSecret": { "type": "boolean" },

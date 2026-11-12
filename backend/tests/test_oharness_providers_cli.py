@@ -77,6 +77,46 @@ def test_list_json_is_versioned_schema_valid_and_has_no_secret(world, capsys):
     assert SECRET not in out + err and "secretRef" not in out
 
 
+def test_an_endpoint_is_printed_without_userinfo_query_or_fragment(world, capsys):
+    """A pasted `https://user:token@host/path?key=...` must never reach stdout, in JSON or in text."""
+    world.connections["openrouter"]["endpoint"] = "https://me:" + SECRET + "@openrouter.ai/api/v1?api_key=" + SECRET + "#frag"
+    code, out, err = run(capsys, "list", "--json")
+    assert code == 0 and SECRET not in out + err and "me:" not in out and "api_key" not in out and "frag" not in out
+    doc = json.loads(out)
+    assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
+    assert {c["id"]: c["endpoint"] for c in doc["connections"]}["openrouter"] == "https://openrouter.ai/api/v1"
+    code, text, err = run(capsys, "list")
+    assert SECRET not in text + err and "me:" not in text and "api_key" not in text
+
+
+def test_an_endpoint_that_is_not_a_url_is_never_echoed(world, capsys):
+    world.connections["openrouter"]["endpoint"] = "not a url with " + SECRET
+    _, out, err = run(capsys, "list", "--json")
+    assert SECRET not in out + err
+    _, text, err = run(capsys, "list")
+    assert SECRET not in text + err
+
+
+def test_the_data_directory_is_shown_relative_to_the_profile_unless_verbose(world, capsys, monkeypatch, tmp_path):
+    """The absolute path carries the OS user name: it is spelled `~/...` by default and in full only on request."""
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("OH_DATA_DIR", str(tmp_path / "data" / "oh"))
+    _, out, _ = run(capsys, "list", "--json")
+    shown = json.loads(out)["dataDir"]
+    assert shown == "~/data/oh" and str(tmp_path) not in out
+    _, full, _ = run(capsys, "list", "--json", "--verbose")
+    assert json.loads(full)["dataDir"] == str(tmp_path / "data" / "oh")
+
+
+def test_a_data_directory_outside_the_profile_is_shown_as_it_is(world, capsys, monkeypatch, tmp_path):
+    home, elsewhere = tmp_path / "home", tmp_path / "elsewhere"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setenv("OH_DATA_DIR", str(elsewhere))
+    _, out, _ = run(capsys, "list", "--json")
+    assert json.loads(out)["dataDir"] == str(elsewhere)
+
+
 def test_list_text_shows_every_connection_and_no_secret(world, capsys):
     code, out, err = run(capsys, "list")
     assert code == 0
@@ -105,7 +145,9 @@ def test_test_live_exits_zero_with_schema_valid_json(world, capsys):
 def test_test_any_state_but_live_exits_non_zero(world, capsys, health):
     world.adapter.result = ProbeResult(ok=False, health=health, detail="Sign in first.")
     code, out, _ = run(capsys, "test", "anthropic", "--json")
-    assert code == 1 and json.loads(out)["health"] == health and json.loads(out)["ok"] is False
+    doc = json.loads(out)
+    assert code == 1 and doc["health"] == health and doc["ok"] is False
+    assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
 
 
 def test_test_unknown_id_is_a_usage_error_on_stderr(world, capsys):
@@ -191,7 +233,7 @@ def _list_from_data_dir(queue) -> None:
 
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        code = main(["providers", "list", "--json"])
+        code = main(["providers", "list", "--json", "--verbose"])
     queue.put((code, out.getvalue()))
 
 
@@ -216,4 +258,4 @@ def test_real_process_lists_what_the_data_directory_holds(monkeypatch, tmp_path)
     assert code == 0 and listing.exitcode == 0
     doc = json.loads(text)
     assert [c["id"] for c in doc["connections"]] == ["cursor"]
-    assert doc["dataDir"] == str(tmp_path)
+    assert doc["dataDir"] == str(tmp_path)  # `--verbose`: the full path, whatever the profile
