@@ -1,4 +1,4 @@
-# ADR 0068 — Resposta do assistente em markdown, sem HTML
+# ADR 0069 — Resposta do assistente em markdown, sem HTML
 
 Status: Aceito (reversível) · 2026-11-12 · Issue #299 (paridade A10) · Código: `frontend/src/components/agent/AssistantMarkdown.tsx`, `frontend/src/components/agent/safeMarkdown.ts`
 
