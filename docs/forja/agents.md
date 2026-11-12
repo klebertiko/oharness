@@ -8,7 +8,7 @@ Um agente da Forja é um ator de longa duração descrito por um arquivo em `age
 python -m oharness forja init .oharness/forja --name payments --model openai/gpt-4o --review-model anthropic/claude-opus --role triage --role implement --role review
 ```
 
-Escreve uma pasta válida: o foreman mais os papéis pedidos, cada um com o ponto de partida do seu papel (`default_agent`). Nunca sobrescreve uma pasta que já tem arquivos. Recusa o que a definição recusaria, como um review com o mesmo modelo do implement. Depois é só editar os arquivos e rodar `python -m oharness forja validate .oharness/forja --check`.
+Escreve uma pasta válida: o foreman mais os papéis pedidos, cada um com o ponto de partida do seu papel (`default_agent`). Nunca sobrescreve uma pasta que já tem arquivos; se a escrita falha no meio, a pasta fica ausente ou vazia para a próxima tentativa. Recusa o que a definição recusaria, como um review com o mesmo modelo do implement. Depois é só editar os arquivos e rodar `python -m oharness forja validate .oharness/forja --check`.
 
 ## Adoção parcial
 
@@ -26,11 +26,11 @@ O que um agente alcança é calculado só pelos campos de configuração:
 | `tokenCeiling`, `permissions.maxTokens` | Teto de tokens; vale o menor entre eles e `ceilings.tokensPerRun`. |
 | repositórios | Os repositórios declarados na Forja. |
 
-Instruções e skills são orientação. Editar um texto (ou instalar uma skill) não adiciona servidor, segredo, repositório nem permissão; um teste de contrato compara as capacidades antes e depois de mudar só as palavras. Isso também limita injeção de prompt: texto que chega de fora não amplia o que o agente alcança.
+Instruções e skills são orientação. Editar um texto (ou instalar uma skill) não adiciona servidor, segredo, repositório nem permissão; um teste de contrato compara as capacidades antes e depois de mudar só as palavras. O runner entrega só os segredos desse cálculo. O plano do foreman só atribui a um estágio um agente que ele pode receber: o modo é o efetivo (o mais restritivo), um harness só cabe em `plan` ou `read_only`, e `maxTokens` não passa do teto calculado. O texto do foreman na chamada ao modelo é o das instruções e das skills dele. Isso também limita injeção de prompt: texto que chega de fora não amplia o que o agente alcança.
 
 ## Skills
 
-Três origens, em ordem: de papel (embarcadas por papel; o foreman leva `reply-to-origin`), embutidas (`forja-definition`, `forja-intake`, citadas em `skills`) e custom (`skills/<id>/SKILL.md` globais ou `agents/<id>/skills/<id>/SKILL.md` de um agente). Agentes `custom` não recebem as embutidas. As skills estendem as instruções do agente e não as substituem.
+Quatro origens, com o rótulo que o código grava. As de papel (`role`) vêm primeiro, embarcadas por papel; o foreman leva `reply-to-origin`. Cada skill citada em `skills` resolve nesta ordem: a do agente (`agent`, `agents/<id>/skills/<id>/SKILL.md`), a global (`global`, `skills/<id>/SKILL.md`) e a embutida (`builtin`, `forja-definition` e `forja-intake`). Agentes `custom` não recebem as embutidas. As skills estendem as instruções do agente e não as substituem.
 
 ## Review diferente de implement
 
