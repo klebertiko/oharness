@@ -1,6 +1,8 @@
 import { isChatCapable, pickChatProvider } from "@/components/agent/chatProvider";
 import { closestToReady, nextStep, stepText, type NextStep } from "./nextStep";
 import type { Connection } from "./providerStore";
+import { EMPTY_TABLE } from "./stateTable";
+import { tr } from "@/i18n/store";
 
 /** What the composer tells the person when `pickChatProvider` came back null:
     never a bare "Unavailable" (design.md § Provider stance). Null once a provider
@@ -19,12 +21,11 @@ export function missingProviderAction(
 ): { text: string; id: string | null; step?: NextStep } | null {
   if (pickChatProvider(connections, chosenId)) return null;
   const target = chosenId ? connections.find((c) => c.id === chosenId) : closestToReady(connections.filter(isChatCapable));
-  if (!target || !isChatCapable(target)) {
-    return { text: chosenId ? "Pick a provider to send" : "Connect a provider to send", id: null };
-  }
+  if (!target) return { text: tr(EMPTY_TABLE[chosenId ? "pick-provider" : "no-connection"].text), id: null };
+  if (!isChatCapable(target)) return { text: tr(EMPTY_TABLE["agent-only"].text), id: null };
   const step = nextStep(target);
   // No step on a connection that still cannot answer means the cause is not one this screen can name.
-  if (!step) return { text: `Open Providers · ${target.label}`, id: target.id };
+  if (!step) return { text: tr(EMPTY_TABLE["open-providers"].text, { label: target.label }), id: target.id };
   return { text: stepText(target, step), id: target.id, step };
 }
 
