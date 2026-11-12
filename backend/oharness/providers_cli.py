@@ -3,7 +3,8 @@
 `list` reads the same connections the desktop app shows (one data directory, `data_dir.resolve_data_dir`). `test <id>` runs the
 same probe the app's Test button runs (`routers.providers.probe_connection`): a status command for a subscription CLI, the
 vendor's no-cost model listing for an API key. Neither prints a secret, a secret reference or raw CLI output: a probe that
-crashes is reported by a fixed line, and everything a probe says is redacted before it is printed. `--json` follows
+crashes is reported as `fault`. A probe's own words (an account e-mail, a CLI's stderr) are never printed: the output is its state,
+latency, model count and one fixed sentence per state (en or pt-BR, from `OHARNESS_LANG`/`LANG`). `--json` follows
 `schema/providers-cli.schema.json` (versioned, validated by tests).
 """
 from __future__ import annotations
@@ -13,7 +14,6 @@ import sys
 
 SCHEMA_VERSION = 1
 EXIT_OK, EXIT_NOT_LIVE, EXIT_USAGE = 0, 1, 2
-CRASH_DETAIL = "The probe failed to run. Check the provider's configuration and try again."
 
 
 def add_parser(sub) -> None:
@@ -58,12 +58,6 @@ def _public(row: dict) -> dict:
     }
 
 
-def _safe(text: str) -> str:
-    from studio_copilot.redaction import redact  # the shared redactor plus the provider key shapes it misses (sk-ant-, sk-proj-, AIza)
-
-    return redact(str(text))[0]
-
-
 async def _list(as_json: bool) -> int:
     connections, _ = await _load_runtime()
     from data_dir import resolve_data_dir
@@ -82,21 +76,39 @@ async def _list(as_json: bool) -> int:
     return EXIT_OK
 
 
+MESSAGES = {  # one fixed sentence per state: what a probe says (an account e-mail, a CLI's own stderr) is never printed
+    "en": {
+        "live": "The connection is live.",
+        "setup": "Setup is needed: install the provider's CLI or sign in, then test again.",
+        "degraded": "The connection answers but is degraded.",
+        "fault": "The connection is not working. Check this provider in OHarness.",
+    },
+    "pt-BR": {
+        "live": "A conexão está ativa.",
+        "setup": "Falta configurar: instale a CLI do provedor ou entre na conta e teste de novo.",
+        "degraded": "A conexão responde, mas está degradada.",
+        "fault": "A conexão não está funcionando. Confira este provedor no OHarness.",
+    },
+}
+
+
+def _language() -> str:
+    import os
+
+    raw = os.environ.get("OHARNESS_LANG") or os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
+    return "pt-BR" if raw.lower().startswith("pt") else "en"
+
+
 async def _probe(connection_id: str, connections: dict, store) -> dict:
+    """Run the app's probe and keep only its state, its latency and how many models it listed."""
     from routers.providers import probe_connection
 
     try:
         result = await probe_connection(connection_id, connections=connections, store=store)
     except Exception:  # never echo the exception: it can hold CLI stderr, a prompt or a credential
-        return {"ok": False, "health": "fault", "detail": CRASH_DETAIL, "latencyMs": 0, "facts": [], "models": []}
-    return {
-        "ok": bool(result["ok"]),
-        "health": result["health"],
-        "detail": _safe(result["detail"]),
-        "latencyMs": int(result["latencyMs"]),
-        "facts": [{"k": _safe(f["k"]), "v": _safe(f["v"]), "tone": f["tone"]} for f in result["facts"]],
-        "models": [_safe(m) for m in result["models"]],
-    }
+        return {"ok": False, "health": "fault", "latencyMs": 0, "modelCount": 0}
+    health = result["health"] if result["health"] in MESSAGES["en"] else "fault"
+    return {"ok": health == "live" and bool(result["ok"]), "health": health, "latencyMs": max(0, int(result["latencyMs"])), "modelCount": len(result["models"])}
 
 
 async def _test(connection_id: str, as_json: bool) -> int:
@@ -106,14 +118,13 @@ async def _test(connection_id: str, as_json: bool) -> int:
         print(f"no connection {connection_id!r}: see `oharness providers list`", file=sys.stderr)
         return EXIT_USAGE
     outcome = await _probe(connection_id, connections, store)
-    doc = {"schemaVersion": SCHEMA_VERSION, "command": "test", "id": row["id"], "provider": row["provider"], **outcome}
+    message = MESSAGES[_language()][outcome["health"]]
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "test", "id": row["id"], "provider": row["provider"], **outcome, "message": message}
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
     else:
-        print(f"{row['id']}: {doc['health']} - {doc['detail']}")
-        for fact in doc["facts"]:
-            print(f"  {fact['k']}: {fact['v']}")
-    return EXIT_OK if doc["health"] == "live" else EXIT_NOT_LIVE
+        print(f"{row['id']}: {outcome['health']} - {message}")
+    return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
 def run(args) -> int:

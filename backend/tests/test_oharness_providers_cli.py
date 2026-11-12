@@ -101,14 +101,14 @@ def test_test_live_exits_zero_with_schema_valid_json(world, capsys):
     doc = json.loads(out)
     assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
     assert doc["command"] == "test" and doc["health"] == "live" and doc["ok"] is True and doc["id"] == "anthropic"
-    assert doc["facts"] == [{"k": "Plan", "v": "Max", "tone": "ok"}] and doc["models"] == ["m1"]
+    assert doc["modelCount"] == 1 and doc["latencyMs"] == 12 and doc["message"] == "The connection is live."
 
 
 @pytest.mark.parametrize("health", ["setup", "degraded", "fault"])
 def test_test_any_state_but_live_exits_non_zero(world, capsys, health):
     world.adapter.result = ProbeResult(ok=False, health=health, detail="Sign in first.")
     code, out, _ = run(capsys, "test", "anthropic", "--json")
-    assert code == 1 and json.loads(out)["health"] == health
+    assert code == 1 and json.loads(out)["health"] == health and json.loads(out)["ok"] is False
 
 
 def test_test_unknown_id_is_a_usage_error_on_stderr(world, capsys):
@@ -137,11 +137,36 @@ def test_a_crashing_probe_prints_a_fixed_line_not_the_exception_text(world, caps
     assert json.loads(out)["health"] == "fault"
 
 
-def test_a_probe_detail_that_carries_a_secret_shaped_value_is_redacted(world, capsys):
+def test_a_probe_s_own_words_are_never_printed(world, capsys):
+    """The adapters' detail and facts carry the account e-mail and a CLI's own last stderr line: only a fixed sentence per state gets out."""
+    email = "someone" + "@" + "example.test"
     leaked = "sk-ant-" + "a1b2c3d4e5f6g7h8i9j0k1l2"
-    world.adapter.result = ProbeResult(ok=False, health="fault", detail=f"failed with {leaked}", facts=[("Key", leaked, "bad")])
-    code, out, err = run(capsys, "test", "anthropic", "--json")
-    assert leaked not in out + err
+    world.adapter.result = ProbeResult(
+        ok=True, health="live", detail=f"Logged in as {email} (Max plan). {STDERR_CANARY} {leaked}",
+        facts=[("Account", email, "ok"), ("Raw", STDERR_CANARY, "bad")], models=[STDERR_CANARY],
+    )
+    for extra in ([], ["--json"]):
+        code, out, err = run(capsys, "test", "anthropic", *extra)
+        assert code == 0
+        for needle in (email, STDERR_CANARY, leaked, "Max plan"):
+            assert needle not in out + err, needle
+
+
+@pytest.mark.parametrize("health", ["live", "setup", "degraded", "fault"])
+def test_each_state_prints_its_one_fixed_sentence_in_both_languages(world, capsys, monkeypatch, health):
+    world.adapter.result = ProbeResult(ok=health == "live", health=health, detail="ignored")
+    monkeypatch.setenv("OHARNESS_LANG", "en")
+    _, en_out, _ = run(capsys, "test", "anthropic", "--json")
+    monkeypatch.setenv("OHARNESS_LANG", "pt-BR")
+    _, pt_out, _ = run(capsys, "test", "anthropic", "--json")
+    en, pt = json.loads(en_out)["message"], json.loads(pt_out)["message"]
+    assert en and pt and en != pt and "ignored" not in en + pt
+
+
+def test_a_health_the_cli_does_not_know_is_reported_as_fault(world, capsys):
+    world.adapter.result = ProbeResult(ok=True, health="mystery", detail="x")
+    code, out, _ = run(capsys, "test", "anthropic", "--json")
+    assert code == 1 and json.loads(out)["health"] == "fault" and json.loads(out)["ok"] is False
 
 
 def test_real_process_lists_what_the_data_directory_holds(tmp_path):
@@ -160,8 +185,8 @@ def test_real_process_lists_what_the_data_directory_holds(tmp_path):
         "        await store.upsert(db, {'id': 'cursor', 'provider': 'cursor', 'label': 'Cursor', 'residence': 'cloud', 'endpoint': '', 'enabled': True})\n"
         "asyncio.run(go())\n"
     )
-    subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); exec(sys.argv[2])", str(BACKEND), seed], env=env, check=True, cwd=tmp_path, timeout=60)
-    done = subprocess.run([sys.executable, "-m", "oharness", "providers", "list", "--json"], env=env, cwd=BACKEND, capture_output=True, text=True, timeout=60)
+    subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); exec(sys.argv[2])", str(BACKEND), seed], env=env, check=True, cwd=tmp_path, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
+    done = subprocess.run([sys.executable, "-m", "oharness", "providers", "list", "--json"], env=env, cwd=BACKEND, capture_output=True, text=True, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     assert done.returncode == 0, done.stderr
     doc = json.loads(done.stdout)
     assert [c["id"] for c in doc["connections"]] == ["cursor"]

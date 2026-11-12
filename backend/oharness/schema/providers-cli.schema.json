@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oharness.dev/schema/providers-cli.schema.json",
   "title": "OHarness providers CLI output",
-  "description": "The document `oharness providers list --json` and `oharness providers test <id> --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference or raw CLI output.",
+  "description": "The document `oharness providers list --json` and `oharness providers test <id> --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
   "oneOf": [
     { "$ref": "#/$defs/list" },
     { "$ref": "#/$defs/test" }
@@ -39,7 +39,7 @@
     },
     "test": {
       "type": "object",
-      "required": ["schemaVersion", "command", "id", "provider", "ok", "health", "detail", "latencyMs", "facts", "models"],
+      "required": ["schemaVersion", "command", "id", "provider", "ok", "health", "message", "latencyMs", "modelCount"],
       "additionalProperties": false,
       "properties": {
         "schemaVersion": { "const": 1 },
@@ -48,18 +48,9 @@
         "provider": { "type": "string" },
         "ok": { "type": "boolean" },
         "health": { "enum": ["live", "setup", "degraded", "fault"] },
-        "detail": { "type": "string" },
+        "message": { "type": "string", "description": "One fixed sentence per state (en or pt-BR). Never a probe's own text." },
         "latencyMs": { "type": "integer", "minimum": 0 },
-        "facts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["k", "v", "tone"],
-            "additionalProperties": false,
-            "properties": { "k": { "type": "string" }, "v": { "type": "string" }, "tone": { "type": "string" } }
-          }
-        },
-        "models": { "type": "array", "items": { "type": "string" } }
+        "modelCount": { "type": "integer", "minimum": 0 }
       }
     }
   }
