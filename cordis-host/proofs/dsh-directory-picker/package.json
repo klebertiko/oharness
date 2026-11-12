@@ -1,0 +1,12 @@
+{
+  "name": "@oharness/proof-dsh-directory-picker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Concrete plugin that loads the vendored DSH directory-picker service, which imports only Cordis.",
+  "main": "./index.ts",
+  "oharness": {
+    "runtime": "in-process"
+  }
+}

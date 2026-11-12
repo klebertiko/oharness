@@ -1,0 +1,9 @@
+{
+  "name": "@deepseek-ai/dsh-host-directory-picker",
+  "version": "0.2.2-rc.2",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Pinned DeepSeek Harness directory-picker service used by the Cordis host proof. index.ts and types.ts are the upstream files named in ../PIN.json.",
+  "main": "./index.ts"
+}
