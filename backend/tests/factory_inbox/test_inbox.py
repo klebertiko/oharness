@@ -1,6 +1,8 @@
 """Inbox of human decisions: derived from the work items, so an entry leaves by itself when it stops being true (ADR 0058)."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import anyio
 import pytest
 from fastapi.testclient import TestClient
@@ -228,3 +230,62 @@ def test_the_answered_notice_is_not_shown_for_an_item_a_person_holds(client):
     client.post(f'/factory/work-items/{q}/actions', json={'action': 'answer', 'text': 'staging'}, headers=HUMAN)
     client.post(f'/factory/work-items/{q}/actions', json={'action': 'claim', 'holder': 'me'}, headers=HUMAN)
     assert kinds(client, include_info='true') == []
+
+
+def _history(client, item_id):
+    return client.get(f'/factory/work-items/{item_id}/events').json()['events']
+
+
+def _just_now(stamp: str) -> bool:
+    moment = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+    return abs((datetime.now(timezone.utc) - moment).total_seconds()) < 120
+
+
+def test_resolve_and_undo_record_who_and_when_without_closing_the_question(client):
+    q = make(client)
+    drive(q, ask)
+    entry = inbox(client)['entries'][0]
+    # Undoing a choice that was never made leaves no trail.
+    assert client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    assert [e for e in _history(client, q) if e['type'] == 'inbox_restored'] == []
+    assert client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    assert client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204  # once is enough
+    assert client.get(f'/factory/work-items/{q}').json()['status'] == 'awaiting_human'  # the question is still open
+    hidden = [e for e in _history(client, q) if e['type'] == 'inbox_resolved']
+    assert len(hidden) == 1
+    assert hidden[0]['actor'] == {'kind': 'human', 'id': 'local-user'} and _just_now(hidden[0]['at'])
+    assert hidden[0]['data'] == {'entry_id': entry['id'], 'entry_type': 'question'}
+    assert not any(e['type'] == 'checkpoint_resolved' for e in _history(client, q))
+    assert kinds(client) == []
+    assert client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    restored = [e for e in _history(client, q) if e['type'] == 'inbox_restored']
+    assert len(restored) == 1 and restored[0]['actor'] == {'kind': 'human', 'id': 'local-user'} and _just_now(restored[0]['at'])
+    assert restored[0]['data']['entry_id'] == entry['id']
+    assert kinds(client) == ['question'] and inbox(client)['entries'][0]['id'] == entry['id']
+
+
+def test_resolving_a_blocked_item_does_not_mint_a_new_entry(client):
+    item = make(client)
+    drive(item, lambda db, it: service.enter_stage(db, it, 'implement', ('foreman', 'foreman')))
+    drive(item, _block)
+    entry = inbox(client)['entries'][0]
+    assert entry['type'] == 'blocked'
+    client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    again = inbox(client, include_resolved='true')['entries']
+    assert [e['id'] for e in again] == [entry['id']] and again[0]['resolved'] is True and kinds(client) == []
+    assert [e for e in _history(client, item) if e['type'] == 'inbox_resolved'][0]['actor']['kind'] == 'human'
+
+
+def test_resolving_a_failure_keeps_the_entry_id_when_there_is_no_failed_event(client):
+    item = make(client)
+
+    async def fail_without_reason(db, it):
+        service._move(it, 'verify', 'failed')
+        await service.add_event(db, it, 'note', ('foreman', 'foreman'), {'text': 'context'})
+    drive(item, fail_without_reason)
+    entry = inbox(client)['entries'][0]
+    client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    again = inbox(client, include_resolved='true')['entries']
+    assert again[0]['id'] == entry['id'] and again[0]['resolved'] is True and kinds(client) == []
+    audit = [e for e in _history(client, item) if e['type'] == 'inbox_resolved']
+    assert len(audit) == 1 and audit[0]['actor']['kind'] == 'human' and audit[0]['data']['entry_id'] == entry['id']

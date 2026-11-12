@@ -27,7 +27,7 @@ async def get_inbox(factory_id: str | None = None, include_info: bool = False, i
 async def resolve(key: str, request: Request, db: AsyncSession = Depends(get_db)):
     _human(request)
     try:
-        await inbox.resolve(db, key)
+        await inbox.resolve(db, key, actor_for(request))
     except FactoryError as exc:
         raise HTTPException(status_code=exc.status, detail={'code': exc.code, 'message': exc.detail}) from None
     return Response(status_code=204)
@@ -36,5 +36,5 @@ async def resolve(key: str, request: Request, db: AsyncSession = Depends(get_db)
 @router.delete('/{key}/resolve', status_code=204)
 async def undo(key: str, request: Request, db: AsyncSession = Depends(get_db)):
     _human(request)
-    await inbox.undo(db, key)
+    await inbox.undo(db, key, actor_for(request))
     return Response(status_code=204)
