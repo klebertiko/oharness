@@ -8,6 +8,8 @@ import { useCanvasStore } from "@/store/canvasStore";
 import { PROPOSAL_STATES } from "@/lib/copilot/rules";
 import { useAssistProvider } from "@/lib/copilot/useAssistProvider";
 import { useCopilotStore, type Turn } from "@/store/copilotStore";
+import { useT } from "@/i18n/store";
+import { EMPTY_TABLE } from "@/components/providers/stateTable";
 import { ProposalCard } from "./ProposalCard";
 import { ProviderLine } from "./ProviderLine";
 
@@ -34,6 +36,7 @@ function TurnView({ turn }: { turn: Turn }) {
   const send = useCopilotStore((s) => s.send);
   const setSection = useShellStore((s) => s.setSection);
   const { mode, connectionId } = useAssistProvider();
+  const t = useT();
 
   if (turn.role === "user") {
     return (
@@ -61,7 +64,7 @@ function TurnView({ turn }: { turn: Turn }) {
             )}
             {turn.error.link === "providers" && (
               <button type="button" onClick={() => setSection("providers")} className="t-body text-signal-text underline-offset-2 hover:underline">
-                Open Providers
+                {t("empty.openProvidersLink")}
               </button>
             )}
           </div>
@@ -80,6 +83,7 @@ export function CopilotPanel() {
   const close = useCopilotStore((s) => s.close);
   const isRunning = useCanvasStore((s) => s.isRunning);
   const { mode, connectionId, provider, missing, requestSetup } = useAssistProvider();
+  const t = useT();
   const [draft, setDraft] = useState("");
   const working = status === "working";
   // A proposal still waiting for review is what this request refines.
@@ -200,7 +204,7 @@ export function CopilotPanel() {
               </Button>
             ) : (
               <Button variant="primary" onClick={requestSetup}>
-                {missing?.text ?? "Connect a provider to send"}
+                {missing?.text ?? t(EMPTY_TABLE["no-connection"].text)}
               </Button>
             )}
           </div>

@@ -1,5 +1,6 @@
 "use client";
 import { create } from "zustand";
+import type { ProviderFaultClass } from "@/components/agent/chatProvider";
 import {
   PROVIDERS,
   OLLAMA_CLOUD,
@@ -62,6 +63,8 @@ export interface Connection {
   modelsFromEndpoint?: boolean;
   enabled: boolean;
   lastProbe: string;
+  /** The closed failure class the sidecar reported for the last failed run or probe, when it named one. */
+  failure?: ProviderFaultClass;
 }
 
 export function specOf(c: Connection): ProviderSpec {
