@@ -66,9 +66,10 @@ def restrict_to_current_user(path: Path) -> bool:
     """
     if platform.system() == "Windows":
         user = os.environ.get("USERNAME") or getpass.getuser()
+        grant = f"{user}:(OI)(CI)F" if path.is_dir() else f"{user}:F"  # a directory's grant is inherited by what is written inside it
         try:
             done = subprocess.run(
-                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
+                ["icacls", str(path), "/inheritance:r", "/grant:r", grant],
                 capture_output=True,
                 timeout=5,
                 check=False,
@@ -77,7 +78,7 @@ def restrict_to_current_user(path: Path) -> bool:
             return False
         return done.returncode == 0
     try:
-        os.chmod(path, 0o600)
+        os.chmod(path, 0o700 if path.is_dir() else 0o600)
     except OSError:
         return False
     return True
