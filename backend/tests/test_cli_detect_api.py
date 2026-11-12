@@ -19,8 +19,9 @@ CRED_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CURSOR_API_KEY", "GITHUB_TO
 CANARY = "CANARY-STDERR-5f1c9a"
 MODULES = ("adapters.cli_claude", "adapters.cli_codex", "adapters.cli_cursor")
 
-CLAUDE_OK = json.dumps({"loggedIn": True, "email": "a@b.c", "subscriptionType": "max"})
-CURSOR_OK = json.dumps({"isAuthenticated": True, "userInfo": {"email": "a@b.c"}})
+EMAIL = "canary-person@example.test"
+CLAUDE_OK = json.dumps({"loggedIn": True, "email": EMAIL, "subscriptionType": "max"})
+CURSOR_OK = json.dumps({"isAuthenticated": True, "userInfo": {"email": EMAIL}})
 
 
 @pytest.fixture(autouse=True)
@@ -75,11 +76,12 @@ def test_reports_installed_signed_in_and_version_per_cli(client: TestClient) -> 
     })
     r = client.get("/providers/clis")
     assert r.status_code == 200
+    assert EMAIL not in r.text and CANARY not in r.text  # no account e-mail, no raw CLI output
     clis = _by_id(r.json())
     assert set(clis) == {"claude", "codex", "cursor"}
     assert clis["claude"] == {
         "id": "claude", "provider": "anthropic", "installed": True, "loggedIn": True,
-        "version": "2.1.4 (Claude Code)", "state": "ready", "detail": "Logged in as a@b.c (max plan).",
+        "version": "2.1.4 (Claude Code)", "state": "ready", "detail": "Signed in.",
     }
     assert clis["codex"]["provider"] == "openai" and clis["codex"]["state"] == "ready"
     assert clis["codex"]["version"] == "codex-cli 0.9.1"
@@ -149,3 +151,64 @@ def test_version_is_one_short_line(client: TestClient) -> None:
     })
     claude = _by_id(client.get("/providers/clis").json())["claude"]
     assert 0 < len(claude["version"]) <= 80 and "second" not in claude["version"]
+
+
+def test_gate_closed_with_the_binary_present_runs_nothing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: False)  # Codex only runs on Windows (SEC-6)
+    calls: list[dict] = []
+    app.state.cli_runner = _runner(calls, {})
+    codex = _by_id(client.get("/providers/clis").json())["codex"]
+    assert codex["installed"] is True and codex["state"] == "unavailable" and codex["version"] == ""
+    assert not any(c["argv"][0].endswith("codex") for c in calls)  # not even --version
+
+
+def test_gate_closed_with_the_binary_absent_is_not_installed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: False)
+    monkeypatch.setattr("adapters.cli_codex.find_cli", lambda name: None)
+    calls: list[dict] = []
+    app.state.cli_runner = _runner(calls, {})
+    codex = _by_id(client.get("/providers/clis").json())["codex"]
+    assert codex["installed"] is False and codex["state"] == "unavailable"
+    assert not any(c["argv"][0].endswith("codex") for c in calls)
+
+
+def test_native_windows_cursor_without_wsl_is_unavailable_and_not_installed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: True)
+    monkeypatch.setattr("adapters.cli_cursor._windows_wsl_prefix", lambda: None)
+    calls: list[dict] = []
+    app.state.cli_runner = _runner(calls, {})
+    cursor = _by_id(client.get("/providers/clis").json())["cursor"]
+    assert cursor["installed"] is False and cursor["state"] == "unavailable"
+    assert not any("cursor-agent" in c["argv"][0] for c in calls)
+
+
+def test_version_timeout_keeps_the_state(client: TestClient) -> None:
+    app.state.cli_runner = _runner([], {
+        ("claude", "--version"): CliRunResult(returncode=-1, stdout="", stderr="timed out", timed_out=True),
+        ("claude", "auth"): _ok(CLAUDE_OK),
+    })
+    claude = _by_id(client.get("/providers/clis").json())["claude"]
+    assert claude["state"] == "ready" and claude["version"] == ""
+
+
+def test_cli_output_is_read_up_to_64_kib(client: TestClient) -> None:
+    huge = json.dumps({"loggedIn": True, "pad": "x" * 100_000})
+    app.state.cli_runner = _runner([], {
+        ("claude", "--version"): _ok("2.1.4\n" + "y" * 200_000),
+        ("claude", "auth"): _ok(huge),
+    })
+    claude = _by_id(client.get("/providers/clis").json())["claude"]
+    assert claude["version"] == "2.1.4"
+    assert claude["state"] == "error"  # the status was cut at 64 KiB, so it no longer parses
+
+
+def test_route_needs_the_sidecar_token() -> None:
+    import httpx
+    from starlette.testclient import TestClient as Raw
+
+    raw = Raw(app)
+    raw.request = httpx.Client.request.__get__(raw, Raw)  # bypass conftest's auto-auth
+    assert raw.get("/providers/clis").status_code == 401
+    assert raw.get("/providers/clis", headers={"Authorization": "Bearer nope"}).status_code == 401
