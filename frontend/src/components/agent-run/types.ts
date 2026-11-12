@@ -111,6 +111,12 @@ export interface Segment {
       "not captured" — a 0 from the wire is never stored as a measurement. */
   latencyMs?: number;
   error?: string;
+  /** Why a PASS/FAIL branch was not taken (`node_skipped.reason`). Absent when the engine did not say, including a pending node `harness_done` marks skipped. */
+  skipReason?: string;
+  /** Gate fail-port loops (`gate_retry`), oldest first. `target` is the node id execution resumed at. */
+  retries?: { attempt: number; cap: number; target: string }[];
+  /** This node's own token limit crossed 80% (`node_token_warning`). `pct` is the fraction the engine sends, not a 0–100 figure. */
+  warnings?: { tokens: number; limit: number; pct: number }[];
 
   gate?: {
     question: string;
@@ -194,6 +200,10 @@ export interface RunState {
   notices: string[];
   /** Who made the Nilo-vs-Harness choice. Persisted as `route_decision`. */
   routeDecision: RouteDecision | null;
+  /** CLI probe or API fallback (`runtime_selected`). `reason` is empty when the preferred runtime was used. */
+  runtime: { kind: string; name: string; reason: string } | null;
+  /** Spend is past 80% of the USD budget and the run is still allowed (`budget_warning` from the execution router). `pct` is a fraction. */
+  budgetWarning: { spentUsd: number; limitUsd: number; pct: number } | null;
   /** The plan a Plan-mode run ended in (`plan_proposed`); nothing executes until a person approves it. */
   proposedPlan?: { planId: string; text: string };
   /** `plan_error`: the answer arrived but the sidecar could not keep it as a plan, so there is nothing to approve. */

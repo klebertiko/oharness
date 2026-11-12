@@ -2,13 +2,23 @@
 
 Desktop Agent + Harness Design Studio: run agents against Providers, and author harnesses as an OHarness Model (`.ohm`).
 
+**Processo (agentes):** antes de iniciar ou encerrar qualquer issue/story/PR, carregue e cumpra [`docs/process/dor-dod.md`](docs/process/dor-dod.md) (DoR na entrada, DoD na entrega). Comunicação entre sessões: [`docs/process/agent-bus.md`](docs/process/agent-bus.md).
+
 ## Language
 
 ### Model
 
 **OHarness Model (OHM)**:
-The portable JSON document that describes a harness — graph, content, connectors, and runtime. File extension `.ohm`.
-_Avoid_: oharness file, wallet bundle, pipeline JSON
+The Studio document, file extension `.ohm`, that draws a harness and can export it, including as a Plugin. It is the layer that says how tasks and requests are served, on top of Claude, Codex, or DeepSeek Harness.
+_Avoid_: oharness file, wallet bundle, pipeline JSON, Cordis Plugin
+
+**Plugin**:
+A harness package: agents, skills, scripts, hooks, commands, MCP, and instructions, as in mattpocock/skills, skills-framework, superpowers, or claude-mem.
+_Avoid_: Cordis Plugin, add-on, Skill (one capability, not the package), Connector, Hook
+
+**Cordis Plugin**:
+Code that extends a Node host, in the manner of DeepSeek Harness. It is not a Plugin.
+_Avoid_: Plugin, extension, add-on
 
 **Harness**:
 A composed system of Agents, Gates, HITL, Skills, and Signals that orchestrates work. Everything the product ships, shows or opens is a harness.

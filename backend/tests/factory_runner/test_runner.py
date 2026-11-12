@@ -380,3 +380,46 @@ def test_a_failed_index_write_leaves_no_orphan_in_the_vault(client, monkeypatch)
                 client.put(f'/factory/secrets/{name}', json={'value': 'brand-new-value'}, headers=HUMAN)
     assert not app.state.secrets_store.exists('forja/fresh')  # a new secret that was not indexed is not left behind
     assert app.state.secrets_store.get('forja/kept') == 'old-value-1234'  # a replacement that was not indexed puts the old value back
+
+
+def test_a_planted_folder_with_a_git_dir_is_not_a_run_workspace(tmp_path, monkeypatch):
+    _, repo = _repo(tmp_path, monkeypatch)
+    real = runner.create_run_workspace(repo, 'item-1', 'run-a')
+    from workspaces.config import Settings
+    fake = Settings.from_env().managed_root / Path(real['path']).parent.name / 'planted'
+    (fake / '.git').mkdir(parents=True)  # looks like a worktree, was never registered by the workspace manager
+    store = MemorySecrets()
+    store.put('forja/npm-token', VALUE)
+    try:
+        with pytest.raises(runner.RunnerError):
+            anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', 'print(1)'], {'id': 'planted', 'path': str(fake)}, store))
+    finally:
+        runner.remove_run_workspace(repo, real['id'])
+
+
+def test_a_path_with_a_nul_fails_closed_as_a_runner_error(tmp_path, monkeypatch):
+    _repo(tmp_path, monkeypatch)
+    store = MemorySecrets()
+    store.put('forja/npm-token', VALUE)
+    with pytest.raises(runner.RunnerError):
+        anyio.run(lambda: runner.run_as_agent(defn(), 'builder', [sys.executable, '-c', 'print(1)'], {'id': 'x', 'path': 'a\x00b'}, store))
+
+
+def test_two_failures_in_a_row_do_not_hide_the_first_error_or_overwrite_a_newer_value(client, monkeypatch):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def boom(self):
+        raise RuntimeError('disk full')
+    store = app.state.secrets_store
+    store.put('forja/twice', 'old-value-1234')
+
+    def failing_put(ref, value):
+        if value == 'old-value-1234':
+            raise OSError('vault locked')  # the undo fails too
+        return original(ref, value)
+    original = store.put
+    with monkeypatch.context() as patched:
+        patched.setattr(AsyncSession, 'commit', boom)
+        patched.setattr(store, 'put', failing_put)
+        with pytest.raises(RuntimeError, match='disk full'):  # the first error, not the undo's
+            client.put('/factory/secrets/twice', json={'value': 'brand-new-value'}, headers=HUMAN)

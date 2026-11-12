@@ -16,6 +16,8 @@ export const emptyRun: RunState = {
   steers: [],
   notices: [],
   routeDecision: null,
+  runtime: null,
+  budgetWarning: null,
   subagents: [],
   turnDiff: null,
   budget: null,
@@ -35,6 +37,10 @@ type Action =
  * an absent measurement as a real one. Tool calls pass `allowZero` because a
  * `tool_result` that does carry `duration_ms` can honestly be 0.
  */
+function finite(raw: unknown): number | undefined {
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
 function capturedMs(raw: unknown, allowZero = false): number | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
   return raw > 0 || (allowZero && raw === 0) ? raw : undefined;
@@ -420,17 +426,60 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
     }
 
-    case "node_skipped":
+    case "node_skipped": {
       // A PASS/FAIL branch this run didn't take (backend engine.py,
       // 2026-09-12) — distinct from "error": nothing went wrong, this path
       // just wasn't selected. `nodesRun` in `harness_done`'s totals already
       // excludes it; this only updates how the segment itself renders.
+      // `reason` is the engine's own words ("no matching condition"); a
+      // pending node that `harness_done` marks skipped has no reason.
+      const reason = typeof action.data.reason === "string" ? action.data.reason.trim() : "";
       return patch(state, String(d.node_id), (s) => ({
         ...s,
         state: "skipped",
         phase: "",
         endedAt: Date.now(),
+        ...(reason ? { skipReason: reason } : {}),
       }));
+    }
+
+    case "gate_retry": {
+      // A Gate's fail port looped back (engine.py). `attempt`/`cap` are
+      // integers; a fractional or empty payload is not a retry to show.
+      const attempt = finite(action.data.attempt);
+      const cap = finite(action.data.cap);
+      const target = typeof action.data.target === "string" ? action.data.target.trim() : "";
+      if (attempt === undefined || cap === undefined || !Number.isInteger(attempt) || !Number.isInteger(cap) || attempt < 1 || cap < 1 || !target) {
+        return state;
+      }
+      return patch(state, String(d.node_id), (s) => ({
+        ...s,
+        retries: [...(s.retries ?? []), { attempt, cap, target }],
+      }));
+    }
+
+    case "node_token_warning": {
+      // Non-blocking: this node's own usage crossed 80% of its tokenLimit.
+      // `pct` stays the fraction the engine computed (0.82, not 82).
+      const tokens = finite(action.data.tokens);
+      const limit = finite(action.data.limit);
+      const pct = finite(action.data.pct);
+      if (tokens === undefined || limit === undefined || pct === undefined || tokens < 0 || limit <= 0 || pct < 0) return state;
+      return patch(state, String(d.node_id), (s) => ({
+        ...s,
+        warnings: [...(s.warnings ?? []), { tokens, limit, pct }],
+      }));
+    }
+
+    case "runtime_selected": {
+      // Emitted after run_start by execute_harness: CLI when the binary is
+      // on PATH, otherwise API plus the reason it fell back.
+      const kind = typeof action.data.kind === "string" ? action.data.kind.trim() : "";
+      const name = typeof action.data.name === "string" ? action.data.name.trim() : "";
+      if (!kind || !name) return state;
+      const reason = typeof action.data.reason === "string" ? action.data.reason.trim() : "";
+      return { ...state, runtime: { kind, name, reason } };
+    }
 
     case "hitl_pause":
       return {
@@ -540,6 +589,19 @@ export function runReducer(state: RunState, action: Action): RunState {
         ...state,
         budget: { maxTokens: Number(action.data.max_tokens ?? 0), usedTokens: Number(action.data.used_tokens ?? 0) },
       };
+
+    case "budget_warning": {
+      // routers/execution.py emits this before run_start when spend is
+      // already in the warning band. The run is still allowed. The payload
+      // is spentUsd/limitUsd/pct — not the schema fixture's state/message.
+      const spentUsd = finite(action.data.spentUsd);
+      const limitUsd = finite(action.data.limitUsd);
+      const pct = finite(action.data.pct);
+      if (spentUsd === undefined || limitUsd === undefined || pct === undefined || spentUsd < 0 || limitUsd <= 0 || pct < 0) {
+        return state;
+      }
+      return { ...state, budgetWarning: { spentUsd, limitUsd, pct } };
+    }
 
     case "context_compacted":
       return {
