@@ -13,3 +13,9 @@
 - [ ] ADR (se decisão difícil de reverter); docs atualizadas se o comportamento mudou
 - [ ] `/code-review` high tratado; threads respondidas
 - [ ] CI completo concluído e verde no head final
+
+## Definition of Done (docs/process/backlog.md)
+- [ ] Cada critério do "Pronto quando" está provado acima (teste, tela ou comando); o que não foi verificado está dito
+- [ ] Revisão QA e SEC em contexto limpo, sem achado aberto, no SHA do head (quem mescla confere o SHA)
+- [ ] Contrato de assinatura verde; sem segredo; assinatura não inventa USD
+- [ ] Achados baixos e lacunas viraram issue com número; issue e épico atualizados
