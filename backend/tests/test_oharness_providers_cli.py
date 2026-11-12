@@ -1,8 +1,5 @@
 """`oharness providers list|test` (R-PRV-17): connections from the data directory, probe by id, stable --json, never a secret."""
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -169,29 +166,54 @@ def test_a_health_the_cli_does_not_know_is_reported_as_fault(world, capsys):
     assert code == 1 and json.loads(out)["health"] == "fault" and json.loads(out)["ok"] is False
 
 
-def test_real_process_lists_what_the_data_directory_holds(tmp_path):
+def _seed_data_dir() -> None:
+    """Runs in a fresh interpreter: the app's own persistence code writes one connection into the data directory."""
+    import asyncio
+
+    from sidecar_entry import configure_environment
+
+    configure_environment()
+    from database import SessionLocal, init_db
+    from providers import store
+
+    async def go() -> None:
+        await init_db()
+        async with SessionLocal() as db:
+            await store.upsert(db, {"id": "cursor", "provider": "cursor", "label": "Cursor", "residence": "cloud", "endpoint": "", "enabled": True})
+
+    asyncio.run(go())
+
+
+def _list_from_data_dir(queue) -> None:
+    """Runs in another fresh interpreter: the CLI's own entry point, nothing stubbed."""
+    import contextlib
+    import io
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = main(["providers", "list", "--json"])
+    queue.put((code, out.getvalue()))
+
+
+def test_real_process_lists_what_the_data_directory_holds(monkeypatch, tmp_path):
     """No stubs: seed a data directory with the app's own persistence code, then read it back through the CLI in a separate process."""
-    env = {**os.environ, "OH_DATA_DIR": str(tmp_path), "OH_SECRETS": "file", "OH_SECRETS_DIR": str(tmp_path / "secrets"), "PYTHONPATH": str(BACKEND)}
-    env.pop("DATABASE_URL", None)
-    seed = (
-        "import asyncio\n"
-        "from sidecar_entry import configure_environment\n"
-        "configure_environment()\n"
-        "from database import SessionLocal, init_db\n"
-        "from providers import store\n"
-        "async def go():\n"
-        "    await init_db()\n"
-        "    async with SessionLocal() as db:\n"
-        "        await store.upsert(db, {'id': 'cursor', 'provider': 'cursor', 'label': 'Cursor', 'residence': 'cloud', 'endpoint': '', 'enabled': True})\n"
-        "asyncio.run(go())\n"
-    )
-    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-    subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); exec(sys.argv[2])", str(BACKEND), seed], env=env, check=True, cwd=tmp_path, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-    done = subprocess.run([sys.executable, "-m", "oharness", "providers", "list", "--json"], env=env, cwd=BACKEND, capture_output=True, text=True, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    assert done.returncode == 0, done.stderr
-    doc = json.loads(done.stdout)
+    import multiprocessing
+
+    monkeypatch.setenv("OH_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("OH_SECRETS", "file")
+    monkeypatch.setenv("OH_SECRETS_DIR", str(tmp_path / "secrets"))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    spawn = multiprocessing.get_context("spawn")  # a fresh interpreter each time: no engine or env carried over from this one
+    seeding = spawn.Process(target=_seed_data_dir)
+    seeding.start()
+    seeding.join(60)
+    assert seeding.exitcode == 0
+    queue = spawn.Queue()
+    listing = spawn.Process(target=_list_from_data_dir, args=(queue,))
+    listing.start()
+    code, text = queue.get(timeout=60)
+    listing.join(60)
+    assert code == 0 and listing.exitcode == 0
+    doc = json.loads(text)
     assert [c["id"] for c in doc["connections"]] == ["cursor"]
     assert doc["dataDir"] == str(tmp_path)

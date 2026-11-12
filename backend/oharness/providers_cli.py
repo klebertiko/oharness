@@ -70,9 +70,9 @@ async def _list(as_json: bool) -> int:
         print("no connections yet: add one in the OHarness app (Providers)")
         return EXIT_OK
     for row in rows:
-        secret = "key stored" if row["hasSecret"] else "-"
+        keyed = "key stored" if row["hasSecret"] else "-"
         state = "enabled" if row["enabled"] else "disabled"
-        print(f"{row['id']}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{secret}\t{row['label']}")
+        print(f"{row['id']}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{row['label']}")
     return EXIT_OK
 
 
