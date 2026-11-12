@@ -493,6 +493,13 @@ export const ptBR: Record<MessageKey, string> = {
   "fault.signIn": "Login necessário",
   "fault.notInstalled": "Não instalado",
   "fault.unknown": "Teste falhou",
+  "fault.cliTimeout": "A CLI demorou demais",
+  "fault.cliError": "Erro na CLI",
+  "empty.noConnection": "Conecte um provedor para enviar",
+  "empty.pickProvider": "Escolha um provedor para enviar",
+  "empty.openProviders": "Abrir Providers · {label}",
+  "empty.openProvidersLink": "Abrir Providers",
+  "empty.agentOnly": "Esta conexão só executa agentes. Escolha outro provedor para conversar.",
 
   "step.replaceKey": "Trocar a chave",
   "step.replaceKey.hint": "trocar a chave",
