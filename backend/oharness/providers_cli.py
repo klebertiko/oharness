@@ -47,29 +47,16 @@ def _kind(provider: str) -> str:
 
 def _endpoint(raw: str) -> str:
     """The endpoint without credentials: scheme, host, port and path only. Anything that is not a plain http(s) URL prints as empty."""
-    from urllib.parse import urlsplit
+    from providers.display import safe_endpoint
 
-    try:
-        parts = urlsplit(raw.strip())
-        host, port = parts.hostname, parts.port
-    except ValueError:
-        return ""
-    if parts.scheme not in ("http", "https") or not host:
-        return ""
-    shown = f"[{host}]" if ":" in host else host  # an IPv6 literal keeps its brackets
-    return f"{parts.scheme}://{shown}{f':{port}' if port else ''}{parts.path}"
+    return safe_endpoint(raw)
 
 
 def _shown_dir(path, verbose: bool) -> str:
     """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
-    from pathlib import Path
+    from providers.display import mask_home
 
-    if verbose:
-        return str(path)
-    try:
-        return "~/" + Path(path).relative_to(Path.home()).as_posix()
-    except ValueError:
-        return str(path)
+    return str(path) if verbose else mask_home(str(path), other_profiles=False)
 
 
 def _public(row: dict) -> dict:
