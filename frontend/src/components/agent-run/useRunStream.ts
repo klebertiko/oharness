@@ -116,14 +116,27 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
         if (event === "node_done" && data.provider_verified === true && typeof id === "string" && id.trim()) {
           useProviderStore.getState().reportRunOutcome(id, { ok: true });
         }
-        if (event === "node_error" && typeof id === "string" && id.trim() &&
-            (data.provider_failure === "authentication" || data.provider_failure === "transport")) {
-          useProviderStore.getState().reportRunOutcome(id, {
-            ok: false,
-            detail: data.provider_failure === "authentication"
-              ? "Provider authentication failed. Test the connection after signing in."
-              : "Provider transport failed. Test the connection to check reachability.",
-          });
+        if (event === "node_error" && typeof id === "string" && id.trim()) {
+          const pf = data.provider_failure;
+          if (pf === "authentication") {
+            useProviderStore.getState().reportRunOutcome(id, {
+              ok: false,
+              detail: "Provider authentication failed. Test the connection after signing in.",
+            });
+          } else if (pf === "transport") {
+            useProviderStore.getState().reportRunOutcome(id, {
+              ok: false,
+              detail: "Provider transport failed. Test the connection to check reachability.",
+            });
+          } else if (typeof pf === "string" && pf.startsWith("cli-")) {
+            useProviderStore.getState().reportRunOutcome(id, {
+              ok: false,
+              ...(pf === "cli-signin" || pf === "cli-missing" ? { cliFailure: pf } : {}),
+              detail: typeof data.error === "string" && data.error.trim()
+                ? data.error
+                : "CLI run failed. Sign in or test the connection in Providers.",
+            });
+          }
         }
         dispatch({ type: "sse", event, data });
         if (event === "harness_done" || event === "error") {

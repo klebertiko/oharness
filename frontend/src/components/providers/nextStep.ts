@@ -1,6 +1,7 @@
 import { modelNotPulled, providerFault, providerReadiness } from "@/components/agent/chatProvider";
 import { tr } from "@/i18n/store";
 import { specOf, type Connection } from "./providerStore";
+import { ACTION_TEXT, STATE_TABLE, type ActionId } from "./stateTable";
 
 /**
  * The one thing that would make a connection answer runs, phrased as an
@@ -44,44 +45,37 @@ function faultStep(c: Connection): NextStep | null {
   const fault = providerFault(c);
   if (!fault) return null;
   const spec = specOf(c);
+  const status = tr(STATE_TABLE[fault].status);
+  const act = (kind: NextStep["kind"], action: ActionId, extra: Partial<NextStep> = {}, vars?: Record<string, string>): NextStep => ({
+    kind,
+    label: tr(ACTION_TEXT[action].label, vars),
+    hint: tr(ACTION_TEXT[action].hint),
+    status,
+    ...extra,
+  });
+  const retest = () => act("retest", "testAgain");
   switch (fault) {
     case "key-rejected":
-      return { kind: "replaceKey", label: tr("step.replaceKey"), hint: tr("step.replaceKey.hint"), status: tr("fault.keyRejected") };
+      return act("replaceKey", "replaceKey");
     case "unreachable":
-      if (c.provider === "ollama" && c.residence === "local") {
-        return {
-          kind: "copy",
-          label: tr("step.copyServe"),
-          hint: tr("step.copyServe.hint"),
-          status: tr("fault.unreachable"),
-          copy: "ollama serve",
-          thenRetest: true,
-        };
-      }
-      if (spec.endpoint.editable) {
-        return { kind: "checkEndpoint", label: tr("step.checkEndpoint"), hint: tr("step.checkEndpoint.hint"), status: tr("fault.unreachable") };
-      }
-      return { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.unreachable") };
+      if (c.provider === "ollama" && c.residence === "local") return act("copy", "copyServe", { copy: "ollama serve", thenRetest: true });
+      return spec.endpoint.editable ? act("checkEndpoint", "checkEndpoint") : retest();
     case "rate-limited":
-      return { kind: "retest", label: tr("step.testLater"), hint: tr("step.testLater.hint"), status: tr("fault.rateLimited") };
+      return act("retest", "testLater");
     case "out-of-credits":
-      return spec.billingUrl
-        ? { kind: "link", label: tr("step.openBilling"), hint: tr("step.openBilling.hint"), status: tr("fault.outOfCredits"), href: spec.billingUrl, thenRetest: true }
-        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.outOfCredits") };
+      return spec.billingUrl ? act("link", "openBilling", { href: spec.billingUrl, thenRetest: true }) : retest();
     case "cli-signin": {
       const login = spec.credential.login;
-      return login
-        ? { kind: "copy", label: tr("step.copyLogin", { login }), hint: tr("step.copyLogin.hint"), status: tr("fault.signIn"), copy: login, thenRetest: true }
-        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.signIn") };
+      return login ? act("copy", "copyLogin", { copy: login, thenRetest: true }, { login }) : retest();
     }
     case "cli-missing": {
       const url = spec.credential.installUrl;
-      return url
-        ? { kind: "link", label: tr("step.openInstall"), hint: tr("step.openInstall.hint"), status: tr("fault.notInstalled"), href: url, thenRetest: true }
-        : { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.notInstalled") };
+      return url ? act("link", "openInstall", { href: url, thenRetest: true }) : retest();
     }
+    case "cli-timeout":
+    case "cli-error":
     case "unknown":
-      return { kind: "retest", label: tr("step.testAgain"), hint: tr("step.testAgain.hint"), status: tr("fault.unknown") };
+      return retest();
   }
 }
 
@@ -156,4 +150,9 @@ export function stepText(c: Connection, step: NextStep): string {
   const names = [c.label, specOf(c).vendor].filter((n) => n.length >= 3).map((n) => n.toLowerCase());
   const label = step.label.toLowerCase();
   return names.some((n) => label.includes(n)) ? step.label : `${step.label} · ${c.label}`;
+}
+
+/** The chat combo's "Needs action" line: the status word and the step, as the list row and the dossier say them. */
+export function needsActionDetail(c: Connection, step: NextStep): string {
+  return `${step.status ?? providerReadiness(c).label} · ${step.label}`;
 }
