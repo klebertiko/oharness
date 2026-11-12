@@ -127,3 +127,28 @@ def test_mask_home_masks_other_profiles_outside_the_home() -> None:
     assert "otheruser" not in mask_home(r"D:\Users\otheruser\bin\claude.exe")
     assert "otheruser" not in mask_home("/home/otheruser/bin/claude")
     assert mask_home("/home/otheruser/bin/claude").endswith("/bin/claude")
+
+
+@pytest.mark.parametrize("raw", [
+    r"\wsl$\Ubuntu\home\bobuser\x",
+    r"\wsl.localhost\Ubuntu\home\bobuser\x",
+    "/mnt/c/Users/bobuser/bin/claude",
+    "/c/Users/bobuser/bin/claude",
+    r"\?\C:\Users\bobuser\bin\claude.exe",
+    "/root/bin/claude",
+])
+def test_mask_home_masks_the_user_in_any_path_flavour(raw: str) -> None:
+    from providers.diagnostics import mask_home
+
+    out = mask_home(raw)
+    assert "bobuser" not in out
+    if raw.startswith("/root"):
+        assert "/root/" not in out
+
+
+def test_safe_endpoint_caps_the_path_and_rejects_unprintable_characters() -> None:
+    from providers.display import safe_endpoint
+
+    assert safe_endpoint("https://h.example/" + "a" * 500) == ""
+    assert safe_endpoint("https://h.example/a\x00b") == ""
+    assert safe_endpoint("https://h.example/v1") == "https://h.example/v1"

@@ -10,13 +10,14 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-_OTHER_PROFILE = re.compile(r"^(?P<root>(?:[A-Za-z]:)?/(?:Users|home)/)[^/]+", re.IGNORECASE)
+_OTHER_PROFILE = re.compile(r"(?<=/)(?:(?P<dir>Users|home)/[^/]+|root(?=/|$))", re.IGNORECASE)
+_MAX_PATH = 200
 
 
 def safe_endpoint(raw: str) -> str:
     """scheme://host[:port]/path for a plain http(s) URL, else "".
 
-    No userinfo, query or fragment; an IPv6 literal keeps its brackets.
+    No userinfo, query or fragment; a path over 200 characters or with unprintable ones gives ""; an IPv6 literal keeps its brackets.
     """
     if not raw:
         return ""
@@ -26,6 +27,8 @@ def safe_endpoint(raw: str) -> str:
     except ValueError:
         return ""
     if parts.scheme not in ("http", "https") or not host:
+        return ""
+    if len(parts.path) > _MAX_PATH or not parts.path.isprintable():
         return ""
     shown = f"[{host}]" if ":" in host else host
     return f"{parts.scheme}://{shown}{f':{port}' if port else ''}{parts.path}"
@@ -45,5 +48,5 @@ def mask_home(path: str, *, other_profiles: bool = True) -> str:
         if norm.lower().startswith(home_norm.lower() + "/"):
             return "~" + norm[len(home_norm):]
     if other_profiles:
-        return _OTHER_PROFILE.sub(lambda m: m.group("root") + "<user>", norm)
+        return _OTHER_PROFILE.sub(lambda m: f"{m.group('dir')}/<user>" if m.group("dir") else "<user>", norm)
     return path
