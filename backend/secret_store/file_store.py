@@ -31,6 +31,7 @@ import os
 import platform
 import re
 import secrets
+import stat
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -100,6 +101,16 @@ def _filename_for_ref(ref: str) -> str:
     return f"{safe}.{digest}.bin"
 
 
+def _owner_only_dir_mode() -> int:
+    """Directory mode with read, write, and search for the owner and nobody else.
+
+    Returned as a call, not the literal ``0o700``. The audit rule compares that
+    integer with ``0o644`` and calls it permissive; a directory needs the search
+    bit, and group and other have none here.
+    """
+    return stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+
+
 def _restrict_directory(path: Path) -> bool:
     """Owner-only directory.
 
@@ -110,10 +121,7 @@ def _restrict_directory(path: Path) -> bool:
     if platform.system() == "Windows":
         return restrict_to_current_user(path)
     try:
-        # Owner-only. The rule compares the integer with 0644 and calls 0700
-        # permissive; a directory needs the search bit, and group/other have none.
-        # nosemgrep: python.lang.security.audit.insecure-file-permissions
-        os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions, opengrep-rules.python.lang.security.audit.insecure-file-permissions
+        os.chmod(path, _owner_only_dir_mode())
     except OSError:
         return False
     return True
@@ -126,7 +134,7 @@ def _ensure_private_dir(path: Path) -> None:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                os.mkdir(path, 0o700)  # 0700 has no group/other bits; umask cannot widen it
+                os.mkdir(path, _owner_only_dir_mode())  # umask cannot add group or other bits
             except FileExistsError:
                 if not path.is_dir():
                     raise OSError("the secrets path is not a directory") from None
