@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from factory import definition_rules as rules
+from factory.agents import AgentError, capabilities
 from sandbox.secrets import redact as redact_patterns
 from sandbox import exec as sandbox_exec
 
@@ -72,8 +73,11 @@ def env_name(reference: str) -> str:
 
 
 def secrets_for(definition: dict, agent_id: str, store) -> tuple[dict[str, str], RunRedactor]:
-    """The environment and the redactor for one agent: exactly the secrets it lists, nothing else, and a refusal if one is not stored."""
-    refs = definition['agents'][agent_id]['secrets']
+    """The environment and the redactor for one agent: exactly the secrets `capabilities` lists, nothing else, and a refusal if one is not stored."""
+    try:
+        refs = capabilities(definition, agent_id)['secrets']
+    except AgentError as exc:
+        raise RunnerError(str(exc)) from exc
     if any(not re.fullmatch(rules.SECRET_REF_PATTERN, ref) for ref in refs):  # the vault also holds provider keys: only forja/<name> is ever read here
         raise RunnerError('a secret reference must look like forja/<name>')
     env: dict[str, str] = {}
