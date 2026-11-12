@@ -120,3 +120,19 @@ def test_run_emits_provider_failure_and_no_stderr(client, monkeypatch: pytest.Mo
     error = next(d for n, d in _sse_events(response.text) if n == "node_error")
     assert error["provider_failure"] == "cli-signin"
     assert CANARY not in json.dumps(error)
+
+
+def test_non_cli_adapter_errors_never_get_a_cli_class() -> None:
+    import httpx
+
+    request = httpx.Request("POST", "https://api.example.test/v1")
+    errors = [
+        RuntimeError(f"upstream said {CANARY}"),
+        ValueError("bad"),
+        httpx.HTTPStatusError("x", request=request, response=httpx.Response(500, request=request)),
+        httpx.ConnectError("down", request=request),
+    ]
+    for exc in errors:
+        details = failure_details(exc)
+        assert not str(details.get("provider_failure", "")).startswith("cli-")
+        assert CANARY not in json.dumps(details)
