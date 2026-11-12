@@ -93,7 +93,7 @@ describe("subscription contract (R-PRV-00 frontend)", () => {
       const endpoint = spec.endpoint.default;
       render(<ConnectionPanel c={conn({ provider, label: spec.vendor, endpoint })} actions={stubActions({ endpointValue: endpoint })} />);
       expect(screen.getByText("Sign-in")).toBeTruthy();
-      expect(screen.getByText(new RegExp(`Uses your ${cli} login`))).toBeTruthy();
+      expect(screen.getByText(`Uses your ${cli} login`)).toBeTruthy();
       expect(screen.queryByLabelText(/API key/i)).toBeNull();
       expect(document.getElementById(KEY_FIELD_ID)).toBeNull();
       expect(screen.queryByRole("button", { name: /Save key/i })).toBeNull();
