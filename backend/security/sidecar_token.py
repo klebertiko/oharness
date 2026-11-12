@@ -65,12 +65,15 @@ def restrict_to_current_user(path: Path) -> bool:
     own token keeps it best-effort.
     """
     if platform.system() == "Windows":
+        from adapters.cli_shared import scrub_env
+
         user = os.environ.get("USERNAME") or getpass.getuser()
         grant = f"{user}:(OI)(CI)F" if path.is_dir() else f"{user}:F"  # a directory's grant is inherited by what is written inside it
         try:
             done = subprocess.run(
                 ["icacls", str(path), "/inheritance:r", "/grant:r", grant],
                 capture_output=True,
+                env=scrub_env(),  # icacls needs no credential: the sidecar and human tokens never reach a child
                 timeout=5,
                 check=False,
             )
