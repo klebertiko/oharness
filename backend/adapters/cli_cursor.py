@@ -60,7 +60,10 @@ from typing import Any, AsyncIterator, Callable, Coroutine
 
 from .base import AdapterConfig, AdapterResult, AgentAdapter, ProbeResult
 from .cli_shared import (
+    CliFailure,
+    CliMissing,
     CliRunResult,
+    classify_cli_failure,
     find_cli,
     is_windows,
     resolve_cwd,
@@ -129,10 +132,7 @@ class CursorCliAdapter(AgentAdapter):
     def _prefix(self) -> list[str]:
         prefix = _invocation_prefix()
         if not prefix:
-            raise FileNotFoundError(
-                "cursor-agent CLI not found on PATH. Install the Cursor CLI and run "
-                "`cursor-agent login`, or switch this connection's runtime to API."
-            )
+            raise CliMissing()
         return prefix
 
     def build_argv(self, config: AdapterConfig) -> list[str]:
@@ -179,7 +179,7 @@ class CursorCliAdapter(AgentAdapter):
     async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
         gate = self._windows_gate()
         if gate:
-            return AdapterResult(content="", error=gate)
+            return AdapterResult(content="", error=gate, failure="cli-error")
         argv = self.build_argv(config)
         cwd = resolve_cwd(config.extra.get("cwd"), root=config.extra.get("cwd_root"))
         env = scrub_env()
@@ -187,11 +187,12 @@ class CursorCliAdapter(AgentAdapter):
         result = await self._runner(argv, cwd=cwd, env=env, timeout=timeout, stdin=prompt)
 
         if result.timed_out:
-            return AdapterResult(content="", error=f"cursor-agent timed out after {timeout:.0f}s")
+            return AdapterResult(content="", error=f"cursor-agent timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
             return AdapterResult(
                 content="",
                 error=_last_line(result.stderr) or f"cursor-agent exited {result.returncode}",
+                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
             )
 
         return _parse_result(result.stdout)
@@ -203,7 +204,7 @@ class CursorCliAdapter(AgentAdapter):
         # chunk is a true and reasonable stream for now.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise RuntimeError(result.error)
+            raise CliFailure(result.failure)
         yield result.content
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:
@@ -286,7 +287,10 @@ def _parse_result(stdout: str) -> AdapterResult:
 
     if isinstance(payload, dict):
         if payload.get("is_error") or payload.get("error"):
-            return AdapterResult(content="", error=str(payload.get("error") or payload.get("result") or "cursor-agent reported an error"))
+            reported = str(payload.get("error") or payload.get("result") or "cursor-agent reported an error")
+            return AdapterResult(
+                content="", error=reported, failure=classify_cli_failure(returncode=1, text=reported),
+            )
         for key in ("result", "output", "text", "message", "response"):
             value = payload.get(key)
             if isinstance(value, str) and value:
@@ -301,6 +305,7 @@ def _parse_result(stdout: str) -> AdapterResult:
         return AdapterResult(
             content="",
             error="cursor-agent returned JSON with no recognised result field — response shape unverified, not treating as success.",
+            failure="cli-error",
         )
 
     return AdapterResult(content=stdout.strip())

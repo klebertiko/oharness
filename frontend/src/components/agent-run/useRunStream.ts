@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { HarnessGraph } from "@/lib/types";
 import { useActiveRunStore } from "@/store/activeRunStore";
+import { tr } from "@/i18n/store";
 import { useProviderStore } from "@/components/providers/providerStore";
 import { useUsageStore } from "@/components/providers/usageStore";
 import { emptyRun, runReducer } from "./runReducer";
@@ -128,13 +129,12 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
               ok: false,
               detail: "Provider transport failed. Test the connection to check reachability.",
             });
-          } else if (typeof pf === "string" && pf.startsWith("cli-")) {
+          } else if (pf === "cli-signin" || pf === "cli-missing" || pf === "cli-timeout" || pf === "cli-error") {
+            // Closed set only; the text is ours (catalog), never the backend's or the CLI's.
             useProviderStore.getState().reportRunOutcome(id, {
               ok: false,
               ...(pf === "cli-signin" || pf === "cli-missing" ? { cliFailure: pf } : {}),
-              detail: typeof data.error === "string" && data.error.trim()
-                ? data.error
-                : "CLI run failed. Sign in or test the connection in Providers.",
+              detail: tr(`run.cliFailure.${pf}`),
             });
           }
         }
