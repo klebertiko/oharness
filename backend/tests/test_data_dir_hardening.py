@@ -4,7 +4,6 @@ import json
 import os
 import platform
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -163,15 +162,19 @@ def test_the_cli_run_path_configures_the_same_directory_as_the_sidecar(monkeypat
     assert Path(os.environ["OH_SECRETS_DIR"]) == tmp_path / "shared" / "secrets"
 
 
-def test_the_cli_without_override_uses_the_directory_named_by_the_desktop_app(tmp_path: Path) -> None:
-    """A real process, no OH_DATA_DIR: the database lands next to the app's own identifier."""
+def test_the_cli_without_override_uses_the_directory_named_by_the_desktop_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No OH_DATA_DIR: `headless._backend_on_path` lands the database next to the app's own identifier."""
     local = tmp_path / "local"
-    env = {k: v for k, v in os.environ.items() if k not in ("OH_DATA_DIR", "DATABASE_URL", "OH_SECRETS", "OH_SECRETS_DIR")}
-    env.update({"LOCALAPPDATA": str(local), "XDG_DATA_HOME": str(local), "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)})
-    code = "from oharness import headless; import os; headless._backend_on_path(); print(os.environ['DATABASE_URL'])"
-    backend = Path(__file__).resolve().parents[1]
-    done = subprocess.run([sys.executable, "-c", code], env=env, cwd=backend, capture_output=True, text=True, timeout=60)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    assert done.returncode == 0, done.stderr
+    for key in ("OH_DATA_DIR", "DATABASE_URL", "OH_SECRETS", "OH_SECRETS_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("XDG_DATA_HOME", str(local))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    headless._backend_on_path()
+    database_url = os.environ["DATABASE_URL"]
     system = platform.system()
     if system == "Windows":
         expected = local / IDENTIFIER
@@ -179,4 +182,4 @@ def test_the_cli_without_override_uses_the_directory_named_by_the_desktop_app(tm
         expected = tmp_path / "Library" / "Application Support" / IDENTIFIER
     else:
         expected = local / IDENTIFIER  # XDG_DATA_HOME is set to `local` above
-    assert done.stdout.strip().endswith((expected / "harness.db").as_posix())
+    assert database_url.endswith((expected / "harness.db").as_posix())
