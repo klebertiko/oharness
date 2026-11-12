@@ -461,7 +461,7 @@ interface ProviderState {
       already be a caller-confirmed provider-level failure (see
       `isProviderLevelFailure`'s doc comment for why no caller uses it yet)
       — never a bad prompt, an HITL rejection, or a Stop. */
-  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string }) => void;
+  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing" }) => void;
   attachSecret: (id: string, plaintext: string) => Promise<void>;
   /** Deletes the key from the sidecar's SecretsStore; false when it could not. */
   revokeSecret: (id: string) => Promise<boolean>;
@@ -561,6 +561,15 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
           detail: x.health === "live" ? x.detail : "Verified by a real run just now.",
         })),
       });
+    } else if (outcome.cliFailure) {
+      // A subscription CLI that lost its session (or vanished) is not a vendor
+      // fault: it is the same "setup" state a probe reports, so the row reads
+      // Sign-in needed / Not installed without a new click. The wording is
+      // fixed per state (never CLI output); a later live probe restores it.
+      const detail = outcome.cliFailure === "cli-signin"
+        ? `${c.label} CLI is installed but not logged in.`
+        : `${c.label} CLI not found on PATH.`;
+      set({ connections: patch(get().connections, id, (x) => ({ ...x, health: "setup", detail })) });
     } else {
       set({
         connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),

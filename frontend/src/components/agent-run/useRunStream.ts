@@ -131,6 +131,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
           } else if (typeof pf === "string" && pf.startsWith("cli-")) {
             useProviderStore.getState().reportRunOutcome(id, {
               ok: false,
+              ...(pf === "cli-signin" || pf === "cli-missing" ? { cliFailure: pf } : {}),
               detail: typeof data.error === "string" && data.error.trim()
                 ? data.error
                 : "CLI run failed. Sign in or test the connection in Providers.",
