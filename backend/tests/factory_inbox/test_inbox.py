@@ -245,19 +245,24 @@ def test_resolve_and_undo_record_who_and_when_without_closing_the_question(clien
     q = make(client)
     drive(q, ask)
     entry = inbox(client)['entries'][0]
-    # Undoing a choice that was never made leaves no trail.
-    assert client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    # Undoing a choice that was never made leaves no trail. The call stays outside the assert: CodeQL treats a request there as a side effect.
+    untouched = client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    assert untouched.status_code == 204
     assert [e for e in _history(client, q) if e['type'] == 'inbox_restored'] == []
-    assert client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
-    assert client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204  # once is enough
-    assert client.get(f'/factory/work-items/{q}').json()['status'] == 'awaiting_human'  # the question is still open
+    first = client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    again = client.post(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)  # once is enough
+    assert first.status_code == 204 and again.status_code == 204
+    still_open = client.get(f'/factory/work-items/{q}')
+    assert still_open.json()['status'] == 'awaiting_human'  # the question is still open
     hidden = [e for e in _history(client, q) if e['type'] == 'inbox_resolved']
     assert len(hidden) == 1
     assert hidden[0]['actor'] == {'kind': 'human', 'id': 'local-user'} and _just_now(hidden[0]['at'])
     assert hidden[0]['data'] == {'entry_id': entry['id'], 'entry_type': 'question'}
-    assert not any(e['type'] == 'checkpoint_resolved' for e in _history(client, q))
+    history = _history(client, q)
+    assert not any(e['type'] == 'checkpoint_resolved' for e in history)
     assert kinds(client) == []
-    assert client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN).status_code == 204
+    undone = client.delete(f"/factory/inbox/{entry['id']}/resolve", headers=HUMAN)
+    assert undone.status_code == 204
     restored = [e for e in _history(client, q) if e['type'] == 'inbox_restored']
     assert len(restored) == 1 and restored[0]['actor'] == {'kind': 'human', 'id': 'local-user'} and _just_now(restored[0]['at'])
     assert restored[0]['data']['entry_id'] == entry['id']
