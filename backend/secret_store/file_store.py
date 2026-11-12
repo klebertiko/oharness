@@ -45,7 +45,6 @@ _SAFE_REF = re.compile(r"[^A-Za-z0-9._-]+")
 INSTALL_KEY_NAME = ".install-key"
 STORE_ID_NAME = ".store-id"
 FILE_STORE_KEYCHAIN_SERVICE = "oharness.file-store"
-_KDF_PREFIX = b"oharness.file-secrets.v2\x00"
 _MAX_BLOB_BYTES = 1024 * 1024
 
 
@@ -79,9 +78,20 @@ def _legacy_fernet_for_root(root: Path) -> Fernet:
     return Fernet(base64.urlsafe_b64encode(kdf.derive(material)))
 
 
+def _new_install_secret() -> bytes:
+    """A Fernet key: 32 random bytes, already urlsafe-base64.
+
+    The value is the key. It is not stretched: it is not a password, and a
+    fast hash of it would not add secrecy.
+    """
+    return Fernet.generate_key()
+
+
 def _fernet_for_secret(secret: bytes) -> Fernet:
-    digest = hashlib.sha256(_KDF_PREFIX + secret).digest()
-    return Fernet(base64.urlsafe_b64encode(digest))
+    try:
+        return Fernet(secret)
+    except (ValueError, TypeError):
+        raise OSError("the file-store key is not usable") from None
 
 
 def _filename_for_ref(ref: str) -> str:
@@ -296,7 +306,7 @@ def _load_or_create_secret(root: Path, backend: KeyringBackend | None) -> bytes:
             raise OSError("the file-store key is in the OS keychain, which could not be read")
         return found.encode("utf-8")
 
-    secret = secrets.token_urlsafe(32).encode("ascii")
+    secret = _new_install_secret()
     if backend is not None:
         store_id = secrets.token_urlsafe(16)
         if _keychain_set(backend, store_id, secret):
@@ -324,7 +334,7 @@ def _migrate_legacy(root: Path, fernet: Fernet) -> None:
             fernet.decrypt(data)
             continue
         except InvalidToken:
-            pass
+            pass  # not the install key; the legacy path key is tried next
         if legacy is None:
             legacy = _legacy_fernet_for_root(root)
         try:

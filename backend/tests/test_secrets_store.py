@@ -159,16 +159,21 @@ def test_new_ciphertext_is_not_decryptable_from_the_store_path(tmp_path: Path) -
 
 def test_legacy_path_derived_files_migrate_without_losing_secrets(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
-    vault.mkdir()
-    os.chmod(vault, 0o755)
-    legacy = _path_derived_fernet(vault)
-    other_ref = "oharness/other-provider"
-    first = vault / _filename_for_ref(SECRET_REF)
-    second = vault / _filename_for_ref(other_ref)
-    first.write_bytes(legacy.encrypt(SECRET_VALUE.encode()))
-    second.write_bytes(legacy.encrypt(b"second-value"))
-    os.chmod(first, 0o644)
-    os.chmod(second, 0o644)
+    legacy_umask = os.umask(0o022)  # the pre-fix create: directory 0755, files 0644
+    try:
+        vault.mkdir()
+        legacy = _path_derived_fernet(vault)
+        other_ref = "oharness/other-provider"
+        first = vault / _filename_for_ref(SECRET_REF)
+        second = vault / _filename_for_ref(other_ref)
+        first.write_bytes(legacy.encrypt(SECRET_VALUE.encode()))
+        second.write_bytes(legacy.encrypt(b"second-value"))
+    finally:
+        os.umask(legacy_umask)
+    if os.name != "nt":
+        assert vault.stat().st_mode & 0o777 == 0o755
+        assert first.stat().st_mode & 0o777 == 0o644
+        assert second.stat().st_mode & 0o777 == 0o644
     note = vault / "notes.txt"
     note.write_bytes(b"leave-me")
     store = FileSecrets(vault)
