@@ -18,7 +18,7 @@ def test_tool_and_cli_environments_never_carry_the_human_credential(monkeypatch)
 
 def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_path):
     """A canary in the environment must not reach the two child processes the sidecar starts on its own (git in the policy, icacls for the token file)."""
-    import subprocess
+    from types import SimpleNamespace
 
     from sandbox import permission
     from security import sidecar_token
@@ -29,7 +29,7 @@ def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_
 
     def fake_run(*args, **kwargs):
         seen.append(kwargs.get('env'))
-        return subprocess.CompletedProcess(args, 0, stdout=b'', stderr=b'')
+        return SimpleNamespace(returncode=0, stdout=b'', stderr=b'')
 
     monkeypatch.setattr(permission.subprocess, 'run', fake_run)
     monkeypatch.setattr(permission, '_GIT_EXE', 'git')
