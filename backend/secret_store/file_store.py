@@ -110,10 +110,10 @@ def _restrict_directory(path: Path) -> bool:
     if platform.system() == "Windows":
         return restrict_to_current_user(path)
     try:
-        # nosemgrep: python.lang.security.audit.insecure-file-permissions
         # Owner-only. The rule compares the integer with 0644 and calls 0700
         # permissive; a directory needs the search bit, and group/other have none.
-        os.chmod(path, 0o700)  # nosemgrep: opengrep-rules.python.lang.security.audit.insecure-file-permissions
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions
+        os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions, opengrep-rules.python.lang.security.audit.insecure-file-permissions
     except OSError:
         return False
     return True
@@ -126,10 +126,7 @@ def _ensure_private_dir(path: Path) -> None:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                # nosemgrep: python.lang.security.audit.insecure-file-permissions
-                # 0700 has no group/other bits, so umask cannot widen it. The audit
-                # rule treats the integer as more open than 0644; it is owner-only.
-                os.mkdir(path, 0o700)  # nosemgrep: opengrep-rules.python.lang.security.audit.insecure-file-permissions
+                os.mkdir(path, 0o700)  # 0700 has no group/other bits; umask cannot widen it
             except FileExistsError:
                 if not path.is_dir():
                     raise OSError("the secrets path is not a directory") from None
