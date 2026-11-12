@@ -9,7 +9,6 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from adapters.base import ProbeResult
-from oharness import headless
 from oharness.cli import main
 from secret_store.memory import MemorySecrets
 
