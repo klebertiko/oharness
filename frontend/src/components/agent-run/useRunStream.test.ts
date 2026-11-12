@@ -1,3 +1,4 @@
+import { providerFault } from "../agent/chatProvider";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -333,6 +334,24 @@ it.each(["authentication", "transport"])("faults only the connection in structur
   const { onEvent } = startAndCapture("an", true);
   act(() => onEvent("node_error", { node_id: "triage", connection_id: "ol", provider_failure, error: "arbitrary task text" }));
   expect(useProviderStore.getState().connections.map((c) => c.health)).toEqual(["live", "fault"]);
+});
+
+it("moves the connection to Sign-in needed on cli-signin provider_failure", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", label: "Claude", health: "live" })] });
+  const { onEvent } = startAndCapture("an", true);
+  const safe = "Sign in to the CLI, then test the connection again in Providers.";
+  act(() =>
+    onEvent("node_error", {
+      node_id: "direct",
+      connection_id: "an",
+      provider_failure: "cli-signin",
+      error: safe,
+    }),
+  );
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.health).toBe("setup");
+  expect(providerFault(conn)).toBe("cli-signin");
+  expect(conn.detail).not.toContain(safe);
 });
 
 it("ignores completion and close callbacks from a superseded stream", () => {
