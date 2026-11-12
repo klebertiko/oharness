@@ -14,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
 from adapters.catalog import get_provider, list_catalog
+from adapters.cli_shared import run_cli
 from database import get_db
 from providers import store as connection_store
 from providers.resolution import ADAPTER_BY_PROVIDER
+from runtime.cli_detect import detect_clis
 from secret_store.base import SecretsStore
 
 router = APIRouter(prefix="/providers", tags=["providers"])
@@ -96,6 +98,17 @@ def _ensure_endpoint_allowed(provider: str, endpoint: str | None, *unchanged: st
 @router.get("/catalog")
 async def get_catalog():
     return {"providers": list_catalog()}
+
+
+@router.get("/clis")
+async def detect_subscription_clis(request: Request):
+    """Which subscription CLIs (Claude, Codex, Cursor) are installed and signed in.
+
+    Asks each CLI only for its version and its own status command — never a prompt,
+    never a credential, so it spends no tokens. The runner is injectable through
+    ``app.state.cli_runner`` for tests."""
+    runner = getattr(request.app.state, "cli_runner", None) or run_cli
+    return {"clis": await detect_clis(runner)}
 
 
 @router.get("/connections")
