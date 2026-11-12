@@ -13,9 +13,9 @@ Issue #382 (R-PRV-01). Diz, por CLI de assinatura, se está instalado, se há se
 | --- | --- | --- |
 | `id` | `claude` \| `codex` \| `cursor` | CLI detectado |
 | `provider` | `anthropic` \| `openai` \| `cursor` | conexão do catálogo que usa esse CLI |
-| `installed` | bool | o binário resolve na busca do próprio adapter. Limite: no Windows, com WSL presente, o prefixo `wsl` conta como instalado sem conferir o binário dentro da distro (#460) |
+| `installed` | bool | o binário resolve na busca do próprio adapter. Limite do Cursor: no Windows, com WSL presente, o prefixo `wsl` conta como instalado, então `installed` pode ser `true` sem que o binário dentro da distro tenha sido conferido (#460) |
 | `loggedIn` | bool | o comando de status confirmou sessão |
-| `version` | string | só a primeira linha do stdout e só se parecer versão (letras, dígitos e `. _ + ( ) -`, até 80); vazia se não instalado, bloqueado, sem resposta ou fora desse formato. Nunca vem do stderr |
+| `version` | string \| null | só a primeira linha do stdout, e só se for uma versão de verdade: começa com letra ou dígito, tem ao menos um dígito, até 80 caracteres de letras, dígitos e `. + _ ( ) -` e espaço, sem `@`. `null` se não instalado, bloqueado, sem resposta ou fora desse formato. Nunca vem do stderr |
 | `state` | enum abaixo | estado único para a tela |
 | `detail` | string | texto fixo por estado |
 

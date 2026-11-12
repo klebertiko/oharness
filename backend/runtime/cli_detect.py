@@ -11,7 +11,7 @@ CLI run itself uses — see issue #455).
 Contract (``GET /providers/clis``, docs/product/providers-cli-detection.md)::
 
     {"clis": [{"id": "claude|codex|cursor", "provider": "anthropic|openai|cursor",
-               "installed": bool, "loggedIn": bool, "version": str,
+               "installed": bool, "loggedIn": bool, "version": str | null,
                "state": "ready|not-logged-in|not-installed|unavailable|error",
                "detail": str}]}
 """
@@ -39,7 +39,7 @@ VERSION_TIMEOUT_S = 10
 MAX_ANSWER_BYTES = 64 * 1024
 # A version is one short token line: letters, digits and . _ + ( ) - and spaces. No @, :, control
 # or bidi characters, so an e-mail or terminal escape printed next to it cannot pass as one.
-_VERSION_LINE = re.compile(r"[A-Za-z0-9._+() -]{1,80}")
+_VERSION_LINE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+_() -]{0,79}")
 
 _STATE_BY_CODE = {
     "not_installed": "not-installed",
@@ -78,24 +78,25 @@ def _bounded_answer(runner: Callable[..., Any]) -> Callable[..., Any]:
     return run
 
 
-def _version_line(stdout: str) -> str:
-    """The first non-empty stdout line if, and only if, it looks like a version; else ''."""
+def _version_line(stdout: str) -> str | None:
+    """The first non-empty stdout line if, and only if, it looks like a version; else None."""
     for line in stdout.splitlines():
         line = line.strip()
         if line:
-            return line if _VERSION_LINE.fullmatch(line) else ""
-    return ""
+            ok = _VERSION_LINE.fullmatch(line) and any(c.isdigit() for c in line) and "@" not in line
+            return line if ok else None
+    return None
 
 
-async def _version(adapter: Any, runner: Callable[..., Any]) -> str:
+async def _version(adapter: Any, runner: Callable[..., Any]) -> str | None:
     prefix = adapter.cli_argv_prefix()
     if not prefix:
-        return ""
+        return None
     result = await runner(
         [*prefix, "--version"], cwd=resolve_cwd(None), env=scrub_env(), timeout=VERSION_TIMEOUT_S,
     )
     if result.timed_out or result.returncode != 0:
-        return ""
+        return None
     return _version_line(result.stdout)
 
 
@@ -108,7 +109,7 @@ async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: 
     installed = bool(adapter.cli_argv_prefix())  # type: ignore[attr-defined]
     state = "ready" if probe.ok else _STATE_BY_CODE.get(probe.code, "error")
     # A closed platform gate (SEC-6, SEC-2) runs nothing, not even `--version`.
-    version = await _version(adapter, runner) if installed and state != "unavailable" else ""
+    version = await _version(adapter, runner) if installed and state != "unavailable" else None
     detail = _FIXED_DETAIL[state]
     return {
         "id": cli,

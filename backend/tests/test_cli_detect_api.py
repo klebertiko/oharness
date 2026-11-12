@@ -102,7 +102,7 @@ def test_not_installed_never_spawns(client: TestClient, monkeypatch: pytest.Monk
     assert calls == []
     for cli in clis.values():
         assert cli["installed"] is False and cli["loggedIn"] is False
-        assert cli["state"] == "not-installed" and cli["version"] == ""
+        assert cli["state"] == "not-installed" and cli["version"] is None
 
 
 def test_installed_but_logged_out(client: TestClient) -> None:
@@ -149,6 +149,9 @@ def test_platform_gate_is_unavailable_not_error(client: TestClient, monkeypatch:
     [
         "\n" + "v" * 300 + "\nsecond line\n",          # one long line
         f"warn: Logged in as {EMAIL}\n",                 # an account e-mail
+        f"{EMAIL}\n",                                    # e-mail alone on stdout
+        f"2.1.4 ({EMAIL})\n",                            # e-mail inside an otherwise valid line
+        "no digit here\n",                               # not a version: no digit
         "2.1.4 \u202e(Claude Code)\n",                    # bidi override
         "\x1b[31m2.1.4\x1b[0m\n",                       # terminal escape
         f"2.1.4 {CANARY}!\n",                            # free text outside the version alphabet
@@ -161,7 +164,7 @@ def test_version_that_is_not_a_version_never_appears(client: TestClient, version
     })
     r = client.get("/providers/clis")
     claude = _by_id(r.json())["claude"]
-    assert claude["version"] == "" and claude["state"] == "ready"
+    assert claude["version"] is None and claude["state"] == "ready"
     for needle in (EMAIL, "\u202e", "\x1b", CANARY, "v" * 81):
         assert needle not in r.text and needle not in json.dumps(r.json(), ensure_ascii=False)
 
@@ -171,7 +174,7 @@ def test_version_is_never_read_from_stderr(client: TestClient) -> None:
         ("claude", "--version"): _ok(stdout="", stderr="2.1.4 (Claude Code)\n"),
         ("claude", "auth"): _ok(CLAUDE_OK),
     })
-    assert _by_id(client.get("/providers/clis").json())["claude"]["version"] == ""
+    assert _by_id(client.get("/providers/clis").json())["claude"]["version"] is None
 
 
 def test_the_cap_counts_bytes_not_characters(client: TestClient) -> None:
@@ -186,7 +189,7 @@ def test_gate_closed_with_the_binary_present_runs_nothing(client: TestClient, mo
     calls: list[dict] = []
     app.state.cli_runner = _runner(calls, {})
     codex = _by_id(client.get("/providers/clis").json())["codex"]
-    assert codex["installed"] is True and codex["state"] == "unavailable" and codex["version"] == ""
+    assert codex["installed"] is True and codex["state"] == "unavailable" and codex["version"] is None
     assert not any(c["argv"][0].endswith("codex") for c in calls)  # not even --version
 
 
@@ -218,7 +221,7 @@ def test_version_timeout_keeps_the_state(client: TestClient) -> None:
         ("claude", "auth"): _ok(CLAUDE_OK),
     })
     claude = _by_id(client.get("/providers/clis").json())["claude"]
-    assert claude["state"] == "ready" and claude["version"] == ""
+    assert claude["state"] == "ready" and claude["version"] is None
 
 
 def test_cli_output_is_read_up_to_64_kib(client: TestClient) -> None:
@@ -240,3 +243,12 @@ def test_route_needs_the_sidecar_token() -> None:
     raw.request = httpx.Client.request.__get__(raw, Raw)  # bypass conftest's auto-auth
     assert raw.get("/providers/clis").status_code == 401
     assert raw.get("/providers/clis", headers={"Authorization": "Bearer nope"}).status_code == 401
+
+
+def test_extra_lines_after_the_version_never_appear(client: TestClient) -> None:
+    app.state.cli_runner = _runner([], {
+        ("claude", "--version"): _ok(f"2.1.4\nLogged in as {EMAIL}\n"),
+        ("claude", "auth"): _ok(CLAUDE_OK),
+    })
+    r = client.get("/providers/clis")
+    assert _by_id(r.json())["claude"]["version"] == "2.1.4" and EMAIL not in r.text
