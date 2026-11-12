@@ -144,13 +144,41 @@ def test_platform_gate_is_unavailable_not_error(client: TestClient, monkeypatch:
     assert codex["installed"] is True and codex["state"] == "unavailable"
 
 
-def test_version_is_one_short_line(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "version_stdout",
+    [
+        "\n" + "v" * 300 + "\nsecond line\n",          # one long line
+        f"warn: Logged in as {EMAIL}\n",                 # an account e-mail
+        "2.1.4 \u202e(Claude Code)\n",                    # bidi override
+        "\x1b[31m2.1.4\x1b[0m\n",                       # terminal escape
+        f"2.1.4 {CANARY}!\n",                            # free text outside the version alphabet
+    ],
+)
+def test_version_that_is_not_a_version_never_appears(client: TestClient, version_stdout: str) -> None:
     app.state.cli_runner = _runner([], {
-        ("claude", "--version"): _ok("\n" + "v" * 300 + "\nsecond line\n"),
+        ("claude", "--version"): _ok(version_stdout),
         ("claude", "auth"): _ok(CLAUDE_OK),
     })
-    claude = _by_id(client.get("/providers/clis").json())["claude"]
-    assert 0 < len(claude["version"]) <= 80 and "second" not in claude["version"]
+    r = client.get("/providers/clis")
+    claude = _by_id(r.json())["claude"]
+    assert claude["version"] == "" and claude["state"] == "ready"
+    for needle in (EMAIL, "\u202e", "\x1b", CANARY, "v" * 81):
+        assert needle not in r.text and needle not in json.dumps(r.json(), ensure_ascii=False)
+
+
+def test_version_is_never_read_from_stderr(client: TestClient) -> None:
+    app.state.cli_runner = _runner([], {
+        ("claude", "--version"): _ok(stdout="", stderr="2.1.4 (Claude Code)\n"),
+        ("claude", "auth"): _ok(CLAUDE_OK),
+    })
+    assert _by_id(client.get("/providers/clis").json())["claude"]["version"] == ""
+
+
+def test_the_cap_counts_bytes_not_characters(client: TestClient) -> None:
+    # 40,000 two-byte characters: under 64 K characters, over 64 KiB.
+    wide = json.dumps({"loggedIn": True, "pad": "\u00e9" * 40_000}, ensure_ascii=False)
+    app.state.cli_runner = _runner([], {("claude", "--version"): _ok("2.1.4\n"), ("claude", "auth"): _ok(wide)})
+    assert _by_id(client.get("/providers/clis").json())["claude"]["state"] == "error"
 
 
 def test_gate_closed_with_the_binary_present_runs_nothing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -4,7 +4,9 @@ Only ever asks a CLI for its version and its own status command: no prompt, no
 credential, an allowlisted environment (``cli_shared.scrub_env``) — so nothing here
 spends a token (I5, I7). Raw CLI output never reaches the caller: every ``detail`` is
 fixed text per state (no account e-mail, no stderr) and the version is clamped to one
-short line. Each CLI answer is read up to ``MAX_OUTPUT_BYTES``.
+short, strictly shaped line read from stdout only. What enters the analysis of each CLI
+answer is cut at ``MAX_ANSWER_BYTES`` (a bound on the response, not on the memory the
+CLI run itself uses — see issue #455).
 
 Contract (``GET /providers/clis``, docs/product/providers-cli-detection.md)::
 
@@ -17,6 +19,7 @@ Contract (``GET /providers/clis``, docs/product/providers-cli-detection.md)::
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, Callable
 
 from adapters.base import AdapterConfig, AgentAdapter, ProbeResult
@@ -33,8 +36,10 @@ DETECTED: tuple[tuple[str, str, type[AgentAdapter]], ...] = (
 )
 
 VERSION_TIMEOUT_S = 10
-VERSION_MAX_CHARS = 80
-MAX_OUTPUT_BYTES = 64 * 1024
+MAX_ANSWER_BYTES = 64 * 1024
+# A version is one short token line: letters, digits and . _ + ( ) - and spaces. No @, :, control
+# or bidi characters, so an e-mail or terminal escape printed next to it cannot pass as one.
+_VERSION_LINE = re.compile(r"[A-Za-z0-9._+() -]{1,80}")
 
 _STATE_BY_CODE = {
     "not_installed": "not-installed",
@@ -50,26 +55,35 @@ _FIXED_DETAIL = {
 }
 
 
-def _capped(runner: Callable[..., Any]) -> Callable[..., Any]:
-    """Read at most MAX_OUTPUT_BYTES of what a CLI printed, without touching run_cli."""
+def _cut(text: str) -> str:
+    raw = text.encode("utf-8", "replace")
+    if len(raw) <= MAX_ANSWER_BYTES:
+        return text
+    return raw[:MAX_ANSWER_BYTES].decode("utf-8", "ignore")
+
+
+def _bounded_answer(runner: Callable[..., Any]) -> Callable[..., Any]:
+    """Cut what a CLI printed to MAX_ANSWER_BYTES before it is analysed. ``run_cli`` has
+    already buffered all of it by then; limiting that is issue #455."""
 
     async def run(*args: Any, **kwargs: Any) -> CliRunResult:
         result: CliRunResult = await runner(*args, **kwargs)
         return CliRunResult(
             returncode=result.returncode,
-            stdout=result.stdout[:MAX_OUTPUT_BYTES],
-            stderr=result.stderr[:MAX_OUTPUT_BYTES],
+            stdout=_cut(result.stdout),
+            stderr=_cut(result.stderr),
             timed_out=result.timed_out,
         )
 
     return run
 
 
-def _one_line(text: str) -> str:
-    for line in text.splitlines():
+def _version_line(stdout: str) -> str:
+    """The first non-empty stdout line if, and only if, it looks like a version; else ''."""
+    for line in stdout.splitlines():
         line = line.strip()
         if line:
-            return line[:VERSION_MAX_CHARS]
+            return line if _VERSION_LINE.fullmatch(line) else ""
     return ""
 
 
@@ -82,7 +96,7 @@ async def _version(adapter: Any, runner: Callable[..., Any]) -> str:
     )
     if result.timed_out or result.returncode != 0:
         return ""
-    return _one_line(result.stdout or result.stderr)
+    return _version_line(result.stdout)
 
 
 async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: Callable[..., Any]) -> dict:
@@ -108,5 +122,5 @@ async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: 
 
 
 async def detect_clis(runner: Callable[..., Any] = run_cli) -> list[dict]:
-    capped = _capped(runner)
+    capped = _bounded_answer(runner)
     return list(await asyncio.gather(*(_detect_one(c, p, k, capped) for c, p, k in DETECTED)))
