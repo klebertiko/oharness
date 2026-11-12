@@ -2,7 +2,8 @@
 
 Access is computed from configuration fields only (mode, MCP servers, secret references, repositories, token ceiling). Instructions and
 skills are guidance: editing them never adds a server, a secret, a repository or a permission, which `capabilities` proves by never
-reading them. Text that came from outside therefore cannot widen what an agent reaches.
+reading them. The runner and the foreman ask these functions for that access, so a second calculation cannot grant more. Text that
+came from outside therefore cannot widen what an agent reaches.
 """
 from __future__ import annotations
 
@@ -134,14 +135,46 @@ def starter_files(name: str, model: str, review_model: str | None = None, roles:
     return files
 
 
+def _place_starter(staging, root) -> None:
+    """Moves a finished side folder onto `root` in one rename. An empty `root` is removed first and recreated if the move fails."""
+    removed_empty = False
+    if root.exists():
+        if any(root.iterdir()):
+            raise FileExistsError(str(root))
+        root.rmdir()
+        removed_empty = True
+    try:
+        staging.rename(root)
+    except OSError:
+        if removed_empty and not root.exists():
+            root.mkdir()
+        raise
+
+
 def write_starter(directory, files: dict[str, str]) -> None:
-    """Writes the files into a folder that does not exist yet or is empty; nothing that is already there is touched."""
+    """Writes the files into a folder that does not exist yet or is empty; nothing that is already there is touched.
+
+    Everything is written in a side folder first and moved across only when every file is on disk. A failure midway leaves the
+    destination absent or empty, so the next run can try again instead of refusing a partial folder."""
+    import shutil
+    import tempfile
     from pathlib import Path
 
     root = Path(directory)
-    if root.exists() and any(root.iterdir()):
+    if root.exists() and any(root.iterdir()):  # a file here raises, same as before: the caller reports that the folder cannot be written
         raise FileExistsError(str(root))
-    for rel, text in files.items():
-        target = root / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding='utf-8', newline='\n')
+    if not files:
+        return
+    parent = root.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f'.{root.name}.', dir=parent))
+    try:
+        staging.chmod(parent.stat().st_mode & 0o777)  # mkdtemp is private to the user; a starter folder should match the folder it lands in
+        for rel, text in files.items():
+            target = staging / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding='utf-8', newline='\n')
+        _place_starter(staging, root)
+    finally:
+        if staging.exists():  # a successful rename consumed it; a failure must not leave the side folder behind
+            shutil.rmtree(staging, ignore_errors=True)
