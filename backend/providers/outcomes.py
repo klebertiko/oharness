@@ -13,5 +13,7 @@ def failure_details(exc: Exception) -> dict:
         return {"provider_failure": "transport", "error": "Could not reach the provider. Check its endpoint and connection."}
     if isinstance(exc, RuntimeError):
         return cli_run_failure_details(exc)
+    if isinstance(exc, FileNotFoundError) and "cli" in str(exc).lower():
+        return cli_run_failure_details(RuntimeError(str(exc)))
     # Arbitrary SDK/CLI messages can contain URLs, prompts or credentials.
     return {"error": "Provider execution failed. Check the provider configuration and retry."}
