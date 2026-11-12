@@ -99,7 +99,7 @@ def test_stream_raises_a_failure_without_the_cli_text(_name, cls, _module) -> No
 def test_missing_binary_is_cli_missing_and_still_a_file_not_found(_name, cls, module, monkeypatch) -> None:
     monkeypatch.setattr(f"{module}.find_cli", lambda name: None)
     monkeypatch.setattr("adapters.cli_cursor._invocation_prefix", lambda: None)
-    adapter = cls(runner=_runner(CliRunResult(returncode=0, stdout="{}", stderr="")))
+    adapter = cls()  # default runner: the binary lookup is real, and finds nothing
     with pytest.raises(FileNotFoundError) as caught:
         asyncio.run(adapter.invoke("hi", _config()))
     assert isinstance(caught.value, CliFailure) and caught.value.failure == "cli-missing"

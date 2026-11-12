@@ -124,6 +124,11 @@ class CursorCliAdapter(AgentAdapter):
         self._runner = runner
         self._timeout = timeout
 
+    def cli_argv_prefix(self) -> list[str] | None:
+        """Argv prefix that launches this CLI, or None when it is not installed.
+        Detection (``runtime/cli_detect.py``) appends ``--version`` to it."""
+        return _invocation_prefix()
+
     def _prefix(self) -> list[str]:
         prefix = _invocation_prefix()
         if not prefix:
@@ -205,13 +210,14 @@ class CursorCliAdapter(AgentAdapter):
     async def probe(self, config: AdapterConfig) -> ProbeResult:
         gate = self._windows_gate()
         if gate:
-            return ProbeResult(ok=False, health="setup", detail=gate)
+            return ProbeResult(ok=False, health="setup", code="platform_unsupported", detail=gate)
 
         prefix = _invocation_prefix()
         if not prefix:
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_installed",
                 detail="cursor-agent CLI not found on PATH. Install it, then run `cursor-agent login`.",
             )
 
@@ -222,23 +228,25 @@ class CursorCliAdapter(AgentAdapter):
         result = await self._runner([*prefix, "status", "--format", "json"], cwd=cwd, env=env, timeout=15)
 
         if result.timed_out:
-            return ProbeResult(ok=False, health="fault", detail="cursor-agent did not respond to `status`.")
+            return ProbeResult(ok=False, health="fault", code="timeout", detail="cursor-agent did not respond to `status`.")
         if result.returncode != 0:
             return ProbeResult(
                 ok=False,
                 health="fault",
+                code="error",
                 detail=_last_line(result.stderr) or f"cursor-agent status exited {result.returncode}.",
             )
 
         try:
             status = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return ProbeResult(ok=False, health="fault", detail="cursor-agent status returned unreadable output.")
+            return ProbeResult(ok=False, health="fault", code="error", detail="cursor-agent status returned unreadable output.")
 
         if not status.get("isAuthenticated"):
             return ProbeResult(
                 ok=False,
                 health="setup",
+                code="not_logged_in",
                 detail="cursor-agent CLI is installed but not logged in. Run `cursor-agent login`.",
             )
 

@@ -57,6 +57,9 @@ class ProbeResult:
     # `GET /models`). Empty when the adapter has no such listing (CLI
     # adapters) — the UI then falls back to its catalog, labelled as such.
     models: list[str] = field(default_factory=list)
+    # Machine-readable reason when `ok` is False, so callers need not parse
+    # `detail`: not_installed | not_logged_in | platform_unsupported | timeout | error.
+    code: str = ""
 
 
 class AgentAdapter(ABC):

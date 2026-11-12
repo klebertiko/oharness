@@ -131,7 +131,11 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
             });
           } else if (pf === "cli-signin" || pf === "cli-missing" || pf === "cli-timeout" || pf === "cli-error") {
             // Closed set only; the text is ours (catalog), never the backend's or the CLI's.
-            useProviderStore.getState().reportRunOutcome(id, { ok: false, detail: tr(`run.cliFailure.${pf}`) });
+            useProviderStore.getState().reportRunOutcome(id, {
+              ok: false,
+              ...(pf === "cli-signin" || pf === "cli-missing" ? { cliFailure: pf } : {}),
+              detail: tr(`run.cliFailure.${pf}`),
+            });
           }
         }
         dispatch({ type: "sse", event, data });

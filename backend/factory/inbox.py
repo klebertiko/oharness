@@ -2,7 +2,9 @@
 
 Nothing is stored about what is waiting, so an entry leaves by itself the moment it stops being true. Six kinds: a question asked, a
 question answered (information), a spec to review, work ready for review, blocked, and failed. Blocked and failed show only when nothing
-else on the item waits for the person. A person can mark an entry done by hand and undo it; that choice is the only thing stored.
+else on the item waits for the person. A person can mark an entry done by hand and undo it. That choice is stored, and the work item's
+history records who did it and when (`inbox_resolved`, `inbox_restored`). An open question stays open until it is answered: the event is
+the trail, not the answer.
 
 The id of an entry carries the event that made it true (the question asked, the spec revision, the handoff), so a later question or a new
 spec revision on the same item is a new entry, while a note on a blocked item does not bring a resolved entry back.
@@ -28,6 +30,10 @@ FAILED_WINDOW = timedelta(days=7)
 DISMISSAL_KEEP = timedelta(days=30)
 SUMMARY_CHARS = 500
 LIMIT = 500
+# Marking the inbox done is an audit of the entry, not a new reason for it. A note already worked this way for a blocked item.
+# Skipping them keeps the entry id stable, so the dismissal still matches.
+_AUDIT = frozenset({'inbox_resolved', 'inbox_restored'})
+_NOT_IDENTITY = frozenset({'note'}) | _AUDIT
 
 
 def _now() -> datetime:
@@ -45,6 +51,20 @@ def _data(event: WorkItemEvent | None) -> dict:
     return json.loads(event.data_json) if event else {}
 
 
+def _before_audit(events: list[WorkItemEvent]) -> WorkItemEvent | None:
+    """The last event that is not an inbox audit. Used when an entry has no event of its own, so resolving does not rename it."""
+    return next((event for event in reversed(events) if event.type not in _AUDIT), None)
+
+
+def _entry_ref(key: str) -> tuple[str, str] | None:
+    """`kind:work_item_id:sequence`. The work item id is a UUID, so it holds no colon."""
+    kind, _, rest = key.partition(':')
+    item_id, sep, sequence = rest.rpartition(':')
+    if kind not in TYPES or not sep or not item_id or not sequence.isdigit():
+        return None
+    return kind, item_id
+
+
 def _derive(item: WorkItem, events: list[WorkItemEvent], include_info: bool) -> list[dict]:
     def last(*types: str, where=None) -> WorkItemEvent | None:
         return next((e for e in reversed(events) if e.type in types and (where is None or where(e))), None)
@@ -53,7 +73,7 @@ def _derive(item: WorkItem, events: list[WorkItemEvent], include_info: bool) -> 
     if item.status == 'failed':
         if item.closed_at and _now() - item.closed_at <= FAILED_WINDOW:
             failed = last('failed')
-            out.append(_entry('failed', item, failed or (events[-1] if events else None), str(_data(failed).get('reason') or '')))
+            out.append(_entry('failed', item, failed or _before_audit(events), str(_data(failed).get('reason') or '')))
         return out
     if item.status == 'awaiting_human':
         resolved = {_data(e).get('question_id') for e in events if e.type == 'checkpoint_resolved'}
@@ -64,11 +84,11 @@ def _derive(item: WorkItem, events: list[WorkItemEvent], include_info: bool) -> 
         if asked is not None:
             out.append(_entry('question', item, asked, str(_data(asked).get('question') or '')))
         if not out:
-            quiet = next((e for e in reversed(events) if e.type != 'note'), None)  # a note does not change what is blocking
+            quiet = next((e for e in reversed(events) if e.type not in _NOT_IDENTITY), None)  # a note does not change what is blocking
             out.append(_entry('blocked', item, quiet, 'Waiting for a person to decide how this continues.'))
     elif item.status == 'waiting_merge' and item.stage == 'handoff':
         arrived = last('stage_entered', 'checkpoint_requested', where=lambda e: _data(e).get('stage') == 'handoff' or _data(e).get('kind') == 'handoff')
-        out.append(_entry('handoff_ready', item, arrived or (events[-1] if events else None), 'Ready for a person to review and merge.'))
+        out.append(_entry('handoff_ready', item, arrived or _before_audit(events), 'Ready for a person to review and merge.'))
     elif include_info and item.status in ('queued', 'running'):
         answered, moved = last('checkpoint_resolved'), last('stage_entered', 'checkpoint_requested')
         if answered is not None and _data(answered).get('kind') == 'question' and (moved is None or answered.sequence > moved.sequence):
@@ -100,18 +120,36 @@ async def entries(db: AsyncSession, factory_id: str | None = None, *, include_in
     return sorted(found, key=lambda e: e['since'], reverse=True)
 
 
-async def resolve(db: AsyncSession, key: str) -> None:
-    """Mark a currently derived entry done by hand. An id that is not in the inbox right now is an error."""
-    if key not in {e['id'] for e in await entries(db, include_info=True, include_resolved=True)}:
+async def _audit(db: AsyncSession, item_id: str, type_: str, actor: tuple[str, str | None], key: str, entry_type: str) -> None:
+    item = await db.get(WorkItem, item_id)
+    if item is None:  # the choice is still stored; there is no item left to attach the trail to
+        return
+    await service.add_event(db, item, type_, actor, {'entry_id': key, 'entry_type': entry_type})
+
+
+async def resolve(db: AsyncSession, key: str, actor: tuple[str, str | None]) -> None:
+    """Mark a currently derived entry done by hand. An id that is not in the inbox right now is an error.
+
+    The question (or the block) stays as it was. The history records who hid it and when, the first time.
+    """
+    current = {e['id']: e for e in await entries(db, include_info=True, include_resolved=True)}
+    entry = current.get(key)
+    if entry is None:
         raise service.FactoryError('not_found', 404)
     await db.execute(delete(InboxDismissal).where(InboxDismissal.at < _now() - DISMISSAL_KEEP))  # old choices about entries long gone
     if await db.get(InboxDismissal, key) is None:
         db.add(InboxDismissal(key=key))
+        await _audit(db, entry['work_item_id'], 'inbox_resolved', actor, key, entry['type'])
     await db.commit()
 
 
-async def undo(db: AsyncSession, key: str) -> None:
+async def undo(db: AsyncSession, key: str, actor: tuple[str, str | None]) -> None:
+    """Bring a hand-resolved entry back, and record who undid it. Undoing something that was not resolved does nothing."""
     row = await db.get(InboxDismissal, key)
-    if row is not None:
-        await db.delete(row)
-        await db.commit()
+    if row is None:
+        return
+    await db.delete(row)
+    ref = _entry_ref(key)
+    if ref is not None:
+        await _audit(db, ref[1], 'inbox_restored', actor, key, ref[0])
+    await db.commit()
