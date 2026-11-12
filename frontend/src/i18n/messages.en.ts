@@ -491,6 +491,12 @@ export const en = {
   "fault.signIn": "Sign-in needed",
   "fault.notInstalled": "Not installed",
   "fault.unknown": "Test failed",
+  "fault.cliTimeout": "CLI timed out",
+  "fault.cliError": "CLI error",
+  "empty.noConnection": "Connect a provider to send",
+  "empty.pickProvider": "Pick a provider to send",
+  "empty.openProviders": "Open Providers · {label}",
+  "empty.agentOnly": "This connection runs agents only. Pick another provider to chat.",
 
   "step.replaceKey": "Replace key",
   "step.replaceKey.hint": "replace key",

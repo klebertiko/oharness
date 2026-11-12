@@ -105,14 +105,23 @@ export function providerReadiness(c: Connection): ProviderReadiness {
     every `detail` the adapters emit, and why each maps where it does, lives in
     docs/adr/0013-probe-detail-classification.md and is locked on the backend by
     tests/test_probe_detail_contract.py; these rules must stay in step with it. */
-export type ProviderFaultClass =
-  | "key-rejected"
-  | "unreachable"
-  | "rate-limited"
-  | "out-of-credits"
-  | "cli-signin"
-  | "cli-missing"
-  | "unknown";
+export const FAULT_CLASSES = [
+  "key-rejected",
+  "unreachable",
+  "rate-limited",
+  "out-of-credits",
+  "cli-signin",
+  "cli-missing",
+  "cli-timeout",
+  "cli-error",
+  "unknown",
+] as const;
+export type ProviderFaultClass = (typeof FAULT_CLASSES)[number];
+
+/** A closed class the sidecar reported for a failed run (`provider_failure`), or null for anything else. */
+export function faultFromRunClass(value: unknown): ProviderFaultClass | null {
+  return typeof value === "string" && (FAULT_CLASSES as readonly string[]).includes(value) ? (value as ProviderFaultClass) : null;
+}
 
 const FAULT_BY_STATUS: Record<number, ProviderFaultClass> = {
   401: "key-rejected",
@@ -126,7 +135,9 @@ const FAULT_BY_STATUS: Record<number, ProviderFaultClass> = {
     `health: "setup"`, an HTTP failure `health: "fault"`; text that matches
     nothing is `unknown` (never a guess at a nearby class), and a connection
     that is neither faulted nor waiting on a CLI has no fault at all. */
-export function providerFault(c: Pick<Connection, "health" | "detail">): ProviderFaultClass | null {
+export function providerFault(c: Pick<Connection, "health" | "detail"> & { failure?: ProviderFaultClass }): ProviderFaultClass | null {
+  // A class the sidecar named for a failed run beats parsing text; it only applies to a connection that is not healthy.
+  if (c.failure && (c.health === "fault" || c.health === "setup")) return c.failure;
   const text = (c.detail ?? "").trim().toLowerCase();
   if (c.health === "setup") {
     if (text.includes(" cli not found on path.")) return "cli-missing";
