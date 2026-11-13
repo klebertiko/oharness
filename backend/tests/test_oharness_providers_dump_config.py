@@ -251,3 +251,25 @@ def test_only_a_word_of_the_codes_own_vocabulary_is_ever_printed_for_the_backend
         _, out, _ = run(capsys, *flags)
         assert (KEY not in out) and "\x1b" not in out
     assert doc_of(capsys)["environment"]["secretsBackend"]["value"] == "unknown"
+
+
+def test_a_label_or_id_with_a_terminal_escape_is_cleaned_in_the_text_output(world, capsys):
+    """Free text a person typed reaches the terminal as printable characters only, cut short (#483); JSON keeps the data as it is."""
+    escape = "\x1b[31m"
+    world.connections["anthropic"]["label"] = "a" + escape + "b" + "x" * 200 + " " + KEY
+    world.connections["evil" + escape] = _row("evil" + escape, "ollama")
+    code, out, _ = run(capsys)
+    assert code == 0
+    assert "\x1b" not in out
+    assert KEY not in out  # past the cut
+    assert max(len(line) for line in out.splitlines()) < 200
+    assert fields(doc_of(capsys), "anthropic")["label"]["value"].startswith("a" + escape + "b")
+
+
+def test_every_text_value_is_cleaned_the_environment_and_the_provider_too(world, capsys, monkeypatch):
+    """Not only `id` and the free fields: a data directory or a provider name holding a terminal escape is cleaned too (#494)."""
+    escape = "]0;title"
+    monkeypatch.setenv("OH_DATA_DIR", str(world.home / ("d" + escape)))
+    world.connections["odd"] = _row("odd", "ollama" + escape)
+    code, out, _ = run(capsys)
+    assert code == 0 and "" not in out and "" not in out

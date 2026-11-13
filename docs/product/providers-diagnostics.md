@@ -21,3 +21,9 @@ Relatório estilo doctor, sem segredos, sem rede. Duas portas, uma função (`pr
 - `path` tem o diretório do usuário trocado por `~`.
 - Nunca aparecem: chave do cofre, e-mail da conta do probe, stderr/stdout cru de CLI, usuário local.
 - O estado de CLI vem das mesmas sondas só de status de `GET /providers/clis`; conexões por chave não fazem chamada de rede (testar a chave continua sendo o probe).
+
+## Texto livre e endpoint
+
+- `label` e `id` são digitados pelo usuário: no JSON saem como estão (o JSON escapa caracteres de controle); no texto da CLI saem só com caracteres imprimíveis e cortados em 80.
+- O endpoint sai como `esquema://host[:porta]/caminho`, sem userinfo, query, fragmento nem `;params`, e vazio se tiver mais de 200 caracteres de caminho. Um token escrito no próprio caminho não tem como ser reconhecido: não cole chave em endpoint.
+- A versão do relatório vem de `backend/version.py` (a mesma do app), sem carregar o app inteiro.

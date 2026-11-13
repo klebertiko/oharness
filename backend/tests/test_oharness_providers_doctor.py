@@ -147,3 +147,73 @@ def test_no_connections_is_a_clean_report(world, capsys):
     world.connections.clear()
     code, out, _ = run(capsys, "--json")
     assert code == 0 and json.loads(out)["connections"] == []
+
+
+def test_the_version_comes_from_a_light_constant_not_from_loading_the_whole_app(world, capsys, monkeypatch):
+    """`from main import app` builds the FastAPI app (and reads the human credential) just to learn a version string."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "main", None)  # an import of `main` now raises
+    code, out, _ = run(capsys, "--json")
+    assert code == 0 and json.loads(out)["app"]["version"]
+
+
+def test_the_version_constant_is_the_one_the_app_declares():
+    import version
+    from main import app
+
+    assert version.APP_VERSION == app.version
+
+
+def _provider_state(monkeypatch, provider: str, *, installed: bool, runner=None, windows: bool = False):
+    for module in MODULES:
+        monkeypatch.setattr(f"{module}.find_cli", (lambda name: f"/home/{USER}/bin/{name}") if installed else (lambda name: None))
+    monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: windows)
+    monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: windows)
+    if runner:
+        monkeypatch.setattr("adapters.cli_shared.run_cli", runner)
+
+
+async def _garbled(argv, *, cwd, env, timeout, stdin=None):
+    return CliRunResult(returncode=1, stdout="not json at all", stderr=f"boom {STDERR_CANARY}")
+
+
+@pytest.mark.parametrize(
+    ("provider", "failure", "setup"),
+    [
+        ("anthropic", "cli-missing", {"installed": False}),
+        ("openai", "cli-unavailable", {"installed": True, "windows": False}),
+        ("anthropic", "cli-error", {"installed": True, "runner": _garbled}),
+    ],
+)
+def test_each_cli_failure_class_exits_non_zero_with_its_fixed_class(world, capsys, monkeypatch, provider, failure, setup):
+    _provider_state(monkeypatch, provider, **setup)
+    world.connections.clear()
+    world.connections[provider] = _row(provider, provider)
+    code, out, err = run(capsys, "--json")
+    row = json.loads(out)["connections"][0]
+    assert code == 1 and row["failureClass"] == failure
+    assert STDERR_CANARY not in out + err and USER not in out + err
+
+
+def test_no_network_socket_is_opened(world, capsys, monkeypatch):
+    """Stronger than stubbing the adapter: the doctor may not open any socket at all."""
+    import socket
+
+    real_connect = socket.socket.connect
+
+    def refuse(self, address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] in ("127.0.0.1", "::1"):
+            return real_connect(self, address, *args, **kwargs)  # the event loop's own self-pipe
+        raise AssertionError("the doctor must not open a network socket")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: refuse(None, ("203.0.113.1", 1)))
+    code, _, _ = run(capsys, "--json")
+    assert code == 0
+
+
+def test_a_label_or_id_with_a_terminal_escape_is_cleaned_in_the_text_output(world, capsys):
+    world.connections["anthropic"]["id"] = "an[31mthropic" + "z" * 200
+    _, out, _ = run(capsys)
+    assert "" not in out

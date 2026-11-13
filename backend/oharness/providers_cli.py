@@ -63,6 +63,15 @@ def _shown_dir(path, verbose: bool) -> str:
     return str(path) if verbose else mask_home(str(path))
 
 
+def _clean(value, limit: int = 80) -> str:
+    """Free text a person typed (a label, an id) as one safe terminal line: printable characters only, cut short.
+
+    A terminal escape or a pasted key must not reach the screen. JSON output keeps the data as it is (it escapes control characters itself).
+    """
+    text = "".join(ch if ch.isprintable() else "?" for ch in str(value))
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def _public(row: dict) -> dict:
     return {
         "id": row["id"],
@@ -91,7 +100,7 @@ async def _list(as_json: bool, verbose: bool) -> int:
     for row in rows:
         keyed = "key stored" if row["hasSecret"] else "-"
         state = "enabled" if row["enabled"] else "disabled"
-        print(f"{row['id']}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{row['label']}")
+        print(f"{_clean(row['id'])}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{_clean(row['label'])}")
     return EXIT_OK
 
 
@@ -142,7 +151,7 @@ async def _test(connection_id: str, as_json: bool) -> int:
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
     else:
-        print(f"{row['id']}: {outcome['health']} - {message}")
+        print(f"{_clean(row['id'])}: {outcome['health']} - {message}")
     return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
@@ -215,10 +224,11 @@ def _connection_config(row: dict) -> dict:
     }
 
 
-def _shown_value(item: dict, words: dict) -> str:
+def _shown_value(item: dict, words: dict, limit: int = 80) -> str:
+    """One field as a safe terminal word: every value goes through `_clean` (printable only, cut short), whatever field it is."""
     if item["value"] is None:
         return words["invalid"] if item["origin"] == "app" else "-"  # `null` from the app is a stored value that cannot be used
-    return str(item["value"])
+    return _clean(item["value"], limit)
 
 
 async def _dump_config(as_json: bool) -> int:
@@ -235,9 +245,9 @@ async def _dump_config(as_json: bool) -> int:
     if not doc["connections"]:
         print(words["none"])
     for conn in doc["connections"]:
-        print(f"{conn['id']} ({conn['provider']})")
+        print(f"{_clean(conn['id'])} ({_clean(conn['provider'])})")
         for name, item in conn["fields"].items():
-            print(f"  {name}	{_shown_value(item, words)}	({words[item['origin']]})")
+            print(f"  {name}	{_shown_value(item, words, 200 if name == 'endpoint' else 80)}	({words[item['origin']]})")  # an endpoint is already cut to 200 by `safe_endpoint`
     return EXIT_OK
 
 
@@ -268,7 +278,7 @@ async def _doctor(as_json: bool) -> int:
         for c in report["connections"]:
             cli = c["cli"]
             where = f"	{cli['id']} {cli['version'] or '-'}" if cli else ""
-            print(f"{c['id']}	{c['state']}	{c['failureClass'] or '-'}{where}")
+            print(f"{_clean(c['id'])}	{c['state']}	{c['failureClass'] or '-'}{where}")
         print(DOCTOR_MESSAGES[_language()]["attention" if needs_attention else "ok"])
     return EXIT_NOT_LIVE if needs_attention else EXIT_OK
 
