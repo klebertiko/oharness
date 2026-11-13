@@ -15,7 +15,7 @@
       "required": ["value", "origin"],
       "additionalProperties": false,
       "properties": {
-        "value": { "type": ["string", "boolean", "null"] },
+        "value": { "type": ["string", "boolean", "null"], "description": "null with origin app: a stored value that cannot be used (an endpoint that is not an http(s) URL)." },
         "origin": { "enum": ["default", "app", "env"], "description": "default: built in (the catalog, the platform); app: a connection the app stored; env: this process's environment. Never the environment of a CLI subprocess." }
       }
     },
@@ -38,7 +38,7 @@
               "required": ["value", "origin"],
               "additionalProperties": false,
               "properties": {
-                "value": { "enum": ["default", "custom", null], "description": "default: the app's own `<data>/secrets`; custom: another folder; null: the backend is not a file." },
+                "value": { "enum": ["default", "custom", null], "description": "default: the app's own `<data>/secrets`; custom: another folder; null: the backend is not a file (origin is then default)." },
                 "origin": { "enum": ["default", "app", "env"] }
               }
             },

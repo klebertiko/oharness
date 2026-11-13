@@ -69,22 +69,37 @@ def read_connections() -> tuple[dict, str]:
             engine.dispose()
 
 
+def secrets_backend() -> str | None:
+    """The secrets backend the installed sidecar runs with: `memory`, `file` or `keychain`, or `None` for a value the app does not know.
+
+    `OH_SECRETS` unset is the packaged sidecar's own default (`sidecar_entry.configure_environment`): a file store. Set (even empty), it is read the way
+    `secret_store.factory` reads it. Only the fixed name is ever returned: the variable's own text is never echoed.
+    """
+    raw = os.environ.get("OH_SECRETS")
+    return "file" if raw is None else _BACKENDS.get(raw.strip().lower())
+
+
+def secrets_folder() -> Path:
+    """Where a file store keeps its keys: `OH_SECRETS_DIR`, else the sidecar's default `<data directory>/secrets`. Nothing is created."""
+    folder = os.environ.get("OH_SECRETS_DIR")
+    if folder:
+        return Path(folder)
+    from data_dir import DataDirError, resolve_data_dir
+
+    try:
+        return resolve_data_dir(create=False) / "secrets"
+    except DataDirError:
+        raise Unreadable("the data directory is not usable") from None
+
+
 def secrets_state() -> str:
     """`ok`, `missing` (a first run: no secrets folder yet) or raise `Unreadable`. The store is not built: no folder is created and no value is read."""
-    backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "file").strip().lower())  # an unconfigured process gets the sidecar's default: a file store
+    backend = secrets_backend()
     if backend is None:
         raise Unreadable("the secrets backend is not one the app knows")
     if backend != "file":
         return "ok"
-    folder = os.environ.get("OH_SECRETS_DIR")
-    if not folder:
-        from data_dir import DataDirError, resolve_data_dir
-
-        try:
-            folder = str(resolve_data_dir(create=False) / "secrets")
-        except DataDirError:
-            raise Unreadable("the data directory is not usable") from None
-    path = Path(folder)
+    path = secrets_folder()
     if not path.exists():
         return "missing"
     if not path.is_dir() or not os.access(path, os.R_OK):
