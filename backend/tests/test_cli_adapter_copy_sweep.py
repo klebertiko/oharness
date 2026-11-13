@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from adapters.cli_shared import CLI_FAILURE_MESSAGES, CLI_MISSING, CLI_SIGNIN
 
 ADAPTERS_DIR = Path(__file__).resolve().parent.parent / "adapters"
