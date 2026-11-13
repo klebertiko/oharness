@@ -1,7 +1,7 @@
 -r requirements.txt
-pytest==9.1.1
-pytest-bdd==9.0.0
+pytest==9.2.0
+pytest-bdd==9.0.1
 # mutmut 3 does not support native Windows. Run only inside an isolated worktree.
-mutmut[patch]==3.8.0
+mutmut[patch]==3.8.1
 pytest-timeout==2.4.0
-filelock==4.2.4
+filelock==4.2.9
