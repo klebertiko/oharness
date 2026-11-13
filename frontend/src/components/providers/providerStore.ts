@@ -485,6 +485,14 @@ interface ProviderState {
   bindMove: (id: string, dir: -1 | 1) => void;
 }
 
+/** Detection is the oldest evidence: a Test or a run result that lands after a detection started wins.
+    `dropDetection` stamps the connection so a slow `GET /providers/clis` answer cannot bring the old state back. */
+let detectTick = 0;
+const detectionDroppedAt = new Map<string, number>();
+const dropDetection = (id: string): void => {
+  detectionDroppedAt.set(id, ++detectTick);
+};
+
 const patch = (list: Connection[], id: string, f: (c: Connection) => Connection) =>
   list.map((c) => (c.id === id ? f(c) : c));
 
@@ -549,6 +557,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
 
   detectClis: async () => {
     try {
+      const startedAt = ++detectTick;
       const res = await fetch(apiUrl("/providers/clis"));
       if (!res.ok) return;
       const body = (await res.json()) as { clis?: { provider?: string; state?: string }[] };
@@ -559,6 +568,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       set({
         connections: get().connections.map((c) => {
           const cliState = byProvider.get(c.provider);
+          if ((detectionDroppedAt.get(c.id) ?? 0) > startedAt) return c;
           return cliState && specOf(c).credential.kind === "cli" ? { ...c, cliState } : c;
         }),
       });
@@ -573,6 +583,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (!before) return;
     // A fresh test is newer than any detection: drop it so the probe's own answer is the one shown.
     set({ connections: patch(get().connections, id, (c) => ({ ...c, health: "probing", cliState: undefined })) });
+    dropDetection(id);
     await ensureBackendRow(before);
     await runProbe(id, set, get);
   },
@@ -585,10 +596,12 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     // connection they've already turned away from). A probe already in
     // flight owns the next honest answer. An unknown id is a stray event.
     if (!c || !c.enabled || c.health === "probing") return;
+    dropDetection(id);
     if (outcome.ok) {
       set({
         connections: patch(get().connections, id, (x) => ({
           ...x,
+          cliState: undefined,
           health: "live",
           detail: x.health === "live" ? x.detail : "Verified by a real run just now.",
         })),
@@ -601,7 +614,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       const detail = outcome.cliFailure === "cli-signin"
         ? `${c.label} CLI is installed but not logged in.`
         : `${c.label} CLI not found on PATH.`;
-      set({ connections: patch(get().connections, id, (x) => ({ ...x, health: "setup", detail })) });
+      set({ connections: patch(get().connections, id, (x) => ({ ...x, cliState: undefined, health: "setup", detail })) });
     } else {
       set({
         connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),

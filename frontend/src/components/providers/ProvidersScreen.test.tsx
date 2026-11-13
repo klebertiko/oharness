@@ -58,6 +58,15 @@ describe("detected CLI state on open (R-PRV-01)", () => {
     expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith("/providers/clis"))).toBe(true);
     vi.unstubAllGlobals();
   });
+
+  it("says the detected state in pt-BR", async () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ clis: [{ id: "claude", provider: "anthropic", state: "not-installed" }] }) }));
+    show([cliConn({})], {}, "");
+    await waitFor(() => expect(rowText()).toContain("Não instalado"));
+    expect(rowText()).toContain("instalar a CLI");
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("list", () => {
