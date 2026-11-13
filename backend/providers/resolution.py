@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from adapters import get_adapter
 from adapters.base import AdapterConfig, AgentAdapter
 from adapters.catalog import endpoint_for_connection, spec_for_connection
+from adapters.cli_shared import INVALID_CLI_MODEL, valid_cli_model
 from secret_store.base import SecretsStore
 
 # connection.provider -> the adapters.get_adapter() key that actually talks to
@@ -235,6 +236,10 @@ def _resolve_connection(
             f"'{conn_label}' has no default model set. Open Providers and pick "
             "one for this connection, or pin a model on the node."
         )
+    if credential.get("kind") == "cli" and model and not valid_cli_model(model):
+        # The model becomes the CLI's `--model` value: refuse it here, with the
+        # connection named, before any process is started.
+        raise ProviderResolutionError(f"'{conn_label}': {INVALID_CLI_MODEL}")
 
     config = AdapterConfig(
         adapter=adapter_name,

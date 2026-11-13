@@ -19,7 +19,7 @@ from adapters.catalog import (
     list_catalog,
     spec_for_connection,
 )
-from adapters.cli_shared import run_cli
+from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
 from database import get_db
 from providers import store as connection_store
 from providers.diagnostics import build_report
@@ -101,6 +101,13 @@ def _ensure_endpoint_allowed(provider: str, endpoint: str | None, *unchanged: st
         raise HTTPException(400, "This provider's endpoint is fixed and cannot be changed.")
 
 
+def _ensure_cli_model_allowed(spec: dict | None, model: str | None) -> None:
+    """A subscription connection's model becomes the CLI's `--model` value, so it
+    is validated before it is stored (fixed text: the typed value is not echoed)."""
+    if spec is not None and spec["credential"]["kind"] == "cli" and model and not valid_cli_model(model):
+        raise HTTPException(400, INVALID_CLI_MODEL)
+
+
 @router.get("/catalog")
 async def get_catalog():
     return {"providers": list_catalog()}
@@ -138,6 +145,7 @@ async def create_connection(
     if body.id in connections:
         raise HTTPException(409, f"Connection '{body.id}' already exists")
     spec = get_provider(body.provider)
+    _ensure_cli_model_allowed(spec, body.defaultModel)
     default_endpoint = spec["endpoint"]["default"] if spec is not None else ""
     _ensure_endpoint_allowed(body.provider, body.endpoint, "", default_endpoint)
     row = {
@@ -178,6 +186,7 @@ async def update_connection(
     if not row:
         raise HTTPException(404, "Connection not found")
     _ensure_endpoint_allowed(row["provider"], body.endpoint, row.get("endpoint", ""))
+    _ensure_cli_model_allowed(get_provider(row["provider"]), body.defaultModel)
     # Commit a copy first; swap it into memory only once the DB accepted it, so
     # a failing write leaves memory and DB in agreement.
     updated = dict(row)
