@@ -48,12 +48,7 @@ def world(monkeypatch, tmp_path):
     }
 
     async def fake_load():
-        # what the real loader does first when the process has no database yet: the packaged sidecar's defaults
-        os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{(home / 'data' / 'harness.db').as_posix()}")
-        os.environ.setdefault("OH_SECRETS", "file")
-        from data_dir import resolve_data_dir
-
-        os.environ.setdefault("OH_SECRETS_DIR", str(resolve_data_dir(create=False) / "secrets"))
+        # the real loader (`readonly.read_connections`) only reads: it never fills in the sidecar's defaults (#497), so neither does this one
         return connections, store
 
     monkeypatch.setattr("oharness.providers_cli._load_runtime", fake_load)
@@ -158,7 +153,7 @@ def test_there_is_no_secrets_directory_when_the_backend_is_not_a_file(world, cap
     monkeypatch.setenv("OH_SECRETS", backend)
     monkeypatch.setenv("OH_SECRETS_DIR", str(world.home / "elsewhere"))
     doc = doc_of(capsys)
-    assert doc["environment"]["secretsDir"] == {"value": None, "origin": "env"}
+    assert doc["environment"]["secretsDir"] == {"value": None, "origin": "default"}  # no folder at all: the variable it was given does not apply (#494)
     assert "elsewhere" not in json.dumps(doc)
 
 
@@ -209,3 +204,40 @@ def test_a_secrets_backend_the_app_does_not_know_is_never_echoed(world, capsys, 
     _, out, _ = run(capsys, "--json")
     assert json.loads(out)["environment"]["secretsBackend"] == {"value": "unknown", "origin": "env"}
     assert "weird-" not in out
+
+
+def test_the_environment_is_the_packaged_sidecars_without_any_loader_filling_it_in(world, capsys, monkeypatch):
+    """Nothing set: the installed app keeps its keys in `<data>/secrets` (file) and its database in `<data>/harness.db`: that is what is reported."""
+    env = doc_of(capsys)["environment"]
+    assert env["secretsBackend"] == {"value": "file", "origin": "default"}
+    assert env["secretsDir"] == {"value": "default", "origin": "default"}
+    assert env["database"] == {"value": "sqlite", "origin": "default"}
+    for name in ("OH_SECRETS", "OH_SECRETS_DIR", "DATABASE_URL"):
+        assert name not in os.environ  # reporting the defaults does not set them
+
+
+def test_a_stored_endpoint_that_is_not_a_url_is_reported_invalid_not_as_the_default(world, capsys, monkeypatch):
+    """A broken value the app stored must show as the app's (and broken), never hide behind the catalog default (#494)."""
+    world.connections["anthropic"]["endpoint"] = "ftp://files.example.test/" + KEY
+    assert fields(doc_of(capsys), "anthropic")["endpoint"] == {"value": None, "origin": "app"}
+    monkeypatch.setenv("OHARNESS_LANG", "en")
+    _, out, _ = run(capsys)
+    line = next(l for l in out.splitlines() if l.strip().startswith("endpoint") and "invalid" in l)
+    assert "(app)" in line and KEY not in out and "files.example.test" not in out
+
+
+def test_the_text_follows_the_language_like_the_doctor(world, capsys, monkeypatch):
+    monkeypatch.setenv("OHARNESS_LANG", "pt-BR")
+    world.connections["anthropic"]["endpoint"] = "not a url"
+    _, pt, _ = run(capsys)
+    assert "(padrão)" in pt and "(app)" in pt and "inválido" in pt
+    monkeypatch.setenv("OHARNESS_LANG", "en")
+    _, en, _ = run(capsys)
+    assert "(default)" in en and "invalid" in en and "padrão" not in en
+
+
+def test_no_connections_text_says_so_in_the_language(world, capsys, monkeypatch):
+    world.connections.clear()
+    monkeypatch.setenv("OHARNESS_LANG", "pt-BR")
+    _, out, _ = run(capsys)
+    assert "nenhuma conexão" in out.lower()

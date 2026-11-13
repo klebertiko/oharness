@@ -46,12 +46,14 @@ class World:
 
 
 @pytest.fixture
-def world(monkeypatch):
+def world(monkeypatch, tmp_path):
     for module in MODULES:
         monkeypatch.setattr(f"{module}.find_cli", lambda name: f"/home/{USER}/bin/{name}")
     monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: False)
     monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: True)
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path(f"/home/{USER}")))
+    home = tmp_path / USER  # it exists: detection runs there and never falls back to the app's own folder (which it would create, #499)
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     store = MemorySecrets()
     store.put(VAULT_REF, KEY)
     connections = {

@@ -16,7 +16,8 @@ DB_PASSWORD = "dbpass-" + "c0ffee"
 SIDECAR_CANARY = "sidecar-" + "tok-4417"
 HUMAN_CANARY = "human-" + "tok-9021"
 MODULES = ("adapters.cli_claude", "adapters.cli_codex", "adapters.cli_cursor")
-COMMANDS = [["doctor", "--json"], ["doctor"], ["providers", "list"], ["providers", "list", "--json"], ["providers", "doctor", "--json"], ["providers", "doctor"]]
+COMMANDS = [["doctor", "--json"], ["doctor"], ["providers", "list"], ["providers", "list", "--json"], ["providers", "doctor", "--json"], ["providers", "doctor"],
+            ["providers", "dump-config"], ["providers", "dump-config", "--json"]]
 
 
 class _NoStdin:
@@ -148,29 +149,89 @@ class _Ran:
         return CliRunResult(returncode=0, stdout="2.1.4 (Claude Code)\n", stderr="")
 
 
+def _fake_claude(bin_dir: Path, log: Path) -> None:
+    """A real executable named `claude` on PATH that records its working directory and answers like the CLI (no stub of `find_cli` or `run_cli`)."""
+    bin_dir.mkdir()
+    if os.name == "nt":
+        (bin_dir / "claude.cmd").write_text(f'@echo off\r\necho %CD%>>"{log}"\r\necho 2.1.4 (Claude Code)\r\n', encoding="utf-8")
+    else:
+        script = bin_dir / "claude"
+        script.write_text(f'#!/bin/sh\npwd >> "{log}"\necho "2.1.4 (Claude Code)"\n', encoding="utf-8")
+        script.chmod(0o755)
+
+
 @pytest.mark.parametrize("argv", [["doctor", "--json"], ["providers", "doctor", "--json"]])
-def test_an_installed_cli_is_detected_without_creating_its_working_directory(quiet, capsys, monkeypatch, tmp_path, argv):
+def test_an_installed_cli_is_detected_without_creating_its_working_directory(quiet, capsys, monkeypatch, tmp_path, tmp_path_factory, argv):
     """With a CLI installed, detection runs `<cli> --version` and the status command: their cwd must already exist, never be made (the app's `cli-runs`)."""
     local = tmp_path / "local"
     local.mkdir()
     monkeypatch.setenv("LOCALAPPDATA", str(local))
     monkeypatch.setenv("HOME", str(local))
     monkeypatch.setenv("USERPROFILE", str(local))
-    for module in MODULES:
-        monkeypatch.setattr(f"{module}.find_cli", lambda name: str(tmp_path / name))  # "installed"
-    ran = _Ran()
-    monkeypatch.setattr("adapters.cli_shared.run_cli", ran)
+    outside = tmp_path_factory.mktemp("cli")  # the fake CLI and its log live outside the tree that must not change
+    log = outside / "cwd.log"
+    _fake_claude(outside / "bin", log)
+    system = [str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32")] if os.name == "nt" else ["/usr/bin", "/bin"]
+    monkeypatch.setenv("PATH", os.pathsep.join([str(outside / "bin"), *system]))
+    for module in ("adapters.cli_codex", "adapters.cli_cursor"):
+        monkeypatch.setattr(f"{module}.find_cli", lambda name: None)  # only `claude` is installed: the others never run
+    monkeypatch.setattr("adapters.cli_claude.find_cli", __import__("adapters.cli_shared", fromlist=["find_cli"]).find_cli)
     import tempfile
 
     shared = Path(tempfile.gettempdir())
     leftovers = lambda: sorted(p.name for p in shared.glob("oharness-doctor-*"))  # noqa: E731
     before, folders = _tree(tmp_path), leftovers()
     main(argv)
-    capsys.readouterr()
-    assert ran.cwds, "the fake CLI was never run: the test would prove nothing"
+    json.loads(capsys.readouterr().out)
+    cwds = log.read_text(encoding="utf-8", errors="replace").split() if log.exists() else []
+    assert cwds, "the fake CLI was never run: the test would prove nothing"
     assert _tree(tmp_path) == before and not (local / "OHarness").exists()
-    assert all(Path(c) == Path.home() == local for c in ran.cwds)  # the person's home: it exists already, only they can write to it, nothing is made for the run
-    assert leftovers() == folders  # no throwaway folder is created in the temp folder (on Windows the child's cwd keeps it from being removed)
+    assert all(Path(c).resolve() == local.resolve() for c in cwds)  # the person's home: it exists already, only they can write to it
+    assert leftovers() == folders
+
+
+def test_detection_with_a_working_directory_that_does_not_exist_creates_nothing(quiet, monkeypatch, tmp_path):
+    """A look-only caller pins the cwd: if it is gone, detection must not fall back to the app's `cli-runs` (which is created) (#499)."""
+    import asyncio
+
+    from runtime.cli_detect import detect_clis
+
+    local = tmp_path / "local"
+    local.mkdir()
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("HOME", str(local))
+    ran = _Ran()
+    for module in MODULES:
+        monkeypatch.setattr(f"{module}.find_cli", lambda name: str(tmp_path / name))
+    with pytest.raises(FileNotFoundError):
+        asyncio.run(detect_clis(ran, cwd=tmp_path / "gone"))
+    assert _tree(local) == [] and ran.cwds == []
+
+
+def test_dump_config_reads_a_real_database_without_writing_it(quiet, capsys):
+    """The real read-only loader, a real `harness.db`: the stored connection is reported and the file is byte-for-byte the same afterwards."""
+    from sqlalchemy import create_engine
+
+    from models import Base, ProviderConnection
+
+    quiet.mkdir()
+    db = quiet / "harness.db"
+    engine = create_engine(f"sqlite:///{db.as_posix()}")
+    Base.metadata.create_all(engine, tables=[ProviderConnection.__table__])
+    from sqlalchemy.orm import Session
+
+    with Session(engine) as session:
+        session.add(ProviderConnection(id="mine", provider="ollama", label="Mine", residence="local", endpoint="ftp://broken", enabled=True))
+        session.commit()
+    engine.dispose()
+    digest = hashlib.sha256(db.read_bytes()).hexdigest()
+    before = _tree(quiet)
+    assert main(["providers", "dump-config", "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert [c["id"] for c in doc["connections"]] == ["mine"]
+    assert doc["connections"][0]["fields"]["endpoint"] == {"value": None, "origin": "app"}
+    assert doc["environment"]["secretsBackend"] == {"value": "file", "origin": "default"}
+    assert hashlib.sha256(db.read_bytes()).hexdigest() == digest and _tree(quiet) == before
 
 
 def test_providers_doctor_reports_a_report_that_cannot_be_built_with_one_fixed_line(quiet, capsys, monkeypatch):

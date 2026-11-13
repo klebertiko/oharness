@@ -148,31 +148,41 @@ async def _test(connection_id: str, as_json: bool) -> int:
 
 ENV_NAMES = ("OH_DATA_DIR", "OH_SECRETS", "OH_SECRETS_DIR", "DATABASE_URL")  # the only variables dump-config ever reads: never a credential, never a subprocess's environment (I5)
 
+DOCTOR_MESSAGES = {  # one fixed sentence per outcome
+    "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
+    "pt-BR": {"ok": "Todas as conexões estão prontas.", "attention": "Algumas conexões precisam de atenção: veja a classe da falha acima."},
+}
 
-_BACKENDS = {"": "memory", "mem": "memory", "memory": "memory", "file": "file", "keychain": "keychain", "keyring": "keychain", "os": "keychain"}  # what `secret_store.factory` accepts
+DUMP_TEXT = {  # the words of the `dump-config` text (en or pt-BR, from `OHARNESS_LANG`/`LANG`); field names stay the JSON keys
+    "en": {"default": "default", "app": "app", "env": "env", "invalid": "invalid", "none": "no connections yet: add one in the OHarness app (Providers)"},
+    "pt-BR": {"default": "padrão", "app": "app", "env": "ambiente", "invalid": "inválido", "none": "nenhuma conexão ainda: adicione uma no app OHarness (Providers)"},
+}
 
 
 def _field(value, origin: str) -> dict:
     return {"value": value, "origin": origin}
 
 
-def _environment(given: dict) -> dict:
-    """Where the app's data lives, from this process (which stands in for the sidecar). `given` is what the environment held before the loader filled in the sidecar's own defaults."""
+def _environment() -> dict:
+    """Where the installed app's data lives, as its sidecar would see it from this process's environment: what is not set is the packaged
+    sidecar's own default (`sidecar_entry.configure_environment`), worked out here without setting anything (the loader only reads, #497)."""
     import os
-    from pathlib import Path
 
     from data_dir import resolve_data_dir
-    from secret_store.factory import _default_file_root
 
-    origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
+    from . import readonly
+
+    origin = lambda name: "env" if os.environ.get(name) else "default"  # noqa: E731
     data_dir = resolve_data_dir(create=False)
-    backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
-    vault_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
-    # the secrets folder is only ever a label (the app's own `<data>/secrets`, or one the person chose): its path is never printed
-    folder = _field(("default" if vault_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
+    backend = readonly.secrets_backend() or "unknown"  # a fixed vocabulary: the variable's own text is never echoed
+    backend_origin = "env" if "OH_SECRETS" in os.environ else "default"  # set but empty is still a choice: the factory reads it as `memory`
+    if backend == "file":  # the folder is only ever a label (the app's own `<data>/secrets`, or one the person chose): its path is never printed
+        folder = _field("default" if readonly.secrets_folder() == data_dir / "secrets" else "custom", origin("OH_SECRETS_DIR"))
+    else:  # no folder at all: an `OH_SECRETS_DIR` the process was given does not apply
+        folder = _field(None, "default")
     return {
         "dataDir": _field(_shown_dir(data_dir, False), origin("OH_DATA_DIR")),
-        "secretsBackend": _field(backend, origin("OH_SECRETS")),
+        "secretsBackend": _field(backend, backend_origin),
         "secretsDir": folder,
         "database": _field("sqlite" if (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "other", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
     }
@@ -182,8 +192,10 @@ def _connection_config(row: dict) -> dict:
     from adapters.catalog import get_provider
 
     spec = get_provider(row["provider"])
-    stored_endpoint = _endpoint(row.get("endpoint", ""))
+    stored = (row.get("endpoint") or "").strip()
     default_endpoint = _endpoint((spec or {}).get("endpoint", {}).get("default", ""))
+    # a stored value that is not a plain http(s) URL is the app's and broken (`null`): it never hides behind the catalog default
+    endpoint = _field(_endpoint(stored) or None, "app") if stored else _field(default_endpoint, "default")
     return {
         "id": row["id"],
         "provider": row["provider"],
@@ -191,7 +203,7 @@ def _connection_config(row: dict) -> dict:
             "label": _field(row["label"], "app"),
             "residence": _field(row["residence"], "app"),
             "enabled": _field(bool(row.get("enabled", False)), "app"),
-            "endpoint": _field(stored_endpoint, "app") if stored_endpoint else _field(default_endpoint, "default"),
+            "endpoint": endpoint,
             "defaultModel": _field(row["defaultModel"], "app") if row.get("defaultModel") else _field("", "default"),
             "credentialKind": _field(_kind(row["provider"]), "default"),  # the catalog decides it, not the user
             "secretStored": _field(bool(row.get("secretRef")), "app"),
@@ -199,28 +211,30 @@ def _connection_config(row: dict) -> dict:
     }
 
 
+def _shown_value(item: dict, words: dict) -> str:
+    if item["value"] is None:
+        return words["invalid"] if item["origin"] == "app" else "-"  # `null` from the app is a stored value that cannot be used
+    return str(item["value"])
+
+
 async def _dump_config(as_json: bool) -> int:
     """Every connection's effective fields and their origin, plus the environment that locates the data. Never a secret."""
-    import os
-
-    given = {name: os.environ.get(name) for name in ENV_NAMES}  # before the loader applies the sidecar's defaults
     connections, _ = await _load_runtime()
-    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given),
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(),
            "connections": [_connection_config(row) for row in connections.values()]}
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
         return EXIT_OK
+    words = DUMP_TEXT[_language()]
     for name, item in doc["environment"].items():
-        print(f"{name}	{item['value'] if item['value'] is not None else '-'}	({item['origin']})")
+        print(f"{name}	{_shown_value(item, words)}	({words[item['origin']]})")
+    if not doc["connections"]:
+        print(words["none"])
     for conn in doc["connections"]:
         print(f"{conn['id']} ({conn['provider']})")
         for name, item in conn["fields"].items():
-            print(f"  {name}	{item['value']!s}	({item['origin']})")
+            print(f"  {name}	{_shown_value(item, words)}	({words[item['origin']]})")
     return EXIT_OK
-DOCTOR_MESSAGES = {  # one fixed sentence per outcome
-    "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
-    "pt-BR": {"ok": "Todas as conexões estão prontas.", "attention": "Algumas conexões precisam de atenção: veja a classe da falha acima."},
-}
 
 
 def _app_version() -> str:

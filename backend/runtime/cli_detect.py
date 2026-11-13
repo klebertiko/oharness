@@ -130,5 +130,7 @@ async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: 
 
 async def detect_clis(runner: Callable[..., Any] = run_cli, *, cwd: Path | None = None) -> list[dict]:
     """`cwd`: a directory that already exists to run the detection commands in (a look-only caller such as `oharness doctor`); the default is the app's own."""
+    if cwd is not None and not Path(cwd).is_dir():  # never fall back to the app's own (it would be created): a look-only caller made a promise (#499)
+        raise FileNotFoundError("the detection working directory does not exist")
     capped = _bounded_answer(runner)
     return list(await asyncio.gather(*(_detect_one(c, p, k, capped, cwd) for c, p, k in DETECTED)))
