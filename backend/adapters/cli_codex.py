@@ -83,6 +83,7 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    cli_model_args,
     find_cli,
     is_windows,
     resolve_cwd,
@@ -169,14 +170,10 @@ class CodexCliAdapter(AgentAdapter):
                              # ~/.codex/sessions outside this app's control — parity
                              # with cli_claude.py's --no-session-persistence
         ]
-        if config.model:
-            if config.model.startswith("-"):
-                # SEC-9: a value starting with "-" would be a malformed argv
-                # pair with the flag right before it (`--model <this>`) — clap
-                # currently errors on it rather than reinterpreting it as a
-                # flag, but refuse it here too rather than depend on that.
-                raise ValueError(f"invalid model name: {config.model!r}")
-            argv += ["--model", config.model]
+        # SEC-9: a value starting with "-" would be a malformed argv pair with
+        # the flag right before it; cli_model_args refuses it (and spaces/shell
+        # text) with fixed text rather than depend on clap rejecting it.
+        argv += cli_model_args(config.model)
         return argv
 
     async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:

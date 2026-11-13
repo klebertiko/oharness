@@ -40,6 +40,7 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    cli_model_args,
     find_cli,
     resolve_cwd,
     run_cli,
@@ -104,8 +105,7 @@ class ClaudeCliAdapter(AgentAdapter):
             "",  # SEC-5: --tools "" leaves hooks reachable via user/project
                  # settings otherwise — this drops those settings sources too
         ]
-        if config.model:
-            argv += ["--model", config.model]
+        argv += cli_model_args(config.model)
         if config.system_prompt:
             argv += ["--system-prompt", config.system_prompt]
         return argv
