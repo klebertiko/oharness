@@ -24,6 +24,7 @@ def add_parser(sub) -> None:
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
     dump = actions.add_parser("dump-config", help="the effective configuration and where each field came from: default, app (stored connection) or env (this process's environment)")
     dump.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
+    dump.add_argument("--verbose", action="store_true", help="also print the secrets folder's path, with your profile folder spelled `~`")
     doctor = actions.add_parser("doctor", help="the secret-free diagnostics report (same as GET /providers/diagnostics); exits 1 if an enabled connection needs attention")
     doctor.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
@@ -156,23 +157,28 @@ def _field(value, origin: str) -> dict:
     return {"value": value, "origin": origin}
 
 
-def _environment(given: dict) -> dict:
+def _environment(given: dict, verbose: bool) -> dict:
     """Where the app's data lives, from this process (which stands in for the sidecar). `given` is what the environment held before the loader filled in the sidecar's own defaults."""
     import os
+    from pathlib import Path
 
     from data_dir import resolve_data_dir
     from secret_store.factory import _default_file_root
 
     origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
-    backend = _BACKENDS.get((os.environ.get(ENV_NAMES[1]) or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
-    directory = os.environ.get(ENV_NAMES[2]) or str(_default_file_root())
-    env = {
-        "dataDir": _field(_shown_dir(resolve_data_dir(create=False), False), origin(ENV_NAMES[0])),
-        "secretsBackend": _field(backend, origin(ENV_NAMES[1])),
-        "secretsDir": _field(_shown_dir(directory, False) if backend == "file" else None, origin(ENV_NAMES[2])),
-        "database": _field("sqlite" if (os.environ.get(ENV_NAMES[3]) or "sqlite").startswith("sqlite") else "other", origin(ENV_NAMES[3])),  # the kind only: a URL can carry a password
+    data_dir = resolve_data_dir(create=False)
+    backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
+    secrets_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
+    # the secrets folder is a label (the app's own `<data>/secrets`, or one the person chose); its masked path only on request
+    secrets = _field(("default" if secrets_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
+    if verbose and backend == "file":
+        secrets["path"] = _shown_dir(secrets_dir, False)
+    return {
+        "dataDir": _field(_shown_dir(data_dir, False), origin("OH_DATA_DIR")),
+        "secretsBackend": _field(backend, origin("OH_SECRETS")),
+        "secretsDir": secrets,
+        "database": _field("sqlite" if (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "other", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
     }
-    return env
 
 
 def _connection_config(row: dict) -> dict:
@@ -196,13 +202,13 @@ def _connection_config(row: dict) -> dict:
     }
 
 
-async def _dump_config(as_json: bool) -> int:
+async def _dump_config(as_json: bool, verbose: bool) -> int:
     """Every connection's effective fields and their origin, plus the environment that locates the data. Never a secret."""
     import os
 
     given = {name: os.environ.get(name) for name in ENV_NAMES}  # before the loader applies the sidecar's defaults
     connections, _ = await _load_runtime()
-    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given),
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given, verbose),
            "connections": [_connection_config(row) for row in connections.values()]}
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
@@ -252,7 +258,7 @@ def run(args) -> int:
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
     if args.providers_cmd == "dump-config":
-        return asyncio.run(_dump_config(args.json))
+        return asyncio.run(_dump_config(args.json, args.verbose))
     if args.providers_cmd == "doctor":
         return asyncio.run(_doctor(args.json))
     return asyncio.run(_test(args.id, args.json))

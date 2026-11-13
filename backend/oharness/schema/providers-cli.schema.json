@@ -33,7 +33,16 @@
           "properties": {
             "dataDir": { "$ref": "#/$defs/field" },
             "secretsBackend": { "$ref": "#/$defs/field" },
-            "secretsDir": { "$ref": "#/$defs/field" },
+            "secretsDir": {
+              "type": "object",
+              "required": ["value", "origin"],
+              "additionalProperties": false,
+              "properties": {
+                "value": { "enum": ["default", "custom", null], "description": "default: the app's own `<data>/secrets`; custom: another folder; null: the backend is not a file." },
+                "origin": { "enum": ["default", "app", "env"] },
+                "path": { "type": "string", "description": "Only with --verbose: the folder, with the profile folder spelled `~`." }
+              }
+            },
             "database": { "$ref": "#/$defs/field" }
           }
         },

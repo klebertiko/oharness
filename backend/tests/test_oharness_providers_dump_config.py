@@ -51,7 +51,9 @@ def world(monkeypatch, tmp_path):
         # what the real loader does first when the process has no database yet: the packaged sidecar's defaults
         os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{(home / 'data' / 'harness.db').as_posix()}")
         os.environ.setdefault("OH_SECRETS", "file")
-        os.environ.setdefault("OH_SECRETS_DIR", str(home / "data" / "secrets"))
+        from data_dir import resolve_data_dir
+
+        os.environ.setdefault("OH_SECRETS_DIR", str(resolve_data_dir(create=False) / "secrets"))
         return connections, store
 
     monkeypatch.setattr("oharness.providers_cli._load_runtime", fake_load)
@@ -123,8 +125,39 @@ def test_environment_values_the_sidecar_defaults_filled_in_are_default(world, ca
     """`OH_SECRETS`/`OH_SECRETS_DIR` were not in the process environment: the packaged sidecar's own defaults set them."""
     env = doc_of(capsys)["environment"]
     assert env["secretsBackend"] == {"value": "file", "origin": "default"}
-    assert env["secretsDir"] == {"value": "~/data/secrets", "origin": "default"}
+    assert env["secretsDir"] == {"value": "default", "origin": "default"}  # the label, never the path
     assert env["dataDir"]["origin"] == "default"
+
+
+def test_a_secrets_directory_the_process_was_given_is_custom_and_its_path_needs_verbose(world, capsys, monkeypatch):
+    monkeypatch.setenv("OH_SECRETS_DIR", str(world.home / "elsewhere"))
+    _, out, _ = run(capsys, "--json")
+    assert json.loads(out)["environment"]["secretsDir"] == {"value": "custom", "origin": "env"}
+    assert "elsewhere" not in out
+    doc = doc_of(capsys, "--verbose")
+    assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
+    assert doc["environment"]["secretsDir"] == {"value": "custom", "origin": "env", "path": "~/elsewhere"}
+
+
+def test_the_default_secrets_directory_is_labelled_default_even_with_verbose(world, capsys):
+    doc = doc_of(capsys, "--verbose")
+    assert doc["environment"]["secretsDir"]["value"] == "default" and doc["environment"]["secretsDir"]["path"].replace("\\", "/").endswith("/secrets")
+    assert str(world.home) not in json.dumps(doc) and USER not in json.dumps(doc)
+
+
+@pytest.mark.parametrize("backend", ["memory", "keychain"])
+def test_there_is_no_secrets_directory_when_the_backend_is_not_a_file(world, capsys, monkeypatch, backend):
+    monkeypatch.setenv("OH_SECRETS", backend)
+    monkeypatch.setenv("OH_SECRETS_DIR", str(world.home / "elsewhere"))
+    doc = doc_of(capsys, "--verbose")
+    assert doc["environment"]["secretsDir"] == {"value": None, "origin": "env"}
+    assert "elsewhere" not in json.dumps(doc)
+
+
+@pytest.mark.parametrize(("alias", "name"), [("mem", "memory"), ("keyring", "keychain"), ("os", "keychain"), ("FILE", "file"), ("", "memory")])
+def test_the_aliases_the_secrets_factory_accepts_are_named_the_same(world, capsys, monkeypatch, alias, name):
+    monkeypatch.setenv("OH_SECRETS", alias)
+    assert doc_of(capsys)["environment"]["secretsBackend"]["value"] == name
 
 
 def test_the_database_is_reported_by_kind_only(world, capsys, monkeypatch):
