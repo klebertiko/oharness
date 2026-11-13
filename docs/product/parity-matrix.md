@@ -39,7 +39,7 @@ Cada célula resume em palavras próprias o que a página descreve; nenhum trech
 | A7 | DS ✓ (nativo), CX ? (schema da CLI, não do app) | Eventos estruturados das CLIs (comando, arquivo, raciocínio, plano) como eventos do contrato | **issue #302.** `cli_codex` guarda só `agent_message`. | `adapters/cli_codex.py` |
 | A8 | CU ◐ (planejamento), DS ✓, CL ?, CX ? | To-do do agente com progresso | **issue #303** (depende de #302). `RunLadder` é o plano do grafo, não do modelo. | `agent-run/RunLadder.tsx` |
 | A9 | CL ✓ (verificar e liberar contexto), DS ✓, CU ?, CX ? | Medidor de contexto e compactação | **main** para o evento de compactação (ADR 0025). **issue #304** para o medidor. | `routers/execution.py`, `runReducer.ts` |
-| A10 | DS ✓, CL ?, CU ?, CX ? | Resposta em markdown | **issue #299.** Hoje é texto puro. | `agent/AgentStage.tsx` |
+| A10 | DS ✓, CL ?, CU ?, CX ? | Resposta em markdown | **PR.** Resposta final e ao vivo, subconjunto seguro, sem HTML cru. | `agent/AssistantMarkdown.tsx` |
 | A11 | CL ✓ (lista de tarefas e subagentes em segundo plano), CU ✓ (Subagents em Customize), DS ✓, CX ? | Atividade de subagentes | **main** (ADR 0027, árvore ao vivo com cancelar por filho). | `agent-run/SubagentTree.tsx` |
 | A12 | CL ✓ (modos de transcrição recolhem chamadas em resumo), DS ◐ | Resumo de atividade ("Ran N commands") | **main.** | `agent-run/activity.ts`, `rollup.ts` |
 
