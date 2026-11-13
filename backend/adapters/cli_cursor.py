@@ -64,6 +64,7 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    cli_model_args,
     find_cli,
     is_windows,
     resolve_cwd,
@@ -152,8 +153,7 @@ class CursorCliAdapter(AgentAdapter):
             "--sandbox",
             "enabled",
         ]
-        if config.model:
-            argv += ["--model", config.model]
+        argv += cli_model_args(config.model)
         return argv
 
     def _windows_gate(self) -> str | None:

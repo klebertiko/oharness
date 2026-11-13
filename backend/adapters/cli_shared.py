@@ -244,6 +244,32 @@ CLI_TIMEOUT = "cli-timeout"
 CLI_ERROR = "cli-error"
 CLI_FAILURES = (CLI_SIGNIN, CLI_MISSING, CLI_TIMEOUT, CLI_ERROR)
 
+# A model the user typed becomes the value of `--model` in a CLI's argv, so it
+# is checked before it gets there: a CLI alias ("sonnet") or a model id
+# ("gpt-5.1-codex", "openai/gpt-5", "qwen3:8b"), never a flag, a space or shell text.
+CLI_MODEL_MAX_LEN = 128
+_CLI_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+INVALID_CLI_MODEL = (
+    "The model name is not valid: use letters, digits, '.', '-', '_', ':' or '/', "
+    f"start with a letter or digit, and keep it under {CLI_MODEL_MAX_LEN + 1} characters."
+)
+
+
+def valid_cli_model(model: str) -> bool:
+    """True when ``model`` is safe as the value of a CLI's `--model` flag."""
+    return 0 < len(model) <= CLI_MODEL_MAX_LEN and _CLI_MODEL.fullmatch(model) is not None
+
+
+def cli_model_args(model: str) -> list[str]:
+    """`--model <model>` for the argv, nothing when empty (the CLI's own default).
+    Raises ValueError with fixed text, never echoing what was typed."""
+    if not model:
+        return []
+    if not valid_cli_model(model):
+        raise ValueError(INVALID_CLI_MODEL)
+    return ["--model", model]
+
+
 CLI_FAILURE_MESSAGES = {
     CLI_SIGNIN: "The CLI is not signed in. Sign in with the CLI, then retry.",
     CLI_MISSING: "The CLI is not installed on this machine. Install it, then retry.",
