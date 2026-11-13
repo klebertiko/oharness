@@ -149,6 +149,9 @@ async def _test(connection_id: str, as_json: bool) -> int:
 ENV_NAMES = ("OH_DATA_DIR", "OH_SECRETS", "OH_SECRETS_DIR", "DATABASE_URL")  # the only variables dump-config ever reads: never a credential, never a subprocess's environment (I5)
 
 
+_BACKENDS = {"": "memory", "mem": "memory", "memory": "memory", "file": "file", "keychain": "keychain", "keyring": "keychain", "os": "keychain"}  # what `secret_store.factory` accepts
+
+
 def _field(value, origin: str) -> dict:
     return {"value": value, "origin": origin}
 
@@ -161,12 +164,13 @@ def _environment(given: dict) -> dict:
     from secret_store.factory import _default_file_root
 
     origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
-    backend = (os.environ.get("OH_SECRETS") or "memory").strip().lower()
+    backend = _BACKENDS.get((os.environ.get(ENV_NAMES[1]) or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
+    directory = os.environ.get(ENV_NAMES[2]) or str(_default_file_root())
     env = {
-        "dataDir": _field(_shown_dir(resolve_data_dir(create=False), False), origin("OH_DATA_DIR")),
-        "secretsBackend": _field(backend, origin("OH_SECRETS")),
-        "secretsDir": _field(_shown_dir(_default_file_root(), False) if backend == "file" else None, origin("OH_SECRETS_DIR")),
-        "database": _field("other" if not (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "sqlite", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
+        "dataDir": _field(_shown_dir(resolve_data_dir(create=False), False), origin(ENV_NAMES[0])),
+        "secretsBackend": _field(backend, origin(ENV_NAMES[1])),
+        "secretsDir": _field(_shown_dir(directory, False) if backend == "file" else None, origin(ENV_NAMES[2])),
+        "database": _field("sqlite" if (os.environ.get(ENV_NAMES[3]) or "sqlite").startswith("sqlite") else "other", origin(ENV_NAMES[3])),  # the kind only: a URL can carry a password
     }
     return env
 

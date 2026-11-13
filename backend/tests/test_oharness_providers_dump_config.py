@@ -160,3 +160,11 @@ def test_no_connections_still_reports_the_environment(world, capsys):
     world.connections.clear()
     doc = doc_of(capsys)
     assert doc["connections"] == [] and doc["environment"]["secretsBackend"]["value"] == "file"
+
+
+def test_a_secrets_backend_the_app_does_not_know_is_never_echoed(world, capsys, monkeypatch):
+    """The backend is reported from a fixed vocabulary: whatever text the variable holds stays out of the output."""
+    monkeypatch.setenv("OH_SECRETS", "weird-" + "value-7731")
+    _, out, _ = run(capsys, "--json")
+    assert json.loads(out)["environment"]["secretsBackend"] == {"value": "unknown", "origin": "env"}
+    assert "weird-" not in out
