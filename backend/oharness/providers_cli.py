@@ -24,7 +24,6 @@ def add_parser(sub) -> None:
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
     dump = actions.add_parser("dump-config", help="the effective configuration and where each field came from: default, app (stored connection) or env (this process's environment)")
     dump.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
-    dump.add_argument("--verbose", action="store_true", help="also print the secrets folder's path, with your profile folder spelled `~`")
     doctor = actions.add_parser("doctor", help="the secret-free diagnostics report (same as GET /providers/diagnostics); exits 1 if an enabled connection needs attention")
     doctor.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
@@ -157,7 +156,7 @@ def _field(value, origin: str) -> dict:
     return {"value": value, "origin": origin}
 
 
-def _environment(given: dict, verbose: bool) -> dict:
+def _environment(given: dict) -> dict:
     """Where the app's data lives, from this process (which stands in for the sidecar). `given` is what the environment held before the loader filled in the sidecar's own defaults."""
     import os
     from pathlib import Path
@@ -169,10 +168,8 @@ def _environment(given: dict, verbose: bool) -> dict:
     data_dir = resolve_data_dir(create=False)
     backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
     vault_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
-    # the secrets folder is a label (the app's own `<data>/secrets`, or one the person chose); its masked path only on request
+    # the secrets folder is only ever a label (the app's own `<data>/secrets`, or one the person chose): its path is never printed
     folder = _field(("default" if vault_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
-    if verbose and backend == "file":
-        folder["path"] = _shown_dir(vault_dir, False)
     return {
         "dataDir": _field(_shown_dir(data_dir, False), origin("OH_DATA_DIR")),
         "secretsBackend": _field(backend, origin("OH_SECRETS")),
@@ -202,13 +199,13 @@ def _connection_config(row: dict) -> dict:
     }
 
 
-async def _dump_config(as_json: bool, verbose: bool) -> int:
+async def _dump_config(as_json: bool) -> int:
     """Every connection's effective fields and their origin, plus the environment that locates the data. Never a secret."""
     import os
 
     given = {name: os.environ.get(name) for name in ENV_NAMES}  # before the loader applies the sidecar's defaults
     connections, _ = await _load_runtime()
-    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given, verbose),
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given),
            "connections": [_connection_config(row) for row in connections.values()]}
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
@@ -258,7 +255,7 @@ def run(args) -> int:
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
     if args.providers_cmd == "dump-config":
-        return asyncio.run(_dump_config(args.json, args.verbose))
+        return asyncio.run(_dump_config(args.json))
     if args.providers_cmd == "doctor":
         return asyncio.run(_doctor(args.json))
     return asyncio.run(_test(args.id, args.json))

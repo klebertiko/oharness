@@ -129,27 +129,35 @@ def test_environment_values_the_sidecar_defaults_filled_in_are_default(world, ca
     assert env["dataDir"]["origin"] == "default"
 
 
-def test_a_secrets_directory_the_process_was_given_is_custom_and_its_path_needs_verbose(world, capsys, monkeypatch):
+def test_a_secrets_directory_the_process_was_given_is_a_label_and_its_path_is_never_printed(world, capsys, monkeypatch):
     monkeypatch.setenv("OH_SECRETS_DIR", str(world.home / "elsewhere"))
-    _, out, _ = run(capsys, "--json")
-    assert json.loads(out)["environment"]["secretsDir"] == {"value": "custom", "origin": "env"}
-    assert "elsewhere" not in out
-    doc = doc_of(capsys, "--verbose")
+    for flags in (["--json"], []):
+        _, out, _ = run(capsys, *flags)
+        assert "elsewhere" not in out
+    doc = doc_of(capsys)
     assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
-    assert doc["environment"]["secretsDir"] == {"value": "custom", "origin": "env", "path": "~/elsewhere"}
+    assert doc["environment"]["secretsDir"] == {"value": "custom", "origin": "env"}
 
 
-def test_the_default_secrets_directory_is_labelled_default_even_with_verbose(world, capsys):
-    doc = doc_of(capsys, "--verbose")
-    assert doc["environment"]["secretsDir"]["value"] == "default" and doc["environment"]["secretsDir"]["path"].replace("\\", "/").endswith("/secrets")
-    assert str(world.home) not in json.dumps(doc) and USER not in json.dumps(doc)
+def test_the_default_secrets_directory_is_labelled_default(world, capsys):
+    doc = doc_of(capsys)
+    assert doc["environment"]["secretsDir"] == {"value": "default", "origin": "default"}
+    assert "secrets" not in json.dumps(doc["environment"]["secretsDir"]).replace("secretsDir", "")
+
+
+def test_there_is_no_flag_that_prints_the_secrets_path(world, capsys):
+    """The folder is a label only: `--verbose` does not exist for dump-config."""
+    with pytest.raises(SystemExit) as raised:
+        main(["providers", "dump-config", "--json", "--verbose"])
+    assert raised.value.code == 2
+    assert "elsewhere" not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("backend", ["memory", "keychain"])
 def test_there_is_no_secrets_directory_when_the_backend_is_not_a_file(world, capsys, monkeypatch, backend):
     monkeypatch.setenv("OH_SECRETS", backend)
     monkeypatch.setenv("OH_SECRETS_DIR", str(world.home / "elsewhere"))
-    doc = doc_of(capsys, "--verbose")
+    doc = doc_of(capsys)
     assert doc["environment"]["secretsDir"] == {"value": None, "origin": "env"}
     assert "elsewhere" not in json.dumps(doc)
 
