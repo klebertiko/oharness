@@ -209,3 +209,16 @@ def test_a_secrets_backend_the_app_does_not_know_is_never_echoed(world, capsys, 
     _, out, _ = run(capsys, "--json")
     assert json.loads(out)["environment"]["secretsBackend"] == {"value": "unknown", "origin": "env"}
     assert "weird-" not in out
+
+
+def test_a_label_or_id_with_a_terminal_escape_is_cleaned_in_the_text_output(world, capsys):
+    """Free text a person typed reaches the terminal as printable characters only, cut short (#483); JSON keeps the data as it is."""
+    escape = "\x1b[31m"
+    world.connections["anthropic"]["label"] = "a" + escape + "b" + "x" * 200 + " " + KEY
+    world.connections["evil" + escape] = _row("evil" + escape, "ollama")
+    code, out, _ = run(capsys)
+    assert code == 0
+    assert "\x1b" not in out
+    assert KEY not in out  # past the cut
+    assert max(len(line) for line in out.splitlines()) < 200
+    assert fields(doc_of(capsys), "anthropic")["label"]["value"].startswith("a" + escape + "b")

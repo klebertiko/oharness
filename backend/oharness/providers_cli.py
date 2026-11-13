@@ -222,9 +222,10 @@ async def _dump_config(as_json: bool) -> int:
     for name, item in doc["environment"].items():
         print(f"{name}	{item['value'] if item['value'] is not None else '-'}	({item['origin']})")
     for conn in doc["connections"]:
-        print(f"{conn['id']} ({conn['provider']})")
+        print(f"{_clean(conn['id'])} ({conn['provider']})")
         for name, item in conn["fields"].items():
-            print(f"  {name}	{item['value']!s}	({item['origin']})")
+            limit = 200 if name == "endpoint" else 80  # an endpoint is already cut to 200 by `safe_endpoint`
+            print(f"  {name}	{_clean(item['value'], limit)}	({item['origin']})")
     return EXIT_OK
 DOCTOR_MESSAGES = {  # one fixed sentence per outcome
     "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
