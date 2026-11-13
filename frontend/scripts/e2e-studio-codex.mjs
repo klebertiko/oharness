@@ -30,7 +30,7 @@ await context.route('**/*', async route => {
     'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /bundles/default': fixture,
     'GET /cowork/projects': { projects: [] },
     'GET /harnesses/': [], 'GET /bundles/examples': { examples: [] },
-    'GET /providers/connections': { connections: [
+    'GET /providers/clis': { clis: [] }, 'GET /providers/connections': { connections: [
       // hydrate() only merges rows whose id is in the offline template.
       { id: 'openai', provider: 'openai', label: 'Studio A', enabled: true, residence: 'cloud', endpoint: '', secretRef: null },
       { id: 'ollama-local', provider: 'ollama', label: 'Studio B', enabled: true, residence: 'local', endpoint: 'http://127.0.0.1:11434', secretRef: null },
