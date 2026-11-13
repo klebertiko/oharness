@@ -168,15 +168,15 @@ def _environment(given: dict, verbose: bool) -> dict:
     origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
     data_dir = resolve_data_dir(create=False)
     backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
-    secrets_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
+    vault_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
     # the secrets folder is a label (the app's own `<data>/secrets`, or one the person chose); its masked path only on request
-    secrets = _field(("default" if secrets_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
+    folder = _field(("default" if vault_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
     if verbose and backend == "file":
-        secrets["path"] = _shown_dir(secrets_dir, False)
+        folder["path"] = _shown_dir(vault_dir, False)
     return {
         "dataDir": _field(_shown_dir(data_dir, False), origin("OH_DATA_DIR")),
         "secretsBackend": _field(backend, origin("OH_SECRETS")),
-        "secretsDir": secrets,
+        "secretsDir": folder,
         "database": _field("sqlite" if (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "other", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
     }
 
