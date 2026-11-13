@@ -35,7 +35,7 @@ const usage = { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, budget: { li
 const stubs = {
   "GET /health": { status: "ok" },
   "GET /cowork/projects": { projects: [] },
-  "GET /providers/connections": { connections },
+  "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections },
   "GET /bundles/examples": { examples: [] },
   "GET /harnesses/": [],
   "GET /flow/config": { enabled: false },

@@ -48,7 +48,7 @@ await context.route('**/*', async route => {
     'GET /health': { status: 'ok' }, 'GET /flow/config': { enabled: false }, 'GET /chat/tools/permission': { thread_id: 'qa', mode: 'ask' }, 'GET /bundles/default': fixture,
     'GET /cowork/projects': { projects: [] }, 'GET /harnesses/': [],
     'GET /bundles/examples': { examples: [] },
-    'GET /providers/connections': { connections: [{ id: 'ollama-local', provider: 'ollama', label: 'QA local', enabled: true, residence: 'local', endpoint: 'http://127.0.0.1:11434', secretRef: null, defaultModel: 'qa-default' }] },
+    'GET /providers/clis': { clis: [] }, 'GET /providers/connections': { connections: [{ id: 'ollama-local', provider: 'ollama', label: 'QA local', enabled: true, residence: 'local', endpoint: 'http://127.0.0.1:11434', secretRef: null, defaultModel: 'qa-default' }] },
     'GET /usage/summary': { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, byConnection: [], bySource: [], budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: 'unset' } },
   };
   if (!(key in responses)) { unexpected.push(key); return route.fulfill({ status: 501, body: '{}' }); }
