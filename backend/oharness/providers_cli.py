@@ -58,7 +58,16 @@ def _shown_dir(path, verbose: bool) -> str:
     """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
     from providers.display import mask_home
 
-    return str(path) if verbose else mask_home(str(path), other_profiles=False)
+    return str(path) if verbose else mask_home(str(path))
+
+
+def _clean(value, limit: int = 80) -> str:
+    """Free text a person typed (a label, an id) as one safe terminal line: printable characters only, cut short.
+
+    A terminal escape or a pasted key must not reach the screen. JSON output keeps the data as it is (it escapes control characters itself).
+    """
+    text = "".join(ch if ch.isprintable() else "?" for ch in str(value))
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _public(row: dict) -> dict:
@@ -89,7 +98,7 @@ async def _list(as_json: bool, verbose: bool) -> int:
     for row in rows:
         keyed = "key stored" if row["hasSecret"] else "-"
         state = "enabled" if row["enabled"] else "disabled"
-        print(f"{row['id']}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{row['label']}")
+        print(f"{_clean(row['id'])}\t{row['provider']}\t{row['credentialKind']}\t{state}\t{keyed}\t{_clean(row['label'])}")
     return EXIT_OK
 
 
@@ -140,7 +149,7 @@ async def _test(connection_id: str, as_json: bool) -> int:
     if as_json:
         print(json.dumps(doc, ensure_ascii=False))
     else:
-        print(f"{row['id']}: {outcome['health']} - {message}")
+        print(f"{_clean(row['id'])}: {outcome['health']} - {message}")
     return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
@@ -151,9 +160,9 @@ DOCTOR_MESSAGES = {  # one fixed sentence per outcome
 
 
 def _app_version() -> str:
-    from main import app
+    from version import APP_VERSION  # a constant: loading `main` would build the whole app just for this string
 
-    return str(app.version)
+    return APP_VERSION
 
 
 async def _doctor(as_json: bool) -> int:
@@ -171,7 +180,7 @@ async def _doctor(as_json: bool) -> int:
         for c in report["connections"]:
             cli = c["cli"]
             where = f"	{cli['id']} {cli['version'] or '-'}" if cli else ""
-            print(f"{c['id']}	{c['state']}	{c['failureClass'] or '-'}{where}")
+            print(f"{_clean(c['id'])}	{c['state']}	{c['failureClass'] or '-'}{where}")
         print(DOCTOR_MESSAGES[_language()]["attention" if needs_attention else "ok"])
     return EXIT_NOT_LIVE if needs_attention else EXIT_OK
 

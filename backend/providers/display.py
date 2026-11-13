@@ -17,7 +17,7 @@ _MAX_PATH = 200
 def safe_endpoint(raw: str) -> str:
     """scheme://host[:port]/path for a plain http(s) URL, else "".
 
-    No userinfo, query or fragment; a path over 200 characters or with unprintable ones gives ""; an IPv6 literal keeps its brackets.
+    No userinfo, query, fragment or `;params`; a path over 200 characters or with unprintable ones gives ""; an IPv6 literal keeps its brackets.
     """
     if not raw:
         return ""
@@ -28,10 +28,11 @@ def safe_endpoint(raw: str) -> str:
         return ""
     if parts.scheme not in ("http", "https") or not host:
         return ""
-    if len(parts.path) > _MAX_PATH or not parts.path.isprintable():
+    path = parts.path.split(";", 1)[0]  # `;params` are not part of the path a person recognises, and they can carry a token
+    if len(path) > _MAX_PATH or not path.isprintable():
         return ""
     shown = f"[{host}]" if ":" in host else host
-    return f"{parts.scheme}://{shown}{f':{port}' if port else ''}{parts.path}"
+    return f"{parts.scheme}://{shown}{f':{port}' if port is not None else ''}{path}"
 
 
 def mask_home(path: str, *, other_profiles: bool = True) -> str:

@@ -114,7 +114,8 @@ def test_a_data_directory_outside_the_profile_is_shown_as_it_is(world, capsys, m
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setenv("OH_DATA_DIR", str(elsewhere))
     _, out, _ = run(capsys, "list", "--json")
-    assert json.loads(out)["dataDir"] == str(elsewhere)
+    shown = json.loads(out)["dataDir"]
+    assert not shown.startswith("~") and shown.replace("\\", "/").endswith("/elsewhere")  # not the person's own profile: no `~`
 
 
 def test_list_text_shows_every_connection_and_no_secret(world, capsys):
@@ -259,3 +260,30 @@ def test_real_process_lists_what_the_data_directory_holds(monkeypatch, tmp_path)
     doc = json.loads(text)
     assert [c["id"] for c in doc["connections"]] == ["cursor"]
     assert doc["dataDir"] == str(tmp_path)  # `--verbose`: the full path, whatever the profile
+
+
+def test_free_text_fields_are_cleaned_and_cut_in_the_text_output(world, capsys):
+    """A label typed by a person can hold a terminal escape or a pasted key: text output prints printable characters only, cut short."""
+    world.connections["anthropic"]["label"] = "[31mred]0;title " + "x" * 200 + " " + SECRET
+    world.connections["anthropic"]["defaultModel"] = "m[2J" + "y" * 200
+    _, out, _ = run(capsys, "list")
+    assert "" not in out and "" not in out
+    assert SECRET not in out  # past the cut
+    assert max(len(line) for line in out.splitlines()) < 400
+
+
+def test_free_text_fields_never_carry_a_raw_control_character_in_json(world, capsys):
+    world.connections["anthropic"]["label"] = "a[31mb"
+    _, out, _ = run(capsys, "list", "--json")
+    assert "" not in out  # json escapes it
+    assert json.loads(out)["connections"][0]["label"] == "a[31mb"  # the data itself is not altered
+
+
+def test_the_data_directory_of_another_profile_is_masked(world, capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "me"))  # the person is `me`; the data directory is someone else's profile
+    other = tmp_path / "Users" / "otherperson" / "data"
+    monkeypatch.setenv("OH_DATA_DIR", str(other))
+    _, out, _ = run(capsys, "list", "--json")
+    assert "otherperson" not in out and "<user>" in json.loads(out)["dataDir"]
+    _, full, _ = run(capsys, "list", "--json", "--verbose")
+    assert "otherperson" in full  # --verbose is the person's own request for the full path
