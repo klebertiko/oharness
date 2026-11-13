@@ -28,7 +28,7 @@ Two rules shape every word below:
 | **Provider** | A registered LLM backend with credentials (shown on Providers). |
 | **Workspace** | The folder on this device a chat's tools read and run in. |
 | **Turn diff** | The files a turn changed in the workspace, each with its diff. **Revert** restores one file on its own. |
-| **Studio, Chats, Providers** | The three destinations of the app. |
+| **Studio, Chats, Providers, Forja** | The four destinations of the app. |
 | **Permission mode** | How much a chat may do on its own: Plan, Read-only, Ask, Auto, Workspace write, Full. |
 | **Needs action** | The model picker's group of connections one step from working, with that step. |
 | **Queue** | Messages typed during a turn; they run after it, in order. |
@@ -40,5 +40,6 @@ Two rules shape every word below:
 | **Work item** | One task of the Forja, with the text it came from kept as untrusted data; it ends only with a merge someone observed or confirmed. |
 | **Foreman** | The Forja agent that plans the shortest path of stages; it proposes and the code checks. It is not Nilo. |
 | **Forja agent** | A long-lived actor of the Forja described in `.oharness/forja` (not the Agent node of a harness). |
+| **Flow** | The run-bar switch that records advisory evidence on a harness run. It is off by default and never a gate. The shared Flow state for the person and the models is specified (ADR 0066) and is not in the app. |
 
 Code may keep older words (`example` in the `/bundles/examples` route, `copilot` in some module names); only text a person reads follows this glossary. Retired UI wording is mapped in the Copy standard of `CONTEXT.md`.

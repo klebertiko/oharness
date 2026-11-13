@@ -110,6 +110,8 @@ Células: "✓ ID" = o produto tem e a fonte prova; "◐" = em parte; "— (não
 
 ### Correções à matriz de paridade (itens desatualizados)
 
+Aplicadas em `docs/product/parity-matrix.md` e `docs/USAGE.md` (issue #422), conferidas na `main` @ `f19ea647`. Onde a `main` divergiu desta lista, a matriz registra o código: o Flow global (S1, #358) não está na `main`; a Forja além do pacote B está onde o código está; a #279 de i18n continua aberta.
+
 1. D1: a UI de worktree está mesclada (PR #294) e a #275 está fechada.
 2. G1: a #255 está fechada. G8 a G11: #264, #265, #266, #267, #268 e #269 estão fechadas; o backend da fábrica (pacote B) está entregue. G10: automações agendadas e por evento existem no backend (ADR 0062), sem UI.
 3. Células DS: a matriz as dava como não reverificadas (acesso negado em 2026-10-29). Em 2026-11-04 o repositório público respondeu e a documentação do master confirmou todas as células herdadas; nenhuma foi refutada (DS1..DS21). Continuam sem reverificação contra o desktop instalado.
