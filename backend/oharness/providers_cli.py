@@ -159,6 +159,9 @@ DUMP_TEXT = {  # the words of the `dump-config` text (en or pt-BR, from `OHARNES
 }
 
 
+_BACKEND_WORDS = {"memory": "memory", "file": "file", "keychain": "keychain"}  # the only backend names dump-config prints; anything else is `unknown`
+
+
 def _field(value, origin: str) -> dict:
     return {"value": value, "origin": origin}
 
@@ -174,10 +177,11 @@ def _environment() -> dict:
 
     origin = lambda name: "env" if os.environ.get(name) else "default"  # noqa: E731
     data_dir = resolve_data_dir(create=False)
-    backend = readonly.secrets_backend() or "unknown"  # a fixed vocabulary: the variable's own text is never echoed
+    backend = _BACKEND_WORDS.get(readonly.secrets_backend(), "unknown")  # always a literal of this module: what `readonly` returned is never printed itself
     backend_origin = "env" if "OH_SECRETS" in os.environ else "default"  # set but empty is still a choice: the factory reads it as `memory`
     if backend == "file":  # the folder is only ever a label (the app's own `<data>/secrets`, or one the person chose): its path is never printed
-        folder = _field("default" if readonly.secrets_folder() == data_dir / "secrets" else "custom", origin("OH_SECRETS_DIR"))
+        custom = readonly.secrets_folder() != data_dir / "secrets"
+        folder = _field("custom" if custom else "default", origin("OH_SECRETS_DIR"))  # a literal label: the folder itself is never printed
     else:  # no folder at all: an `OH_SECRETS_DIR` the process was given does not apply
         folder = _field(None, "default")
     return {

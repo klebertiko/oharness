@@ -241,3 +241,13 @@ def test_no_connections_text_says_so_in_the_language(world, capsys, monkeypatch)
     monkeypatch.setenv("OHARNESS_LANG", "pt-BR")
     _, out, _ = run(capsys)
     assert "nenhuma conexão" in out.lower()
+
+
+@pytest.mark.parametrize("odd", ["file ", "FILE", "keychain\x1b[31m", KEY, None])
+def test_only_a_word_of_the_codes_own_vocabulary_is_ever_printed_for_the_backend(world, capsys, monkeypatch, odd):
+    """What `readonly` returns never reaches the output as itself: it is mapped to a literal of this module, anything else is `unknown`."""
+    monkeypatch.setattr("oharness.readonly.secrets_backend", lambda: odd)
+    for flags in (["--json"], []):
+        _, out, _ = run(capsys, *flags)
+        assert (KEY not in out) and "\x1b" not in out
+    assert doc_of(capsys)["environment"]["secretsBackend"]["value"] == "unknown"
