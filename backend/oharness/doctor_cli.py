@@ -62,35 +62,40 @@ def _sandbox() -> tuple[dict, dict]:
 
 
 async def _report() -> dict:
+    import platform
+
     from adapters.cli_shared import run_cli
     from providers.diagnostics import build_report
 
-    from . import providers_cli
+    from . import providers_cli, readonly
 
+    readonly.backend_on_path()
     data_dir, data_check = _data_dir()
     checks = [data_check]
-    connections, connection_check = [], _check("connections", "skipped")
-    try:
-        rows, _store = await providers_cli._load_runtime()
-        checks += [_check("database", "ok"), _check("secretsStore", "ok")]
-    except Exception:  # never echo it: it can hold a path and the database's own text
-        rows = None
-        checks += [_check("database", "fail", "cannot-open"), _check("secretsStore", "skipped")]
-    try:
-        version = providers_cli._app_version()
-        checks.append(_check("sidecar", "ok"))
+    rows = None
+    try:  # the database is opened read-only, and only if it exists: a first run has none and the doctor does not make one
+        rows, state = readonly.read_connections()
+        checks.append(_check("database", "ok", "missing" if state == "missing" else None))
+    except Exception:  # never echo it: it carries the database path
+        checks.append(_check("database", "fail", "cannot-open"))
+    try:  # the secrets store is not built (that would create its folder): only whether its folder can be read
+        state = readonly.secrets_state()
+        checks.append(_check("secretsStore", "ok", "missing" if state == "missing" else None))
     except Exception:
-        version = "unknown"
-        checks.append(_check("sidecar", "fail", "cannot-load"))
+        checks.append(_check("secretsStore", "fail", "cannot-open"))
+    version = providers_cli._app_version()
+    checks.append(_check("sidecar", "skipped"))  # a running sidecar's port and token are not known here (#388/#397): the version is what the app carries
     facts, sandbox_check = _sandbox()
     checks.append(sandbox_check)
+    connections, connection_check = [], _check("connections", "skipped")
     if rows is not None:
-        connections = (await build_report(rows, run_cli, version))["connections"]
-        needs_attention = any(c["enabled"] and c["failureClass"] for c in connections)  # a disabled connection is not a failure
-        connection_check = _check("connections", "fail" if needs_attention else "ok")
+        try:
+            connections = (await build_report(rows, run_cli, version))["connections"]
+            needs_attention = any(c["enabled"] and c["failureClass"] for c in connections)  # a disabled connection is not a failure
+            connection_check = _check("connections", "fail" if needs_attention else "ok")
+        except Exception:  # never echo it: it can hold CLI output
+            connections, connection_check = [], _check("connections", "fail", "cannot-load")
     checks.append(connection_check)
-    import platform
-
     return {"schemaVersion": SCHEMA_VERSION, "command": "doctor", "ok": all(c["status"] != "fail" for c in checks), "version": version,
             "os": platform.system() or "unknown", "dataDir": data_dir, "checks": checks, "sandbox": facts, "connections": connections}
 

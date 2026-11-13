@@ -30,14 +30,14 @@ def add_parser(sub) -> None:
 
 
 async def _load_runtime():
-    """The stored connections and the secrets store, as the sidecar loads them at startup."""
-    from . import headless
+    """The stored connections and a secrets store, read-only: nothing is created (no data directory, no database, no tables, no secrets folder).
 
-    headless._backend_on_path()
-    from database import init_db
+    The store is lazy: it is built only if a probe actually asks for a stored key.
+    """
+    from . import readonly
 
-    await init_db()  # a first-ever run has no tables yet
-    return await headless.load_runtime()
+    connections, _state = readonly.read_connections()
+    return connections, readonly.LazySecrets()
 
 
 def _kind(provider: str) -> str:
@@ -58,7 +58,7 @@ def _shown_dir(path, verbose: bool) -> str:
     """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
     from providers.display import mask_home
 
-    return str(path) if verbose else mask_home(str(path), other_profiles=False)
+    return str(path) if verbose else mask_home(str(path))
 
 
 def _public(row: dict) -> dict:
@@ -151,9 +151,9 @@ DOCTOR_MESSAGES = {  # one fixed sentence per outcome
 
 
 def _app_version() -> str:
-    from main import app
+    from version import APP_VERSION  # a constant: loading `main` would build the whole app (and read the human credential, write the sidecar token)
 
-    return str(app.version)
+    return APP_VERSION
 
 
 async def _doctor(as_json: bool) -> int:
@@ -179,6 +179,16 @@ async def _doctor(as_json: bool) -> int:
 def run(args) -> int:
     import asyncio
 
+    from .readonly import Unreadable
+
+    try:
+        return _dispatch(args, asyncio)
+    except Unreadable:
+        print("cannot read the OHarness data directory: run `oharness doctor`", file=sys.stderr)
+        return EXIT_NOT_LIVE
+
+
+def _dispatch(args, asyncio) -> int:
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
     if args.providers_cmd == "doctor":

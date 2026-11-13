@@ -67,10 +67,8 @@ def world(monkeypatch, tmp_path):
         "openrouter": _row("openrouter", "openrouter", secretRef=VAULT_REF, endpoint=f"https://u:{KEY}@openrouter.ai/api/v1?token={KEY}#frag"),
     }
 
-    async def fake_load():
-        return connections, store
-
-    monkeypatch.setattr("oharness.providers_cli._load_runtime", fake_load)
+    monkeypatch.setattr("oharness.readonly.read_connections", lambda: (connections, "ok"))
+    monkeypatch.setattr("oharness.readonly.secrets_state", lambda: "ok")
     monkeypatch.setattr("routers.providers.get_adapter", _no_adapter)
     w = World()
     w.monkeypatch, w.connections, w.home, w.data = monkeypatch, connections, home, data
@@ -99,7 +97,8 @@ def test_doctor_json_is_versioned_schema_valid_and_all_ok(world, capsys):
     assert code == 0 and not err and doc["ok"] is True
     assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
     assert doc["schemaVersion"] == 1 and doc["command"] == "doctor"
-    assert [c["id"] for c in doc["checks"]] == CHECK_IDS and {c["status"] for c in doc["checks"]} == {"ok"}
+    assert [c["id"] for c in doc["checks"]] == CHECK_IDS
+    assert {c["id"]: c["status"] for c in doc["checks"]} == {**{i: "ok" for i in CHECK_IDS}, "sidecar": "skipped"}  # a running sidecar is not knowable from here
     assert doc["version"] and doc["os"] and doc["dataDir"] == "~/data"
     assert set(doc["sandbox"]) == {"defaultMode", "modes", "gitFound"} and doc["sandbox"]["defaultMode"] in doc["sandbox"]["modes"]
 
@@ -138,17 +137,39 @@ def test_a_disabled_connection_that_needs_attention_is_not_a_failure(world, caps
 
 
 def test_a_database_that_cannot_open_fails_with_a_fixed_code_never_the_exception(world, capsys):
-    async def broken():
+    def broken():
         raise RuntimeError(f"unable to open database file {world.data} {DB_CANARY}")
 
-    world.monkeypatch.setattr("oharness.providers_cli._load_runtime", broken)
+    world.monkeypatch.setattr("oharness.readonly.read_connections", broken)
     for flags in (["--json"], []):
         code, out, err = run(capsys, *flags)
         assert code == 1 and DB_CANARY not in out + err and str(world.data) not in out + err
     doc = doc_of(capsys)
     assert checks(doc)["database"] == {"id": "database", "status": "fail", "detail": "cannot-open"}
-    assert checks(doc)["connections"]["status"] == "skipped" and checks(doc)["secretsStore"]["status"] == "skipped"
+    assert checks(doc)["connections"]["status"] == "skipped"
+    assert checks(doc)["secretsStore"]["status"] == "ok"  # its own check: a broken database does not hide it
     assert not list(Draft202012Validator(SCHEMA).iter_errors(doc))
+
+
+def test_a_secrets_folder_that_cannot_be_read_fails_on_its_own(world, capsys):
+    def broken():
+        raise RuntimeError(f"{world.data} {DB_CANARY}")
+
+    world.monkeypatch.setattr("oharness.readonly.secrets_state", broken)
+    code, out, err = run(capsys, "--json")
+    doc = json.loads(out)
+    assert code == 1 and DB_CANARY not in out + err
+    assert checks(doc)["secretsStore"] == {"id": "secretsStore", "status": "fail", "detail": "cannot-open"} and checks(doc)["database"]["status"] == "ok"
+
+
+def test_a_report_that_cannot_be_built_fails_with_a_fixed_code(world, capsys):
+    async def broken(*args, **kwargs):
+        raise RuntimeError(f"CLI said {STDERR_CANARY} {EMAIL}")
+
+    world.monkeypatch.setattr("providers.diagnostics.build_report", broken)
+    code, out, err = run(capsys, "--json")
+    assert code == 1 and STDERR_CANARY not in out + err and EMAIL not in out + err
+    assert checks(json.loads(out))["connections"] == {"id": "connections", "status": "fail", "detail": "cannot-load"}
 
 
 def test_a_data_directory_that_is_not_writable_fails(world, capsys):
@@ -164,14 +185,10 @@ def test_a_data_directory_that_does_not_exist_yet_is_a_first_run_not_a_failure(w
     assert not (world.home / "first-run").exists()  # a doctor looks, it does not create
 
 
-def test_a_sidecar_that_cannot_load_fails_with_a_fixed_code(world, capsys):
-    def broken():
-        raise ImportError(f"cannot import {DB_CANARY}")
-
-    world.monkeypatch.setattr("oharness.providers_cli._app_version", broken)
-    code, out, err = run(capsys, "--json")
-    assert code == 1 and DB_CANARY not in out + err
-    assert checks(json.loads(out))["sidecar"] == {"id": "sidecar", "status": "fail", "detail": "cannot-load"}
+def test_the_sidecar_check_is_skipped_never_pretended(world, capsys):
+    """The CLI does not know a running sidecar's port or token (#388/#397): it says so instead of reporting ok."""
+    _, out, _ = run(capsys, "--json")
+    assert checks(json.loads(out))["sidecar"] == {"id": "sidecar", "status": "skipped", "detail": None}
 
 
 def test_the_text_report_has_one_fixed_sentence_per_language(world, capsys, monkeypatch):
@@ -190,3 +207,10 @@ def test_no_connections_is_a_clean_report(world, capsys):
     world.connections.clear()
     code, out, _ = run(capsys, "--json")
     assert code == 0 and json.loads(out)["connections"] == []
+
+
+def test_the_version_constant_is_the_one_the_app_declares():
+    import version
+    from main import app
+
+    assert version.APP_VERSION == app.version
