@@ -159,7 +159,11 @@ def test_an_installed_cli_is_detected_without_creating_its_working_directory(qui
     capsys.readouterr()
     assert ran.cwds, "the fake CLI was never run: the test would prove nothing"
     assert _tree(tmp_path) == before and not (local / "OHarness").exists()
-    assert all(Path(c).is_dir() for c in ran.cwds)
+    import tempfile
+
+    shared = Path(tempfile.gettempdir()).resolve()
+    assert all(Path(c).resolve() != shared and Path(c).resolve().parent == shared for c in ran.cwds)  # a fresh folder of its own, never the shared temp folder itself
+    assert not any(Path(c).exists() for c in ran.cwds)  # and it is gone when the command ends
 
 
 def test_providers_doctor_reports_a_report_that_cannot_be_built_with_one_fixed_line(quiet, capsys, monkeypatch):

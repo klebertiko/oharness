@@ -3,13 +3,14 @@ Provider connections (R-DX-01).
 
 The connections are the rows `providers.diagnostics.build_report` already builds (the same report `oharness providers doctor` and
 `GET /providers/diagnostics` serve): nothing is re-derived here. Every failure is a fixed code (`cannot-open`, `not-writable`, ...),
-never an exception's text, a path or a CLI's own output. The command only looks: it creates nothing (it does run the installed CLIs' `--version` and status commands, in an existing directory), probes no provider and
+never an exception's text, a path or a CLI's own output. The command only looks: it creates nothing (it does run the installed CLIs' `--version` and status commands, in a private directory it makes and removes), probes no provider and
 calls no adapter. Exits 1 when any check fails. `--json` follows `schema/doctor.schema.json` (versioned, validated by tests).
 """
 from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 SCHEMA_VERSION = 1
 EXIT_OK, EXIT_FAILED = 0, 1
@@ -61,12 +62,12 @@ def _sandbox() -> tuple[dict, dict]:
     return facts, _check("sandbox", "ok")
 
 
-def _existing_dir():
-    """Where detection commands run: a directory that already exists (the app's `cli-runs` would be created on first use)."""
+def _private_dir():
+    """A fresh directory only this command can use, removed when it is done: detection runs the installed CLIs, and a CLI reads its project settings
+    (hooks, rules) from its working directory, so that directory must never be one another process could have planted files in (the shared temp folder)."""
     import tempfile
-    from pathlib import Path
 
-    return Path(tempfile.gettempdir())
+    return tempfile.TemporaryDirectory(prefix="oharness-doctor-", ignore_cleanup_errors=True)  # mkdtemp: 0700 on POSIX, inside the person's own temp folder on Windows
 
 
 async def _report() -> dict:
@@ -98,7 +99,8 @@ async def _report() -> dict:
     connections, connection_check = [], _check("connections", "skipped")
     if rows is not None:
         try:
-            connections = (await build_report(rows, run_cli, version, cwd=_existing_dir()))["connections"]
+            with _private_dir() as workdir:
+                connections = (await build_report(rows, run_cli, version, cwd=Path(workdir)))["connections"]
             needs_attention = any(c["enabled"] and c["failureClass"] for c in connections)  # a disabled connection is not a failure
             connection_check = _check("connections", "fail" if needs_attention else "ok")
         except Exception:  # never echo it: it can hold CLI output

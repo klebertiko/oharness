@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 SCHEMA_VERSION = 1
 EXIT_OK, EXIT_NOT_LIVE, EXIT_USAGE = 0, 1, 2
@@ -162,10 +163,11 @@ async def _doctor(as_json: bool) -> int:
     from providers.diagnostics import build_report
 
     connections, _ = await _load_runtime()
-    from .doctor_cli import _existing_dir
+    from .doctor_cli import _private_dir
 
     try:
-        report = await build_report(connections, run_cli, _app_version(), cwd=_existing_dir())
+        with _private_dir() as workdir:
+            report = await build_report(connections, run_cli, _app_version(), cwd=Path(workdir))
     except Exception:  # never echo it: it can hold CLI output
         print("cannot build the diagnostics report: run `oharness doctor`", file=sys.stderr)
         return EXIT_NOT_LIVE
