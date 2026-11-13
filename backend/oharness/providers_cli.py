@@ -1,4 +1,4 @@
-"""`oharness providers list|test`: the Provider connections stored in the data directory, from a terminal (R-PRV-17).
+"""`oharness providers list|test|doctor`: the Provider connections stored in the data directory, from a terminal (R-PRV-17).
 
 `list` reads the same connections the desktop app shows (one data directory, `data_dir.resolve_data_dir`). `test <id>` runs the
 same probe the app's Test button runs (`routers.providers.probe_connection`): a status command for a subscription CLI, the
@@ -22,6 +22,8 @@ def add_parser(sub) -> None:
     listing = actions.add_parser("list", help="the stored connections (never their secrets)")
     listing.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
+    doctor = actions.add_parser("doctor", help="the secret-free diagnostics report (same as GET /providers/diagnostics); exits 1 if an enabled connection needs attention")
+    doctor.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
     test.add_argument("id", help="a connection id from `providers list`")
     test.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
@@ -47,29 +49,16 @@ def _kind(provider: str) -> str:
 
 def _endpoint(raw: str) -> str:
     """The endpoint without credentials: scheme, host, port and path only. Anything that is not a plain http(s) URL prints as empty."""
-    from urllib.parse import urlsplit
+    from providers.display import safe_endpoint
 
-    try:
-        parts = urlsplit(raw.strip())
-        host, port = parts.hostname, parts.port
-    except ValueError:
-        return ""
-    if parts.scheme not in ("http", "https") or not host:
-        return ""
-    shown = f"[{host}]" if ":" in host else host  # an IPv6 literal keeps its brackets
-    return f"{parts.scheme}://{shown}{f':{port}' if port else ''}{parts.path}"
+    return safe_endpoint(raw)
 
 
 def _shown_dir(path, verbose: bool) -> str:
     """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
-    from pathlib import Path
+    from providers.display import mask_home
 
-    if verbose:
-        return str(path)
-    try:
-        return "~/" + Path(path).relative_to(Path.home()).as_posix()
-    except ValueError:
-        return str(path)
+    return str(path) if verbose else mask_home(str(path), other_profiles=False)
 
 
 def _public(row: dict) -> dict:
@@ -155,9 +144,43 @@ async def _test(connection_id: str, as_json: bool) -> int:
     return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
+DOCTOR_MESSAGES = {  # one fixed sentence per outcome
+    "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
+    "pt-BR": {"ok": "Todas as conexões estão prontas.", "attention": "Algumas conexões precisam de atenção: veja a classe da falha acima."},
+}
+
+
+def _app_version() -> str:
+    from main import app
+
+    return str(app.version)
+
+
+async def _doctor(as_json: bool) -> int:
+    """The report `GET /providers/diagnostics` serves (`providers.diagnostics.build_report`), from the stored connections. No network, no probe."""
+    from adapters.cli_shared import run_cli
+    from providers.diagnostics import build_report
+
+    connections, _ = await _load_runtime()
+    report = await build_report(connections, run_cli, _app_version())
+    needs_attention = any(c["enabled"] and c["failureClass"] for c in report["connections"])  # a disabled connection is not a problem
+    if as_json:
+        print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "doctor", **report}, ensure_ascii=False))
+    else:
+        print(f"OHarness {report['app']['version']} ({report['app']['os']})")
+        for c in report["connections"]:
+            cli = c["cli"]
+            where = f"	{cli['id']} {cli['version'] or '-'}" if cli else ""
+            print(f"{c['id']}	{c['state']}	{c['failureClass'] or '-'}{where}")
+        print(DOCTOR_MESSAGES[_language()]["attention" if needs_attention else "ok"])
+    return EXIT_NOT_LIVE if needs_attention else EXIT_OK
+
+
 def run(args) -> int:
     import asyncio
 
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
+    if args.providers_cmd == "doctor":
+        return asyncio.run(_doctor(args.json))
     return asyncio.run(_test(args.id, args.json))

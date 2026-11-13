@@ -103,18 +103,14 @@ fn webview_scripts<S: AsRef<str> + serde::Serialize>(
     )
 }
 
-/// The sidecar's environment: its own token and, separately, the human
-/// credential the webview presents (the sidecar fails closed without it).
-fn sidecar_env(
-    port: u16,
-    token: &str,
-    human: &str,
-    data_dir: &std::path::Path,
-) -> Vec<(&'static str, String)> {
+/// The sidecar's environment: its own token and a flag saying the human
+/// credential the webview presents arrives on stdin, never in the
+/// environment (the sidecar fails closed without it).
+fn sidecar_env(port: u16, token: &str, data_dir: &std::path::Path) -> Vec<(&'static str, String)> {
     vec![
         ("OH_PORT", port.to_string()),
         ("OH_SIDECAR_TOKEN", token.to_string()),
-        ("OH_HUMAN_TOKEN", human.to_string()),
+        ("OH_HUMAN_STDIN", "1".to_string()),
         ("OH_DATA_DIR", data_dir.to_string_lossy().into_owned()),
     ]
 }
@@ -155,14 +151,25 @@ fn spawn_sidecar(app: &AppHandle, port: u16, token: &str, human: &str) -> Result
     let mut sidecar = shell
         .sidecar(SIDECAR_NAME)
         .map_err(|e| format!("sidecar lookup failed: {e}"))?;
-    for (name, value) in sidecar_env(port, token, human, &data_dir) {
+    for (name, value) in sidecar_env(port, token, &data_dir) {
         sidecar = sidecar.env(name, value);
     }
 
-    let (mut _rx, child) = sidecar
+    let (mut _rx, mut child) = sidecar
         .spawn()
         .map_err(|e| format!("sidecar spawn failed: {e}"))?;
     let pid = child.pid();
+    // One line on stdin: the credential is not in the process environment block.
+    if let Err(e) = child.write(
+        format!(
+            "{human}
+"
+        )
+        .as_bytes(),
+    ) {
+        stop_sidecar(SidecarProcess { child, pid });
+        return Err(format!("sidecar credential hand-off failed: {e}"));
+    }
 
     if !wait_until_ready(port, Duration::from_secs(15)) {
         stop_sidecar(SidecarProcess { child, pid });
@@ -370,19 +377,16 @@ mod tests {
     }
 
     #[test]
-    fn the_sidecar_gets_the_human_credential_in_its_own_variable() {
-        let env = sidecar_env(
-            8123,
-            "sidecar-secret",
-            "human-secret",
-            std::path::Path::new("data"),
-        );
+    fn the_sidecar_is_told_to_read_the_human_credential_from_stdin() {
+        let env = sidecar_env(8123, "sidecar-secret", std::path::Path::new("data"));
         let get = |name: &str| {
             env.iter()
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| v.as_str())
         };
-        assert_eq!(get("OH_HUMAN_TOKEN"), Some("human-secret"));
+        assert_eq!(get("OH_HUMAN_STDIN"), Some("1"));
+        assert_eq!(get("OH_HUMAN_TOKEN"), None, "never in the environment");
+        assert!(env.iter().all(|(_, v)| v != "human-secret"));
         assert_eq!(get("OH_SIDECAR_TOKEN"), Some("sidecar-secret"));
         assert_eq!(get("OH_PORT"), Some("8123"));
     }

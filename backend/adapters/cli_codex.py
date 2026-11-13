@@ -79,7 +79,10 @@ from typing import Any, AsyncIterator, Callable, Coroutine
 from .base import AdapterConfig, AdapterResult, AgentAdapter, ProbeResult
 from .cli_shared import (
     DEFAULT_TIMEOUT_S,
+    CliFailure,
+    CliMissing,
     CliRunResult,
+    classify_cli_failure,
     find_cli,
     is_windows,
     resolve_cwd,
@@ -121,10 +124,7 @@ class CodexCliAdapter(AgentAdapter):
     def _binary(self) -> str:
         path = find_cli(CLI_NAME)
         if not path:
-            raise FileNotFoundError(
-                "codex CLI not found on PATH. Install it and run `codex login`, "
-                "or switch this connection's runtime to API."
-            )
+            raise CliMissing()
         return path
 
     def _non_windows_gate(self) -> str | None:
@@ -182,7 +182,7 @@ class CodexCliAdapter(AgentAdapter):
     async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
         gate = self._non_windows_gate()
         if gate:
-            return AdapterResult(content="", error=gate)
+            return AdapterResult(content="", error=gate, failure="cli-error")
         argv = self.build_argv(config)
         cwd = resolve_cwd(config.extra.get("cwd"), root=config.extra.get("cwd_root"))
         env = scrub_env()
@@ -201,11 +201,12 @@ class CodexCliAdapter(AgentAdapter):
         result = await self._runner(argv, cwd=cwd, env=env, timeout=timeout, stdin=stdin_text)
 
         if result.timed_out:
-            return AdapterResult(content="", error=f"codex CLI timed out after {timeout:.0f}s")
+            return AdapterResult(content="", error=f"codex CLI timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
             return AdapterResult(
                 content="",
                 error=_last_line(result.stderr) or f"codex CLI exited {result.returncode}",
+                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
             )
 
         return _parse_jsonl(result.stdout, model=config.model)
@@ -217,7 +218,7 @@ class CodexCliAdapter(AgentAdapter):
         # adapters make.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise RuntimeError(result.error)
+            raise CliFailure(result.failure)
         yield result.content
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:
@@ -309,7 +310,9 @@ def _parse_jsonl(stdout: str, *, model: str) -> AdapterResult:
             tokens = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
         elif kind in ("turn.failed", "error"):
             detail = event.get("error") or event.get("message") or "codex CLI reported an error"
-            return AdapterResult(content="", error=str(detail))
+            return AdapterResult(
+                content="", error=str(detail), failure=classify_cli_failure(returncode=1, text=str(detail)),
+            )
 
     if texts:
         return AdapterResult(content="\n".join(texts), tokens_used=tokens, model=model or "")
@@ -318,8 +321,8 @@ def _parse_jsonl(stdout: str, *, model: str) -> AdapterResult:
         # empty real answer is possible but indistinguishable here from a
         # shape this parser doesn't know yet. Fail loud either way rather
         # than silently returning "" as if that were content.
-        return AdapterResult(content="", error="codex CLI completed the turn with no agent message.")
-    return AdapterResult(content="", error="codex CLI returned unrecognised output (expected --json events).")
+        return AdapterResult(content="", error="codex CLI completed the turn with no agent message.", failure="cli-error")
+    return AdapterResult(content="", error="codex CLI returned unrecognised output (expected --json events).", failure="cli-error")
 
 
 def _last_line(text: str) -> str:
