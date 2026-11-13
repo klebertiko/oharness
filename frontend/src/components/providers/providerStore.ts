@@ -63,9 +63,15 @@ export interface Connection {
   modelsFromEndpoint?: boolean;
   enabled: boolean;
   lastProbe: string;
+  /** What `GET /providers/clis` said about this connection's subscription CLI, when it has one.
+      Detection only (it costs no token); a probe or a run result outranks it. */
+  cliState?: CliState;
   /** The closed failure class the sidecar reported for the last failed run or probe, when it named one. */
   failure?: ProviderFaultClass;
 }
+
+export const CLI_STATES = ["ready", "not-logged-in", "not-installed", "unavailable", "error"] as const;
+export type CliState = (typeof CLI_STATES)[number];
 
 export function specOf(c: Connection): ProviderSpec {
   if (c.provider === "ollama") return c.residence === "cloud" ? OLLAMA_CLOUD : PROVIDERS.ollama;
@@ -457,6 +463,8 @@ interface ProviderState {
       call more than once — it's a no-op after the first successful run. */
   hydrate: () => Promise<void>;
   probe: (id: string) => Promise<void>;
+  /** Ask the sidecar which subscription CLIs are installed and signed in. Silent when it cannot answer. */
+  detectClis: () => Promise<void>;
   /** A real run just finished against this connection — not a Test click,
       but the thing a person actually cares about working. `ok: true` is at
       least as strong evidence as a probe, so it clears the untested
@@ -476,6 +484,14 @@ interface ProviderState {
   bindToggle: (id: string) => void;
   bindMove: (id: string, dir: -1 | 1) => void;
 }
+
+/** Detection is the oldest evidence: a Test or a run result that lands after a detection started wins.
+    `dropDetection` stamps the connection so a slow `GET /providers/clis` answer cannot bring the old state back. */
+let detectTick = 0;
+const detectionDroppedAt = new Map<string, number>();
+const dropDetection = (id: string): void => {
+  detectionDroppedAt.set(id, ++detectTick);
+};
 
 const patch = (list: Connection[], id: string, f: (c: Connection) => Connection) =>
   list.map((c) => (c.id === id ? f(c) : c));
@@ -539,11 +555,35 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     }
   },
 
+  detectClis: async () => {
+    try {
+      const startedAt = ++detectTick;
+      const res = await fetch(apiUrl("/providers/clis"));
+      if (!res.ok) return;
+      const body = (await res.json()) as { clis?: { provider?: string; state?: string }[] };
+      const byProvider = new Map<string, CliState>();
+      for (const row of body.clis ?? []) {
+        if (row.provider && (CLI_STATES as readonly string[]).includes(row.state ?? "")) byProvider.set(row.provider, row.state as CliState);
+      }
+      set({
+        connections: get().connections.map((c) => {
+          const cliState = byProvider.get(c.provider);
+          if ((detectionDroppedAt.get(c.id) ?? 0) > startedAt) return c;
+          return cliState && specOf(c).credential.kind === "cli" ? { ...c, cliState } : c;
+        }),
+      });
+    } catch {
+      // No sidecar, no detection: the rows keep what they know.
+    }
+  },
+
   /** Real reachability check against the sidecar — never a fixture replay. */
   probe: async (id) => {
     const before = get().connections.find((c) => c.id === id);
     if (!before) return;
-    set({ connections: patch(get().connections, id, (c) => ({ ...c, health: "probing" })) });
+    // A fresh test is newer than any detection: drop it so the probe's own answer is the one shown.
+    set({ connections: patch(get().connections, id, (c) => ({ ...c, health: "probing", cliState: undefined })) });
+    dropDetection(id);
     await ensureBackendRow(before);
     await runProbe(id, set, get);
   },
@@ -556,10 +596,12 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     // connection they've already turned away from). A probe already in
     // flight owns the next honest answer. An unknown id is a stray event.
     if (!c || !c.enabled || c.health === "probing") return;
+    dropDetection(id);
     if (outcome.ok) {
       set({
         connections: patch(get().connections, id, (x) => ({
           ...x,
+          cliState: undefined,
           health: "live",
           detail: x.health === "live" ? x.detail : "Verified by a real run just now.",
         })),
@@ -572,7 +614,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       const detail = outcome.cliFailure === "cli-signin"
         ? `${c.label} CLI is installed but not logged in.`
         : `${c.label} CLI not found on PATH.`;
-      set({ connections: patch(get().connections, id, (x) => ({ ...x, health: "setup", detail })) });
+      set({ connections: patch(get().connections, id, (x) => ({ ...x, cliState: undefined, health: "setup", detail })) });
     } else {
       set({
         connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),

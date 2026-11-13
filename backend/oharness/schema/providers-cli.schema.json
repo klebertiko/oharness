@@ -2,13 +2,77 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oharness.dev/schema/providers-cli.schema.json",
   "title": "OHarness providers CLI output",
-  "description": "The document `oharness providers list --json`, `oharness providers test <id> --json` and `oharness providers doctor --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
+  "description": "The document `oharness providers list --json`, `test <id> --json`, `doctor --json` and `dump-config --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
   "oneOf": [
     { "$ref": "#/$defs/list" },
     { "$ref": "#/$defs/test" },
-    { "$ref": "#/$defs/doctor" }
+    { "$ref": "#/$defs/doctor" },
+    { "$ref": "#/$defs/dumpConfig" }
   ],
   "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["value", "origin"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": ["string", "boolean", "null"] },
+        "origin": { "enum": ["default", "app", "env"], "description": "default: built in (the catalog, the platform); app: a connection the app stored; env: this process's environment. Never the environment of a CLI subprocess." }
+      }
+    },
+    "dumpConfig": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "environment", "connections"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "dump-config" },
+        "environment": {
+          "type": "object",
+          "required": ["dataDir", "secretsBackend", "secretsDir", "database"],
+          "additionalProperties": false,
+          "properties": {
+            "dataDir": { "$ref": "#/$defs/field" },
+            "secretsBackend": { "$ref": "#/$defs/field" },
+            "secretsDir": {
+              "type": "object",
+              "required": ["value", "origin"],
+              "additionalProperties": false,
+              "properties": {
+                "value": { "enum": ["default", "custom", null], "description": "default: the app's own `<data>/secrets`; custom: another folder; null: the backend is not a file." },
+                "origin": { "enum": ["default", "app", "env"] }
+              }
+            },
+            "database": { "$ref": "#/$defs/field" }
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "fields"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "provider": { "type": "string" },
+              "fields": {
+                "type": "object",
+                "required": ["label", "residence", "enabled", "endpoint", "defaultModel", "credentialKind", "secretStored"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "$ref": "#/$defs/field" },
+                  "residence": { "$ref": "#/$defs/field" },
+                  "enabled": { "$ref": "#/$defs/field" },
+                  "endpoint": { "$ref": "#/$defs/field" },
+                  "defaultModel": { "$ref": "#/$defs/field" },
+                  "credentialKind": { "$ref": "#/$defs/field" },
+                  "secretStored": { "$ref": "#/$defs/field" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "doctor": {
       "type": "object",
       "required": ["schemaVersion", "command", "app", "connections"],

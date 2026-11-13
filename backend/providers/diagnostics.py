@@ -11,6 +11,7 @@ No network call is made; CLI state comes from the same status-only probes as
 from __future__ import annotations
 
 import platform
+from pathlib import Path
 from typing import Any, Callable
 
 from adapters.catalog import get_provider
@@ -33,8 +34,8 @@ def _cli_path(cli: str, runner: Callable[..., Any]) -> str | None:
     return None
 
 
-async def build_report(connections: dict[str, dict[str, Any]], runner: Callable[..., Any], app_version: str) -> dict:
-    detected = {d["provider"]: d for d in await detect_clis(runner)}
+async def build_report(connections: dict[str, dict[str, Any]], runner: Callable[..., Any], app_version: str, *, cwd: Path | None = None) -> dict:
+    detected = {d["provider"]: d for d in await detect_clis(runner, cwd=cwd)}
     cli_for_provider = {provider: cid for cid, provider, _cls in DETECTED}
     rows = []
     for row in connections.values():

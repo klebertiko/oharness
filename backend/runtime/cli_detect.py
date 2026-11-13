@@ -19,6 +19,7 @@ Contract (``GET /providers/clis``, docs/product/providers-cli-detection.md)::
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import re
 from typing import Any, Callable
 
@@ -88,28 +89,33 @@ def _version_line(stdout: str) -> str | None:
     return None
 
 
-async def _version(adapter: Any, runner: Callable[..., Any]) -> str | None:
+def _cwd(cwd: Path | None) -> Path:
+    """The working directory a detection command runs in: the app's own (made on first use) unless the caller names one that already exists."""
+    return resolve_cwd(str(cwd), root=cwd) if cwd else resolve_cwd(None)
+
+
+async def _version(adapter: Any, runner: Callable[..., Any], cwd: Path | None = None) -> str | None:
     prefix = adapter.cli_argv_prefix()
     if not prefix:
         return None
     result = await runner(
-        [*prefix, "--version"], cwd=resolve_cwd(None), env=scrub_env(), timeout=VERSION_TIMEOUT_S,
+        [*prefix, "--version"], cwd=_cwd(cwd), env=scrub_env(), timeout=VERSION_TIMEOUT_S,
     )
     if result.timed_out or result.returncode != 0:
         return None
     return _version_line(result.stdout)
 
 
-async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: Callable[..., Any]) -> dict:
+async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: Callable[..., Any], cwd: Path | None = None) -> dict:
     adapter = cls(runner=runner)  # type: ignore[call-arg]
-    config = AdapterConfig(adapter=cli, model="")
+    config = AdapterConfig(adapter=cli, model="", extra={"cwd": str(cwd), "cwd_root": str(cwd)} if cwd else {})
     probe: ProbeResult = await adapter.probe(config)
     # Installed means "the binary resolves", decided by the adapter's own lookup — not by
     # the probe code, which a platform gate can set before any lookup happened.
     installed = bool(adapter.cli_argv_prefix())  # type: ignore[attr-defined]
     state = "ready" if probe.ok else _STATE_BY_CODE.get(probe.code, "error")
     # A closed platform gate (SEC-6, SEC-2) runs nothing, not even `--version`.
-    version = await _version(adapter, runner) if installed and state != "unavailable" else None
+    version = await _version(adapter, runner, cwd) if installed and state != "unavailable" else None
     detail = _FIXED_DETAIL[state]
     return {
         "id": cli,
@@ -122,6 +128,7 @@ async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: 
     }
 
 
-async def detect_clis(runner: Callable[..., Any] = run_cli) -> list[dict]:
+async def detect_clis(runner: Callable[..., Any] = run_cli, *, cwd: Path | None = None) -> list[dict]:
+    """`cwd`: a directory that already exists to run the detection commands in (a look-only caller such as `oharness doctor`); the default is the app's own."""
     capped = _bounded_answer(runner)
-    return list(await asyncio.gather(*(_detect_one(c, p, k, capped) for c, p, k in DETECTED)))
+    return list(await asyncio.gather(*(_detect_one(c, p, k, capped, cwd) for c, p, k in DETECTED)))

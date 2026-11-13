@@ -20,7 +20,7 @@ const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
 const stubs = {
   "GET /health": { status: "ok" }, "GET /bundles/default": fixture, "GET /cowork/projects": { projects: [] },
-  "GET /harnesses/": [], "GET /bundles/examples": { examples: [] }, "GET /providers/connections": { connections: [] },
+  "GET /harnesses/": [], "GET /bundles/examples": { examples: [] }, "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [] },
   "GET /flow/config": { enabled: false },
   "GET /usage/summary": { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" }, byConnection: [], bySource: [] },
 };

@@ -90,7 +90,7 @@ async function session(theme, { listFails = false } = {}) {
       "GET /bundles/default": agile,
       "GET /cowork/projects": { projects: [] },
       "GET /bundles/examples": { examples: [] },
-      "GET /providers/connections": { connections: [{ id: "ollama-local", provider: "ollama", label: "QA local", enabled: true, residence: "local", endpoint: "http://127.0.0.1:11434", secretRef: null, defaultModel: "qa-default" }] },
+      "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [{ id: "ollama-local", provider: "ollama", label: "QA local", enabled: true, residence: "local", endpoint: "http://127.0.0.1:11434", secretRef: null, defaultModel: "qa-default" }] },
       "GET /usage/summary": { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, byConnection: [], bySource: [], budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" } },
     };
     if (!Object.hasOwn(responses, key)) return json({ detail: `Unstubbed E2E request: ${key}` }, 501);

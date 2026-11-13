@@ -40,6 +40,35 @@ afterEach(() => {
   useLocaleStore.setState({ locale: "en" });
 });
 
+describe("detected CLI state on open (R-PRV-01)", () => {
+  const cliConn = (over: Partial<Connection>) => conn({ id: "anthropic-cli", provider: "anthropic", label: "Anthropic", residence: "cloud", endpoint: "", health: "setup", enabled: false, models: [], ...over });
+  const rowText = () => within(screen.getByRole("complementary")).getAllByRole("button").map((b) => b.textContent ?? "").join(" | ");
+
+  it("asks the sidecar once the list is ready and shows Install / Sign in before any try", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ clis: [
+      { id: "claude", provider: "anthropic", state: "not-installed" },
+      { id: "codex", provider: "openai", state: "not-logged-in" },
+    ] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    show([cliConn({}), cliConn({ id: "openai-cli", provider: "openai", label: "OpenAI" })], {}, "");
+    await waitFor(() => expect(rowText()).toContain("Not installed"));
+    expect(rowText()).toContain("install CLI");
+    expect(rowText()).toContain("Sign-in needed");
+    expect(rowText()).toContain("sign in");
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith("/providers/clis"))).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("says the detected state in pt-BR", async () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ clis: [{ id: "claude", provider: "anthropic", state: "not-installed" }] }) }));
+    show([cliConn({})], {}, "");
+    await waitFor(() => expect(rowText()).toContain("Não instalado"));
+    expect(rowText()).toContain("instalar a CLI");
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("list", () => {
   it("groups by what to do, nearest to answering first, and says one word and one step per row", () => {
     show([

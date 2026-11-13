@@ -23,7 +23,7 @@ const item = (over = {}) => ({
 });
 const stubs = {
   "GET /health": { status: "ok" }, "GET /bundles/default": fixture, "GET /cowork/projects": { projects: [] },
-  "GET /harnesses/": [], "GET /bundles/examples": { examples: [] }, "GET /providers/connections": { connections: [] }, "GET /flow/config": { enabled: false },
+  "GET /harnesses/": [], "GET /bundles/examples": { examples: [] }, "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [] }, "GET /flow/config": { enabled: false },
   "GET /usage/summary": { totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" }, byConnection: [], bySource: [] },
   "GET /factory/work-items": { items: [item(), item({ id: "i2", title: "Add search", column: "implementing", stage: "implement", status: "running" })] },
   "GET /factory/work-items/i1": { ...item(), artifacts: [{ id: "a", kind: "diff", ref: "forja/i1-run", label: "", created_at: "2026-11-01T11:00:00Z" }], runs: [] },

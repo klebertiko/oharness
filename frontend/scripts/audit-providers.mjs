@@ -99,6 +99,7 @@ for (const theme of ["dark", "light"]) {
         const key = `${route.request().method()} ${url.pathname}`;
         const json = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
         if (key === "GET /providers/connections") return json({ connections: s.rows });
+        if (key === "GET /providers/clis") return json({ clis: [] });
         if (key === "GET /usage/summary") return json({ totalTokens: 0, totalCostUsd: 0, unpricedTokens: 0, budget: { limitUsd: null, spentUsd: 0, remainingUsd: null, pct: null, state: "unset" }, byConnection: [], bySource: [] });
         if (key === "GET /health") return json({ status: "ok" });
         if (key === "GET /harnesses/") return json([]);
