@@ -14,7 +14,7 @@ import platform
 from pathlib import Path
 from typing import Any, Callable
 
-from adapters.catalog import get_provider
+from adapters.catalog import spec_for_connection
 from providers.display import mask_home, safe_endpoint
 from runtime.cli_detect import DETECTED, detect_clis
 
@@ -40,7 +40,7 @@ async def build_report(connections: dict[str, dict[str, Any]], runner: Callable[
     rows = []
     for row in connections.values():
         provider = row["provider"]
-        kind = (get_provider(provider) or {}).get("credential", {}).get("kind", "none")
+        kind = (spec_for_connection(row) or {}).get("credential", {}).get("kind", "none")
         entry: dict[str, Any] = {
             "id": row["id"], "provider": provider, "label": row["label"], "enabled": bool(row.get("enabled")),
             "credentialKind": kind, "endpoint": safe_endpoint(row.get("endpoint", "")), "cli": None,

@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
-from adapters.catalog import get_provider, list_catalog
+from adapters.catalog import (
+    endpoint_for_connection,
+    get_provider,
+    list_catalog,
+    spec_for_connection,
+)
 from adapters.cli_shared import run_cli
 from database import get_db
 from providers import store as connection_store
@@ -234,11 +239,14 @@ async def probe_connection(
     adapter = get_adapter(adapter_name)
 
     api_key = ""
-    spec = get_provider(row["provider"]) or {}
-    if spec.get("credential", {}).get("kind") == "api-key" and row.get("secretRef"):
+    spec = spec_for_connection(row)
+    # A fixed endpoint is the catalog default; an editable one stays as stored
+    # (empty still means the adapter's own default, as before).
+    endpoint = endpoint_for_connection(row, spec) if spec and not spec["endpoint"]["editable"] else row.get("endpoint", "")
+    if spec and spec["credential"]["kind"] == "api-key" and row.get("secretRef"):
         api_key = store.get(row["secretRef"]) or ""
 
-    config = AdapterConfig(adapter=adapter_name, model="", endpoint=row.get("endpoint", ""), api_key=api_key)
+    config = AdapterConfig(adapter=adapter_name, model="", endpoint=endpoint, api_key=api_key)
     result = await adapter.probe(config)
     return {
         "ok": result.ok,
