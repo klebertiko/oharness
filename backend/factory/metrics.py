@@ -18,6 +18,10 @@ SCHEMA_VERSION = 1
 WINDOWS = {'7d': 7, '30d': 30, '90d': 90}
 MAX_RANGE = timedelta(days=366)
 MAX_ITEMS = 5000
+# `factory_work_items.factory_version` is String(80). A longer filter cannot match a stored version.
+FACTORY_VERSION_MAX = 80
+# Items born before a definition was active have no version. They stay in `by_version` under this key instead of disappearing.
+NO_VERSION = 'sem versão'
 SIZE_CUTS = (('S', 100), ('M', 500), ('L', 1000))  # changed lines: below 100 is S, below 500 M, below 1000 L, the rest XL
 # Human events that mean the Forja needed help; the decisions a person is meant to take (approve the spec, confirm the merge) do not count.
 INTERVENTIONS = ('changes_requested', 'spec_edited', 'advanced', 'note')
@@ -151,6 +155,10 @@ def json_kind(event: WorkItemEvent) -> str:
     return json.loads(event.data_json).get('kind', '')
 
 
+def _version_key(item: WorkItem) -> str:
+    return item.factory_version or NO_VERSION
+
+
 def _percentile(values: list[float], share: float) -> float | None:
     if not values:
         return None
@@ -162,13 +170,15 @@ async def compute(db: AsyncSession, *, window: str | None = '7d', since: str | N
                   factory_version: str | None = None) -> dict:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     label, start, end = resolve_range(window, since, until, now)
-    # An item untouched since the start has no event in the range; the load is bounded too.
-    query = select(WorkItem).where(WorkItem.created_at < end, WorkItem.updated_at >= start).order_by(WorkItem.created_at.desc()).limit(MAX_ITEMS)
+    # An item untouched since the start has no event in the range. One row past the cap tells whether the read was cut.
+    query = select(WorkItem).where(WorkItem.created_at < end, WorkItem.updated_at >= start).order_by(WorkItem.created_at.desc()).limit(MAX_ITEMS + 1)
     if factory_id:
         query = query.where(WorkItem.factory_id == factory_id)
     if factory_version:
         query = query.where(WorkItem.factory_version == factory_version)
-    items = list(await db.scalars(query))
+    rows = list(await db.scalars(query))
+    truncated = len(rows) > MAX_ITEMS
+    items = rows[:MAX_ITEMS]
     ids = [i.id for i in items]
     events: dict[str, list[WorkItemEvent]] = {i: [] for i in ids}
     artifacts: dict[str, list[WorkItemArtifact]] = {i: [] for i in ids}
@@ -182,7 +192,7 @@ async def compute(db: AsyncSession, *, window: str | None = '7d', since: str | N
         for run in await db.scalars(select(WorkItemRun).where(WorkItemRun.work_item_id.in_(ids))):
             runs[run.work_item_id].append(run)
     out = {'schemaVersion': SCHEMA_VERSION, 'window': label, 'since': start.isoformat() + 'Z', 'until': end.isoformat() + 'Z',
-           **_core(items, events, artifacts, runs, start, end)}
-    versions = sorted({i.factory_version for i in items if i.factory_version})
-    out['by_version'] = {v: _core([i for i in items if i.factory_version == v], events, artifacts, runs, start, end) for v in versions}
+           'truncated': truncated, **_core(items, events, artifacts, runs, start, end)}
+    versions = sorted({_version_key(i) for i in items})
+    out['by_version'] = {v: _core([i for i in items if _version_key(i) == v], events, artifacts, runs, start, end) for v in versions}
     return out

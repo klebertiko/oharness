@@ -17,6 +17,7 @@ from adapters.catalog import get_provider, list_catalog
 from adapters.cli_shared import run_cli
 from database import get_db
 from providers import store as connection_store
+from providers.diagnostics import build_report
 from providers.resolution import ADAPTER_BY_PROVIDER
 from runtime.cli_detect import detect_clis
 from secret_store.base import SecretsStore
@@ -109,6 +110,13 @@ async def detect_subscription_clis(request: Request):
     ``app.state.cli_runner`` for tests."""
     runner = getattr(request.app.state, "cli_runner", None) or run_cli
     return {"clis": await detect_clis(runner)}
+
+
+@router.get("/diagnostics")
+async def diagnostics(request: Request, connections: dict = Depends(get_connections)):
+    """Secret-free doctor report (R-PRV-07); contract in providers/diagnostics.py and issue #390."""
+    runner = getattr(request.app.state, "cli_runner", None) or run_cli
+    return await build_report(connections, runner, request.app.version)
 
 
 @router.get("/connections")

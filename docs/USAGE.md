@@ -36,6 +36,7 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 
 - **Subagents** (composer switch, off by default and remembered): lets Nilo hand tasks to helpers that work at the same time during the turn (up to 4, each one provider call with no tools). The run detail shows Nilo and each subagent with its live state; **Cancel** next to a running one stops only that one, and Nilo carries on with what the others return. Stopping the run ends all of them. Available for chats without a harness and with a provider that Nilo drives directly; with a provider that runs its own tools (a CLI), the turn says it ran without subagents. Their tokens count toward the run and its ceiling.
 - Run history is stored locally and survives a restart; an interrupted run is marked as such ([details](product/durable-run-history.md)). **Activity** lists every run; open an interrupted one and choose **Continue as a new run** to start a linked run from its saved events (the original never changes).
+- **Run detail** shows a retry (which attempt, and the step it went back to), a step that passed 80% of its own token limit, a spend warning while the run is still allowed, whether the run used a CLI or the API, and why a step was skipped. Each one is a word on the step, not a color by itself.
 
 ## Studio
 
