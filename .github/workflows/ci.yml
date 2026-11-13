@@ -223,10 +223,29 @@ jobs:
           persist-credentials: false
       - run: docker compose config --quiet
 
+  cordis-host:
+    name: cordis host
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cordis-host
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: $/.github/actions/setup-safe-chain # nosemgrep: third-party-action-not-pinned-to-commit-sha (in-repo action, self-repository syntax)
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+
   required:
     name: Quality / required
     if: always()
-    needs: [frontend, frontend-e2e, backend, rust-tauri, website, compose]
+    needs: [frontend, frontend-e2e, backend, rust-tauri, website, compose, cordis-host]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce required results

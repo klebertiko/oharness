@@ -1,0 +1,13 @@
+{
+  "name": "@oharness/proof-plugin",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Cordis plugin used to prove the host loads our own plugin in-process.",
+  "main": "./index.ts",
+  "oharness": {
+    "runtime": "in-process",
+    "capabilities": []
+  }
+}
