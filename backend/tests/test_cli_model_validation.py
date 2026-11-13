@@ -25,6 +25,16 @@ GOOD = ["sonnet", "opus", "claude-sonnet-4-5", "gpt-5.1-codex", "qwen3:8b", "ope
 BAD = ["--x", "-m", "has space", "a;b", "a$(b)", "a\nb", "", "x" * (CLI_MODEL_MAX_LEN + 1)]
 
 
+@pytest.fixture(autouse=True)
+def _clis_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    # build_argv looks the binary up first: pin it so the test does not depend
+    # on which CLIs the machine running it has installed.
+    for module in ("adapters.cli_claude", "adapters.cli_codex", "adapters.cli_cursor"):
+        monkeypatch.setattr(f"{module}.find_cli", lambda name: f"/opt/bin/{name}")
+    monkeypatch.setattr("adapters.cli_cursor.is_windows", lambda: False)
+    monkeypatch.setattr("adapters.cli_codex.is_windows", lambda: False)
+
+
 @pytest.mark.parametrize("model", GOOD)
 def test_valid_cli_model_accepts_cli_aliases_and_ids(model: str) -> None:
     assert valid_cli_model(model)
