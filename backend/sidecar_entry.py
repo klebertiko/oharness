@@ -9,12 +9,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from data_dir import resolve_data_dir
+
 
 def _data_dir() -> Path:
-    configured = os.environ.get("OH_DATA_DIR")
-    path = Path(configured) if configured else Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "OHarness"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return resolve_data_dir()
 
 
 def configure_environment() -> int:

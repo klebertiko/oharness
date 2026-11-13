@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oharness.dev/schema/providers-cli.schema.json",
+  "title": "OHarness providers CLI output",
+  "description": "The document `oharness providers list --json`, `oharness providers test <id> --json` and `oharness providers doctor --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
+  "oneOf": [
+    { "$ref": "#/$defs/list" },
+    { "$ref": "#/$defs/test" },
+    { "$ref": "#/$defs/doctor" }
+  ],
+  "$defs": {
+    "doctor": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "app", "connections"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "doctor" },
+        "app": {
+          "type": "object",
+          "required": ["version", "os"],
+          "additionalProperties": false,
+          "properties": { "version": { "type": "string" }, "os": { "type": "string" } }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "label", "enabled", "credentialKind", "credentialOrigin", "state", "failureClass", "endpoint", "cli"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "provider": { "type": "string" },
+              "label": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "credentialKind": { "enum": ["cli", "api-key", "none"] },
+              "credentialOrigin": { "enum": ["cli", "vault", "none"] },
+              "state": { "enum": ["ready", "not-logged-in", "not-installed", "unavailable", "error", "configured", "no-credential", "disabled"] },
+              "failureClass": { "enum": ["cli-signin", "cli-missing", "cli-unavailable", "cli-error", "credential-missing", null] },
+              "endpoint": { "type": "string", "description": "Scheme, host, port and path only; empty when there is none." },
+              "cli": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["id", "version", "path"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": { "type": "string" },
+                      "version": { "type": ["string", "null"] },
+                      "path": { "type": ["string", "null"], "description": "The user's home directory is spelled `~`." }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "dataDir", "connections"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "list" },
+        "dataDir": { "type": "string", "description": "Relative to the profile (`~/...`) when it lives there; the full path with `--verbose`." },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "label", "residence", "endpoint", "enabled", "credentialKind", "hasSecret", "defaultModel"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "provider": { "type": "string" },
+              "label": { "type": "string" },
+              "residence": { "enum": ["local", "cloud"] },
+              "endpoint": { "type": "string", "description": "Scheme, host, port and path only: never userinfo, query or fragment; empty when it is not an http(s) URL." },
+              "enabled": { "type": "boolean" },
+              "credentialKind": { "enum": ["cli", "api-key", "none", "unknown"] },
+              "hasSecret": { "type": "boolean" },
+              "defaultModel": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "id", "provider", "ok", "health", "message", "latencyMs", "modelCount"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "test" },
+        "id": { "type": "string" },
+        "provider": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "health": { "enum": ["live", "setup", "degraded", "fault"] },
+        "message": { "type": "string", "description": "One fixed sentence per state (en or pt-BR). Never a probe's own text." },
+        "latencyMs": { "type": "integer", "minimum": 0 },
+        "modelCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
