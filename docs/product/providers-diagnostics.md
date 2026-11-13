@@ -1,6 +1,6 @@
 # Diagnóstico de Providers — `GET /providers/diagnostics` (R-PRV-07, #390)
 
-Relatório estilo doctor, sem segredos, sem rede. Hoje só o endpoint HTTP o serve. Follow-up: ligar a tela e a CLI `oharness providers` a este JSON (ainda não existe; a CLI hoje lê direto o diretório de dados).
+Relatório estilo doctor, sem segredos, sem rede. Duas portas, uma função (`providers.diagnostics.build_report`): o endpoint HTTP e `oharness providers doctor [--json]`, que lê as conexões do diretório de dados e acrescenta só `schemaVersion` e `command` (schema em `backend/oharness/schema/providers-cli.schema.json`). A CLI sai com 1 se uma conexão habilitada tem `failureClass`; conexão desabilitada não conta. Follow-up: ligar a tela a este JSON.
 
 ```json
 {

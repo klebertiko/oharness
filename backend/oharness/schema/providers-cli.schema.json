@@ -2,10 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oharness.dev/schema/providers-cli.schema.json",
   "title": "OHarness providers CLI output",
-  "description": "The document `oharness providers list --json` and `oharness providers test <id> --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
+  "description": "The document `oharness providers list --json`, `test <id> --json`, `doctor --json` and `dump-config --json` print. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. No document ever carries a secret, a secret reference, an account e-mail or raw CLI output.",
   "oneOf": [
     { "$ref": "#/$defs/list" },
     { "$ref": "#/$defs/test" },
+    { "$ref": "#/$defs/doctor" },
     { "$ref": "#/$defs/dumpConfig" }
   ],
   "$defs": {
@@ -58,6 +59,55 @@
                   "credentialKind": { "$ref": "#/$defs/field" },
                   "secretStored": { "$ref": "#/$defs/field" }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "doctor": {
+      "type": "object",
+      "required": ["schemaVersion", "command", "app", "connections"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "command": { "const": "doctor" },
+        "app": {
+          "type": "object",
+          "required": ["version", "os"],
+          "additionalProperties": false,
+          "properties": { "version": { "type": "string" }, "os": { "type": "string" } }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "label", "enabled", "credentialKind", "credentialOrigin", "state", "failureClass", "endpoint", "cli"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "provider": { "type": "string" },
+              "label": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "credentialKind": { "enum": ["cli", "api-key", "none"] },
+              "credentialOrigin": { "enum": ["cli", "vault", "none"] },
+              "state": { "enum": ["ready", "not-logged-in", "not-installed", "unavailable", "error", "configured", "no-credential", "disabled"] },
+              "failureClass": { "enum": ["cli-signin", "cli-missing", "cli-unavailable", "cli-error", "credential-missing", null] },
+              "endpoint": { "type": "string", "description": "Scheme, host, port and path only; empty when there is none." },
+              "cli": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["id", "version", "path"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": { "type": "string" },
+                      "version": { "type": ["string", "null"] },
+                      "path": { "type": ["string", "null"], "description": "The user's home directory is spelled `~`." }
+                    }
+                  }
+                ]
               }
             }
           }

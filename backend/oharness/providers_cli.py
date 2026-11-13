@@ -1,4 +1,4 @@
-"""`oharness providers list|test`: the Provider connections stored in the data directory, from a terminal (R-PRV-17).
+"""`oharness providers list|test|doctor`: the Provider connections stored in the data directory, from a terminal (R-PRV-17).
 
 `list` reads the same connections the desktop app shows (one data directory, `data_dir.resolve_data_dir`). `test <id>` runs the
 same probe the app's Test button runs (`routers.providers.probe_connection`): a status command for a subscription CLI, the
@@ -24,6 +24,8 @@ def add_parser(sub) -> None:
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
     dump = actions.add_parser("dump-config", help="the effective configuration and where each field came from: default, app (stored connection) or env (this process's environment)")
     dump.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
+    doctor = actions.add_parser("doctor", help="the secret-free diagnostics report (same as GET /providers/diagnostics); exits 1 if an enabled connection needs attention")
+    doctor.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
     test.add_argument("id", help="a connection id from `providers list`")
     test.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
@@ -208,6 +210,36 @@ async def _dump_config(as_json: bool) -> int:
         for name, item in conn["fields"].items():
             print(f"  {name}	{item['value']!s}	({item['origin']})")
     return EXIT_OK
+DOCTOR_MESSAGES = {  # one fixed sentence per outcome
+    "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
+    "pt-BR": {"ok": "Todas as conexões estão prontas.", "attention": "Algumas conexões precisam de atenção: veja a classe da falha acima."},
+}
+
+
+def _app_version() -> str:
+    from main import app
+
+    return str(app.version)
+
+
+async def _doctor(as_json: bool) -> int:
+    """The report `GET /providers/diagnostics` serves (`providers.diagnostics.build_report`), from the stored connections. No network, no probe."""
+    from adapters.cli_shared import run_cli
+    from providers.diagnostics import build_report
+
+    connections, _ = await _load_runtime()
+    report = await build_report(connections, run_cli, _app_version())
+    needs_attention = any(c["enabled"] and c["failureClass"] for c in report["connections"])  # a disabled connection is not a problem
+    if as_json:
+        print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "doctor", **report}, ensure_ascii=False))
+    else:
+        print(f"OHarness {report['app']['version']} ({report['app']['os']})")
+        for c in report["connections"]:
+            cli = c["cli"]
+            where = f"	{cli['id']} {cli['version'] or '-'}" if cli else ""
+            print(f"{c['id']}	{c['state']}	{c['failureClass'] or '-'}{where}")
+        print(DOCTOR_MESSAGES[_language()]["attention" if needs_attention else "ok"])
+    return EXIT_NOT_LIVE if needs_attention else EXIT_OK
 
 
 def run(args) -> int:
@@ -217,4 +249,6 @@ def run(args) -> int:
         return asyncio.run(_list(args.json, args.verbose))
     if args.providers_cmd == "dump-config":
         return asyncio.run(_dump_config(args.json))
+    if args.providers_cmd == "doctor":
+        return asyncio.run(_doctor(args.json))
     return asyncio.run(_test(args.id, args.json))
