@@ -127,3 +127,46 @@ def test_the_providers_commands_report_an_unreadable_database_with_one_stable_li
     code = main(["providers", "list"])
     out = capsys.readouterr()
     assert code == 1 and DB_PASSWORD not in out.out + out.err and "Traceback" not in out.err
+
+
+class _Ran:
+    """A runner that never spawns a process: it only records the working directories it was handed."""
+
+    def __init__(self):
+        self.cwds = []
+
+    async def __call__(self, argv, *, cwd, env, timeout, stdin=None):
+        from adapters.cli_shared import CliRunResult
+
+        self.cwds.append(cwd)
+        return CliRunResult(returncode=0, stdout="2.1.4 (Claude Code)\n", stderr="")
+
+
+@pytest.mark.parametrize("argv", [["doctor", "--json"], ["providers", "doctor", "--json"]])
+def test_an_installed_cli_is_detected_without_creating_its_working_directory(quiet, capsys, monkeypatch, tmp_path, argv):
+    """With a CLI installed, detection runs `<cli> --version` and the status command: their cwd must already exist, never be made (the app's `cli-runs`)."""
+    local = tmp_path / "local"
+    local.mkdir()
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("HOME", str(local))
+    monkeypatch.setenv("USERPROFILE", str(local))
+    for module in MODULES:
+        monkeypatch.setattr(f"{module}.find_cli", lambda name: str(tmp_path / name))  # "installed"
+    ran = _Ran()
+    monkeypatch.setattr("adapters.cli_shared.run_cli", ran)
+    before = _tree(tmp_path)
+    main(argv)
+    capsys.readouterr()
+    assert ran.cwds, "the fake CLI was never run: the test would prove nothing"
+    assert _tree(tmp_path) == before and not (local / "OHarness").exists()
+    assert all(Path(c).is_dir() for c in ran.cwds)
+
+
+def test_providers_doctor_reports_a_report_that_cannot_be_built_with_one_fixed_line(quiet, capsys, monkeypatch):
+    async def broken(*args, **kwargs):
+        raise RuntimeError("CLI said " + DB_PASSWORD)
+
+    monkeypatch.setattr("providers.diagnostics.build_report", broken)
+    code = main(["providers", "doctor", "--json"])
+    out = capsys.readouterr()
+    assert code == 1 and DB_PASSWORD not in out.out + out.err and "Traceback" not in out.err and out.err.strip()

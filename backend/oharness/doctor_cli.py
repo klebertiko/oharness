@@ -3,7 +3,7 @@ Provider connections (R-DX-01).
 
 The connections are the rows `providers.diagnostics.build_report` already builds (the same report `oharness providers doctor` and
 `GET /providers/diagnostics` serve): nothing is re-derived here. Every failure is a fixed code (`cannot-open`, `not-writable`, ...),
-never an exception's text, a path or a CLI's own output. The command only looks: it creates nothing, probes no provider and
+never an exception's text, a path or a CLI's own output. The command only looks: it creates nothing (it does run the installed CLIs' `--version` and status commands, in an existing directory), probes no provider and
 calls no adapter. Exits 1 when any check fails. `--json` follows `schema/doctor.schema.json` (versioned, validated by tests).
 """
 from __future__ import annotations
@@ -61,6 +61,14 @@ def _sandbox() -> tuple[dict, dict]:
     return facts, _check("sandbox", "ok")
 
 
+def _existing_dir():
+    """Where detection commands run: a directory that already exists (the app's `cli-runs` would be created on first use)."""
+    import tempfile
+    from pathlib import Path
+
+    return Path(tempfile.gettempdir())
+
+
 async def _report() -> dict:
     import platform
 
@@ -90,7 +98,7 @@ async def _report() -> dict:
     connections, connection_check = [], _check("connections", "skipped")
     if rows is not None:
         try:
-            connections = (await build_report(rows, run_cli, version))["connections"]
+            connections = (await build_report(rows, run_cli, version, cwd=_existing_dir()))["connections"]
             needs_attention = any(c["enabled"] and c["failureClass"] for c in connections)  # a disabled connection is not a failure
             connection_check = _check("connections", "fail" if needs_attention else "ok")
         except Exception:  # never echo it: it can hold CLI output

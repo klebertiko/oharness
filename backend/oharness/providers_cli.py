@@ -162,7 +162,13 @@ async def _doctor(as_json: bool) -> int:
     from providers.diagnostics import build_report
 
     connections, _ = await _load_runtime()
-    report = await build_report(connections, run_cli, _app_version())
+    from .doctor_cli import _existing_dir
+
+    try:
+        report = await build_report(connections, run_cli, _app_version(), cwd=_existing_dir())
+    except Exception:  # never echo it: it can hold CLI output
+        print("cannot build the diagnostics report: run `oharness doctor`", file=sys.stderr)
+        return EXIT_NOT_LIVE
     needs_attention = any(c["enabled"] and c["failureClass"] for c in report["connections"])  # a disabled connection is not a problem
     if as_json:
         print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "doctor", **report}, ensure_ascii=False))
