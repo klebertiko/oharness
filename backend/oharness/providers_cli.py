@@ -22,6 +22,8 @@ def add_parser(sub) -> None:
     listing = actions.add_parser("list", help="the stored connections (never their secrets)")
     listing.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     listing.add_argument("--verbose", action="store_true", help="print the data directory in full instead of relative to your profile (`~/...`)")
+    dump = actions.add_parser("dump-config", help="the effective configuration and where each field came from: default, app (stored connection) or env (this process's environment)")
+    dump.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     doctor = actions.add_parser("doctor", help="the secret-free diagnostics report (same as GET /providers/diagnostics); exits 1 if an enabled connection needs attention")
     doctor.add_argument("--json", action="store_true", help="one versioned JSON document (schema/providers-cli.schema.json)")
     test = actions.add_parser("test", help="run a connection's probe; exits 1 unless it is live")
@@ -30,14 +32,14 @@ def add_parser(sub) -> None:
 
 
 async def _load_runtime():
-    """The stored connections and the secrets store, as the sidecar loads them at startup."""
-    from . import headless
+    """The stored connections and a secrets store, read-only: nothing is created (no data directory, no database, no tables, no secrets folder).
 
-    headless._backend_on_path()
-    from database import init_db
+    The store is lazy: it is built only if a probe actually asks for a stored key.
+    """
+    from . import readonly
 
-    await init_db()  # a first-ever run has no tables yet
-    return await headless.load_runtime()
+    connections, _state = readonly.read_connections()
+    return connections, readonly.LazySecrets()
 
 
 def _kind(provider: str) -> str:
@@ -58,7 +60,7 @@ def _shown_dir(path, verbose: bool) -> str:
     """The OS user name lives in the profile path: show it as `~/...` unless asked for in full."""
     from providers.display import mask_home
 
-    return str(path) if verbose else mask_home(str(path), other_profiles=False)
+    return str(path) if verbose else mask_home(str(path))
 
 
 def _public(row: dict) -> dict:
@@ -144,6 +146,77 @@ async def _test(connection_id: str, as_json: bool) -> int:
     return EXIT_OK if outcome["health"] == "live" else EXIT_NOT_LIVE
 
 
+ENV_NAMES = ("OH_DATA_DIR", "OH_SECRETS", "OH_SECRETS_DIR", "DATABASE_URL")  # the only variables dump-config ever reads: never a credential, never a subprocess's environment (I5)
+
+
+_BACKENDS = {"": "memory", "mem": "memory", "memory": "memory", "file": "file", "keychain": "keychain", "keyring": "keychain", "os": "keychain"}  # what `secret_store.factory` accepts
+
+
+def _field(value, origin: str) -> dict:
+    return {"value": value, "origin": origin}
+
+
+def _environment(given: dict) -> dict:
+    """Where the app's data lives, from this process (which stands in for the sidecar). `given` is what the environment held before the loader filled in the sidecar's own defaults."""
+    import os
+    from pathlib import Path
+
+    from data_dir import resolve_data_dir
+    from secret_store.factory import _default_file_root
+
+    origin = lambda name: "env" if given.get(name) else "default"  # noqa: E731
+    data_dir = resolve_data_dir(create=False)
+    backend = _BACKENDS.get((os.environ.get("OH_SECRETS") or "").strip().lower(), "unknown")  # a fixed vocabulary: the variable's own text is never echoed
+    vault_dir = Path(os.environ.get("OH_SECRETS_DIR") or _default_file_root())
+    # the secrets folder is only ever a label (the app's own `<data>/secrets`, or one the person chose): its path is never printed
+    folder = _field(("default" if vault_dir == data_dir / "secrets" else "custom") if backend == "file" else None, origin("OH_SECRETS_DIR"))
+    return {
+        "dataDir": _field(_shown_dir(data_dir, False), origin("OH_DATA_DIR")),
+        "secretsBackend": _field(backend, origin("OH_SECRETS")),
+        "secretsDir": folder,
+        "database": _field("sqlite" if (os.environ.get("DATABASE_URL") or "sqlite").startswith("sqlite") else "other", origin("DATABASE_URL")),  # the kind only: a URL can carry a password
+    }
+
+
+def _connection_config(row: dict) -> dict:
+    from adapters.catalog import get_provider
+
+    spec = get_provider(row["provider"])
+    stored_endpoint = _endpoint(row.get("endpoint", ""))
+    default_endpoint = _endpoint((spec or {}).get("endpoint", {}).get("default", ""))
+    return {
+        "id": row["id"],
+        "provider": row["provider"],
+        "fields": {
+            "label": _field(row["label"], "app"),
+            "residence": _field(row["residence"], "app"),
+            "enabled": _field(bool(row.get("enabled", False)), "app"),
+            "endpoint": _field(stored_endpoint, "app") if stored_endpoint else _field(default_endpoint, "default"),
+            "defaultModel": _field(row["defaultModel"], "app") if row.get("defaultModel") else _field("", "default"),
+            "credentialKind": _field(_kind(row["provider"]), "default"),  # the catalog decides it, not the user
+            "secretStored": _field(bool(row.get("secretRef")), "app"),
+        },
+    }
+
+
+async def _dump_config(as_json: bool) -> int:
+    """Every connection's effective fields and their origin, plus the environment that locates the data. Never a secret."""
+    import os
+
+    given = {name: os.environ.get(name) for name in ENV_NAMES}  # before the loader applies the sidecar's defaults
+    connections, _ = await _load_runtime()
+    doc = {"schemaVersion": SCHEMA_VERSION, "command": "dump-config", "environment": _environment(given),
+           "connections": [_connection_config(row) for row in connections.values()]}
+    if as_json:
+        print(json.dumps(doc, ensure_ascii=False))
+        return EXIT_OK
+    for name, item in doc["environment"].items():
+        print(f"{name}	{item['value'] if item['value'] is not None else '-'}	({item['origin']})")
+    for conn in doc["connections"]:
+        print(f"{conn['id']} ({conn['provider']})")
+        for name, item in conn["fields"].items():
+            print(f"  {name}	{item['value']!s}	({item['origin']})")
+    return EXIT_OK
 DOCTOR_MESSAGES = {  # one fixed sentence per outcome
     "en": {"ok": "All connections are ready.", "attention": "Some connections need attention: see the failure class above."},
     "pt-BR": {"ok": "Todas as conexões estão prontas.", "attention": "Algumas conexões precisam de atenção: veja a classe da falha acima."},
@@ -151,9 +224,9 @@ DOCTOR_MESSAGES = {  # one fixed sentence per outcome
 
 
 def _app_version() -> str:
-    from main import app
+    from version import APP_VERSION  # a constant: loading `main` would build the whole app (and read the human credential, write the sidecar token)
 
-    return str(app.version)
+    return APP_VERSION
 
 
 async def _doctor(as_json: bool) -> int:
@@ -162,7 +235,13 @@ async def _doctor(as_json: bool) -> int:
     from providers.diagnostics import build_report
 
     connections, _ = await _load_runtime()
-    report = await build_report(connections, run_cli, _app_version())
+    from .doctor_cli import _detection_dir
+
+    try:
+        report = await build_report(connections, run_cli, _app_version(), cwd=_detection_dir())
+    except Exception:  # never echo it: it can hold CLI output
+        print("cannot build the diagnostics report: run `oharness doctor`", file=sys.stderr)
+        return EXIT_NOT_LIVE
     needs_attention = any(c["enabled"] and c["failureClass"] for c in report["connections"])  # a disabled connection is not a problem
     if as_json:
         print(json.dumps({"schemaVersion": SCHEMA_VERSION, "command": "doctor", **report}, ensure_ascii=False))
@@ -179,8 +258,20 @@ async def _doctor(as_json: bool) -> int:
 def run(args) -> int:
     import asyncio
 
+    from .readonly import Unreadable
+
+    try:
+        return _dispatch(args, asyncio)
+    except Unreadable:
+        print("cannot read the OHarness data directory: run `oharness doctor`", file=sys.stderr)
+        return EXIT_NOT_LIVE
+
+
+def _dispatch(args, asyncio) -> int:
     if args.providers_cmd == "list":
         return asyncio.run(_list(args.json, args.verbose))
+    if args.providers_cmd == "dump-config":
+        return asyncio.run(_dump_config(args.json))
     if args.providers_cmd == "doctor":
         return asyncio.run(_doctor(args.json))
     return asyncio.run(_test(args.id, args.json))
