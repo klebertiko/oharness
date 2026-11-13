@@ -62,12 +62,11 @@ def _sandbox() -> tuple[dict, dict]:
     return facts, _check("sandbox", "ok")
 
 
-def _private_dir():
-    """A fresh directory only this command can use, removed when it is done: detection runs the installed CLIs, and a CLI reads its project settings
-    (hooks, rules) from its working directory, so that directory must never be one another process could have planted files in (the shared temp folder)."""
-    import tempfile
-
-    return tempfile.TemporaryDirectory(prefix="oharness-doctor-", ignore_cleanup_errors=True)  # mkdtemp: 0700 on POSIX, inside the person's own temp folder on Windows
+def _detection_dir() -> Path:
+    """The working directory for running the installed CLIs: the person's home, which already exists. A CLI reads its project settings (hooks, rules)
+    from its working directory, so it must not be one another process could have planted files in (the shared temp folder); the home is private to the
+    user, and nothing is created or removed (a throwaway folder cannot be removed on Windows while the child process still holds it as its cwd)."""
+    return Path.home()
 
 
 async def _report() -> dict:
@@ -99,8 +98,7 @@ async def _report() -> dict:
     connections, connection_check = [], _check("connections", "skipped")
     if rows is not None:
         try:
-            with _private_dir() as workdir:
-                connections = (await build_report(rows, run_cli, version, cwd=Path(workdir)))["connections"]
+            connections = (await build_report(rows, run_cli, version, cwd=_detection_dir()))["connections"]
             needs_attention = any(c["enabled"] and c["failureClass"] for c in connections)  # a disabled connection is not a failure
             connection_check = _check("connections", "fail" if needs_attention else "ok")
         except Exception:  # never echo it: it can hold CLI output

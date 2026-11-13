@@ -119,7 +119,13 @@ def test_a_file_that_is_not_a_database_fails_with_a_fixed_code(quiet, capsys):
     (quiet / "harness.db").write_text("this is not a sqlite file " + DB_PASSWORD, encoding="utf-8")
     code = main(["doctor", "--json"])
     out = capsys.readouterr()
-    assert code == 1 and DB_PASSWORD not in out.out + out.err and str(quiet) not in out.out + out.err
+    doc = json.loads(out.out)
+    assert code == 1 and {c["id"]: c for c in doc["checks"]}["database"] == {"id": "database", "status": "fail", "detail": "cannot-open"}
+    assert DB_PASSWORD not in out.out + out.err
+    # `dataDir` is the one field that reports the directory on purpose; nothing else (no driver text) may carry it. Compared on the parsed
+    # report, since JSON escapes the backslashes of a Windows path and a raw substring check there passes for the wrong reason.
+    doc.pop("dataDir")
+    assert str(quiet) not in json.dumps(doc) and str(quiet) not in out.err
 
 
 def test_the_providers_commands_report_an_unreadable_database_with_one_stable_line(quiet, capsys, monkeypatch):
@@ -154,16 +160,17 @@ def test_an_installed_cli_is_detected_without_creating_its_working_directory(qui
         monkeypatch.setattr(f"{module}.find_cli", lambda name: str(tmp_path / name))  # "installed"
     ran = _Ran()
     monkeypatch.setattr("adapters.cli_shared.run_cli", ran)
-    before = _tree(tmp_path)
+    import tempfile
+
+    shared = Path(tempfile.gettempdir())
+    leftovers = lambda: sorted(p.name for p in shared.glob("oharness-doctor-*"))  # noqa: E731
+    before, folders = _tree(tmp_path), leftovers()
     main(argv)
     capsys.readouterr()
     assert ran.cwds, "the fake CLI was never run: the test would prove nothing"
     assert _tree(tmp_path) == before and not (local / "OHarness").exists()
-    import tempfile
-
-    shared = Path(tempfile.gettempdir()).resolve()
-    assert all(Path(c).resolve() != shared and Path(c).resolve().parent == shared for c in ran.cwds)  # a fresh folder of its own, never the shared temp folder itself
-    assert not any(Path(c).exists() for c in ran.cwds)  # and it is gone when the command ends
+    assert all(Path(c) == Path.home() == local for c in ran.cwds)  # the person's home: it exists already, only they can write to it, nothing is made for the run
+    assert leftovers() == folders  # no throwaway folder is created in the temp folder (on Windows the child's cwd keeps it from being removed)
 
 
 def test_providers_doctor_reports_a_report_that_cannot_be_built_with_one_fixed_line(quiet, capsys, monkeypatch):
