@@ -30,6 +30,7 @@ from factory.auth import load_human_credential
 load_human_credential()  # the human credential leaves the environment before anything can spawn a child
 from providers.store import load_all as load_provider_connections
 import models  # noqa: F401 — register ORM tables for create_all
+from version import APP_VERSION
 
 
 @asynccontextmanager
@@ -53,7 +54,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="OHarness API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="OHarness API", version=APP_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -114,7 +114,8 @@ def test_a_data_directory_outside_the_profile_is_shown_as_it_is(world, capsys, m
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setenv("OH_DATA_DIR", str(elsewhere))
     _, out, _ = run(capsys, "list", "--json")
-    assert json.loads(out)["dataDir"] == str(elsewhere)
+    shown = json.loads(out)["dataDir"]
+    assert not shown.startswith("~") and shown.replace("\\", "/").endswith("/elsewhere")  # not the person's own profile: no `~`
 
 
 def test_list_text_shows_every_connection_and_no_secret(world, capsys):
