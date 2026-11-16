@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLE_ICON, ROLE_VAR } from "@/lib/roles";
-import { useT } from "@/i18n/store";
+import { useI18n } from "@/i18n/store";
+import { Badge, type BadgeTone } from "@/components/ui";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
@@ -16,6 +17,34 @@ import { useActiveRunStore } from "@/store/activeRunStore";
 import { connectionLabel, isPinnedMismatch } from "./pinnedConnection";
 import { rollupTotals, type TokenSource } from "./rollup";
 import type { Block, RunState, Segment, ToolCall } from "./types";
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+/** `pct` on the wire is a fraction (0.82), the same figure engine.py and the budget router send. */
+function percent(pct: number): number {
+  return Math.round(pct * 100);
+}
+
+/** A status chip: the word is the meaning. The marker inside Badge is aria-hidden. */
+function RunChip({ tone, children }: { tone: BadgeTone; children: string }) {
+  return (
+    <Badge tone={tone} className="h-auto max-w-full whitespace-normal text-left">
+      {children}
+    </Badge>
+  );
+}
+
+function runtimeText(t: Translate, runtime: NonNullable<RunState["runtime"]>): string {
+  const kind = runtime.kind === "cli" ? t("run.runtime.kind.cli") : runtime.kind === "api" ? t("run.runtime.kind.api") : runtime.kind;
+  if (!runtime.reason) return t("run.runtime.chosen", { kind, name: runtime.name });
+  if (runtime.reason.toLowerCase().includes("not found")) return t("run.runtime.fallback", { name: runtime.name });
+  return t("run.runtime.reason", { kind, name: runtime.name, reason: runtime.reason });
+}
+
+function skipText(t: Translate, reason: string): string {
+  const detail = reason === "no matching condition" ? t("run.skip.noCondition") : reason;
+  return t("run.skip.chip", { reason: detail });
+}
 
 /* ── Marker ────────────────────────────────────────────────────────────────
    The glyph hanging off the spine. Shape carries state, colour carries role —
@@ -271,13 +300,16 @@ function SegmentView({
   last,
   onResolve,
   runId,
+  labelOf,
 }: {
   segment: Segment;
   first: boolean;
   last: boolean;
   onResolve: (decision: "approve" | "reject", note: string) => void;
   runId: string | null;
+  labelOf: (nodeId: string) => string;
 }) {
+  const { t, number } = useI18n();
   const Icon = ROLE_ICON[segment.type] ?? ROLE_ICON.agent;
   const role = ROLE_VAR[segment.type] ?? "var(--ink-faint)";
   const running = segment.state === "running";
@@ -285,6 +317,17 @@ function SegmentView({
   const items = useMemo(() => groupActivity(segment.blocks), [segment.blocks]);
   const lastItemIndex = items.length - 1;
   const stepActivity = useMemo(() => segmentActivity(segment.blocks), [segment.blocks]);
+  const chips: { tone: BadgeTone; text: string }[] = [
+    ...(segment.skipReason ? [{ tone: "neutral" as const, text: skipText(t, segment.skipReason) }] : []),
+    ...(segment.retries ?? []).map((retry) => ({
+      tone: "warn" as const,
+      text: t("run.retry", { attempt: retry.attempt, cap: retry.cap, target: labelOf(retry.target) }),
+    })),
+    ...(segment.warnings ?? []).map((warning) => ({
+      tone: "warn" as const,
+      text: t("run.tokenWarning", { pct: percent(warning.pct), tokens: number(warning.tokens), limit: number(warning.limit) }),
+    })),
+  ];
 
   return (
     <div className="grid grid-cols-[24px_minmax(0,1fr)]">
@@ -296,74 +339,90 @@ function SegmentView({
         </div>
       </div>
 
-      <div className={`min-w-0 pb-3 ${pending ? "opacity-45" : ""}`}>
-        {/* Node header — label left, identity centre-dim, cost right. */}
-        <div className="flex h-5.5 min-w-0 items-center gap-2">
-          <Icon size={12} strokeWidth={1.75} style={{ color: role }} className="flex-none" />
-          <span className="t-title min-w-0 flex-none truncate text-ink">{segment.label}</span>
-          <span className="t-meta min-w-0 flex-1 truncate text-ink-mute">
-            {segment.intrinsic
-              ? segment.type
-              : `${segment.type} · ${segment.model || segment.adapter}`}
-          </span>
-          {stepActivity && (
-            <span
-              role="note"
-              aria-label={`${segment.label} activity`}
-              className="t-meta max-w-[55%] flex-none truncate"
-              style={{ color: stepActivity.failed > 0 ? "var(--fault-text)" : "var(--ink-mute)" }}
-            >
-              {stepActivity.label}
+      <div className="min-w-0 pb-3">
+        {/* Node header — label left, identity centre-dim, cost right.
+            A skipped step stays dim, but its chips stay at full strength:
+            the reason is the thing a person has to read. */}
+        <div className={pending ? "opacity-45" : undefined}>
+          <div className="flex h-5.5 min-w-0 items-center gap-2">
+            <Icon size={12} strokeWidth={1.75} style={{ color: role }} className="flex-none" />
+            <span className="t-title min-w-0 flex-none truncate text-ink">{segment.label}</span>
+            <span className="t-meta min-w-0 flex-1 truncate text-ink-mute">
+              {segment.intrinsic
+                ? segment.type
+                : `${segment.type} · ${segment.model || segment.adapter}`}
             </span>
-          )}
-          {segment.restored && <span className="t-meta flex-none text-ink-mute">Restored from the earlier run</span>}
-          {segment.state === "done" && !segment.restored && (
-            <span className="t-meta flex-none text-ink-mute">
-              {segment.latencyMs ? fmtLatency(segment.latencyMs) : null}
-              {segment.tokens ? ` · ${segment.tokensEstimated ? "~" : ""}${fmtTokens(segment.tokens)} tok` : null}
-            </span>
-          )}
-          {running && segment.phase && (
-            <span className="t-meta flex-none" style={{ color: "var(--signal-text)" }}>
-              {segment.phase}
-              {segment.phaseDetail ? ` · ${segment.phaseDetail}` : ""}
-            </span>
-          )}
+            {stepActivity && (
+              <span
+                role="note"
+                aria-label={`${segment.label} activity`}
+                className="t-meta max-w-[55%] flex-none truncate"
+                style={{ color: stepActivity.failed > 0 ? "var(--fault-text)" : "var(--ink-mute)" }}
+              >
+                {stepActivity.label}
+              </span>
+            )}
+            {segment.restored && <span className="t-meta flex-none text-ink-mute">Restored from the earlier run</span>}
+            {segment.state === "done" && !segment.restored && (
+              <span className="t-meta flex-none text-ink-mute">
+                {segment.latencyMs ? fmtLatency(segment.latencyMs) : null}
+                {segment.tokens ? ` · ${segment.tokensEstimated ? "~" : ""}${fmtTokens(segment.tokens)} tok` : null}
+              </span>
+            )}
+            {running && segment.phase && (
+              <span className="t-meta flex-none" style={{ color: "var(--signal-text)" }}>
+                {segment.phase}
+                {segment.phaseDetail ? ` · ${segment.phaseDetail}` : ""}
+              </span>
+            )}
+          </div>
         </div>
 
-        {items.map((item, i) =>
-          item.kind === "activity" || item.kind === "tool" ? (
-            // Keyed by the run's first call so a solo call that becomes a
-            // group (second call arrives) is the same element, not a remount.
-            <ToolRun
-              key={`t-${item.kind === "activity" ? item.calls[0].callId : item.call.callId}`}
-              calls={item.kind === "activity" ? item.calls : [item.call]}
-              runId={runId}
-            />
-          ) : (
-            <BlockView key={`b-${i}`} block={item} streaming={running && i === lastItemIndex} runId={runId} />
-          ),
-        )}
-
-        {/* An intrinsic node has no adapter and therefore no stream — its
-            output is the whole of it, so it is shown rather than hidden. */}
-        {segment.intrinsic && segment.type !== "hitl" && segment.output && (
-          <p className={`t-body mt-1.5 text-ink-dim ${css.prose}`}>{segment.output}</p>
-        )}
-
-        {segment.gate && <Gate segment={segment} onResolve={onResolve} />}
-
-        {segment.error && (
-          <div
-            className="mt-1.5 rounded-control border px-2 py-1.5"
-            style={{ borderColor: "var(--fault)" }}
-          >
-            <span className="t-label" style={{ color: "var(--fault-text)" }}>
-              fault
-            </span>
-            <p className={`t-body mt-0.5 text-ink-dim ${css.prose}`}>{segment.error}</p>
+        {chips.length > 0 && (
+          <div className="mt-1 flex max-w-full flex-wrap gap-1" role="status">
+            {chips.map((chip, i) => (
+              <RunChip key={`${chip.tone}-${i}`} tone={chip.tone}>
+                {chip.text}
+              </RunChip>
+            ))}
           </div>
         )}
+
+        <div className={pending ? "opacity-45" : undefined}>
+          {items.map((item, i) =>
+            item.kind === "activity" || item.kind === "tool" ? (
+              // Keyed by the run's first call so a solo call that becomes a
+              // group (second call arrives) is the same element, not a remount.
+              <ToolRun
+                key={`t-${item.kind === "activity" ? item.calls[0].callId : item.call.callId}`}
+                calls={item.kind === "activity" ? item.calls : [item.call]}
+                runId={runId}
+              />
+            ) : (
+              <BlockView key={`b-${i}`} block={item} streaming={running && i === lastItemIndex} runId={runId} />
+            ),
+          )}
+
+          {/* An intrinsic node has no adapter and therefore no stream — its
+              output is the whole of it, so it is shown rather than hidden. */}
+          {segment.intrinsic && segment.type !== "hitl" && segment.output && (
+            <p className={`t-body mt-1.5 text-ink-dim ${css.prose}`}>{segment.output}</p>
+          )}
+
+          {segment.gate && <Gate segment={segment} onResolve={onResolve} />}
+
+          {segment.error && (
+            <div
+              className="mt-1.5 rounded-control border px-2 py-1.5"
+              style={{ borderColor: "var(--fault)" }}
+            >
+              <span className="t-label" style={{ color: "var(--fault-text)" }}>
+                fault
+              </span>
+              <p className={`t-body mt-0.5 text-ink-dim ${css.prose}`}>{segment.error}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -620,7 +679,9 @@ export function Transcript({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const t = useT();
+  const { t, locale } = useI18n();
+  const money = (n: number) => new Intl.NumberFormat(locale, { style: "currency", currency: "USD" }).format(n);
+  const labelOf = (id: string) => run.plan.find((s) => s.nodeId === id)?.label || id;
 
   const connections = useProviderStore((s) => s.connections);
   const chosenProviderId = useChatProviderStore((s) => s.chosenId);
@@ -663,6 +724,25 @@ export function Transcript({
         </div>
       ))}
 
+      {(run.runtime || run.budgetWarning) && (
+        <div className="mb-2 flex max-w-full flex-wrap gap-1">
+          {run.runtime && (
+            <RunChip tone={run.runtime.reason ? "warn" : "neutral"}>{runtimeText(t, run.runtime)}</RunChip>
+          )}
+          {run.budgetWarning && (
+            <span role="status">
+              <RunChip tone="warn">
+                {t("run.budgetWarning", {
+                  pct: percent(run.budgetWarning.pct),
+                  spent: money(run.budgetWarning.spentUsd),
+                  limit: money(run.budgetWarning.limitUsd),
+                })}
+              </RunChip>
+            </span>
+          )}
+        </div>
+      )}
+
       <RunRollup run={run} elapsed={elapsed} />
       {run.routeDecision && <RouteDecisionProvenance decision={run.routeDecision} />}
       <SubagentTree runId={run.runId} runLive={run.status === "running" || run.status === "starting"} status={run.status} subagents={run.subagents} />
@@ -676,6 +756,7 @@ export function Transcript({
           last={i === visible.length - 1}
           onResolve={onResolve}
           runId={run.runId}
+          labelOf={labelOf}
         />
       ))}
 

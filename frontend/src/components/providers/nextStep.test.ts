@@ -70,3 +70,26 @@ describe("nextStep in Brazilian Portuguese", () => {
     expect(nextStep(conn({ health: "setup", enabled: false, secret: null }))?.label).toBe("Colar a chave OpenRouter");
   });
 });
+
+describe("nextStep - detected CLI state, before any run (R-PRV-01)", () => {
+  const cli = (over: Partial<Connection>) =>
+    conn({ provider: "anthropic", label: "Anthropic", health: "setup", enabled: false, detail: "", ...over });
+
+  it("not-installed shows Install, with the install guide", () => {
+    expect(nextStep(cli({ cliState: "not-installed" }))).toMatchObject({ kind: "link", label: "Open install guide", status: "Not installed" });
+  });
+
+  it("not-logged-in shows Sign in, with the command to copy", () => {
+    expect(nextStep(cli({ cliState: "not-logged-in" }))).toMatchObject({ kind: "copy", copy: "claude login", status: "Sign-in needed" });
+  });
+
+  it("ready, error and unavailable keep the ordinary step (Turn on)", () => {
+    for (const cliState of ["ready", "error", "unavailable"] as const) {
+      expect(nextStep(cli({ cliState }))).toMatchObject({ kind: "turnOn" });
+    }
+  });
+
+  it("a probe that came back live outranks an older detection", () => {
+    expect(nextStep(cli({ cliState: "not-installed", health: "live", enabled: true }))).toBeNull();
+  });
+});

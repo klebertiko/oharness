@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oharness.dev/schema/doctor.schema.json",
+  "title": "OHarness doctor output",
+  "description": "The document `oharness doctor --json` prints. `schemaVersion` changes only when a field is removed or changes meaning; new optional fields do not bump it. Failures are fixed codes: no document ever carries a secret, a secret reference, an account e-mail, an exception text or raw CLI output.",
+  "type": "object",
+  "required": ["schemaVersion", "command", "ok", "version", "os", "dataDir", "checks", "sandbox", "connections"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "command": { "const": "doctor" },
+    "ok": { "type": "boolean", "description": "False when any check failed; `oharness doctor` then exits 1." },
+    "version": { "type": "string" },
+    "os": { "type": "string" },
+    "dataDir": { "type": "string", "description": "The user's home directory is spelled `~`." },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "detail"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "enum": ["dataDir", "database", "secretsStore", "sidecar", "sandbox", "connections"] },
+          "status": { "enum": ["ok", "fail", "skipped"] },
+          "detail": { "enum": [null, "exists", "missing", "invalid", "not-a-folder", "not-writable", "cannot-open", "cannot-load"] }
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "required": ["defaultMode", "modes", "gitFound"],
+      "additionalProperties": false,
+      "properties": {
+        "defaultMode": { "type": "string" },
+        "modes": { "type": "array", "items": { "type": "string" } },
+        "gitFound": { "type": "boolean" }
+      }
+    },
+    "connections": {
+      "type": "array",
+      "description": "The rows `GET /providers/diagnostics` (and `oharness providers doctor`) serve, unchanged.",
+      "items": { "type": "object" }
+    }
+  }
+}
