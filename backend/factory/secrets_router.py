@@ -53,10 +53,11 @@ async def put_secret(request: Request, name: str = Path(pattern=NAME), db: Async
             row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
     except BaseException:  # the index could not be written: the vault goes back to what it held, so no secret is left that nothing lists
-        if previous is None:
-            store.delete(ref)
-        else:
-            store.put(ref, previous)
+        try:
+            if store.get(ref) == value:  # only undo our own write: a concurrent PUT that succeeded since is not overwritten
+                store.delete(ref) if previous is None else store.put(ref, previous)
+        except Exception:  # the undo failed too: the first error is the one that matters and is the one raised
+            pass
         raise
     return {'name': name, 'reference': f'forja/{name}'}
 

@@ -203,6 +203,25 @@ def get_provider(provider_id: str) -> ProviderSpec | None:
     return None
 
 
+def spec_for_connection(connection: dict) -> ProviderSpec | None:
+    """The spec a stored connection really uses: an ``ollama`` row in the cloud
+    is Ollama Cloud (an API key; "subscription" is only its billing), the same
+    rule as the frontend's ``specForConnection``."""
+    provider = connection.get("provider", "")
+    if provider == "ollama" and connection.get("residence") == "cloud":
+        return OLLAMA_CLOUD
+    return get_provider(provider)
+
+
+def endpoint_for_connection(connection: dict, spec: ProviderSpec) -> str:
+    """Where calls for this connection go. A fixed endpoint is always the
+    catalog default, so a stored key never reaches a host the row was edited to."""
+    endpoint = spec.get("endpoint", {})
+    if not endpoint.get("editable", True):
+        return endpoint.get("default", "")
+    return connection.get("endpoint") or endpoint.get("default", "")
+
+
 # ── Per-model pricing ────────────────────────────────────────────────────────
 # USD per million tokens, (input, output). Mirrors
 # `frontend/src/components/providers/providerStore.ts`'s `seed` catalog

@@ -36,7 +36,7 @@ await context.route("http://127.0.0.1:8000/**", async route => {
     "GET /health": { status: "ok" },
     "GET /flow/config": { enabled: false },
     "GET /cowork/projects": { projects: [] },
-    "GET /providers/connections": { connections: [] },
+    "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [] },
   };
   let body = responses[request];
   if (request === "POST /bundles/validate") {

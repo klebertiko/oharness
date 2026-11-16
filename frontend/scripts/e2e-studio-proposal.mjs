@@ -26,7 +26,7 @@ const plan = {
 const stubs = {
   "GET /health": { status: "ok" },
   "GET /cowork/projects": { projects: [] },
-  "GET /providers/connections": { connections: [] },
+  "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [] },
   "GET /bundles/examples": { examples: [] },
   "GET /harnesses/": [],
   "GET /flow/config": { enabled: false },

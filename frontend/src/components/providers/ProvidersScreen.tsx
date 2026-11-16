@@ -22,12 +22,17 @@ export function ProvidersScreen() {
   const select = useProviderStore((s) => s.select);
   const loadState = useProviderStore((s) => s.loadState);
   const hydrate = useProviderStore((s) => s.hydrate);
+  const detectClis = useProviderStore((s) => s.detectClis);
   const offline = loadState === "offline";
   const loading = loadState === "loading";
   const opened = connections.find((c) => c.id === selectedId);
   // The default is chosen once the sidecar has answered and then held: a connection that becomes ready while the
   // person works on it must not swap the pane for another one.
   const [pinned, setPinned] = useState("");
+  // Which CLIs are installed and signed in, so a row says "Install" or "Sign in" before anyone tries (R-PRV-01).
+  useEffect(() => {
+    if (loadState === "ready") void detectClis();
+  }, [loadState, detectClis]);
   useEffect(() => {
     if (!pinned && (loadState === "ready" || loadState === "offline") && connections.length) setPinned(defaultConnectionId(connections));
   }, [pinned, loadState, connections]);
