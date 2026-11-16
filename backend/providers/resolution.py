@@ -39,6 +39,10 @@ ADAPTER_BY_PROVIDER: dict[str, str] = {
     "openai": "codex",  # ChatGPT subscription via the codex CLI, not a metered key
     "ollama": "ollama",
     "openrouter": "openrouter",
+    # Connections a person creates (#402): generic protocols with their own
+    # id, endpoint and key. Metered, never the subscription CLIs (I13).
+    "openai-compatible": "openai",
+    "anthropic-gateway": "anthropic-gateway",
 }
 
 # The CLI adapters (claude/codex) fall back to their own default model when a
@@ -47,7 +51,7 @@ ADAPTER_BY_PROVIDER: dict[str, str] = {
 # (confirmed live, 2026-09-11) — so an empty model here must fail loud with
 # an actionable message instead of reaching the adapter and 400ing 9 times
 # over, once per harness node, with a raw httpx error.
-_HTTP_ADAPTERS_REQUIRE_MODEL = {"ollama", "openrouter", "openai"}
+_HTTP_ADAPTERS_REQUIRE_MODEL = {"ollama", "openrouter", "openai", "anthropic-gateway"}
 
 
 class ProviderResolutionError(Exception):

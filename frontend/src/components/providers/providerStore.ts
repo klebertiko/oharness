@@ -284,6 +284,28 @@ function offlineTemplate(c: Connection): Connection {
   };
 }
 
+/** A sidecar row with no seed (a connection the person created): the same
+    neutral status as the offline template; `hydrate` then fills the row's own
+    fields. Models stay empty until a probe lists what the endpoint serves. */
+function customTemplate(row: BackendConnectionRow): Connection {
+  return offlineTemplate({
+    id: row.id,
+    provider: row.provider as ProviderId,
+    label: row.label,
+    residence: row.residence,
+    endpoint: row.endpoint,
+    secret: null,
+    health: "setup",
+    detail: "",
+    probes: [],
+    facts: [],
+    models: [],
+    defaultModel: row.defaultModel ?? "",
+    enabled: false,
+    lastProbe: "",
+  });
+}
+
 type BackendConnectionRow = {
   id: string;
   provider: string;
@@ -520,9 +542,15 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       if (!res.ok) return release();
       const body = (await res.json()) as { connections: BackendConnectionRow[] };
       const byId = new Map(body.connections.map((row) => [row.id, row]));
+      const known = new Set(get().connections.map((c) => c.id));
+      // Rows a person created (R-PRV-14) have no seed: build them from the
+      // sidecar row. A provider this build does not know is skipped, not guessed.
+      const created = body.connections
+        .filter((row) => !known.has(row.id) && Object.prototype.hasOwnProperty.call(PROVIDERS, row.provider))
+        .map(customTemplate);
       set({
         loadState: "ready",
-        connections: get().connections.map((c) => {
+        connections: [...get().connections, ...created].map((c) => {
           const row = byId.get(c.id);
           if (!row) return c;
           return {

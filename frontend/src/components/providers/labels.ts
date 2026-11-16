@@ -23,4 +23,6 @@ export const PROVIDER_TEXT_KEY = {
   ollama: { summary: "provider.ollama.summary", caveat: undefined, where: "provider.ollama.where" },
   ollamaCloud: { summary: "provider.ollamaCloud.summary", caveat: "provider.ollamaCloud.caveat", where: "provider.ollamaCloud.where" },
   openrouter: { summary: "provider.openrouter.summary", caveat: "provider.openrouter.caveat", where: "provider.openrouter.where" },
+  "openai-compatible": { summary: "provider.openaiCompatible.summary", caveat: "provider.openaiCompatible.caveat", where: "provider.openaiCompatible.where" },
+  "anthropic-gateway": { summary: "provider.anthropicGateway.summary", caveat: "provider.anthropicGateway.caveat", where: "provider.anthropicGateway.where" },
 } as const satisfies Record<string, { summary: MessageKey; caveat: MessageKey | undefined; where: MessageKey }>;
