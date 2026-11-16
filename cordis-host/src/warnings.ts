@@ -30,6 +30,10 @@ export interface DigestInput {
   readonly runtime: string
   readonly capabilities: readonly string[]
   readonly scripts: readonly string[]
+  /** Entry file, relative to the package directory, with `/` separators. */
+  readonly entry: string
+  /** sha256 over every file in the package directory (see `treeDigest`). */
+  readonly tree: string
 }
 
 /** Digest of the warning plus the exact package the human is confirming. */
@@ -42,6 +46,8 @@ export function installDigest(input: DigestInput): string {
     input.runtime,
     [...input.capabilities].sort().join(','),
     [...input.scripts].sort().join(','),
+    input.entry,
+    input.tree,
     WARNING_EN,
     WARNING_PT,
   ]

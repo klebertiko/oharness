@@ -19,8 +19,11 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+/** Test plugin folders: this package (proofs/, vendor/) and the OS temp folder (tempPackage). */
+export const testPluginRoots: readonly string[] = [packageRoot, tmpdir()]
+
 export async function withHost(run: (host: RunningHost) => Promise<void>): Promise<void> {
-  const host = await startHost()
+  const host = await startHost({ pluginRoots: testPluginRoots })
   try {
     await run(host)
   } finally {

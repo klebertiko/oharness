@@ -111,29 +111,33 @@ export class CordisRuntime {
   readonly context: Context
   readonly cordisVersion: string
   readonly schemasteryVersion: string
+  readonly pluginRoots: readonly string[]
   readonly #loaded = new Map<string, InstallResult>()
 
-  private constructor(context: Context, versions: { cordis: string; schemastery: string }) {
+  private constructor(context: Context, versions: { cordis: string; schemastery: string }, pluginRoots: readonly string[]) {
     this.context = context
+    this.pluginRoots = pluginRoots
     this.cordisVersion = versions.cordis
     this.schemasteryVersion = versions.schemastery
   }
 
-  static async create(): Promise<CordisRuntime> {
+  static async create(options: { pluginRoots: readonly string[] }): Promise<CordisRuntime> {
     const versions = assertPins()
     const context = new Context()
     await context.plugin(ToolsService)
     await context.plugin(CommandsService)
     await context.plugin(SessionProjectionsRecord)
-    return new CordisRuntime(context, versions)
+    return new CordisRuntime(context, versions, [...options.pluginRoots])
   }
 
   preview(packageDir: string): Promise<PackagePreview> {
-    return inspectPackage(packageDir)
+    return inspectPackage(packageDir, this.pluginRoots)
   }
 
   async install(packageDir: string, confirmation: unknown, config?: unknown): Promise<InstallResult> {
-    const preview = await inspectPackage(packageDir)
+    // Re-read and re-hash the package here, right before the import: the
+    // digest the person confirmed must match the bytes that are about to run.
+    const preview = await inspectPackage(packageDir, this.pluginRoots)
     const existing = this.#loaded.get(preview.realpath)
     if (existing !== undefined && existing.status !== 'failed') return existing
     requireConfirmation(preview, confirmation)

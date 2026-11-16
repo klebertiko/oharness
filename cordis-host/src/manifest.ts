@@ -1,4 +1,5 @@
-import { open, realpath, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, open, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { HostError } from './errors.ts'
 import { installDigest, warningText, type WarningText } from './warnings.ts'
@@ -8,6 +9,8 @@ export type Capability = (typeof CAPABILITIES)[number]
 
 const LIFECYCLE_SCRIPTS = ['preinstall', 'install', 'postinstall', 'prepare'] as const
 const PACKAGE_JSON_LIMIT = 256 * 1024
+const TREE_FILE_LIMIT = 10_000
+const TREE_BYTE_LIMIT = 64 * 1024 * 1024
 
 export interface PackagePreview {
   readonly name: string
@@ -23,6 +26,8 @@ export interface PackagePreview {
   readonly dshManifestVersion: number | undefined
   /** True when the package names a DSH bundle patch. This host does not apply it. */
   readonly bundlePatchIgnored: boolean
+  /** sha256 of the package's files. Part of `digest`, so editing any file after preview voids the confirmation. */
+  readonly tree: string
   readonly digest: string
   readonly warning: WarningText
 }
@@ -157,8 +162,64 @@ async function resolveEntry(root: string, main: unknown): Promise<string> {
   throw new HostError('path-rejected', 'plugin entry was not found inside the package directory')
 }
 
-/** Read a package directory without importing its code. */
-export async function inspectPackage(packageDir: string): Promise<PackagePreview> {
+/**
+ * sha256 over the package directory: each file's relative path and content
+ * hash, in sorted order. A link anywhere in the tree is refused, so every
+ * byte the digest covers is a byte inside the package directory.
+ */
+export async function treeDigest(root: string): Promise<string> {
+  const entries: string[] = []
+  let files = 0
+  let bytes = 0
+  async function walk(dir: string): Promise<void> {
+    const names = (await readdir(dir)).sort()
+    for (const name of names) {
+      const full = path.join(dir, name)
+      const info = await lstat(full)
+      if (info.isSymbolicLink()) throw new HostError('path-rejected', 'the package contains a link')
+      if (info.isDirectory()) {
+        await walk(full)
+        continue
+      }
+      if (!info.isFile()) throw new HostError('path-rejected', 'the package contains a special file')
+      files += 1
+      bytes += info.size
+      if (files > TREE_FILE_LIMIT || bytes > TREE_BYTE_LIMIT) {
+        throw new HostError('path-rejected', 'the package is too large to review')
+      }
+      const hash = createHash('sha256').update(await readFile(full)).digest('hex')
+      entries.push(`${path.relative(root, full).split(path.sep).join('/')}\0${hash}`)
+    }
+  }
+  await walk(root)
+  return createHash('sha256').update(entries.join('\n')).digest('hex')
+}
+
+async function realRoots(roots: readonly string[]): Promise<string[]> {
+  const resolved: string[] = []
+  for (const root of roots) {
+    if (!path.isAbsolute(root)) throw new HostError('path-rejected', 'plugin root must be an absolute path')
+    try {
+      resolved.push(await realpath(root))
+    } catch {
+      // A root that does not exist yet admits nothing.
+    }
+  }
+  return resolved
+}
+
+function strictlyInside(root: string, target: string): boolean {
+  return target !== root && contained(root, target)
+}
+
+/**
+ * Read a package directory without importing its code.
+ *
+ * The directory, after resolving links, must sit strictly inside one of
+ * `roots`: the plugin folders the app controls. A caller with the token can
+ * not point the host at an arbitrary folder.
+ */
+export async function inspectPackage(packageDir: string, roots: readonly string[]): Promise<PackagePreview> {
   if (typeof packageDir !== 'string' || packageDir === '' || packageDir.includes('\0')) {
     throw new HostError('path-rejected', 'packageDir must be an absolute path')
   }
@@ -170,6 +231,10 @@ export async function inspectPackage(packageDir: string): Promise<PackagePreview
     root = await realpath(packageDir)
   } catch {
     throw new HostError('path-rejected', 'package directory was not found')
+  }
+  const allowed = await realRoots(roots)
+  if (!allowed.some((base) => strictlyInside(base, root))) {
+    throw new HostError('path-rejected', 'packageDir must be inside the plugin folder')
   }
   const rootInfo = await stat(root)
   if (!rootInfo.isDirectory()) throw new HostError('path-rejected', 'packageDir must be a directory')
@@ -195,7 +260,9 @@ export async function inspectPackage(packageDir: string): Promise<PackagePreview
   const scripts = readScripts(manifest.scripts)
   const dsh = readDsh(manifest.dsh)
   const entry = await resolveEntry(root, manifest.main)
-  const digest = installDigest({ name, version, realpath: root, runtime, capabilities, scripts })
+  const tree = await treeDigest(root)
+  const relativeEntry = path.relative(root, entry).split(path.sep).join('/')
+  const digest = installDigest({ name, version, realpath: root, runtime, capabilities, scripts, entry: relativeEntry, tree })
   return {
     name,
     version,
@@ -209,6 +276,7 @@ export async function inspectPackage(packageDir: string): Promise<PackagePreview
     hasDshField: dsh.hasDshField,
     dshManifestVersion: dsh.dshManifestVersion,
     bundlePatchIgnored: dsh.bundlePatchIgnored,
+    tree,
     digest,
     warning: warningText(),
   }

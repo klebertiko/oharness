@@ -22,3 +22,8 @@ async function shutdown(): Promise<void> {
 
 process.on('SIGINT', () => { void shutdown() })
 process.on('SIGTERM', () => { void shutdown() })
+// The parent (sidecar or app) holds our stdin. If it dies, even without
+// sending a signal, the pipe closes and the host must not keep listening.
+process.stdin.on('end', () => { void shutdown() })
+process.stdin.on('close', () => { void shutdown() })
+process.stdin.resume()

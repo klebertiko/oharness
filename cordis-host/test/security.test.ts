@@ -185,7 +185,7 @@ test('an entry path outside the package is refused before import', async () => {
 test('the process entry prints one loopback line and does not repeat the token on stderr', async () => {
   const child = spawn(process.execPath, ['--experimental-transform-types', '--disable-warning=ExperimentalWarning', '--import', './src/register-alias.ts', './src/main.ts'], {
     cwd: packageRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   })
   let stdout = ''
   let stderr = ''

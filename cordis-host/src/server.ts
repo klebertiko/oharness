@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { homedir } from 'node:os'
+import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { HostError } from './errors.ts'
 import { CordisRuntime } from './host.ts'
@@ -96,8 +98,27 @@ export interface RunningHost {
   close(): Promise<void>
 }
 
-export async function startHost(): Promise<RunningHost> {
-  const runtime = await CordisRuntime.create()
+export interface HostOptions {
+  /** Folders a plugin package must sit inside. Defaults to `defaultPluginRoots()`. */
+  readonly pluginRoots?: readonly string[]
+}
+
+/**
+ * The app's plugin folder: `OH_CORDIS_PLUGINS_DIR` when set (absolute),
+ * otherwise `~/.oharness/plugins`. Only the parent that starts the host
+ * chooses it; the HTTP API cannot.
+ */
+export function defaultPluginRoots(env: NodeJS.ProcessEnv = process.env): string[] {
+  const configured = env.OH_CORDIS_PLUGINS_DIR
+  if (configured !== undefined && configured !== '') {
+    if (!path.isAbsolute(configured)) throw new Error('OH_CORDIS_PLUGINS_DIR must be an absolute path')
+    return [configured]
+  }
+  return [path.join(homedir(), '.oharness', 'plugins')]
+}
+
+export async function startHost(options: HostOptions = {}): Promise<RunningHost> {
+  const runtime = await CordisRuntime.create({ pluginRoots: options.pluginRoots ?? defaultPluginRoots() })
   const token = randomBytes(32).toString('base64url')
   const server = createServer((req, res) => {
     void onRequest(runtime, token, server, req, res)

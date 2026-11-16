@@ -19,6 +19,10 @@ O aviso, em inglês e pt-BR, diz que um plugin de terceiros pode alcançar arqui
 
 Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existirem, a confirmação leva `scripts: "do-not-run"`. `approvedBuilds` e `allowBuilds` são recusados. `oharness.runtime: "isolated"` é recusado.
 
+O pacote tem de estar dentro da pasta de plugins: `OH_CORDIS_PLUGINS_DIR` (absoluta) ou `~/.oharness/plugins`. O digest cobre o arquivo de entrada e o hash de todos os arquivos do pacote, então editar o pacote depois da prévia exige uma prévia nova. O token é da UI e do sidecar, nunca do agente.
+
+O processo pai segura o stdin do host. Quando ele fecha, o host sai. Por isso `npm start` num terminal funciona, e `npm start < /dev/null` sai logo.
+
 ## Cordis
 
 O pacote é `cordis@4.0.0-rc.11`, o mesmo commit que o DeepSeek Harness registra em `vendor/README.md` (`0b96d9fd517b998e44e2209560c9e5f0671ce933`). A integridade está no `package-lock.json` e em `src/pin.ts`. As modificações locais V1–V27 do DSH não entram. `@deepseek-ai/cordis` não é instalado; um hook de carregamento aponta esse specifier para o tarball acima, para haver uma só instância do módulo.

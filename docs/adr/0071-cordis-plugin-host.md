@@ -19,6 +19,15 @@ O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671c
 7. O host oferece serviços de servidor em processo: `tools` e `commands` como subconjuntos, eventos pelo `ctx.emit` do Cordis (nomes `internal/` recusados), e serviços Cordis. `sessionProjections` só guarda o registro; não dobra um log de sessão.
 8. `defineTool` deste host não valida o schema dos argumentos. O pacote `@deepseek-ai/dsh-tools` não está instalado. Schemastery é o tarball npm `3.18.0` (`gitHead` `9e1f54f8`), não o commit `cf0b7e54` que o DSH vende. Patches de bundle (`dsh.bundle.patch`) são reconhecidos e não aplicados.
 
+9. O pacote tem de estar, depois de resolver links, estritamente dentro de uma pasta de plugins que o app controla: `OH_CORDIS_PLUGINS_DIR` (caminho absoluto) ou, sem ela, `~/.oharness/plugins`. Só o processo pai escolhe essa pasta; a API HTTP não. Um link dentro do pacote é recusado.
+10. O digest também amarra o arquivo de entrada (caminho relativo) e um sha256 de todos os arquivos do pacote (caminho e hash de cada um, em ordem). A instalação relê e re-hasheia o pacote logo antes do `import`, então editar qualquer arquivo depois da prévia invalida a confirmação. Arquivos fora do pacote que o código importa por caminho relativo não entram no hash.
+11. O token fica só com a UI e o sidecar, nunca com o agente. Quem tem o token consegue fazer prévia e instalação sozinho (o digest volta na resposta 409), então entregar o token ao agente equivale a deixar o agente instalar código.
+12. O pai segura o stdin do host. Quando o stdin fecha, inclusive porque o pai morreu sem mandar sinal, o host para de escutar e sai. Subir o host com stdin em `/dev/null` faz ele sair na hora.
+
+## Pendente: empacotamento
+
+Nada aqui decide como o host entra no instalador NSIS. Rodá-lo exige Node 22.20 ou mais novo, a flag `--experimental-transform-types` (as fontes do DSH usam propriedades de parâmetro) e o `node_modules` de `cordis-host/`. Embutir o Node, exigir um Node do sistema ou compilar as fontes para JS é uma decisão em aberto, a tomar antes de ligar o host no app.
+
 ## Consequências
 
 As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`. O que elas não fecham: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e qualquer runtime que não seja o mesmo processo. A tela "Cordis Plugins", o creator-mode e o compartilhamento ficam fora.

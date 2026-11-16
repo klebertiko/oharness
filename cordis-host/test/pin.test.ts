@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as upstream from 'cordis'
 import * as aliased from '@deepseek-ai/cordis'
@@ -36,6 +36,19 @@ function lockEntry(name: string): { version: string; integrity: string } {
   return { version, integrity }
 }
 
+/**
+ * The rescoped names must not be installed. This checks the disk and the
+ * lockfile, not `require.resolve`: from Node 24 the `registerHooks` alias
+ * also remaps `require`, so resolving the alias succeeds by design.
+ */
+function assertNotInstalled(name: string): void {
+  assert.equal(existsSync(new URL(`../node_modules/${name}/package.json`, import.meta.url)), false, `${name} is installed`)
+  const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8')) as {
+    packages: Record<string, unknown>
+  }
+  assert.equal(lock.packages[`node_modules/${name}`], undefined, `lockfile has ${name}`)
+}
+
 test('cordis pin is the DSH upstream tarball, not the rescoped package', () => {
   const installed = JSON.parse(readFileSync(require.resolve('cordis/package.json'), 'utf8')) as { version: string }
   const locked = lockEntry('cordis')
@@ -44,7 +57,7 @@ test('cordis pin is the DSH upstream tarball, not the rescoped package', () => {
   assert.equal(locked.integrity, CORDIS_INTEGRITY)
   assert.equal(CORDIS_GIT_HEAD, CORDIS_DSH_VENDOR_COMMIT)
   assert.notEqual(installed.version, CORDIS_RESCOPED_VERSION_NOT_USED)
-  assert.throws(() => require.resolve('@deepseek-ai/cordis/package.json'))
+  assertNotInstalled('@deepseek-ai/cordis')
   assert.equal(upstream.Context, aliased.Context)
 })
 
@@ -55,8 +68,8 @@ test('schemastery pin records the npm tarball and the different DSH vendor commi
   assert.equal(locked.version, SCHEMASTERY_VERSION)
   assert.equal(locked.integrity, SCHEMASTERY_INTEGRITY)
   assert.notEqual(SCHEMASTERY_NPM_GIT_HEAD, SCHEMASTERY_DSH_VENDOR_COMMIT)
-  assert.throws(() => require.resolve('@deepseek-ai/schemastery/package.json'))
-  assert.throws(() => require.resolve('@deepseek-ai/dsh-tools/package.json'))
+  assertNotInstalled('@deepseek-ai/schemastery')
+  assertNotInstalled('@deepseek-ai/dsh-tools')
 })
 
 test('zod pin matches the lockfile', () => {
