@@ -114,10 +114,15 @@ def test_secret_bytes_hit_the_vault_path_only_after_restrict(tmp_path: Path, mon
     """
     real = sidecar_token.restrict_to_current_user
     seen = {"files": 0, "dirs": 0, "plain": False}
+    first_sizes: dict[Path, int] = {}
 
     def spy(path: Path) -> bool:
         if path.is_file():
             seen["files"] += 1
+            # Ciphertext never contains the plaintext, so "no SECRET_VALUE"
+            # cannot catch a write that ran before restrict. Size can: the
+            # first restrict of every file must see it still empty.
+            first_sizes.setdefault(path, path.stat().st_size)
             if SECRET_VALUE.encode() in path.read_bytes():
                 seen["plain"] = True
             if os.name != "nt":
@@ -138,6 +143,8 @@ def test_secret_bytes_hit_the_vault_path_only_after_restrict(tmp_path: Path, mon
     finally:
         os.umask(old)
     assert seen["files"] >= 1
+    assert first_sizes
+    assert all(size == 0 for size in first_sizes.values()), first_sizes
     assert seen["plain"] is False
     assert tmp_path.stat().st_mode == parent_mode
     if os.name != "nt":
@@ -216,6 +223,49 @@ def test_without_a_keychain_the_install_secret_is_a_user_only_file(tmp_path: Pat
     assert SECRET_VALUE.encode() not in key.read_bytes()
     if os.name != "nt":
         assert key.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_concurrent_first_open_keeps_the_winning_key_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two processes open a new vault: the one that loses the create reads the winner's key.
+
+    The competitor writes its key between our "no key yet" read and our create.
+    Overwriting it would leave the competitor with a key that is no longer on disk.
+    """
+    vault = tmp_path / "vault"
+    winner = Fernet.generate_key()
+    real_new = file_store._new_install_secret
+
+    def racing_new() -> bytes:
+        (vault / INSTALL_KEY_NAME).write_bytes(winner)
+        return real_new()
+
+    monkeypatch.setattr(file_store, "_new_install_secret", racing_new)
+    loser = FileSecrets(vault, use_keychain=False)
+    monkeypatch.setattr(file_store, "_new_install_secret", real_new)
+    assert (vault / INSTALL_KEY_NAME).read_bytes() == winner
+    loser.put(SECRET_REF, SECRET_VALUE)
+    assert FileSecrets(vault, use_keychain=False).get(SECRET_REF) == SECRET_VALUE
+
+
+def test_a_concurrent_first_open_keeps_the_winning_store_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same race with a keychain: the loser adopts the winner's store id and keychain secret."""
+    vault = tmp_path / "vault"
+    keyring = _FakeKeyring()
+    winner_id = "winner-store-id"
+    real_new = file_store._new_install_secret
+
+    def racing_new() -> bytes:
+        winner_secret = real_new()
+        keyring.set_password(FILE_STORE_KEYCHAIN_SERVICE, winner_id, winner_secret.decode("ascii"))
+        (vault / STORE_ID_NAME).write_text(winner_id, encoding="ascii")
+        return real_new()
+
+    monkeypatch.setattr(file_store, "_new_install_secret", racing_new)
+    loser = FileSecrets(vault, keyring_backend=keyring)
+    monkeypatch.setattr(file_store, "_new_install_secret", real_new)
+    assert (vault / STORE_ID_NAME).read_text(encoding="ascii") == winner_id
+    loser.put(SECRET_REF, SECRET_VALUE)
+    assert FileSecrets(vault, keyring_backend=keyring).get(SECRET_REF) == SECRET_VALUE
 
 
 def test_two_vaults_do_not_share_an_install_secret(tmp_path: Path) -> None:

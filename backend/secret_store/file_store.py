@@ -27,11 +27,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import contextlib
 import os
 import platform
 import re
 import secrets
 import stat
+import time
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -47,6 +49,8 @@ INSTALL_KEY_NAME = ".install-key"
 STORE_ID_NAME = ".store-id"
 FILE_STORE_KEYCHAIN_SERVICE = "oharness.file-store"
 _MAX_BLOB_BYTES = 1024 * 1024
+_WINNER_READ_ATTEMPTS = 50
+_WINNER_READ_DELAY_S = 0.02
 
 
 def _is_link(path: Path) -> bool:
@@ -321,10 +325,46 @@ def _load_or_create_secret(root: Path, backend: KeyringBackend | None) -> bytes:
     if backend is not None:
         store_id = secrets.token_urlsafe(16)
         if _keychain_set(backend, store_id, secret):
-            _write_private(id_path, store_id.encode("ascii"))
+            try:
+                _write_new(id_path, store_id.encode("ascii"))
+            except FileExistsError:
+                # Another process opened this new vault first. Adopt its id
+                # and keychain secret; ours was never used for ciphertext.
+                _keychain_forget(backend, store_id)
+                winner_id = _read_winner(id_path, what="id file").decode("ascii")
+                found = _keychain_get(backend, winner_id)
+                if not found:
+                    raise OSError("the file-store key is in the OS keychain, which could not be read") from None
+                return found.encode("utf-8")
             return secret
-    _write_private(key_path, secret)
+    try:
+        _write_new(key_path, secret)
+    except FileExistsError:
+        # Lost the create race: the winner's key is the one on disk, so use
+        # it instead of overwriting it out from under the other process.
+        return _read_winner(key_path, what="key file")
     return secret
+
+
+def _read_winner(path: Path, *, what: str) -> bytes:
+    """The value another process just created at ``path``.
+
+    ``_write_new`` creates the file empty, restricts it, then writes, so a
+    reader can briefly see it empty. Wait a short, bounded time for the bytes.
+    """
+    for _ in range(_WINNER_READ_ATTEMPTS):
+        if _is_link(path):
+            raise OSError("refusing to follow a link in the secrets directory")
+        if path.is_file() and path.stat().st_size > 0:
+            return _ascii_secret(_read_all(path), what=what)
+        time.sleep(_WINNER_READ_DELAY_S)
+    raise OSError(f"the file-store {what} is not usable")
+
+
+def _keychain_forget(backend: KeyringBackend, store_id: str) -> None:
+    # Best effort: an orphan entry holds a secret that encrypts nothing.
+    with contextlib.suppress(Exception):
+        backend.delete_password(FILE_STORE_KEYCHAIN_SERVICE, store_id)
 
 
 def _migrate_legacy(root: Path, fernet: Fernet) -> None:
