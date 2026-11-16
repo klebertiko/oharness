@@ -90,3 +90,38 @@ describe("providerStore.loadState", () => {
     expect(useProviderStore.getState().loadState).toBe("ready");
   });
 });
+
+/** R-PRV-14 (#402): a connection the person created has no seed row; hydrate keeps it. */
+describe("providerStore.hydrate — connections outside the seed", () => {
+  const custom = {
+    id: "my-vllm",
+    provider: "openai-compatible",
+    label: "My vLLM",
+    residence: "cloud",
+    endpoint: "https://llm.example.test/v1",
+    enabled: true,
+    secretRef: "oharness/my-vllm",
+    defaultModel: "qwen3.5-32b",
+  };
+
+  it("adds a sidecar row the seed does not have, with its own endpoint and model", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(ok({ connections: [custom] })));
+    await useProviderStore.getState().hydrate();
+    const row = useProviderStore.getState().connections.find((c) => c.id === "my-vllm");
+    expect(row).toBeDefined();
+    expect(row!.provider).toBe("openai-compatible");
+    expect(row!.endpoint).toBe("https://llm.example.test/v1");
+    expect(row!.defaultModel).toBe("qwen3.5-32b");
+    expect(row!.enabled).toBe(true);
+    expect(row!.secret?.service).toBe("oharness/my-vllm");
+    // The seed rows are all still there.
+    expect(useProviderStore.getState().connections.some((c) => c.id === "anthropic")).toBe(true);
+  });
+
+  it("skips a row whose provider this build does not know, instead of crashing the list", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(ok({ connections: [{ ...custom, id: "x", provider: "from-the-future" }] })));
+    await useProviderStore.getState().hydrate();
+    expect(useProviderStore.getState().connections.some((c) => c.id === "x")).toBe(false);
+    expect(useProviderStore.getState().loadState).toBe("ready");
+  });
+});
