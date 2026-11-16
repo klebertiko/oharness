@@ -121,7 +121,7 @@ try {
   report({ result: 'passed', finishedAt: new Date().toISOString(), limitation: 'Real Edge UI; all sidecar HTTP stubbed, no engine/provider/database executed.' });
 } catch (error) {
   report({ result: 'failed', error: error.stack });
-  writeFileSync(resolve(output, 'failure.txt'), await page.locator('body').innerText());
+  writeFileSync(resolve(output, 'failure.txt'), await page.locator('body').textContent());
   await page.screenshot({ path: resolve(output, 'failure.png') });
   throw error;
 } finally { await context.close(); await browser.close(); }

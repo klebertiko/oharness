@@ -254,7 +254,7 @@ try {
 } catch (error) {
   writeFileSync(resultPath, JSON.stringify({ result: "failed", step, startedAt, finishedAt: new Date().toISOString(), error: error.message, pageErrors: errors, unexpectedRequests, browserLog, responsive }, null, 2));
   if (page) {
-    writeFileSync(resolve(output, "failure.txt"), String(error.stack) + "\n" + await page.locator("body").innerText());
+    writeFileSync(resolve(output, "failure.txt"), String(error.stack) + "\n" + await page.locator("body").textContent());
     await page.screenshot({ path: resolve(output, "failure.png") }).catch(() => {});
   }
   throw error;

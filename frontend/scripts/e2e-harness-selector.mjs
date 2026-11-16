@@ -85,7 +85,7 @@ for (const theme of ["dark", "light"]) {
     const filter = page.getByRole("combobox", { name: "Filter Harness" });
     await filter.waitFor();
     const popover = page.locator("[data-combobox-popover]");
-    const text = await popover.innerText();
+    const text = await popover.textContent();
     assert.ok(!/provider|connect|api key|credential/i.test(text), `no provider words in: ${text}`);
     assert.deepEqual(await popover.getByRole("button").allInnerTexts(), ["Open Studio"], "one route to Studio");
     await axe(page, label("selector open"));
@@ -102,7 +102,7 @@ for (const theme of ["dark", "light"]) {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Enter");
     await page.getByText("Recent", { exact: true }).waitFor();
-    assert.match((await page.getByRole("option").nth(1).innerText()), /^Team Harness 3/);
+    assert.match((await page.getByRole("option").nth(1).textContent()), /^Team Harness 3/);
     await page.keyboard.press("Escape");
 
     // The single Studio route, from a chosen harness.

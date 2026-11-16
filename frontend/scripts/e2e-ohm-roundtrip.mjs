@@ -96,7 +96,7 @@ try {
   process.stdout.write("PASS: real browser import -> download -> reimport -> download; authored objects equal. Sidecar HTTP stubbed.\n");
 } catch (error) {
   writeFileSync(resultPath, JSON.stringify({ result: "failed", startedAt, finishedAt: new Date().toISOString(), error: error.message, pageErrors: errors, unexpectedRequests, browserLog }, null, 2));
-  writeFileSync(resolve(output, "failure.txt"), `${error.stack}\nPage errors: ${JSON.stringify(errors)}\n${await page.locator("body").innerText()}`);
+  writeFileSync(resolve(output, "failure.txt"), `${error.stack}\nPage errors: ${JSON.stringify(errors)}\n${await page.locator("body").textContent()}`);
   await page.screenshot({ path: resolve(output, "failure.png") });
   throw error;
 } finally {
