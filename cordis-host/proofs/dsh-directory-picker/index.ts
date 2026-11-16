@@ -3,7 +3,7 @@ import {
   DirectoryPicker,
   DirectoryPickerError,
   type DirectoryPickerCapability,
-} from '../../vendor/dsh/directory-picker/index.ts'
+} from '@oharness/dsh-directory-picker'
 
 const mark = globalThis as typeof globalThis & { oharnessDirectoryPickerProofEvaluated?: number }
 mark.oharnessDirectoryPickerProofEvaluated = (mark.oharnessDirectoryPickerProofEvaluated ?? 0) + 1

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { lstat, open, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { HostError } from './errors.ts'
 import { installDigest, warningText, type WarningText } from './warnings.ts'
@@ -168,7 +169,17 @@ async function resolveEntry(root: string, main: unknown): Promise<string> {
  * byte the digest covers is a byte inside the package directory.
  */
 export async function treeDigest(root: string): Promise<string> {
+  return (await readTree(root)).digest
+}
+
+interface TreeFile {
+  readonly relative: string
+  readonly bytes: Buffer
+}
+
+async function readTree(root: string): Promise<{ digest: string; files: TreeFile[] }> {
   const entries: string[] = []
+  const collected: TreeFile[] = []
   let files = 0
   let bytes = 0
   async function walk(dir: string): Promise<void> {
@@ -187,12 +198,41 @@ export async function treeDigest(root: string): Promise<string> {
       if (files > TREE_FILE_LIMIT || bytes > TREE_BYTE_LIMIT) {
         throw new HostError('path-rejected', 'the package is too large to review')
       }
-      const hash = createHash('sha256').update(await readFile(full)).digest('hex')
-      entries.push(`${path.relative(root, full).split(path.sep).join('/')}\0${hash}`)
+      const content = await readFile(full)
+      const relative = path.relative(root, full).split(path.sep).join('/')
+      collected.push({ relative, bytes: content })
+      const hash = createHash('sha256').update(content).digest('hex')
+      entries.push(`${relative}\0${hash}`)
     }
   }
   await walk(root)
-  return createHash('sha256').update(entries.join('\n')).digest('hex')
+  return { digest: createHash('sha256').update(entries.join('\n')).digest('hex'), files: collected }
+}
+
+export interface PackageSnapshot {
+  /** Host-owned copy of the package; the caller cannot edit it. */
+  readonly dir: string
+  readonly entry: string
+}
+
+/**
+ * Copy the package into a new private folder from the same buffers that are
+ * hashed, and refuse if those bytes are not the confirmed tree. The import
+ * then reads the copy, so editing the original after the check changes
+ * nothing that runs.
+ */
+export async function snapshotPackage(preview: PackagePreview): Promise<PackageSnapshot> {
+  const { digest, files } = await readTree(preview.realpath)
+  if (digest !== preview.tree) {
+    throw new HostError('confirmation-mismatch', 'the package changed after it was confirmed', preview)
+  }
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), 'oharness-cordis-snap-')))
+  for (const file of files) {
+    const target = path.join(dir, ...file.relative.split('/'))
+    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
+    await writeFile(target, file.bytes, { flag: 'wx', mode: 0o600 })
+  }
+  return { dir, entry: path.join(dir, path.relative(preview.realpath, preview.entry)) }
 }
 
 async function realRoots(roots: readonly string[]): Promise<string[]> {

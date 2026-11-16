@@ -10,7 +10,10 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@oharness/dsh-directory-picker": ["./vendor/dsh/directory-picker/index.ts"]
+    }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "proofs/**/*.ts"]
 }

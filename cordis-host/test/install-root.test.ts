@@ -4,6 +4,7 @@ import { mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { startHost, type RunningHost } from '../src/server.ts'
 import { asRecord, call, ourPluginDir, preview, tempPackage } from './client.ts'
 
@@ -86,5 +87,38 @@ test('changing a file the entry imports also changes the digest', async () => {
     await writeFile(path.join(dir, 'lib', 'x.ts'), 'export const x = \'changed\'\n')
     const after = await preview(host, dir)
     assert.notEqual(after.digest, before.digest)
+  })
+})
+
+test('install runs a host-owned snapshot, not the folder the caller can still edit', async () => {
+  const dir = await tempPackage({
+    'package.json': JSON.stringify({ name: 'snap', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'index.ts': 'const g = globalThis as { cordisSnapUrl?: string }\ng.cordisSnapUrl = import.meta.url\nexport const name = \'snap\'\nexport function apply() {}\n',
+  })
+  await withRoot([path.dirname(dir)], async (host) => {
+    const seen = await preview(host, dir)
+    const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
+    assert.equal(install.status, 200)
+    const url = (globalThis as { cordisSnapUrl?: string }).cordisSnapUrl
+    assert.equal(typeof url, 'string')
+    assert.equal(fileURLToPath(url ?? '').startsWith(dir), false)
+  })
+})
+
+test('a plugin that imports a file outside its package is refused before that file runs', async () => {
+  const outside = await mkdtemp(path.join(tmpdir(), 'cordis-outside-'))
+  const marker = path.join(outside, 'ran.txt')
+  const sneaky = path.join(outside, 'sneaky.ts')
+  await writeFile(sneaky, plugin(marker))
+  const dir = await tempPackage({
+    'package.json': JSON.stringify({ name: 'escape', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'index.ts': `import ${JSON.stringify(pathToFileURL(sneaky).href)}\nexport const name = 'escape'\nexport function apply() {}\n`,
+  })
+  await withRoot([path.dirname(dir)], async (host) => {
+    const seen = await preview(host, dir)
+    const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
+    assert.equal(install.status, 400)
+    assert.equal(asRecord(install.json).code, 'path-rejected')
+    assert.equal(existsSync(marker), false)
   })
 })

@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { Context, type Fiber } from 'cordis'
 import { CommandsService } from './commands-service.ts'
 import { HostError } from './errors.ts'
-import { inspectPackage, type PackagePreview } from './manifest.ts'
+import { inspectPackage, snapshotPackage, type PackagePreview } from './manifest.ts'
+import { confineSnapshot, OutsidePackageError } from './register-alias.ts'
 import { CORDIS_PACKAGE, CORDIS_VERSION, SCHEMASTERY_PACKAGE, SCHEMASTERY_VERSION } from './pin.ts'
 import { SessionProjectionsRecord } from './session-projections.ts'
 import { ToolsService, type ToolExec } from './tools-service.ts'
@@ -113,6 +115,7 @@ export class CordisRuntime {
   readonly schemasteryVersion: string
   readonly pluginRoots: readonly string[]
   readonly #loaded = new Map<string, InstallResult>()
+  readonly #snapshots: string[] = []
 
   private constructor(context: Context, versions: { cordis: string; schemastery: string }, pluginRoots: readonly string[]) {
     this.context = context
@@ -141,7 +144,16 @@ export class CordisRuntime {
     const existing = this.#loaded.get(preview.realpath)
     if (existing !== undefined && existing.status !== 'failed') return existing
     requireConfirmation(preview, confirmation)
-    const imported: unknown = await import(pathToFileURL(preview.entry).href)
+    const snapshot = await snapshotPackage(preview)
+    this.#snapshots.push(snapshot.dir)
+    confineSnapshot(snapshot.dir)
+    let imported: unknown
+    try {
+      imported = await import(pathToFileURL(snapshot.entry).href)
+    } catch (error) {
+      if (error instanceof OutsidePackageError) throw new HostError('path-rejected', error.message, preview)
+      throw error
+    }
     if (!isRecord(imported) && typeof imported !== 'function') {
       throw new HostError('not-a-plugin', 'plugin module did not evaluate to an object')
     }
@@ -232,5 +244,6 @@ export class CordisRuntime {
 
   async close(): Promise<void> {
     await this.context.fiber.dispose().catch(() => undefined)
+    await Promise.all(this.#snapshots.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)))
   }
 }
