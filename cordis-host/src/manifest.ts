@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, mkdir, mkdtemp, open, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { HostError } from './errors.ts'
@@ -172,6 +173,25 @@ export async function treeDigest(root: string): Promise<string> {
   return (await readTree(root)).digest
 }
 
+/**
+ * Read one file through a single descriptor: no link is followed at open,
+ * the type and size come from that descriptor, and the bytes hashed are the
+ * bytes read from it. A file swapped after `lstat` cannot slip in.
+ */
+async function readRegularFile(file: string, budget: number): Promise<Buffer> {
+  const handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const info = await handle.stat()
+    if (!info.isFile()) throw new HostError('path-rejected', 'the package contains a special file')
+    if (info.size > budget) throw new HostError('path-rejected', 'the package is too large to review')
+    const buffer = Buffer.alloc(info.size)
+    const { bytesRead } = await handle.read(buffer, 0, info.size, 0)
+    return buffer.subarray(0, bytesRead)
+  } finally {
+    await handle.close()
+  }
+}
+
 interface TreeFile {
   readonly relative: string
   readonly bytes: Buffer
@@ -194,11 +214,9 @@ async function readTree(root: string): Promise<{ digest: string; files: TreeFile
       }
       if (!info.isFile()) throw new HostError('path-rejected', 'the package contains a special file')
       files += 1
-      bytes += info.size
-      if (files > TREE_FILE_LIMIT || bytes > TREE_BYTE_LIMIT) {
-        throw new HostError('path-rejected', 'the package is too large to review')
-      }
-      const content = await readFile(full)
+      if (files > TREE_FILE_LIMIT) throw new HostError('path-rejected', 'the package is too large to review')
+      const content = await readRegularFile(full, TREE_BYTE_LIMIT - bytes)
+      bytes += content.length
       const relative = path.relative(root, full).split(path.sep).join('/')
       collected.push({ relative, bytes: content })
       const hash = createHash('sha256').update(content).digest('hex')
