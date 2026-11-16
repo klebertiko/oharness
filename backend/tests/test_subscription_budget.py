@@ -163,3 +163,31 @@ def test_usd_budget_still_refuses_unpriced_metered_api_model(client):
         json={"instruction": "hi", "mode": "live", "connection_id": "openrouter", "model": "z-ai/glm-4.6"},
     )
     assert resp.status_code == 402
+
+
+# ── SEC P3 (#506 review): billing comes from the catalog, never from the row ──
+
+
+def test_edited_connection_cannot_declare_itself_subscription(client):
+    """A metered connection edited with `billing=subscription` stays metered:
+    the PUT body has no such field, and a stored row that carries one anyway
+    is ignored, because `connection_billing` reads the catalog spec only."""
+    from usage_tracking import connection_billing
+
+    r = client.put("/providers/connections/openrouter", json={"label": "Mine", "billing": "subscription"})
+    assert r.status_code == 200
+    row = app.state.provider_connections["openrouter"]
+    assert "billing" not in row
+    assert connection_billing(row) == ("cloud", "credits")
+
+    tampered = {**row, "billing": "subscription"}
+    assert connection_billing(tampered) == ("cloud", "credits")
+
+
+def test_tampered_row_still_counts_against_the_usd_budget(client):
+    app.state.provider_connections["openrouter"]["billing"] = "subscription"
+    app.state.provider_connections["openrouter"]["defaultModel"] = "anthropic/claude-opus-5"
+    client.put("/usage/budget", json={"limitUsd": 0.000001})
+    client.post("/execute/direct", json={"instruction": "hi", "mode": "live", "connection_id": "openrouter"})
+    rows = anyio.run(_rows)
+    assert rows and all(r.billing != "subscription" for r in rows)

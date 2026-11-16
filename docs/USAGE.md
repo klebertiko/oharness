@@ -55,6 +55,7 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 
 - **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
 - **Remove a key.** **Remove** asks first, with **Cancel** selected.
+- **Spend and the USD ceiling.** Runs on a subscription (Claude, Codex, Cursor, Ollama Cloud) count their tokens but stay outside the USD budget; only metered API connections count toward it.
 - **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
 - **Language.** The Providers screen is in English and Brazilian Portuguese. It follows the browser language; `Mod+K`, then "Language", switches it. The rest of the app is still English.
 

@@ -541,8 +541,10 @@ def test_direct_run_refused_for_no_model_when_budget_configured(client: TestClie
         "/execute/direct",
         json={"instruction": "hi", "mode": "live", "connection_id": "metered"},
     )
-    assert resp.status_code in (400, 402)
-    assert "no default model" in resp.json()["detail"].lower()
+    # Refused by provider resolution (400), before the budget gate (402) is
+    # even reached: the reason names the connection and the missing model.
+    assert resp.status_code == 400
+    assert resp.json()["detail"].startswith("'OpenRouter' has no default model set.")
 
     summary = client.get("/usage/summary").json()
     assert summary["totalTokens"] == 0  # refused before the adapter was ever called
