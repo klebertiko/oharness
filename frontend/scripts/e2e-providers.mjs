@@ -47,6 +47,8 @@ function sidecar(rows, probes = {}) {
     if (s.down) return { status: 503, body: {} };
     const key = `${method} ${path}`;
     if (key === "GET /providers/connections") return { body: { connections: s.rows } };
+    // Detection of the subscription CLIs: all signed in, the state the screen shows no step for.
+    if (key === "GET /providers/clis") return { body: { clis: [{ id: "claude", provider: "anthropic", state: "ready" }, { id: "codex", provider: "openai", state: "ready" }, { id: "cursor", provider: "cursor", state: "ready" }] } };
     if (key === "GET /usage/summary") return { body: usage };
     if (key === "GET /bundles/default") return { body: fixture };
     if (key === "GET /health") return { body: { status: "ok" } };

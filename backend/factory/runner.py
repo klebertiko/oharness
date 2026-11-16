@@ -163,9 +163,24 @@ def _is_run_workspace(workspace: dict) -> bool:
 
     try:
         path = Path(workspace['path']).resolve()
-        return path.name == workspace['id'] and path.parent.parent == Settings.from_env().managed_root.resolve() and (path / '.git').exists()
-    except (OSError, KeyError, TypeError):
+        if not (path.name == workspace['id'] and path.parent.parent == Settings.from_env().managed_root.resolve() and (path / '.git').exists()):
+            return False
+        return _registered(path, workspace['id'])
+    except (OSError, KeyError, TypeError, ValueError, AttributeError):  # a NUL in the path is a ValueError: fail closed like the rest
         return False
+
+
+def _registered(path: Path, workspace_id: str) -> bool:
+    """The workspace manager made this worktree for a Forja run: its registry holds the id at this path on a `forja/` branch. A folder somebody
+    planted under the managed root, with a `.git` inside, is not in the registry."""
+    import os
+    from workspaces.service import WorkspaceService
+
+    for group in WorkspaceService().store.read().get('workspaces', {}).values():
+        record = group.get(workspace_id)
+        if record and os.path.normcase(os.path.normpath(record['path'])) == os.path.normcase(str(path)) and str(record.get('branch') or '').startswith('forja/'):
+            return True
+    return False
 
 
 def deny_command(command: str | list[str], protected: list[str]) -> str | None:
