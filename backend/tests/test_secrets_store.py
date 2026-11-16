@@ -396,6 +396,7 @@ def test_vault_path_acl_is_limited_to_the_current_user(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     FileSecrets(vault, use_keychain=False).put(SECRET_REF, SECRET_VALUE)
     for path in [vault, *[entry for entry in vault.iterdir() if entry.is_file()]]:
+        # Fixed argv, no shell: icacls and a pytest tmp_path. The audit rule flags every subprocess call.
         listing = subprocess.run(  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
             ["icacls", str(path)],
             capture_output=True,
