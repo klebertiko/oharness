@@ -48,16 +48,20 @@ async def _reset() -> None:
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch):
     store = MemorySecrets()
-    store.put("oharness/anthropic", "sk-ant-REAL")
+    store.put("oharness/metered", "placeholder-not-a-key")
     connections = {
-        "anthropic": {
-            "id": "anthropic",
-            "provider": "anthropic",
-            "label": "Anthropic",
+        # A metered (per-token USD) connection: the USD budget applies here.
+        # Before #416 this fixture was the Anthropic *subscription* (Claude
+        # CLI) priced as if it were an API — the F5 bug itself; the
+        # subscription path is pinned in test_subscription_budget.py.
+        "metered": {
+            "id": "metered",
+            "provider": "openrouter",
+            "label": "OpenRouter",
             "residence": "cloud",
-            "endpoint": "https://api.anthropic.com",
+            "endpoint": "https://openrouter.ai/api/v1",
             "enabled": True,
-            "secretRef": "oharness/anthropic",  # gitleaks:allow
+            "secretRef": "oharness/metered",  # gitleaks:allow
         },
         # residence: "local" -- used by the P2-4 unpriced-model tests below to
         # confirm a genuinely-free local connection is never refused just
@@ -111,7 +115,7 @@ def _graph() -> dict:
             {
                 "id": "draft",
                 "type": "llm",
-                "data": {"label": "Draft", "providerIds": ["anthropic"], "model": "claude-sonnet-5"},
+                "data": {"label": "Draft", "providerIds": ["metered"], "model": "claude-sonnet-5"},
             },
         ],
         "edges": [{"source": "in", "target": "draft"}],
@@ -124,7 +128,7 @@ def _graph() -> dict:
 def test_direct_run_records_real_usage(client: TestClient) -> None:
     resp = client.post(
         "/execute/direct",
-        json={"instruction": "hi", "mode": "live", "connection_id": "anthropic", "model": "claude-sonnet-5"},
+        json={"instruction": "hi", "mode": "live", "connection_id": "metered", "model": "claude-sonnet-5"},
     )
     assert resp.status_code == 200
 
@@ -140,13 +144,13 @@ def test_direct_run_refused_when_budget_already_exceeded(client: TestClient) -> 
     # Spend past it first.
     client.post(
         "/execute/direct",
-        json={"instruction": "hi", "mode": "live", "connection_id": "anthropic", "model": "claude-sonnet-5"},
+        json={"instruction": "hi", "mode": "live", "connection_id": "metered", "model": "claude-sonnet-5"},
     )
     before = client.get("/usage/summary").json()["totalTokens"]
 
     resp = client.post(
         "/execute/direct",
-        json={"instruction": "hi again", "mode": "live", "connection_id": "anthropic", "model": "claude-sonnet-5"},
+        json={"instruction": "hi again", "mode": "live", "connection_id": "metered", "model": "claude-sonnet-5"},
     )
     assert resp.status_code == 402
     assert "budget" in resp.json()["detail"].lower()
@@ -171,8 +175,8 @@ def test_harness_run_records_real_usage_per_node(client: TestClient) -> None:
     summary = client.get("/usage/summary").json()
     assert summary["totalTokens"] == 100_000
     by_conn = {row["connectionId"]: row for row in summary["byConnection"]}
-    assert by_conn["anthropic"]["tokensTotal"] == 100_000
-    assert by_conn["anthropic"]["costUsd"] == pytest.approx(0.9)
+    assert by_conn["metered"]["tokensTotal"] == 100_000
+    assert by_conn["metered"]["costUsd"] == pytest.approx(0.9)
 
 
 def test_harness_run_refused_when_budget_already_exceeded(client: TestClient) -> None:
@@ -228,7 +232,7 @@ def test_direct_run_refused_for_unpriced_model_when_budget_configured(client: Te
         json={
             "instruction": "hi",
             "mode": "live",
-            "connection_id": "anthropic",
+            "connection_id": "metered",
             "model": "some-model-not-in-any-catalog",
         },
     )
@@ -245,7 +249,7 @@ def test_direct_run_allows_unpriced_model_when_no_budget_configured(client: Test
         json={
             "instruction": "hi",
             "mode": "live",
-            "connection_id": "anthropic",
+            "connection_id": "metered",
             "model": "some-model-not-in-any-catalog",
         },
     )
@@ -294,7 +298,7 @@ def test_harness_run_refused_for_unpriced_model_when_budget_configured(client: T
                 "type": "llm",
                 "data": {
                     "label": "Draft",
-                    "providerIds": ["anthropic"],
+                    "providerIds": ["metered"],
                     "model": "some-model-not-in-any-catalog",
                 },
             },
@@ -330,12 +334,12 @@ def test_harness_run_refuses_a_later_unpriced_node_not_just_the_first(client: Te
             {
                 "id": "draft",
                 "type": "llm",
-                "data": {"label": "Draft", "providerIds": ["anthropic"], "model": "claude-opus-5"},
+                "data": {"label": "Draft", "providerIds": ["metered"], "model": "claude-opus-5"},
             },
             {
                 "id": "review",
                 "type": "llm",
-                "data": {"label": "Review", "providerIds": ["anthropic"], "model": "z-ai/glm-4.6"},
+                "data": {"label": "Review", "providerIds": ["metered"], "model": "z-ai/glm-4.6"},
             },
         ],
         "edges": [
@@ -365,14 +369,14 @@ def test_harness_run_refuses_majority_unpriced_graph_not_just_flags_it(client: T
     client.put("/usage/budget", json={"limitUsd": 5.0})
     nodes = [
         {"id": "in", "type": "input", "data": {"prompt": "hi"}},
-        {"id": "priced", "type": "llm", "data": {"providerIds": ["anthropic"], "model": "claude-opus-5"}},
+        {"id": "priced", "type": "llm", "data": {"providerIds": ["metered"], "model": "claude-opus-5"}},
     ]
     edges = [{"source": "in", "target": "priced"}]
     prev = "priced"
     for i in range(8):
         node_id = f"unpriced-{i}"
         nodes.append(
-            {"id": node_id, "type": "llm", "data": {"providerIds": ["anthropic"], "model": "z-ai/glm-4.6"}}
+            {"id": node_id, "type": "llm", "data": {"providerIds": ["metered"], "model": "z-ai/glm-4.6"}}
         )
         edges.append({"source": prev, "target": node_id})
         prev = node_id
@@ -404,10 +408,10 @@ def test_harness_run_refuses_decoy_intrinsic_node_hiding_real_unpriced_llm_nodes
             {
                 "id": "in",
                 "type": "input",
-                "data": {"prompt": "hi", "providerIds": ["anthropic"], "model": "claude-opus-5"},
+                "data": {"prompt": "hi", "providerIds": ["metered"], "model": "claude-opus-5"},
             },
-            {"id": "n1", "type": "llm", "data": {"providerIds": ["anthropic"], "model": "z-ai/glm-4.6"}},
-            {"id": "n2", "type": "llm", "data": {"providerIds": ["anthropic"], "model": "z-ai/glm-4.6"}},
+            {"id": "n1", "type": "llm", "data": {"providerIds": ["metered"], "model": "z-ai/glm-4.6"}},
+            {"id": "n2", "type": "llm", "data": {"providerIds": ["metered"], "model": "z-ai/glm-4.6"}},
         ],
         "edges": [{"source": "in", "target": "n1"}, {"source": "n1", "target": "n2"}],
     }
@@ -437,7 +441,7 @@ def test_harness_run_refuses_decoy_local_residence_node_hiding_real_cloud_spend(
                 "type": "input",
                 "data": {"prompt": "hi", "providerIds": ["ollama-local"], "model": "qwen3.5:9b"},
             },
-            {"id": "n1", "type": "llm", "data": {"providerIds": ["anthropic"], "model": "z-ai/glm-4.6"}},
+            {"id": "n1", "type": "llm", "data": {"providerIds": ["metered"], "model": "z-ai/glm-4.6"}},
         ],
         "edges": [{"source": "in", "target": "n1"}],
     }
@@ -463,6 +467,9 @@ def test_harness_run_refuses_decoy_local_residence_node_hiding_real_cloud_spend(
 def test_triage_intake_spend_is_recorded_when_it_engages_the_harness(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The intake call resolves the connection with no node model, so a
+    # metered connection needs its own default model to make that call at all.
+    monkeypatch.setitem(app.state.provider_connections["metered"], "defaultModel", "claude-sonnet-5")
     class _EngageWithRealSpend(_FixedTokenAdapter):
         async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
             if "reply with these exact characters and nothing else" in prompt:
@@ -495,6 +502,9 @@ def test_triage_reply_only_path_is_still_recorded_exactly_once(
     (engage_harness=False) must keep working exactly as before -- its spend
     already reaches the ledger via `_reply_only_events`, and the new
     triage-row logic must not double-count it."""
+    # The intake call resolves the connection with no node model, so a
+    # metered connection needs its own default model to make that call at all.
+    monkeypatch.setitem(app.state.provider_connections["metered"], "defaultModel", "claude-sonnet-5")
 
     class _ChatOnly(_FixedTokenAdapter):
         async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
@@ -524,15 +534,16 @@ def test_triage_reply_only_path_is_still_recorded_exactly_once(
 
 def test_direct_run_refused_for_no_model_when_budget_configured(client: TestClient) -> None:
     """The realistic shape: no `model` field at all (the composer never sends
-    one). Checked post-resolution now, not a pre-resolution guess -- an empty
-    model here means the CLI adapter would fall back to its own invisible
-    default, which is exactly as unpriceable as a named-but-uncatalogued one."""
+    one). A metered connection with no model never runs unpriced under a
+    budget — refused before the adapter is ever called. (A subscription
+    connection without a model is *not* refused: it spends no USD — #416,
+    test_subscription_budget.py.)"""
     client.put("/usage/budget", json={"limitUsd": 5.0})
     resp = client.post(
         "/execute/direct",
-        json={"instruction": "hi", "mode": "live", "connection_id": "anthropic"},
+        json={"instruction": "hi", "mode": "live", "connection_id": "metered"},
     )
-    assert resp.status_code == 402
+    assert resp.status_code in (400, 402)
     assert "no default model" in resp.json()["detail"].lower()
 
     summary = client.get("/usage/summary").json()
@@ -557,7 +568,7 @@ def test_triage_refused_when_budget_already_exceeded(client: TestClient) -> None
     # Spend past it first, via a real (non-triage) direct call.
     client.post(
         "/execute/direct",
-        json={"instruction": "hi", "mode": "live", "connection_id": "anthropic", "model": "claude-sonnet-5"},
+        json={"instruction": "hi", "mode": "live", "connection_id": "metered", "model": "claude-sonnet-5"},
     )
     before = client.get("/usage/summary").json()["totalTokens"]
 

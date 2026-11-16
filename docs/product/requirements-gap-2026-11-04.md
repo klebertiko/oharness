@@ -172,7 +172,7 @@ Nenhum requisito, de Providers ou de qualquer outra frente, pode violar estes it
 | I12 | Timeout obrigatório e encerramento da árvore de processos. |
 | I13 | Os ids `anthropic`, `openai` e `cursor` continuam `credential.kind=cli` e continuam resolvendo para os adapters de CLI; conexões novas por chave usam ids distintos. |
 
-**Regra de não-regressão.** Nenhum PR que toque adapters de CLI, resolução, catálogo, cofre, ledger/orçamento ou o painel de conexão pode ser mesclado com a suíte de 3.5 vermelha. A suíte roda em todo PR, antes dos demais R-PRV; depois que o dono a marcar como obrigatória na proteção de branch (passo do dono, relacionada #290), bloqueia o merge. Não se usa skip, xfail, retry ou timeout maior para escondê-la (`docs/process/pre-pr-checklist.md`). Mudar um invariante exige ADR e decisão do dono; a suíte é atualizada no mesmo PR que o ADR. I11 hoje é violado em parte (F5, inferido): R-PRV-06 o corrige com teste vermelho primeiro.
+**Regra de não-regressão.** Nenhum PR que toque adapters de CLI, resolução, catálogo, cofre, ledger/orçamento ou o painel de conexão pode ser mesclado com a suíte de 3.5 vermelha. A suíte roda em todo PR, antes dos demais R-PRV; depois que o dono a marcar como obrigatória na proteção de branch (passo do dono, relacionada #290), bloqueia o merge. Não se usa skip, xfail, retry ou timeout maior para escondê-la (`docs/process/pre-pr-checklist.md`). Mudar um invariante exige ADR e decisão do dono; a suíte é atualizada no mesmo PR que o ADR. I11 era violado em parte (F5): o teste vermelho da #416 confirmou o achado e R-PRV-06 o corrigiu.
 
 ### 3.4 Requisitos de Providers
 
@@ -225,7 +225,7 @@ Contagem: Must 7 (R-PRV-00..06), Should 16, Could 4, total 27; 25 novos e 2 que 
 | I7 | `test_cli_adapters.py`: `test_claude_probe_*`, `test_codex_probe_*`, `test_cursor_probe_*`; `test_cli_probe.py` |
 | I9 | `test_cli_adapters.py` (argv restrito); `test_chat_tools_cli_bdd.py::test_cli_tools_remain_locked`; `test_tool_capabilities.py` (`cli-adapter`) |
 | I10 | `test_probe_detail_contract.py` (`test_every_failing_detail_an_adapter_emits_has_a_class`, `test_cli_details_and_free_text`); `test_execution_provider_resolution.py::test_connection_failure_is_structured_and_keeps_partial_usage`, `::test_direct_failed_history_preserves_safe_classification`; `providerFault.test.ts` |
-| I11 | `test_budget_fixes.py::test_billing_record_distinguishes_local_and_subscription`, `::test_subscription_never_uses_api_catalog_to_pass_budget` (só a função) |
+| I11 | `test_subscription_contract.py::test_i11_subscription_never_invents_usd`, `test_subscription_budget.py` (integração, PRV-06a, #416), `test_budget_fixes.py::test_billing_record_distinguishes_local_and_subscription`, `::test_subscription_never_uses_api_catalog_to_pass_budget` |
 | I12 | `test_claude_invoke_surfaces_timeout`, `test_codex_invoke_surfaces_timeout` |
 | I13 | `test_get_adapter_claude_is_cli_backed_not_mock`, `test_get_adapter_cursor_is_cli_backed_not_mock`, `test_get_adapter_codex_openai_and_ollama`; `test_provider_resolution.py::test_cursor_connection_on_an_llm_node_is_an_honest_error`; `chatProvider.recovery.test.ts` |
 | Fiação e UI | `test_engine_provider_resolution.py`, `test_provider_persistence.py`, `chatProvider.test.ts`, `composerAction.test.ts`, `ProvidersScreen.test.tsx`, `ChatProviderPicker.test.tsx`, `runReducer.test.ts`; e2e `e2e-providers.mjs` e `e2e-chat-providers.mjs` (só OpenRouter e Ollama) |

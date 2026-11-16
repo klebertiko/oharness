@@ -182,8 +182,11 @@ class UsageRecord(Base):
     means this model's price is not in the catalog (mock mode, or a real
     model this catalog doesn't know the price of yet) — never conflate that
     with "genuinely free": a local/on-device model reads that way too, and
-    the two are told apart by the caller via the connection's `residence`,
-    not by anything stored on this row.
+    the two are told apart by the caller via the connection's `residence`.
+    `billing` records the connection's catalog billing at write time; a
+    `billing="subscription"` row (a CLI seat or plan) stores `cost_usd` as
+    NULL — unknown, never 0.0 — and sits outside the USD budget (I11,
+    R-PRV-06, #416).
 
     A row is only ever written for real spend: `usage_tracking.record_usage`
     refuses `tokens_total <= 0` and the `mock`/`unresolved` adapters outright,
@@ -203,7 +206,11 @@ class UsageRecord(Base):
     model: Mapped[str] = mapped_column(String(255), default="")
     tokens_total: Mapped[int] = mapped_column(Integer, default=0)
     price_per_mtok: Mapped[float | None] = mapped_column(Float, nullable=True)
-    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # NULL only for `billing="subscription"`: a seat's cost is unknown, never 0.
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Catalog billing of the connection at write time: "subscription" |
+    # "credits" | "none" | None (legacy row or unknown connection).
+    billing: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

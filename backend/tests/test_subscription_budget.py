@@ -58,7 +58,7 @@ async def _rows() -> list[UsageRecord]:
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch):
     store = MemorySecrets()
-    store.put("oharness/openrouter", "sk-or-TEST")
+    store.put("oharness/openrouter", "placeholder-not-a-key")
     connections = {
         # Subscription: the Claude CLI seat. No defaultModel on purpose (F5).
         "anthropic": {
@@ -126,7 +126,7 @@ def test_direct_subscription_run_without_default_model_is_not_refused_under_usd_
 
 def test_harness_subscription_node_without_default_model_is_not_refused_under_usd_budget(client):
     client.put("/usage/budget", json={"limitUsd": 5})
-    resp = client.post("/execute/", json={"graph": _graph("anthropic", None), "mode": "live"})
+    resp = client.post("/execute/", json={"graph_json": _graph("anthropic", None), "mode": "live"})
     assert resp.status_code == 200, resp.text
     names = [name for name, _ in _sse_events(resp.text)]
     assert "node_done" in names and "node_error" not in names, resp.text
@@ -148,6 +148,12 @@ def test_subscription_usage_never_makes_the_usd_budget_unknown(client):
     assert summary["totalCostUsd"] == pytest.approx(TOKENS * 45 / 1_000_000)
     assert summary["costComplete"] is True
     assert summary["subscriptionTokens"] == TOKENS
+    by_conn = {row["connectionId"]: row for row in summary["byConnection"]}
+    # The seat's cost reads as unknown, never as "$0.00".
+    assert by_conn["anthropic"]["estimatedCostUsd"] is None
+    assert by_conn["anthropic"]["costComplete"] is False
+    assert by_conn["anthropic"]["subscriptionTokens"] == TOKENS
+    assert by_conn["openrouter"]["costComplete"] is True
 
 
 def test_usd_budget_still_refuses_unpriced_metered_api_model(client):
