@@ -493,6 +493,202 @@ describe("runReducer plan_error", () => {
   });
 });
 
+describe("runReducer · warnings, retries, runtime and skip reason", () => {
+  function seeded() {
+    return runReducer(emptyRun, {
+      type: "sse",
+      event: "run_start",
+      data: {
+        run_id: "r1",
+        mode: "live",
+        step: false,
+        order: [
+          { node_id: "writer", type: "agent", label: "Writer", adapter: "claude", model: "" },
+          { node_id: "gate", type: "gate", label: "Gate", adapter: "", model: "" },
+          { node_id: "other", type: "agent", label: "Other", adapter: "claude", model: "" },
+        ],
+        unreachable: [],
+      },
+    });
+  }
+
+  const segment = (state: ReturnType<typeof seeded>, nodeId: string) => state.plan.find((s) => s.nodeId === nodeId);
+
+  it("node_skipped keeps the reason the engine sent, and does not treat the branch as a failure", () => {
+    const state = runReducer(seeded(), {
+      type: "sse",
+      event: "node_skipped",
+      data: { node_id: "other", reason: "no matching condition" },
+    });
+    expect(segment(state, "other")).toMatchObject({ state: "skipped", skipReason: "no matching condition" });
+    expect(state.status).not.toBe("error");
+  });
+
+  it("node_skipped without a reason still marks the segment skipped and invents nothing", () => {
+    const state = runReducer(seeded(), { type: "sse", event: "node_skipped", data: { node_id: "other" } });
+    expect(segment(state, "other")?.state).toBe("skipped");
+    expect(segment(state, "other")?.skipReason).toBeUndefined();
+  });
+
+  it("harness_done skips leftover pending nodes without inventing a skip reason", () => {
+    const skipped = runReducer(seeded(), {
+      type: "sse",
+      event: "node_skipped",
+      data: { node_id: "other", reason: "no matching condition" },
+    });
+    const done = runReducer(skipped, {
+      type: "sse",
+      event: "harness_done",
+      data: { status: "complete", total_tokens: 0, nodes_run: 0, elapsed_ms: 1 },
+    });
+    expect(segment(done, "writer")?.state).toBe("skipped");
+    expect(segment(done, "writer")?.skipReason).toBeUndefined();
+    expect(segment(done, "other")?.skipReason).toBe("no matching condition");
+  });
+
+  it("gate_retry records each loop back on the gate, in order, without failing the run", () => {
+    const once = runReducer(seeded(), {
+      type: "sse",
+      event: "gate_retry",
+      data: { node_id: "gate", attempt: 1, cap: 3, target: "writer" },
+    });
+    const twice = runReducer(once, {
+      type: "sse",
+      event: "gate_retry",
+      data: { node_id: "gate", attempt: 2, cap: 3, target: "writer" },
+    });
+    expect(segment(twice, "gate")?.retries).toEqual([
+      { attempt: 1, cap: 3, target: "writer" },
+      { attempt: 2, cap: 3, target: "writer" },
+    ]);
+    expect(segment(twice, "writer")?.retries).toBeUndefined();
+    expect(twice.status).not.toBe("error");
+  });
+
+  it("gate_retry ignores a payload that cannot be shown, and a node the plan does not have", () => {
+    const malformed = runReducer(seeded(), {
+      type: "sse",
+      event: "gate_retry",
+      data: { node_id: "gate", attempt: 1.5, cap: 3, target: "writer" },
+    });
+    expect(segment(malformed, "gate")?.retries).toBeUndefined();
+    const missing = runReducer(seeded(), {
+      type: "sse",
+      event: "gate_retry",
+      data: { node_id: "ghost", attempt: 1, cap: 3, target: "writer" },
+    });
+    expect(missing.plan).toHaveLength(3);
+    expect(missing.plan.every((s) => s.retries === undefined)).toBe(true);
+  });
+
+  it("node_start keeps retries and token warnings already recorded on the segment", () => {
+    let state = runReducer(seeded(), {
+      type: "sse",
+      event: "gate_retry",
+      data: { node_id: "gate", attempt: 1, cap: 3, target: "writer" },
+    });
+    state = runReducer(state, {
+      type: "sse",
+      event: "node_token_warning",
+      data: { node_id: "writer", tokens: 800, limit: 1000, pct: 0.8 },
+    });
+    state = runReducer(state, { type: "sse", event: "node_start", data: { node_id: "writer" } });
+    state = runReducer(state, { type: "sse", event: "node_start", data: { node_id: "gate" } });
+    expect(segment(state, "gate")?.retries).toEqual([{ attempt: 1, cap: 3, target: "writer" }]);
+    expect(segment(state, "writer")?.warnings).toEqual([{ tokens: 800, limit: 1000, pct: 0.8 }]);
+    expect(segment(state, "writer")?.state).toBe("running");
+    expect(state.status).not.toBe("error");
+  });
+
+  it("node_token_warning ignores a limit that is not a positive number", () => {
+    const state = runReducer(seeded(), {
+      type: "sse",
+      event: "node_token_warning",
+      data: { node_id: "writer", tokens: 10, limit: 0, pct: 0.8 },
+    });
+    expect(segment(state, "writer")?.warnings).toBeUndefined();
+  });
+
+  it("budget_warning keeps the spend warning across run_start and lets the run continue", () => {
+    const warned = runReducer(emptyRun, {
+      type: "sse",
+      event: "budget_warning",
+      data: { spentUsd: 0.9, limitUsd: 1, pct: 0.9 },
+    });
+    expect(warned.budgetWarning).toEqual({ spentUsd: 0.9, limitUsd: 1, pct: 0.9 });
+    expect(warned.status).not.toBe("error");
+    const started = runReducer(warned, {
+      type: "sse",
+      event: "run_start",
+      data: { run_id: "r", mode: "live", step: false, order: [{ node_id: "writer", type: "agent", label: "Writer" }], unreachable: [] },
+    });
+    expect(started.budgetWarning).toEqual(warned.budgetWarning);
+    expect(started.status).toBe("running");
+    const later = runReducer(started, {
+      type: "sse",
+      event: "budget_warning",
+      data: { spentUsd: 0.95, limitUsd: 1, pct: 0.95 },
+    });
+    expect(later.budgetWarning).toEqual({ spentUsd: 0.95, limitUsd: 1, pct: 0.95 });
+  });
+
+  it("budget_warning ignores a payload without the spend figures the router emits", () => {
+    const state = runReducer(emptyRun, {
+      type: "sse",
+      event: "budget_warning",
+      data: { state: "warning", message: "80% of the budget is used" },
+    });
+    expect(state.budgetWarning).toBeNull();
+    expect(state).toBe(emptyRun);
+  });
+
+  it("runtime_selected records the CLI or API the run uses, including why it fell back", () => {
+    const cli = runReducer(seeded(), {
+      type: "sse",
+      event: "runtime_selected",
+      data: { kind: "cli", name: "claude", reason: "" },
+    });
+    expect(cli.runtime).toEqual({ kind: "cli", name: "claude", reason: "" });
+    expect(cli.plan).toEqual(seeded().plan);
+    const api = runReducer(cli, {
+      type: "sse",
+      event: "runtime_selected",
+      data: {
+        kind: "api",
+        name: "claude",
+        reason: "claude CLI not found on PATH; falling back to API. Install the CLI or switch the runtime preference to API.",
+      },
+    });
+    expect(api.runtime).toEqual({
+      kind: "api",
+      name: "claude",
+      reason: "claude CLI not found on PATH; falling back to API. Install the CLI or switch the runtime preference to API.",
+    });
+  });
+
+  it("runtime_selected ignores a choice with no kind or name", () => {
+    const state = runReducer(emptyRun, { type: "sse", event: "runtime_selected", data: { kind: "cli", reason: "x" } });
+    expect(state.runtime).toBeNull();
+    expect(state).toBe(emptyRun);
+  });
+
+  it("a new run drops the previous runtime and budget warning", () => {
+    const warned = runReducer(emptyRun, {
+      type: "sse",
+      event: "budget_warning",
+      data: { spentUsd: 1, limitUsd: 1, pct: 1 },
+    });
+    const picked = runReducer(warned, {
+      type: "sse",
+      event: "runtime_selected",
+      data: { kind: "cli", name: "codex", reason: "" },
+    });
+    const reset = runReducer(picked, { type: "reset", mode: "live", step: false });
+    expect(reset.runtime).toBeNull();
+    expect(reset.budgetWarning).toBeNull();
+  });
+});
+
 describe("worktree events", () => {
   it("tells the person the run works in its own worktree and where its changes were kept", () => {
     let state = runReducer(emptyRun, { type: "reset", mode: "live", step: false });

@@ -238,8 +238,12 @@ powershell -File scripts/smoke-desktop.ps1 -AppPath <path-to-exe>
 | `OH_SECRETS` | Store |
 | --- | --- |
 | `memory` | Process lifetime (tests / explicit dev) |
-| `file` | Default when packaged — Fernet files under `%LOCALAPPDATA%/OHarness/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
+| `file` | Default when packaged — Fernet files under `<data dir>/secrets` (`OH_SECRETS_DIR` overrides; unpackaged default `~/.oharness/secrets`, falling back to a pre-rebrand `~/.openharness/secrets` if only that exists) |
 | `keychain` | OS keychain (`pip install keyring`) |
+
+### Data directory
+
+The installed app and the `oharness` CLI use the same data directory for **the connections database (`harness.db`) and the secrets store (`secrets/`)** — and only for those: `OH_DATA_DIR` when set (it must be an absolute path), otherwise the app's own folder, named after its bundle identifier `dev.oharness.app` — `%LOCALAPPDATA%\dev.oharness.app` on Windows, `~/Library/Application Support/dev.oharness.app` on macOS, `$XDG_DATA_HOME` or `~/.local/share/dev.oharness.app` on Linux. `backend/data_dir.py` resolves it for both, and a test pins it to the identifier in `src-tauri/tauri.conf.json`. A folder it creates is private to you (mode `0700`, or a Windows ACL for your account only); the default folder is never followed through a link. The Forja intake database, the sidecar token file, the workspaces folder and the CLI working directory still resolve their own locations (tracked in a separate issue). There is no migration: a CLI from before this fix kept its data in `%LOCALAPPDATA%\OHarness`, so after updating `oharness` sees an empty directory until you run it with `OH_DATA_DIR` pointing at that folder.
 
 ---
 

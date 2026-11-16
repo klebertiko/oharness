@@ -326,7 +326,9 @@ def _git_run(args: list[str], cwd: str) -> bytes | None:
     git = _GIT_EXE
     if git is None:
         return None
-    env = {key: value for key, value in os.environ.items() if not key.upper().startswith('GIT_')}
+    from adapters.cli_shared import scrub_env
+
+    env = scrub_env()  # the allowlist only: no sidecar or human credential, no GIT_* of the user
     env.update({'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_TERMINAL_PROMPT': '0'})
     try:
         # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
