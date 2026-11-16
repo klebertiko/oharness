@@ -83,6 +83,9 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    completed_result_events,
+    reported_model,
+    reported_tokens,
     cli_model_args,
     find_cli,
     is_windows,
@@ -218,6 +221,10 @@ class CodexCliAdapter(AgentAdapter):
             raise CliFailure(result.failure)
         yield result.content
 
+    async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
+        async for event in completed_result_events(self, prompt, config):
+            yield event
+
     async def probe(self, config: AdapterConfig) -> ProbeResult:
         gate = self._non_windows_gate()
         if gate:
@@ -303,8 +310,7 @@ def _parse_jsonl(stdout: str, *, model: str) -> AdapterResult:
                     texts.append(text)
         elif kind == "turn.completed":
             saw_turn_completed = True
-            usage = event.get("usage") or {}
-            tokens = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
+            tokens = reported_tokens(event.get("usage"))
         elif kind in ("turn.failed", "error"):
             detail = event.get("error") or event.get("message") or "codex CLI reported an error"
             return AdapterResult(

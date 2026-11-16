@@ -123,3 +123,21 @@ def test_engine_node_counts_cli_usage_as_reported_with_effective_model(monkeypat
     assert done["tokens"] == 6
     assert done["tokens_estimated"] is False
     assert done["model"] == "claude-sonnet-5-20261001"
+
+
+def test_ledger_row_takes_the_effective_model_over_the_requested_one():
+    from routers.execution import _usage_rows_from_events
+
+    events = [
+        {"event": "node_start", "data": {"node_id": "n", "adapter": "claude", "model": "", "connection_id": "anthropic"}},
+        {"event": "node_done", "data": {"node_id": "n", "tokens": 6, "model": "claude-sonnet-5-20261001"}},
+    ]
+    rows = _usage_rows_from_events(events, run_id="r", source="harness", connections={})
+    assert rows[0]["model"] == "claude-sonnet-5-20261001"
+
+
+def test_malformed_reported_model_never_travels():
+    out = json.dumps({"result": "pong", "usage": {"input_tokens": 1, "output_tokens": 1},
+                      "modelUsage": {"bad model; rm -rf /": {"outputTokens": 9}}})
+    events = asyncio.run(_events(ClaudeCliAdapter(runner=_runner(out)), model="claude-opus-5"))
+    assert _usage(events) == {"kind": "usage", "tokens": 2, "model": "claude-opus-5"}
