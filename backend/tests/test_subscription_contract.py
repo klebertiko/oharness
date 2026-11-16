@@ -141,8 +141,9 @@ def test_i10_cli_stderr_never_arrives_in_the_run_response(client, monkeypatch: p
     assert captured, "the failing CLI was never invoked"
     assert CANARY not in response.text
     error = next((d for n, d in _sse_events(response.text) if n == "node_error"), None)
-    # Today the run answers with fixed text; the closed failure class arrives with R-PRV-03.
+    # The run answers with a closed failure class and fixed text; stderr never travels (R-PRV-03).
     assert error is not None and CANARY not in json.dumps(error)
+    assert error["provider_failure"] == "cli-error"
 
 
 # I11 (subscription never invents USD): pending until R-PRV-06 — tracked in the issue, no test here.

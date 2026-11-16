@@ -1,11 +1,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Transcript } from "./Transcript";
-import { emptyRun } from "./runReducer";
+import { emptyRun, runReducer } from "./runReducer";
 import type { RunState, Segment } from "./types";
 import { useProviderStore, type Connection } from "@/components/providers/providerStore";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useActiveRunStore } from "@/store/activeRunStore";
+import { useLocaleStore } from "@/i18n/store";
+import { axeViolations } from "@/test/axe";
 
 function conn(overrides: Partial<Connection>): Connection {
   return {
@@ -347,5 +349,100 @@ describe("Transcript — trajectory breakdown", () => {
       const approve = screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement;
       expect(approve.disabled).toBe(false);
     });
+  });
+});
+
+function replay(events: [string, Record<string, unknown>][]) {
+  return events.reduce((state, [event, data]) => runReducer(state, { type: "sse", event, data }), emptyRun);
+}
+
+const FALLBACK = "claude CLI not found on PATH; falling back to API. Install the CLI or switch the runtime preference to API.";
+
+/** The shapes engine.py and routers/execution.py already emit, replayed through the reducer. */
+function warnedRun() {
+  return replay([
+    ["budget_warning", { spentUsd: 0.9, limitUsd: 1, pct: 0.9 }],
+    ["run_start", {
+      run_id: "r1", mode: "live", step: false, unreachable: [],
+      order: [
+        { node_id: "writer", type: "agent", label: "Writer", adapter: "claude", model: "" },
+        { node_id: "gate", type: "gate", label: "Gate", adapter: "", model: "" },
+        { node_id: "other", type: "agent", label: "Other", adapter: "claude", model: "" },
+      ],
+    }],
+    ["runtime_selected", { kind: "api", name: "claude", reason: FALLBACK }],
+    ["node_start", { node_id: "writer" }],
+    ["node_token_warning", { node_id: "writer", tokens: 820, limit: 1000, pct: 0.82 }],
+    ["node_done", { node_id: "writer", tokens: 820, output: "draft", latency_ms: 10 }],
+    ["node_start", { node_id: "gate" }],
+    ["node_done", { node_id: "gate", tokens: 0, output: "FAIL", latency_ms: 4 }],
+    ["gate_retry", { node_id: "gate", attempt: 2, cap: 3, target: "writer" }],
+    ["node_skipped", { node_id: "other", reason: "no matching condition" }],
+  ]);
+}
+
+describe("Transcript — warnings, retries and skip reasons", () => {
+  afterEach(() => {
+    cleanup();
+    useLocaleStore.setState({ locale: "en" });
+  });
+
+  function chip(name: RegExp | string) {
+    const el = screen.getByText(name);
+    expect(el.querySelector("[aria-hidden]"), `${el.textContent} has a word, and its marker is not the meaning`).toBeTruthy();
+    expect((el.textContent ?? "").replace(/\s+/g, " ").trim().length).toBeGreaterThan(0);
+    return el;
+  }
+
+  it("shows retries, limit warnings, the runtime and the skip reason as words", () => {
+    render(<Transcript run={warnedRun()} onResolve={() => {}} />);
+    expect(chip(/API · claude — CLI not found, using the API/).textContent).not.toMatch(/#[0-9a-f]{3}/i);
+    const budget = chip(/Budget 90%/);
+    expect(budget.textContent).toMatch(/\$0\.90/);
+    expect(budget.textContent).toMatch(/\$1\.00/);
+    expect(chip(/Token limit 82% · 820 of 1,000/)).toBeTruthy();
+    expect(chip(/Retry 2\/3 · back to Writer/)).toBeTruthy();
+    expect(chip(/Skipped · no matching condition/)).toBeTruthy();
+  });
+
+  it("uses the pt-BR catalog for the same chips", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    render(<Transcript run={warnedRun()} onResolve={() => {}} />);
+    expect(screen.getByText(/API · claude — CLI ausente, esta execução usa a API/)).toBeTruthy();
+    expect(screen.getByText(/Orçamento 90%/).textContent).toMatch(/0,90/);
+    expect(screen.getByText(/Limite de tokens 82% · 820 de 1\.000/)).toBeTruthy();
+    expect(screen.getByText(/Tentativa 2\/3 · voltou para Writer/)).toBeTruthy();
+    expect(screen.getByText(/Pulado · nenhuma condição correspondente/)).toBeTruthy();
+  });
+
+  it("names a CLI that was found, and does not invent a fallback", () => {
+    const run = replay([
+      ["run_start", { run_id: "r", mode: "live", order: [{ node_id: "a", type: "agent", label: "A" }], unreachable: [] }],
+      ["runtime_selected", { kind: "cli", name: "codex", reason: "" }],
+    ]);
+    render(<Transcript run={run} onResolve={() => {}} />);
+    expect(screen.getByText("CLI · codex")).toBeTruthy();
+    expect(screen.queryByText(/not found|ausente/i)).toBeNull();
+  });
+
+  it("keeps an unknown runtime reason instead of dropping the why", () => {
+    const run = replay([["runtime_selected", { kind: "api", name: "claude", reason: "operator asked for the API" }]]);
+    render(<Transcript run={run} onResolve={() => {}} />);
+    expect(screen.getByText("API · claude — operator asked for the API")).toBeTruthy();
+  });
+
+  it("does not invent a skip chip for a pending node the run simply never reached", () => {
+    const run = replay([
+      ["run_start", { run_id: "r", order: [{ node_id: "a", type: "agent", label: "A" }], unreachable: [] }],
+      ["harness_done", { status: "complete", total_tokens: 0, nodes_run: 0, elapsed_ms: 1 }],
+    ]);
+    render(<Transcript run={run} onResolve={() => {}} />);
+    expect(screen.queryByText(/^Skipped/)).toBeNull();
+    expect(screen.queryByText(/^Pulado/)).toBeNull();
+  });
+
+  it("has no axe violations on the warning chips", async () => {
+    const { container } = render(<Transcript run={warnedRun()} onResolve={() => {}} />);
+    expect(await axeViolations(container)).toEqual([]);
   });
 });

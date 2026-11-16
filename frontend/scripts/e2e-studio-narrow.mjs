@@ -29,7 +29,7 @@ const agile = { schemaVersion: "1", manifest: { id: "oharness.default.agile", na
 const stubs = {
   "GET /health": { status: "ok" },
   "GET /cowork/projects": { projects: [] },
-  "GET /providers/connections": { connections: [] },
+  "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections: [] },
   "GET /bundles/examples": { examples: [] },
   "GET /bundles/default": agile,
   "GET /harnesses/": [],

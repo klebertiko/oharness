@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
@@ -233,3 +234,88 @@ async def _kill(proc: "asyncio.subprocess.Process") -> None:
         await asyncio.wait_for(proc.wait(), timeout=5)
     except asyncio.TimeoutError:
         pass
+
+
+# ---- failure classes of a subscription CLI (R-PRV-03) ----------------------
+# A closed set the run can report without echoing anything the CLI printed (I10).
+CLI_SIGNIN = "cli-signin"
+CLI_MISSING = "cli-missing"
+CLI_TIMEOUT = "cli-timeout"
+CLI_ERROR = "cli-error"
+CLI_FAILURES = (CLI_SIGNIN, CLI_MISSING, CLI_TIMEOUT, CLI_ERROR)
+
+# A model the user typed becomes the value of `--model` in a CLI's argv, so it
+# is checked before it gets there: a CLI alias ("sonnet") or a model id
+# ("gpt-5.1-codex", "openai/gpt-5", "qwen3:8b"), never a flag, a space or shell text.
+CLI_MODEL_MAX_LEN = 128
+_CLI_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+INVALID_CLI_MODEL = (
+    "The model name is not valid: use letters, digits, '.', '-', '_', ':' or '/', "
+    f"start with a letter or digit, and keep it under {CLI_MODEL_MAX_LEN + 1} characters."
+)
+
+
+def valid_cli_model(model: str) -> bool:
+    """True when ``model`` is safe as the value of a CLI's `--model` flag."""
+    return 0 < len(model) <= CLI_MODEL_MAX_LEN and _CLI_MODEL.fullmatch(model) is not None
+
+
+def cli_model_args(model: str) -> list[str]:
+    """`--model <model>` for the argv, nothing when empty (the CLI's own default).
+    Raises ValueError with fixed text, never echoing what was typed."""
+    if not model:
+        return []
+    if not valid_cli_model(model):
+        raise ValueError(INVALID_CLI_MODEL)
+    return ["--model", model]
+
+
+CLI_FAILURE_MESSAGES = {
+    CLI_SIGNIN: "The CLI is not signed in. Sign in with the CLI, then retry.",
+    CLI_MISSING: "The CLI is not installed on this machine. Install it, then retry.",
+    CLI_TIMEOUT: "The CLI did not answer in time. Retry, or check that it is running.",
+    CLI_ERROR: "The CLI failed to run the request. Check it in Providers and retry.",
+}
+
+# Sign-in phrases only count at the START of a line (re.M): the same words in the
+# middle of a sentence - a task's own text echoed back - must not flip the class.
+_SIGNIN_LINE = re.compile(
+    r"^\W*(?:error:?\s*)?(?:"
+    r"not (?:logged|signed) in"
+    r"|invalid api key"
+    r"|authentication (?:required|failed|error)"
+    r"|(?:please )?(?:log|sign)[ -]?in (?:again|required)"
+    r"|please (?:run|log|sign)"
+    r"|session (?:has )?expired"
+    r"|(?:token|credentials?) (?:has |have )?(?:expired|invalid|revoked)"
+    r"|unauthorized\b"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def classify_cli_failure(*, returncode: int, text: str = "", timed_out: bool = False) -> str:
+    """Closed failure class from the exit code plus anchored phrases in ``text``.
+
+    ``text`` is only read here, never returned."""
+    if timed_out:
+        return CLI_TIMEOUT
+    if returncode != 0 and _SIGNIN_LINE.search(text or ""):
+        return CLI_SIGNIN
+    return CLI_ERROR
+
+
+class CliFailure(RuntimeError):
+    """A CLI-backed adapter failed. Carries only the closed class; ``str()`` is a
+    fixed message, so nothing the CLI printed can travel with it."""
+
+    def __init__(self, failure: str = CLI_ERROR) -> None:
+        self.failure = failure if failure in CLI_FAILURES else CLI_ERROR
+        super().__init__(CLI_FAILURE_MESSAGES[self.failure])
+
+
+class CliMissing(CliFailure, FileNotFoundError):
+    """The CLI binary is not on PATH (still a FileNotFoundError for older callers)."""
+
+    def __init__(self) -> None:
+        CliFailure.__init__(self, CLI_MISSING)

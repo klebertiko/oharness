@@ -78,7 +78,7 @@ def metrics(client, **params):
 def test_the_numbers_follow_the_events_in_the_window(client):
     seed()
     m = metrics(client, window='30d')
-    assert m['schemaVersion'] == 1 and m['window'] == '30d'
+    assert m['schemaVersion'] == 1 and m['window'] == '30d' and m['truncated'] is False
     assert m['throughput'] == {'prs_opened': 4, 'prs_merged': 1, 'items_opened': 3, 'items_merged': 1, 'items_completed': 1}
     assert m['cost']['median_tokens_per_pr'] == 1250 and m['cost']['total_tokens'] == 4500  # 1000, 1500, 1500, 500
     assert m['quality'] == {'items_reviewed': 2, 'approved_first_review': 0.5, 'avg_returns_to_implement': 0.5, 'verify_failures': 1,
@@ -182,3 +182,31 @@ def test_changes_requested_after_verification_is_counted(client):
 def test_idle_old_items_are_not_loaded(client):
     build('IDLE', NOW - timedelta(days=500), [], cost=5)
     assert metrics(client, window='90d')['cost']['total_tokens'] == 0
+
+
+def test_the_cap_is_reported_instead_of_cutting_in_silence(client, monkeypatch):
+    from factory import metrics as figures
+    monkeypatch.setattr(figures, 'MAX_ITEMS', 2)
+    build('NEW', NOW - timedelta(days=1), [], cost=10)
+    build('MID', NOW - timedelta(days=2), [], cost=20)
+    under = metrics(client, window='30d')
+    assert under['truncated'] is False and under['cost']['total_tokens'] == 30
+    build('OLD', NOW - timedelta(days=3), [], cost=40)
+    over = metrics(client, window='30d')
+    assert over['truncated'] is True and over['cost']['total_tokens'] == 30  # the two newest; the third is the cut
+
+
+def test_items_without_a_version_stay_in_their_own_group(client):
+    born = NOW - timedelta(days=1)
+    opened = [(30, 'artifact_added', 'agent', {'kind': 'diff'})]
+    build('PLAIN', born, opened, version=None, cost=7, artifacts=[(30, 'forja/plain', '')])
+    build('TAGGED', born, opened, version='v9', cost=11, artifacts=[(30, 'forja/tagged', '')])
+    by_version = metrics(client, window='30d')['by_version']
+    assert set(by_version) == {'sem versão', 'v9'}
+    assert by_version['sem versão']['cost']['total_tokens'] == 7 and by_version['sem versão']['throughput']['prs_opened'] == 1
+    assert by_version['v9']['cost']['total_tokens'] == 11
+
+
+def test_a_factory_version_longer_than_the_column_is_refused(client):
+    assert client.get('/factory/metrics', params={'factory_version': 'a' * 81}).status_code == 422
+    assert client.get('/factory/metrics', params={'factory_version': 'a' * 80, 'window': '7d'}).status_code == 200
