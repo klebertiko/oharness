@@ -55,7 +55,7 @@ def _direct(client: TestClient, monkeypatch, adapter) -> dict[str, dict]:
     monkeypatch.setattr("routers.execution.get_adapter", lambda name: adapter)
     resp = client.post(
         "/execute/direct",
-        json={"instruction": "hi", "mode": "live", "connection_id": "anthropic", "model": "claude-sonnet-5"},
+        json={"instruction": "hi", "mode": "live", "connection_id": "metered", "model": "claude-sonnet-5"},
     )
     assert resp.status_code == 200
     return {name: data for name, data in _sse_events(resp.text)}

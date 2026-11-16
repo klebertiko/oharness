@@ -62,6 +62,9 @@ def client(monkeypatch: pytest.MonkeyPatch):
             "endpoint": "https://openrouter.ai/api/v1",
             "enabled": True,
             "secretRef": "oharness/metered",  # gitleaks:allow
+            # The triage/intake call resolves with no node model, and an HTTP
+            # adapter needs one, so the metered connection carries a default.
+            "defaultModel": "claude-sonnet-5",
         },
         # residence: "local" -- used by the P2-4 unpriced-model tests below to
         # confirm a genuinely-free local connection is never refused just
@@ -467,9 +470,6 @@ def test_harness_run_refuses_decoy_local_residence_node_hiding_real_cloud_spend(
 def test_triage_intake_spend_is_recorded_when_it_engages_the_harness(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The intake call resolves the connection with no node model, so a
-    # metered connection needs its own default model to make that call at all.
-    monkeypatch.setitem(app.state.provider_connections["metered"], "defaultModel", "claude-sonnet-5")
     class _EngageWithRealSpend(_FixedTokenAdapter):
         async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
             if "reply with these exact characters and nothing else" in prompt:
@@ -502,9 +502,6 @@ def test_triage_reply_only_path_is_still_recorded_exactly_once(
     (engage_harness=False) must keep working exactly as before -- its spend
     already reaches the ledger via `_reply_only_events`, and the new
     triage-row logic must not double-count it."""
-    # The intake call resolves the connection with no node model, so a
-    # metered connection needs its own default model to make that call at all.
-    monkeypatch.setitem(app.state.provider_connections["metered"], "defaultModel", "claude-sonnet-5")
 
     class _ChatOnly(_FixedTokenAdapter):
         async def invoke(self, prompt: str, config: AdapterConfig) -> AdapterResult:
@@ -538,6 +535,7 @@ def test_direct_run_refused_for_no_model_when_budget_configured(client: TestClie
     budget — refused before the adapter is ever called. (A subscription
     connection without a model is *not* refused: it spends no USD — #416,
     test_subscription_budget.py.)"""
+    app.state.provider_connections["metered"].pop("defaultModel")
     client.put("/usage/budget", json={"limitUsd": 5.0})
     resp = client.post(
         "/execute/direct",
