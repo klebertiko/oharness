@@ -1,6 +1,6 @@
 # Usage guide
 
-OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and **Providers** (`Alt+3`). `Mod+K` opens the command palette and `?` lists every shortcut. Terms are defined in the [glossary](GLOSSARY.md).
+OHarness has four destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`), **Providers** (`Alt+3`) and **Forja** (`Alt+4`). `Mod+K` opens the command palette and `?` lists every shortcut. Terms are defined in the [glossary](GLOSSARY.md).
 
 ## First run
 
@@ -13,12 +13,14 @@ OHarness has three destinations: **Chats** (`Alt+1`), **Studio** (`Alt+2`) and *
 - Pick the provider and model with the composer chip, which reads `{connection} · {model}`. **Auto** uses the first eligible connection, cloud before on-device. The list is grouped by connection, with a search ("Find a model"). `Enter` saves the model as that connection's default; `Shift+Enter`, or "This chat only" in the list, applies it to the open chat alone (the chip then says so). Connections that cannot answer yet appear under **Needs action**, nearest to ready first, each with one step ("Turn on", "Replace key", "Copy `ollama serve`"). Choosing one opens it in Providers; when nothing can answer, the composer shows the same step as a button. A local model that is not downloaded reads "Model not pulled" with a "Copy `ollama pull …`" step. Setup stays on Providers.
 - The **harness** chip next to it chooses which harness runs this chat (or "No harness" to talk to the model directly). It applies from your next message; earlier replies keep the harness that wrote them. **Edit in Studio** opens the harness in use.
 - Pick the **workspace** with the other chip: the folder the chat's tools read and run commands in. With no folder, tools use a scratch directory.
+- **Own worktree** (off by default): with a harness and a folder, the run bar has a switch. On, that harness run works in its own Git worktree, so the folder is not touched; changes left behind are kept on a rescue ref. The switch is disabled while a run is in progress. Slash tools and Plan mode are not harness runs: they still use the folder.
+- **Flow** (off by default): with a harness, the same bar has a switch. On, each step of a harness run records advice. The advice is evidence only: it does not skip a step, change a gate, or change what runs. It does not put the app into the shared Flow state of [ADR 0066](adr/0066-flow-global.md). That state is not in the app (epic #357; the first slice, #358, is not on main).
 - **Queue**: type while a turn is running and press `Mod+Enter` (or Queue): the message waits in a visible list above the composer and runs after the current turn, one at a time, in order. Remove one with its button. If the turn stops or fails the queue pauses; Send next or Clear queue decides. The queue is kept if you reload or restart the app, and then it comes back **paused**: nothing runs until you press Send next. It holds 20 messages of up to 4000 characters each; past that the chat says so and keeps what you typed. Deleting the conversation clears its queue. Commands (`/exec`, `/read`) wait for the turn to finish.
 - **Subagents** (off by default): turn it on and the model can hand tasks to child runs, up to four per run. The chat shows Nilo and each child with its state; **Cancel** stops one child and leaves the rest running.
 - **Token ceiling** (no harness): a number in the toolbar. A run that reaches it stops with the status **Budget exceeded**. An invalid entry keeps the last valid ceiling and says so.
 - **Files this turn changed**: after a turn in a workspace, the chat lists the files it changed with a diff and a one-time **Revert** per file. A file edited after the turn is left alone.
 - Chat tools: `/exec` (run a command), `/read`, `/ls`. They run in the sidecar, never in the UI.
-- **Permission mode** is per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
+- **Permission modes** are per conversation, always visible beside the composer, and `Shift+Tab` cycles Ask, Auto and Plan. The six modes come from one table, [`backend/sandbox/permission_modes.json`](../backend/sandbox/permission_modes.json); the UI keeps a byte-identical copy that a test checks:
 
 | Mode | Behaviour |
 | --- | --- |
@@ -56,7 +58,7 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 - **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
 - **Remove a key.** **Remove** asks first, with **Cancel** selected.
 - **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
-- **Language.** The Providers screen is in English and Brazilian Portuguese. It follows the browser language; `Mod+K`, then "Language", switches it. The rest of the app is still English.
+- **Language.** English and Brazilian Portuguese. The choice is the one you saved, otherwise the browser language; `Mod+K`, then "Language", switches it. The catalogues cover the shell, Chats, Studio, the inspector, Cowork, Providers, Forja, and the Flow and worktree switches. The chat welcome ("What are we working on?") and some run notices, including the worktree lines in the transcript, are still English outside the catalogue. Issue #279 is open for the rest, including a native-speaker review.
 
 | Vendor | Connects through |
 | --- | --- |
@@ -67,6 +69,10 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 | Cursor | Local `cursor-agent` CLI; agent-only, on Windows through WSL2 |
 
 A node can pin an ordered list of providers; if one rejects the call the next is tried and the attempts appear in the run transcript. If nothing resolves the run stops at that node with an error and never swaps providers silently ([rule](product/provider-harness-rule.md)). API keys are stored by the sidecar's secrets store, never by the Tauri shell.
+
+## Forja
+
+Forja (`Alt+4`) is the local software factory. It shows work items on a board, an inbox of decisions that wait for a person, how the definition is set up (versions, secret names, agent memory) and metrics. Forja never merges on its own. Live runs stay in Chats. Scheduled and event automations run on this machine (`oharness forja automation`) and are not listed on this screen. Detail is in the [control room](forja/control-room.md) guide.
 
 ## Workspaces
 
