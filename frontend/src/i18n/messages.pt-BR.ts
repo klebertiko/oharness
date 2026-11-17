@@ -682,6 +682,12 @@ export const ptBR: Record<MessageKey, string> = {
   "provider.openrouter.where": "openrouter.ai, Keys.",
   "provider.openrouter.summary": "Uma chave, vários fornecedores. Escolha o modelo desta conexão; o OpenRouter o encaminha a um fornecedor que o ofereça.",
   "provider.openrouter.caveat": "Preços e disponibilidade são definidos pelo fornecedor de origem e mudam sem aviso.",
+  "provider.openaiCompatible.where": "As configurações do próprio servidor.",
+  "provider.openaiCompatible.summary": "Qualquer servidor que fale a API de chat completions da OpenAI: vLLM, LM Studio, um gateway da empresa.",
+  "provider.openaiCompatible.caveat": "A chave vai só para o host que você digitou. O app não conhece os preços.",
+  "provider.anthropicGateway.where": "As configurações do próprio gateway.",
+  "provider.anthropicGateway.summary": "Um gateway que fala a API Messages da Anthropic com chave de API, não a assinatura do Claude.",
+  "provider.anthropicGateway.caveat": "A chave vai só para o host que você digitou. O app não conhece os preços.",
 
   "flow.toggle.on": "Flow ligado",
   "flow.toggle.off": "Flow desligado",

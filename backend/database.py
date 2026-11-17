@@ -48,6 +48,10 @@ def _migrate_usage_records(conn) -> None:
         return
     current = Table("usage_records", MetaData(), autoload_with=conn)
     if "billing" in current.c:
+        # Post-#416 shape: #418 only adds a column, which SQLite can do in place.
+        # Existing rows read 0: they are not claimed as estimates.
+        if "tokens_estimated" not in current.c:
+            conn.execute(text("ALTER TABLE usage_records ADD COLUMN tokens_estimated BOOLEAN NOT NULL DEFAULT 0"))
         return
     from models import UsageRecord
 

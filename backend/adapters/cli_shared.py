@@ -25,12 +25,14 @@ default rather than an open injection surface:
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import platform
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
+from typing import AsyncIterator
 
 # What a CLI needs to locate its own config/session and run at all.
 # Deliberately excludes ANTHROPIC_API_KEY, OPENAI_API_KEY, CURSOR_API_KEY, or
@@ -319,3 +321,52 @@ class CliMissing(CliFailure, FileNotFoundError):
 
     def __init__(self) -> None:
         CliFailure.__init__(self, CLI_MISSING)
+
+
+# No single CLI turn comes near this; a larger figure is a malformed report,
+# not a count to charge against the ceiling.
+MAX_REPORTED_TOKENS = 10**9
+
+
+def reported_tokens(usage: object) -> int:
+    """Input + output tokens a CLI reported, in snake_case (claude, codex) or
+    camelCase (cursor-agent). 0 when nothing usable was reported (not a dict,
+    a bool, a string, negative, NaN/Inf, or above ``MAX_REPORTED_TOKENS``): the
+    caller then keeps its honest length estimate instead of an invented count."""
+    if not isinstance(usage, dict):
+        return 0
+    total = 0
+    for snake, camel in (("input_tokens", "inputTokens"), ("output_tokens", "outputTokens")):
+        value = usage.get(snake, usage.get(camel, 0))
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+        # isfinite only on a float: on a huge int it would itself overflow.
+        if isinstance(value, float) and not math.isfinite(value):
+            return 0
+        if value < 0 or value > MAX_REPORTED_TOKENS:
+            return 0
+        total += int(value)
+    return total if total <= MAX_REPORTED_TOKENS else 0
+
+
+def reported_model(value: object, fallback: str = "") -> str:
+    """The effective model a CLI named, when it is a well-formed model id;
+    otherwise the model that was requested (possibly empty). A malformed
+    value never travels to events, the ledger or the UI."""
+    if isinstance(value, str) and valid_cli_model(value):
+        return value
+    return fallback or ""
+
+
+async def completed_result_events(adapter, prompt: str, config) -> AsyncIterator[dict]:
+    """`stream_events` for a single-shot CLI: one completed answer, then the
+    usage and effective model the CLI itself reported (#418). No usage event
+    when the CLI reported no tokens — the engine then marks its count as an
+    estimate. A failure raises `CliFailure` with only the closed class."""
+    yield {"kind": "phase", "phase": "writing", "detail": config.model or config.adapter}
+    result = await adapter.invoke(prompt, config)
+    if result.error:
+        raise CliFailure(result.failure)
+    yield {"kind": "text", "text": result.content}
+    if result.tokens_used > 0:
+        yield {"kind": "usage", "tokens": result.tokens_used, "model": result.model}

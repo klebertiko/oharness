@@ -28,6 +28,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 
 from adapters import get_adapter, AdapterConfig
 from adapters.base import ProbeResult
+from adapters.cli_shared import reported_model
 from flow.advice import OutputTrail, advice_event, run_facts
 from flow.policy import advise_facts
 from providers.resolution import (
@@ -393,9 +394,12 @@ async def execute_harness(
       node_stream       {node_id, chunk}             — answer text
       tool_call         {node_id, call_id, name, args}
       tool_result       {node_id, call_id, ok, result, duration_ms}
-      node_done         {node_id, output, tokens, tokens_estimated, latency_ms}
+      node_done         {node_id, output, tokens, tokens_estimated, latency_ms, model?}
                                                      — `tokens_estimated`: true when the count was derived from
                                                        output length because the adapter reported no usage
+                                                     — `model`: the effective model the CLI reported
+                                                       (claude, cursor-agent); else the requested one;
+                                                       (codex and HTTP name none); absent when neither is known
       node_error        {node_id, error, tokens?}      — `tokens` present only when real spend
                                                           happened before the failure (e.g. an
                                                           over-limit node, see node_token_warning)
@@ -999,6 +1003,7 @@ async def execute_harness(
         node_start = time.time()
         collected: list[str] = []
         node_tokens = 0
+        node_model = ""  # the effective model the provider reported, if any (#418)
 
         try:
             if execution_mode != "mock" and runtime_error is not None:
@@ -1084,6 +1089,7 @@ async def execute_harness(
                     )
                 elif kind == "usage":
                     node_tokens = int(ev.get("tokens", 0))
+                    node_model = reported_model(ev.get("model"), node_model)
 
             output = "".join(collected)
             latency = int((time.time() - node_start) * 1000)
@@ -1132,6 +1138,7 @@ async def execute_harness(
                             f"downstream, not the spend itself."
                         ),
                         "tokens": node_tokens,
+                        **({"model": node_model} if node_model else {}),
                     },
                 )
             else:
@@ -1154,6 +1161,8 @@ async def execute_harness(
                     "tokens_estimated": node_tokens_estimated,
                     "latency_ms": latency,
                 }
+                if node_model:
+                    node_done_data["model"] = node_model
                 if execution_mode != "mock" and not control.stop.is_set():
                     # The frontend's provider-verification seam (useRunStream.ts)
                     # only credits a connection from this exact pair, present

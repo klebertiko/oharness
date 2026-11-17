@@ -4,6 +4,7 @@ import json
 from typing import AsyncIterator
 import httpx
 from .base import AgentAdapter, AdapterConfig, AdapterResult, ProbeResult
+from .catalog import MAX_CUSTOM_MODEL_LEN
 
 DEFAULT_ENDPOINTS = {
     "ollama": "http://host.docker.internal:11434/v1",
@@ -15,7 +16,7 @@ DEFAULT_ENDPOINTS = {
 # and what it will hand back to the UI.
 MAX_PROBE_BODY_BYTES = 2 * 1024 * 1024
 MAX_PROBE_MODELS = 2000
-MAX_MODEL_ID_LEN = 200
+MAX_MODEL_ID_LEN = MAX_CUSTOM_MODEL_LEN  # one bound for typed and listed model ids
 
 
 def reported_tokens(usage) -> int | None:

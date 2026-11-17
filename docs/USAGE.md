@@ -58,6 +58,7 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 - **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
 - **Remove a key.** **Remove** asks first, with **Cancel** selected.
 - **Spend and the USD ceiling.** Runs on a subscription (Claude, Codex, Cursor, Ollama Cloud) count their tokens but stay outside the USD budget; only metered API connections count toward it.
+- **Reported or estimated.** Each step's tokens and model are the ones the provider or CLI reported: Claude and cursor-agent report both, the HTTP providers report tokens, and Codex reports tokens but no model, so its step shows the model you asked for. When nothing usable is reported (no usage, or a malformed one), the count is estimated from the length of the answer. The spend ledger (`usage_records`) keeps a `tokens_estimated` column: `true` for an estimate, `false` for a reported count. Rows from before this column read `false`.
 - **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
 - **Language.** English and Brazilian Portuguese. The choice is the one you saved, otherwise the browser language; `Mod+K`, then "Language", switches it. The catalogues cover the shell, Chats, Studio, the inspector, Cowork, Providers, Forja, and the Flow and worktree switches. The chat welcome ("What are we working on?") and some run notices, including the worktree lines in the transcript, are still English outside the catalogue. Issue #279 is open for the rest, including a native-speaker review.
 
@@ -68,6 +69,12 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 | OpenRouter | API key |
 | Ollama | Local daemon (default `http://127.0.0.1:11434/v1`); Ollama Cloud is a separate connection |
 | Cursor | Local `cursor-agent` CLI; agent-only, on Windows through WSL2 |
+
+**Your own connections.** Two more kinds can be added with your own id and endpoint: **OpenAI-compatible** (vLLM, LM Studio, a company gateway) and **Anthropic gateway** (Anthropic's Messages API behind your own host). Create one with `POST /providers/connections` on the sidecar (`provider` set to `openai-compatible` or `anthropic-gateway`; example in the README's Providers section). It then appears in Providers, where you paste its key.
+
+- The key is kept only in the sidecar's secrets store, never in the connection or in the URL, and is sent only to that endpoint's host. To move a connection with a saved key to another host, remove the key first.
+- The endpoint must be `http://` or `https://` with a host, and cannot contain a user or password, a query string or a fragment. An Anthropic gateway takes the base URL without `/v1`.
+- Set a default model (up to 200 characters, no spaces or control characters); a run without one stops with an error. The name is up to 80 characters.
 
 A node can pin an ordered list of providers; if one rejects the call the next is tried and the attempts appear in the run transcript. If nothing resolves the run stops at that node with an error and never swaps providers silently ([rule](product/provider-harness-rule.md)). API keys are stored by the sidecar's secrets store, never by the Tauri shell.
 

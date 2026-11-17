@@ -211,6 +211,9 @@ class UsageRecord(Base):
     # Catalog billing of the connection at write time: "subscription" |
     # "credits" | "none" | None (legacy row or unknown connection).
     billing: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # True when `tokens_total` is the length-based fallback, not the count the
+    # provider or CLI reported (#418). Rows written before #418 read False.
+    tokens_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

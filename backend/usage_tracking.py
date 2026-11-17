@@ -114,6 +114,7 @@ async def record_usage(
     call_id: str | None = None,
     residence: str | None = None,
     billing: str | None = None,
+    tokens_estimated: bool = False,
 ) -> UsageRecord | None:
     """Persist one ledger row for one completed node/turn.
 
@@ -147,6 +148,8 @@ async def record_usage(
         # NULL price marks it unknown); only a subscription stores NULL cost.
         cost_usd=None if billing == "subscription" else (cost_usd if cost_usd is not None else 0.0),
         billing=billing,
+        # True only when the caller fell back to a length estimate (#418).
+        tokens_estimated=bool(tokens_estimated),
     )
     if call_id is not None:
         if not call_id.strip():
