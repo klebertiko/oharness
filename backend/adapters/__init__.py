@@ -4,6 +4,7 @@ from .cli_claude import ClaudeCliAdapter
 from .cli_codex import CodexCliAdapter
 from .cli_cursor import CursorCliAdapter
 from .mock import MockAdapter
+from .anthropic_gateway import AnthropicGatewayAdapter
 
 
 def get_adapter(adapter_name: str) -> AgentAdapter:
@@ -27,6 +28,9 @@ def get_adapter(adapter_name: str) -> AgentAdapter:
         "claude": ClaudeCliAdapter(),
         "cursor": CursorCliAdapter(),
         "codex": CodexCliAdapter(),
+        # Metered Anthropic Messages API over a gateway the person chose (#402);
+        # the subscription stays on "claude" (I13).
+        "anthropic-gateway": AnthropicGatewayAdapter(),
         "mock": MockAdapter(),
     }
     return adapters.get(adapter_name, MockAdapter())

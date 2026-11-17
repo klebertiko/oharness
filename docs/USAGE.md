@@ -70,6 +70,12 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 | Ollama | Local daemon (default `http://127.0.0.1:11434/v1`); Ollama Cloud is a separate connection |
 | Cursor | Local `cursor-agent` CLI; agent-only, on Windows through WSL2 |
 
+**Your own connections.** Two more kinds can be added with your own id and endpoint: **OpenAI-compatible** (vLLM, LM Studio, a company gateway) and **Anthropic gateway** (Anthropic's Messages API behind your own host). Create one with `POST /providers/connections` on the sidecar (`provider` set to `openai-compatible` or `anthropic-gateway`; example in the README's Providers section). It then appears in Providers, where you paste its key.
+
+- The key is kept only in the sidecar's secrets store, never in the connection or in the URL, and is sent only to that endpoint's host. To move a connection with a saved key to another host, remove the key first.
+- The endpoint must be `http://` or `https://` with a host, and cannot contain a user or password, a query string or a fragment. An Anthropic gateway takes the base URL without `/v1`.
+- Set a default model (up to 200 characters, no spaces or control characters); a run without one stops with an error. The name is up to 80 characters.
+
 A node can pin an ordered list of providers; if one rejects the call the next is tried and the attempts appear in the run transcript. If nothing resolves the run stops at that node with an error and never swaps providers silently ([rule](product/provider-harness-rule.md)). API keys are stored by the sidecar's secrets store, never by the Tauri shell.
 
 ## Forja
