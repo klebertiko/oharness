@@ -1,28 +1,79 @@
 """Fernet-backed file SecretsStore — used when ``OH_SECRETS=file``.
 
-DPAPI-free: the Fernet key is derived from the absolute store path via
-PBKDF2-HMAC-SHA256 so the same directory decrypts across process restarts
-on this machine. Prefer ``OH_SECRETS=keychain`` for desktop installs.
+The encryption key is a per-install random secret, not the store path. When
+the optional ``keyring`` package has a working OS backend, that secret is
+stored in the keychain (service ``oharness.file-store``). Without one, it is
+stored in ``.install-key`` inside the vault directory.
+
+That file fallback is a real limitation: the key sits next to the ciphertext,
+and any process running as the same user can read both. Mode ``0600`` (and
+the Windows ACL) stops other users. It does not stop other processes of this
+user. Prefer ``OH_SECRETS=keychain`` — which stores the credentials
+themselves in the keychain — or install ``keyring`` so only the wrapping
+secret is there. See ADR 0070.
+
+The directory is created mode ``0700`` and each file mode ``0600``. On
+Windows the ACL comes from ``security.sidecar_token.restrict_to_current_user``.
+Restrict runs before any secret bytes are written. If it fails, the empty
+file is removed and nothing is stored.
+
+Files written by older builds were encrypted with a key derived only from
+the absolute store path (``openharness.file-secrets.v1``). The first open
+decrypts those and re-encrypts them with the install secret, in place. A
+blob neither key can open is left untouched.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import contextlib
+import errno
+import os
+import platform
 import re
+import secrets
+import stat
+import time
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from security.sidecar_token import restrict_to_current_user
+
+from .keychain import KeyringBackend
+
 _SAFE_REF = re.compile(r"[^A-Za-z0-9._-]+")
+INSTALL_KEY_NAME = ".install-key"
+STORE_ID_NAME = ".store-id"
+FILE_STORE_KEYCHAIN_SERVICE = "oharness.file-store"
+_MAX_BLOB_BYTES = 1024 * 1024
+_WINNER_READ_ATTEMPTS = 50
+_WINNER_READ_DELAY_S = 0.02
 
 
-def _fernet_for_root(root: Path) -> Fernet:
-    """Derive a Fernet key from the machine-local absolute store path."""
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or path.is_junction()
+
+
+def _open_flags(*parts: int) -> int:
+    flags = 0
+    for part in parts:
+        flags |= part
+    for name in ("O_NOFOLLOW", "O_CLOEXEC", "O_BINARY"):
+        flags |= getattr(os, name, 0)
+    return flags
+
+
+def _legacy_fernet_for_root(root: Path) -> Fernet:
+    """Pre-fix key: PBKDF2 of the absolute path only. Migration, not new data.
+
+    The salt domain ``openharness.file-secrets.v1`` is frozen. Changing it
+    would make files written before the install secret unreadable.
+    """
     material = str(root.resolve()).encode("utf-8")
-    # Frozen pre-rebrand domain tag: changing it would make existing files undecryptable.
     salt = hashlib.sha256(b"openharness.file-secrets.v1:" + material).digest()
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -30,8 +81,23 @@ def _fernet_for_root(root: Path) -> Fernet:
         salt=salt,
         iterations=390_000,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(material))
-    return Fernet(key)
+    return Fernet(base64.urlsafe_b64encode(kdf.derive(material)))
+
+
+def _new_install_secret() -> bytes:
+    """A Fernet key: 32 random bytes, already urlsafe-base64.
+
+    The value is the key. It is not stretched: it is not a password, and a
+    fast hash of it would not add secrecy.
+    """
+    return Fernet.generate_key()
+
+
+def _fernet_for_secret(secret: bytes) -> Fernet:
+    try:
+        return Fernet(secret)
+    except (ValueError, TypeError):
+        raise OSError("the file-store key is not usable") from None
 
 
 def _filename_for_ref(ref: str) -> str:
@@ -40,35 +106,352 @@ def _filename_for_ref(ref: str) -> str:
     return f"{safe}.{digest}.bin"
 
 
+def _restrict_directory(path: Path) -> bool:
+    """Owner-only directory.
+
+    On POSIX the directory is opened once without following links, checked
+    through that descriptor (a directory, owned by this user), and set to
+    ``0700`` with ``fchmod`` on the same descriptor. A link swapped in for the
+    vault, or a folder another user owns, is refused: fail closed. This is not
+    ``restrict_to_current_user``, which chmods to ``0600`` and would drop the
+    search bit a directory needs. On Windows the helper is the ACL.
+    """
+    if platform.system() == "Windows":
+        return restrict_to_current_user(path)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise OSError("the secrets path is a link or not a directory") from None
+        return False
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISDIR(info.st_mode):
+            raise OSError("the secrets path is a link or not a directory")
+        if info.st_uid != os.geteuid():
+            raise OSError("the secrets directory belongs to another user")
+        try:
+            # A directory needs the search bit; 0o700 gives group and other nothing.
+            # The rule below compares the mode with 0o644 as a number, so it flags 0o700.
+            os.fchmod(fd, 0o700)  # nosemgrep: opengrep-rules.python.lang.security.audit.insecure-file-permissions
+        except OSError:
+            return False
+    finally:
+        os.close(fd)
+    return True
+
+
+def _ensure_private_dir(path: Path) -> None:
+    try:
+        if path.exists() and not path.is_dir():
+            raise OSError("the secrets path is not a directory")
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.mkdir(path, 0o700)  # umask cannot add group or other bits
+            except FileExistsError:
+                if not path.is_dir():
+                    raise OSError("the secrets path is not a directory") from None
+    except OSError as exc:
+        if str(exc) == "the secrets path is not a directory":
+            raise
+        raise OSError("the secrets directory could not be created") from None
+    if not _restrict_directory(path):
+        raise OSError("could not restrict the secrets directory to the current user")
+
+
+def _restrict_existing_files(root: Path) -> None:
+    """Tighten files already on disk before they are read or rewritten."""
+    for entry in root.iterdir():
+        if _is_link(entry) or not entry.is_file():
+            continue
+        if not restrict_to_current_user(entry):
+            raise OSError("could not restrict the secret file to the current user")
+
+
+def _read_all(path: Path) -> bytes:
+    fd = os.open(path, _open_flags(os.O_RDONLY))
+    try:
+        chunks: list[bytes] = []
+        size = 0
+        while True:
+            block = os.read(fd, 65536)
+            if not block:
+                break
+            size += len(block)
+            if size > _MAX_BLOB_BYTES:
+                raise OSError("the secrets file is too large")
+            chunks.append(block)
+        return b"".join(chunks)
+    finally:
+        os.close(fd)
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("could not write the secret file")
+        view = view[written:]
+
+
+def _write_new(path: Path, data: bytes) -> None:
+    """Create ``path`` owner-only, restrict it, and only then write ``data``.
+
+    ``O_EXCL`` so an existing name (including a link) is not opened. The
+    first descriptor is closed before restrict so Windows can set the ACL,
+    and it is closed before any secret byte exists. Failure deletes the
+    empty file.
+    """
+    if _is_link(path):
+        raise OSError("refusing to follow a link in the secrets directory")
+    fd = os.open(path, _open_flags(os.O_WRONLY, os.O_CREAT, os.O_EXCL), 0o600)
+    os.close(fd)
+    try:
+        if not restrict_to_current_user(path):
+            raise OSError("could not restrict the secret file to the current user")
+        fd = os.open(path, _open_flags(os.O_WRONLY, os.O_TRUNC), 0o600)
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(fd, 0o600)
+            _write_all(fd, data)
+        finally:
+            os.close(fd)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+def _write_private(path: Path, data: bytes) -> None:
+    if _is_link(path):
+        raise OSError("refusing to follow a link in the secrets directory")
+    if not path.exists():
+        try:
+            _write_new(path, data)
+            return
+        except FileExistsError:
+            pass
+    if not restrict_to_current_user(path):
+        raise OSError("could not restrict the secret file to the current user")
+    tmp = path.with_name("." + path.name + "." + secrets.token_hex(6) + ".tmp")
+    try:
+        _write_new(tmp, data)
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    if not restrict_to_current_user(path):
+        raise OSError("could not restrict the secret file to the current user")
+
+
+def _ascii_secret(raw: bytes, *, what: str) -> bytes:
+    text = raw.strip()
+    if not text or len(text) > 512:
+        raise OSError(f"the file-store {what} is not usable")
+    try:
+        text.decode("ascii")
+    except UnicodeDecodeError:
+        raise OSError(f"the file-store {what} is not usable") from None
+    return text
+
+
+def _read_named(path: Path, *, what: str) -> bytes | None:
+    if _is_link(path):
+        raise OSError("refusing to follow a link in the secrets directory")
+    if not path.is_file():
+        return None
+    return _ascii_secret(_read_all(path), what=what)
+
+
+def _load_keyring() -> KeyringBackend | None:
+    """The OS keychain when ``keyring`` imports and has a real backend.
+
+    A missing package, or the fail/null backend (priority 0), means the
+    install secret goes to the user-only file instead. Callers that must
+    not touch the real keychain pass a backend or set ``use_keychain=False``.
+    """
+    try:
+        import keyring
+    except ImportError:
+        return None
+    try:
+        backend = keyring.get_keyring()
+    except Exception:
+        return None
+    if not getattr(backend, "priority", 0):
+        return None
+    return keyring
+
+
+def _keychain_get(backend: KeyringBackend, store_id: str) -> str | None:
+    try:
+        value = backend.get_password(FILE_STORE_KEYCHAIN_SERVICE, store_id)
+    except Exception:
+        return None
+    return value or None
+
+
+def _keychain_set(backend: KeyringBackend, store_id: str, secret: bytes) -> bool:
+    text = secret.decode("ascii")
+    try:
+        backend.set_password(FILE_STORE_KEYCHAIN_SERVICE, store_id, text)
+        return backend.get_password(FILE_STORE_KEYCHAIN_SERVICE, store_id) == text
+    except Exception:
+        return False
+
+
+def _load_or_create_secret(root: Path, backend: KeyringBackend | None) -> bytes:
+    """The install secret. The on-disk key wins while it exists; then the keychain.
+
+    A store id with no key file means the secret lives only in the keychain.
+    A missing or failing keychain then raises, instead of minting a new
+    secret that could no longer open the ciphertext.
+    """
+    key_path = root / INSTALL_KEY_NAME
+    id_path = root / STORE_ID_NAME
+    file_secret = _read_named(key_path, what="key file")
+    store_id_bytes = _read_named(id_path, what="id file")
+    store_id = store_id_bytes.decode("ascii") if store_id_bytes is not None else None
+
+    if file_secret is not None:
+        if backend is not None:
+            if store_id is None:
+                store_id = secrets.token_urlsafe(16)
+                _write_private(id_path, store_id.encode("ascii"))
+            if _keychain_set(backend, store_id, file_secret):
+                key_path.unlink()
+        return file_secret
+
+    if store_id is not None:
+        if backend is None:
+            raise OSError("the file-store key is in the OS keychain, which is unavailable")
+        found = _keychain_get(backend, store_id)
+        if not found:
+            raise OSError("the file-store key is in the OS keychain, which could not be read")
+        return found.encode("utf-8")
+
+    secret = _new_install_secret()
+    if backend is not None:
+        store_id = secrets.token_urlsafe(16)
+        if _keychain_set(backend, store_id, secret):
+            try:
+                _write_new(id_path, store_id.encode("ascii"))
+            except FileExistsError:
+                # Another process opened this new vault first. Adopt its id
+                # and keychain secret; ours was never used for ciphertext.
+                _keychain_forget(backend, store_id)
+                winner_id = _read_winner(id_path, what="id file").decode("ascii")
+                found = _keychain_get(backend, winner_id)
+                if not found:
+                    raise OSError("the file-store key is in the OS keychain, which could not be read") from None
+                return found.encode("utf-8")
+            return secret
+    try:
+        _write_new(key_path, secret)
+    except FileExistsError:
+        # Lost the create race: the winner's key is the one on disk, so use
+        # it instead of overwriting it out from under the other process.
+        return _read_winner(key_path, what="key file")
+    return secret
+
+
+def _read_winner(path: Path, *, what: str) -> bytes:
+    """The value another process just created at ``path``.
+
+    ``_write_new`` creates the file empty, restricts it, then writes, so a
+    reader can briefly see it empty. Wait a short, bounded time for the bytes.
+    """
+    for _ in range(_WINNER_READ_ATTEMPTS):
+        if _is_link(path):
+            raise OSError("refusing to follow a link in the secrets directory")
+        if path.is_file() and path.stat().st_size > 0:
+            return _ascii_secret(_read_all(path), what=what)
+        time.sleep(_WINNER_READ_DELAY_S)
+    raise OSError(f"the file-store {what} is not usable")
+
+
+def _keychain_forget(backend: KeyringBackend, store_id: str) -> None:
+    # Best effort: an orphan entry holds a secret that encrypts nothing.
+    with contextlib.suppress(Exception):
+        backend.delete_password(FILE_STORE_KEYCHAIN_SERVICE, store_id)
+
+
+def _migrate_legacy(root: Path, fernet: Fernet) -> None:
+    blobs = [
+        entry
+        for entry in root.iterdir()
+        if not _is_link(entry)
+        and entry.is_file()
+        and not entry.name.startswith(".")
+        and entry.suffix == ".bin"
+    ]
+    if not blobs:
+        return
+    legacy: Fernet | None = None
+    for path in blobs:
+        data = _read_all(path)
+        try:
+            fernet.decrypt(data)
+            continue
+        except InvalidToken:
+            pass  # not the install key; the legacy path key is tried next
+        if legacy is None:
+            legacy = _legacy_fernet_for_root(root)
+        try:
+            plain = legacy.decrypt(data)
+        except InvalidToken:
+            continue
+        _write_private(path, fernet.encrypt(plain))
+
+
 class FileSecrets:
-    def __init__(self, root: Path | str) -> None:
+    def __init__(
+        self,
+        root: Path | str,
+        *,
+        keyring_backend: KeyringBackend | None = None,
+        use_keychain: bool = True,
+    ) -> None:
         self._root = Path(root)
-        self._root.mkdir(parents=True, exist_ok=True)
-        self._fernet = _fernet_for_root(self._root)
+        _ensure_private_dir(self._root)
+        _restrict_existing_files(self._root)
+        if not use_keychain:
+            backend = None
+        elif keyring_backend is not None:
+            backend = keyring_backend
+        else:
+            backend = _load_keyring()
+        self._fernet = _fernet_for_secret(_load_or_create_secret(self._root, backend))
+        _migrate_legacy(self._root, self._fernet)
 
     def _path(self, ref: str) -> Path:
         return self._root / _filename_for_ref(ref)
 
     def put(self, ref: str, value: str) -> None:
-        token = self._fernet.encrypt(value.encode("utf-8"))
-        self._path(ref).write_bytes(token)
+        _write_private(self._path(ref), self._fernet.encrypt(value.encode("utf-8")))
 
     def get(self, ref: str) -> str | None:
         path = self._path(ref)
-        if not path.is_file():
+        if _is_link(path) or not path.is_file():
             return None
         try:
-            return self._fernet.decrypt(path.read_bytes()).decode("utf-8")
+            plain = self._fernet.decrypt(_read_all(path))
         except InvalidToken:
+            return None
+        try:
+            return plain.decode("utf-8")
+        except UnicodeDecodeError:
             return None
 
     def delete(self, ref: str) -> None:
         path = self._path(ref)
-        if path.is_file():
+        if _is_link(path) or path.is_file():
             path.unlink()
 
     def exists(self, ref: str) -> bool:
-        return self._path(ref).is_file()
+        path = self._path(ref)
+        return not _is_link(path) and path.is_file()
 
     def __repr__(self) -> str:
         return f"FileSecrets(root={self._root!s})"
