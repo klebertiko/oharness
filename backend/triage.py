@@ -79,6 +79,7 @@ import httpx
 
 from adapters.base import AdapterConfig
 from providers.resolution import ProviderResolutionError, resolve_node_provider
+from usage_tracking import connection_billing
 
 _SOUL_PATH = Path(__file__).resolve().parent.parent / "SOUL.md"
 
@@ -252,7 +253,7 @@ async def route_message(
     connections: dict[str, dict] | None,
     secrets_store: object | None,
     cwd: str | None = None,
-    enforce_budget: Callable[[str | None, str | None], Awaitable[None]] | None = None,
+    enforce_budget: Callable[[str | None, str | None, str | None], Awaitable[None]] | None = None,
     laya_decide: LayaDecideFn | None = None,
     laya_confidence_threshold: float = _LAYA_CONFIDENCE_THRESHOLD,
 ) -> RouteResult:
@@ -321,8 +322,8 @@ async def route_message(
         )
 
     if enforce_budget is not None:
-        residence = (connections or {}).get(resolved.connection_id, {}).get("residence")
-        await enforce_budget(resolved.config.model, residence)
+        residence, billing = connection_billing((connections or {}).get(resolved.connection_id))
+        await enforce_budget(resolved.config.model, residence, billing)
 
     call_started = time.perf_counter()
     try:

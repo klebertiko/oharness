@@ -5,7 +5,7 @@ from test_execution_budget_enforcement import _sse_events, client  # noqa: F401 
 
 
 def _two_node_graph():
-    node = lambda nid: {"id": nid, "type": "llm", "data": {"label": nid, "providerIds": ["anthropic"], "model": "claude-sonnet-5"}}
+    node = lambda nid: {"id": nid, "type": "llm", "data": {"label": nid, "providerIds": ["metered"], "model": "claude-sonnet-5"}}
     return {"nodes": [{"id": "in", "type": "input", "data": {"prompt": "hi"}}, node("a"), node("b")],
             "edges": [{"source": "in", "target": "a"}, {"source": "a", "target": "b"}]}
 
@@ -38,7 +38,7 @@ def test_invalid_ceiling_is_refused_for_harness_runs_too(client):
 
 def test_a_run_whose_last_node_crosses_the_ceiling_is_left_complete(client):
     graph = {"nodes": [{"id": "in", "type": "input", "data": {"prompt": "hi"}},
-                       {"id": "a", "type": "llm", "data": {"label": "a", "providerIds": ["anthropic"], "model": "claude-sonnet-5"}}],
+                       {"id": "a", "type": "llm", "data": {"label": "a", "providerIds": ["metered"], "model": "claude-sonnet-5"}}],
              "edges": [{"source": "in", "target": "a"}]}
     resp = client.post("/execute/", json={"graph_json": graph, "mode": "live", "instruction": "work", "max_tokens": 500})
     done = dict(_sse_events(resp.text))

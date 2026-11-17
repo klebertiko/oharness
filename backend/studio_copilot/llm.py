@@ -88,11 +88,13 @@ async def complete_json(
         raise StudioLlmError(400, "provider_unavailable", _safe_detail(str(exc))) from exc
 
     connection = connections.get(resolved.connection_id, {})
+    residence, billing = usage_tracking.connection_billing(connection)
     try:
         await usage_tracking.enforce_budget_or_raise(
             db,
             model=resolved.config.model or None,
-            residence=connection.get("residence"),
+            residence=residence,
+            billing=billing,
             model_expected=True,
         )
     except usage_tracking.BudgetExceededError as exc:
@@ -149,4 +151,6 @@ async def complete_json(
                     adapter=resolved.adapter_name,
                     model=config.model,
                     tokens_total=tokens,
+                    residence=residence,
+                    billing=billing,
                 )

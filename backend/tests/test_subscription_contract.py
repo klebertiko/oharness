@@ -1,13 +1,12 @@
 """
-Subscription-path contract (R-PRV-00): pins invariants I1..I10, I12 and I13 of
-the `credential.kind=cli` connections (Claude, Codex/ChatGPT, Cursor).
+Subscription-path contract (R-PRV-00): pins invariants I1..I13 of the
+`credential.kind=cli` connections (Claude, Codex/ChatGPT, Cursor).
 
 Nothing here changes behaviour — it fixes today's behaviour so every later
 Providers change must keep the subscription path as it is. No process is
 spawned: each adapter takes an injectable ``runner``.
 
-I11 (subscription never invents USD) stays pending until the budget wiring in
-R-PRV-06 lands; it is deliberately neither a red test nor a skip.
+I11 (subscription never invents USD) landed with R-PRV-06 (#416).
 """
 from __future__ import annotations
 
@@ -146,4 +145,40 @@ def test_i10_cli_stderr_never_arrives_in_the_run_response(client, monkeypatch: p
     assert error["provider_failure"] == "cli-error"
 
 
-# I11 (subscription never invents USD): pending until R-PRV-06 — tracked in the issue, no test here.
+# I11 — subscription never invents USD (R-PRV-06, #416). The end-to-end run
+# is in test_subscription_budget.py; this pins the contract per CLI vendor.
+@pytest.mark.parametrize("pid", [pid for pid, _cls, _mod in VIA])
+def test_i11_subscription_never_invents_usd(pid: str) -> None:
+    import anyio
+    from sqlalchemy import delete
+
+    import usage_tracking as ut
+    from database import SessionLocal
+    from models import BudgetConfig, UsageRecord
+
+    residence, billing = ut.connection_billing({"id": pid, "provider": pid, "residence": "cloud"})
+    assert billing == "subscription"
+
+    async def go() -> None:
+        async with SessionLocal() as db:
+            await db.execute(delete(UsageRecord))
+            await db.execute(delete(BudgetConfig))
+            await db.commit()
+            await ut.set_budget_limit(db, 5)
+            # No default model is not a reason to refuse a seat under a USD budget.
+            status = await ut.enforce_budget_or_raise(
+                db, model=None, residence=residence, billing=billing, model_expected=True
+            )
+            assert status.state == "ok"
+            row = await ut.record_usage(
+                db, run_id="i11", node_id=None, source="direct", connection_id=pid, provider=pid,
+                adapter="cli", model="claude-sonnet-5", tokens_total=1000, residence=residence, billing=billing,
+            )
+            # Unknown, never 0.0 and never the API list price of the same model.
+            assert row.billing == "subscription" and row.cost_usd is None and row.price_per_mtok is None
+            assert (await ut.get_budget_status(db)).state == "ok"
+            await db.execute(delete(UsageRecord))
+            await db.execute(delete(BudgetConfig))
+            await db.commit()
+
+    anyio.run(go)
