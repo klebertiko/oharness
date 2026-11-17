@@ -131,7 +131,9 @@ def _restrict_directory(path: Path) -> bool:
         if info.st_uid != os.geteuid():
             raise OSError("the secrets directory belongs to another user")
         try:
-            os.fchmod(fd, 0o700)  # a directory needs the search bit; group and other get nothing
+            # A directory needs the search bit; 0o700 gives group and other nothing.
+            # The rule below compares the mode with 0o644 as a number, so it flags 0o700.
+            os.fchmod(fd, 0o700)  # nosemgrep: opengrep-rules.python.lang.security.audit.insecure-file-permissions
         except OSError:
             return False
     finally:
