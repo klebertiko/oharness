@@ -28,10 +28,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import contextlib
+import errno
 import os
 import platform
 import re
 import secrets
+import stat
 import time
 from pathlib import Path
 
@@ -107,16 +109,33 @@ def _filename_for_ref(ref: str) -> str:
 def _restrict_directory(path: Path) -> bool:
     """Owner-only directory.
 
-    On POSIX this is ``0700`` from ``chmod``, not ``restrict_to_current_user``.
-    That helper chmods to ``0600``, which is right for a file and wrong for a
-    directory (it drops the search bit). On Windows the helper is the ACL.
+    On POSIX the directory is opened once without following links, checked
+    through that descriptor (a directory, owned by this user), and set to
+    ``0700`` with ``fchmod`` on the same descriptor. A link swapped in for the
+    vault, or a folder another user owns, is refused: fail closed. This is not
+    ``restrict_to_current_user``, which chmods to ``0600`` and would drop the
+    search bit a directory needs. On Windows the helper is the ACL.
     """
     if platform.system() == "Windows":
         return restrict_to_current_user(path)
     try:
-        os.chmod(path, 0o700)  # a directory needs the search bit; group and other get nothing
-    except OSError:
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise OSError("the secrets path is a link or not a directory") from None
         return False
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISDIR(info.st_mode):
+            raise OSError("the secrets path is a link or not a directory")
+        if info.st_uid != os.geteuid():
+            raise OSError("the secrets directory belongs to another user")
+        try:
+            os.fchmod(fd, 0o700)  # a directory needs the search bit; group and other get nothing
+        except OSError:
+            return False
+    finally:
+        os.close(fd)
     return True
 
 

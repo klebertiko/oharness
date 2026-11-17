@@ -201,6 +201,31 @@ def test_legacy_path_derived_files_migrate_without_losing_secrets(tmp_path: Path
     assert first.read_bytes() == migrated
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory mode and owner; Windows uses the ACL")
+def test_a_link_in_place_of_the_vault_directory_is_refused(tmp_path: Path) -> None:
+    """A link swapped in for the vault must not have its target chmodded or used."""
+    target = tmp_path / "elsewhere"
+    target.mkdir(mode=0o755)
+    vault = tmp_path / "vault"
+    vault.symlink_to(target, target_is_directory=True)
+    with pytest.raises(OSError, match="link or not a directory"):
+        FileSecrets(vault, use_keychain=False)
+    assert target.stat().st_mode & 0o777 == 0o755
+    assert list(target.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory mode and owner; Windows uses the ACL")
+def test_a_vault_directory_owned_by_another_user_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault"
+    vault.mkdir(mode=0o755)
+    real_euid = os.geteuid()
+    monkeypatch.setattr(file_store.os, "geteuid", lambda: real_euid + 1)
+    with pytest.raises(OSError, match="belongs to another user"):
+        FileSecrets(vault, use_keychain=False)
+    assert vault.stat().st_mode & 0o777 == 0o755
+    assert list(vault.iterdir()) == []
+
+
 def test_an_undecryptable_blob_is_left_in_place(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     vault.mkdir()
