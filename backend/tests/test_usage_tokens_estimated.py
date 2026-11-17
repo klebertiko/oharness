@@ -6,7 +6,7 @@ from __future__ import annotations
 import anyio
 from sqlalchemy import create_engine, delete, select, text
 
-from database import SessionLocal, _migrate_usage_records
+from database import SessionLocal, _migrate_usage_records, init_db
 from models import UsageRecord
 from routers.execution import _usage_rows_from_events
 import usage_tracking
@@ -56,6 +56,7 @@ def test_model_has_tokens_estimated_column():
 
 
 async def _record(**over) -> UsageRecord | None:
+    await init_db()
     async with SessionLocal() as db:
         await db.execute(delete(UsageRecord))
         await db.commit()

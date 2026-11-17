@@ -112,6 +112,7 @@ async def complete_json(
     )
 
     tokens = 0
+    tokens_estimated = False  # any attempt counted by length, not by the provider (#418)
     try:
         message = user
         problem = "no reply"
@@ -123,7 +124,11 @@ async def complete_json(
             except Exception as exc:  # noqa: BLE001 - adapters raise vendor-specific errors
                 raise StudioLlmError(502, "provider_error", f"The provider call failed ({type(exc).__name__}).") from exc
 
-            tokens += result.tokens_used if result.tokens_used > 0 else _estimate(result.content)
+            if result.tokens_used > 0:
+                tokens += result.tokens_used
+            else:
+                tokens += _estimate(result.content)
+                tokens_estimated = True
             if result.error:
                 raise StudioLlmError(502, "provider_error", _safe_detail(result.error))
 
@@ -153,4 +158,5 @@ async def complete_json(
                     tokens_total=tokens,
                     residence=residence,
                     billing=billing,
+                    tokens_estimated=tokens_estimated,
                 )

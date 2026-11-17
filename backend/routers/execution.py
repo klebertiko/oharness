@@ -278,6 +278,9 @@ def _usage_rows_from_events(
                     tokens_total=tokens,
                     residence=residence,
                     billing=billing,
+                    # Only an explicit False is a reported count; a node_error
+                    # that carries no flag is not claimed as reported (#418).
+                    tokens_estimated=data.get("tokens_estimated") is not False,
                 )
             )
     return rows
@@ -944,6 +947,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             tokens_total=total_tokens,
                             residence=residence,
                             billing=billing,
+                            tokens_estimated=tokens_estimated,
                         )
 
     return StreamingResponse(
