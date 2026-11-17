@@ -22,6 +22,7 @@ from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, Ru
 from run_worktree import RunWorktree, require_workspace
 from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run, resume_seed, claim_start, release_start
 from adapters import get_adapter, AdapterConfig
+from adapters.cli_shared import reported_model
 from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
@@ -271,10 +272,15 @@ def _usage_rows_from_events(
                     connection_id=connection_id,
                     provider=provider,
                     adapter=start.get("adapter", ""),
-                    model=start.get("model", ""),
+                    # The effective model the provider reported wins over the
+                    # one requested at node_start (#418).
+                    model=data.get("model") or start.get("model", ""),
                     tokens_total=tokens,
                     residence=residence,
                     billing=billing,
+                    # Only an explicit False is a reported count; a node_error
+                    # that carries no flag is not claimed as reported (#418).
+                    tokens_estimated=data.get("tokens_estimated") is not False,
                 )
             )
     return rows
@@ -720,6 +726,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         status = STATUS_ERROR
         total_tokens = 0
         node_tokens = 0
+        effective_model = model  # replaced by the model the provider reports (#418)
         tokens_estimated = False
         collected: list[str] = []
         nodes_run = 0
@@ -818,6 +825,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             )
                         elif kind == "usage":
                             node_tokens = int(ev.get("tokens", 0))
+                            effective_model = reported_model(ev.get("model"), effective_model)
                             if not broker and budget_hit is None and run_budget.exceeded(node_tokens):
                                 # The provider's own count arrives after the text; it outranks the length estimate.
                                 budget_hit = {"max_tokens": run_budget.max_tokens, "used_tokens": node_tokens}
@@ -860,6 +868,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "tokens": node_tokens,
                                 "tokens_estimated": tokens_estimated,
                                 "latency_ms": latency,
+                                **({"model": effective_model} if effective_model else {}),
                                 "connection_id": connection_id,
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
@@ -934,10 +943,11 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             connection_id=connection_id,
                             provider=connections.get(connection_id, {}).get("provider", ""),
                             adapter=adapter_name,
-                            model=model,
+                            model=effective_model,
                             tokens_total=total_tokens,
                             residence=residence,
                             billing=billing,
+                            tokens_estimated=tokens_estimated,
                         )
 
     return StreamingResponse(

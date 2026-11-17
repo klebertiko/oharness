@@ -64,6 +64,9 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    completed_result_events,
+    reported_model,
+    reported_tokens,
     cli_model_args,
     find_cli,
     is_windows,
@@ -195,7 +198,7 @@ class CursorCliAdapter(AgentAdapter):
                 failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
             )
 
-        return _parse_result(result.stdout)
+        return _parse_result(result.stdout, model=config.model)
 
     async def stream(self, prompt: str, config: AdapterConfig) -> AsyncIterator[str]:
         # cursor-agent's --output-format json is a single completed result in
@@ -206,6 +209,10 @@ class CursorCliAdapter(AgentAdapter):
         if result.error:
             raise CliFailure(result.failure)
         yield result.content
+
+    async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
+        async for event in completed_result_events(self, prompt, config):
+            yield event
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:
         gate = self._windows_gate()
@@ -267,7 +274,7 @@ class CursorCliAdapter(AgentAdapter):
         )
 
 
-def _parse_result(stdout: str) -> AdapterResult:
+def _parse_result(stdout: str, *, model: str = "") -> AdapterResult:
     """
     Extract completion text from cursor-agent's ``--output-format json``.
 
@@ -294,7 +301,13 @@ def _parse_result(stdout: str) -> AdapterResult:
         for key in ("result", "output", "text", "message", "response"):
             value = payload.get(key)
             if isinstance(value, str) and value:
-                return AdapterResult(content=value)
+                # usage/model are taken only when cursor-agent reports them;
+                # their shape is unverified against a real run (see above).
+                return AdapterResult(
+                    content=value,
+                    tokens_used=reported_tokens(payload.get("usage")),
+                    model=reported_model(payload.get("model"), model),
+                )
         # Valid JSON, no error flag, but none of the known content keys held
         # a non-empty string. Silently returning raw stdout here (SEC P3-3,
         # harness Security Gate 2026-09-11) would let an unrecognised
