@@ -25,6 +25,51 @@ async def get_db() -> AsyncSession:
         yield session
 
 
+# Adapters that only ever ride a vendor's own CLI seat (Claude, Codex/ChatGPT,
+# Cursor): a legacy ledger row from one of them was a subscription turn.
+_SUBSCRIPTION_ADAPTERS = ("claude", "codex", "cursor")
+
+
+def _migrate_usage_records(conn) -> None:
+    """Bring a pre-#416 ``usage_records`` table to the current shape.
+
+    ``create_all`` never alters an existing table, and SQLite cannot drop a
+    NOT NULL constraint in place, so the table is rebuilt once: ``billing`` is
+    added and ``cost_usd`` becomes nullable. Legacy rows from the subscription
+    CLI adapters were priced as if they were API calls (F5): they are marked
+    ``billing='subscription'`` with unknown cost, which corrects a wrong
+    classification rather than repricing anything. Idempotent: a table that
+    already has ``billing`` is left alone."""
+    if conn.dialect.name != "sqlite":
+        return
+    from sqlalchemy import MetaData, Table, inspect, insert, select, text, update
+
+    if "usage_records" not in inspect(conn).get_table_names():
+        return
+    current = Table("usage_records", MetaData(), autoload_with=conn)
+    if "billing" in current.c:
+        # Post-#416 shape: #418 only adds a column, which SQLite can do in place.
+        # Existing rows read 0: they are not claimed as estimates.
+        if "tokens_estimated" not in current.c:
+            conn.execute(text("ALTER TABLE usage_records ADD COLUMN tokens_estimated BOOLEAN NOT NULL DEFAULT 0"))
+        return
+    from models import UsageRecord
+
+    conn.execute(text("ALTER TABLE usage_records RENAME TO usage_records_pre416"))
+    legacy = Table("usage_records_pre416", MetaData(), autoload_with=conn)
+    table = UsageRecord.__table__
+    table.create(conn)
+    shared = [name for name in legacy.c.keys() if name in table.c]
+    conn.execute(insert(table).from_select(shared, select(*(legacy.c[name] for name in shared))))
+    conn.execute(
+        update(table)
+        .where(table.c.adapter.in_(_SUBSCRIPTION_ADAPTERS))
+        .values(billing="subscription", cost_usd=None, price_per_mtok=None)
+    )
+    legacy.drop(conn)
+
+
 async def init_db():
     async with engine.begin() as conn:
+        await conn.run_sync(_migrate_usage_records)
         await conn.run_sync(Base.metadata.create_all)

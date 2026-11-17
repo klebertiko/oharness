@@ -28,6 +28,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 
 from adapters import get_adapter, AdapterConfig
 from adapters.base import ProbeResult
+from adapters.cli_shared import reported_model
 from flow.advice import OutputTrail, advice_event, run_facts
 from flow.policy import advise_facts
 from providers.resolution import (
@@ -38,7 +39,7 @@ from providers.resolution import (
 from providers.outcomes import failure_details
 from sandbox.approval import ToolApproval
 from runtime.router import select_runtime
-from usage_tracking import BudgetExceededError, WARN_THRESHOLD as TOKEN_BUDGET_WARN_THRESHOLD
+from usage_tracking import BudgetExceededError, WARN_THRESHOLD as TOKEN_BUDGET_WARN_THRESHOLD, connection_billing
 
 # ── Terminal states a run can land in ──────────────────────────────────────────
 STATUS_COMPLETE = "complete"
@@ -340,14 +341,14 @@ async def execute_harness(
     connections: dict[str, dict] | None = None,
     secrets_store: Any = None,
     cwd: str | None = None,
-    enforce_budget: Callable[[str | None, str | None], Awaitable[None]] | None = None,
+    enforce_budget: Callable[[str | None, str | None, str | None], Awaitable[None]] | None = None,
     decision_transport: httpx.BaseTransport | None = None,
     resume_outputs: dict[str, str] | None = None,
     flow_advice: bool = False,
 ) -> AsyncIterator[str]:
     """
     `enforce_budget`, when given, is called as `await enforce_budget(model,
-    residence)` once per real (non-mock) node, right after that node's own
+    residence, billing)` once per real (non-mock) node, right after that node's own
     `resolve_node_provider()` result is known and before its adapter is
     ever called -- never with a different node's claim. It should raise
     `usage_tracking.BudgetExceededError` to refuse the node, or return
@@ -393,9 +394,12 @@ async def execute_harness(
       node_stream       {node_id, chunk}             — answer text
       tool_call         {node_id, call_id, name, args}
       tool_result       {node_id, call_id, ok, result, duration_ms}
-      node_done         {node_id, output, tokens, tokens_estimated, latency_ms}
+      node_done         {node_id, output, tokens, tokens_estimated, latency_ms, model?}
                                                      — `tokens_estimated`: true when the count was derived from
                                                        output length because the adapter reported no usage
+                                                     — `model`: the effective model the CLI reported
+                                                       (claude, cursor-agent); else the requested one;
+                                                       (codex and HTTP name none); absent when neither is known
       node_error        {node_id, error, tokens?}      — `tokens` present only when real spend
                                                           happened before the failure (e.g. an
                                                           over-limit node, see node_token_warning)
@@ -819,9 +823,9 @@ async def execute_harness(
                 # refusal is a policy decision, not a transient fault — it is
                 # deliberately never retried against the next id.
                 if execution_mode != "mock" and enforce_budget is not None:
-                    residence = (connections or {}).get(candidate.connection_id, {}).get("residence")
+                    residence, billing = connection_billing((connections or {}).get(candidate.connection_id))
                     try:
-                        await enforce_budget(candidate.config.model, residence)
+                        await enforce_budget(candidate.config.model, residence, billing)
                     except BudgetExceededError as exc:
                         resolved = candidate
                         budget_error = exc
@@ -999,6 +1003,7 @@ async def execute_harness(
         node_start = time.time()
         collected: list[str] = []
         node_tokens = 0
+        node_model = ""  # the effective model the provider reported, if any (#418)
 
         try:
             if execution_mode != "mock" and runtime_error is not None:
@@ -1084,6 +1089,7 @@ async def execute_harness(
                     )
                 elif kind == "usage":
                     node_tokens = int(ev.get("tokens", 0))
+                    node_model = reported_model(ev.get("model"), node_model)
 
             output = "".join(collected)
             latency = int((time.time() - node_start) * 1000)
@@ -1132,6 +1138,7 @@ async def execute_harness(
                             f"downstream, not the spend itself."
                         ),
                         "tokens": node_tokens,
+                        **({"model": node_model} if node_model else {}),
                     },
                 )
             else:
@@ -1154,6 +1161,8 @@ async def execute_harness(
                     "tokens_estimated": node_tokens_estimated,
                     "latency_ms": latency,
                 }
+                if node_model:
+                    node_done_data["model"] = node_model
                 if execution_mode != "mock" and not control.stop.is_set():
                     # The frontend's provider-verification seam (useRunStream.ts)
                     # only credits a connection from this exact pair, present

@@ -108,7 +108,7 @@ for (const theme of ["dark", "light"]) {
     await page.getByText("Synthetic answer 2", { exact: true }).waitFor();
     note(JSON.stringify(turns) === JSON.stringify(["First message", "Second message"]), label("the queued message ran after the first turn, in order"), JSON.stringify(turns));
     note((await queue().count()) === 0, label("the queue is empty after it ran"));
-    const order = await page.getByRole("log", { name: "Conversation" }).innerText();
+    const order = await page.getByRole("log", { name: "Conversation" }).textContent();
     const at = (t) => order.indexOf(t);
     note(at("First message") < at("Synthetic answer 1") && at("Synthetic answer 1") < at("Second message") && at("Second message") < at("Synthetic answer 2"),
       label("the transcript reads first, answer, second, answer"), order.replace(/\n+/g, " | "));

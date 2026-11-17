@@ -239,6 +239,8 @@ export function ConnectionPanel({ c, actions }: { c: Connection; actions: Connec
         <Row
           label={t("endpoint.label")}
           action={
+            // A connection a person created (#402) has no vendor docs to link.
+            spec.docs ? (
             <a
               href={spec.docs}
               target="_blank"
@@ -248,6 +250,7 @@ export function ConnectionPanel({ c, actions }: { c: Connection; actions: Connec
               {t("endpoint.docs", { vendor: spec.vendor })}
               <ExternalLink size={12} strokeWidth={1.7} aria-hidden />
             </a>
+            ) : undefined
           }
         >
           <Input

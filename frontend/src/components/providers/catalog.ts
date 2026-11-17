@@ -21,7 +21,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-export type ProviderId = "anthropic" | "cursor" | "openai" | "ollama" | "openrouter";
+export type ProviderId =
+  | "anthropic"
+  | "cursor"
+  | "openai"
+  | "ollama"
+  | "openrouter"
+  // Connections a person creates with their own id and endpoint (R-PRV-14, #402).
+  | "openai-compatible"
+  | "anthropic-gateway";
 
 /** Where the tokens are actually computed. */
 export type Residence = "local" | "cloud";
@@ -197,7 +205,38 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     docs: "https://openrouter.ai/docs",
     billingUrl: "https://openrouter.ai/credits",
   },
+  // Generic protocols, mirrored from backend/adapters/catalog.py. Metered keys,
+  // never the subscription (I13); the endpoint is whatever the person typed.
+  "openai-compatible": {
+    id: "openai-compatible",
+    vendor: "OpenAI-compatible endpoint",
+    monogram: "OC",
+    residence: "either",
+    capabilities: ["chat"],
+    billing: "metered",
+    catalogue: "hosted",
+    credential: { kind: "api-key", prefix: "", where: "The server's own settings", env: "" },
+    endpoint: { default: "", editable: true },
+    summary: "Any server that speaks the OpenAI chat-completions API (vLLM, LM Studio, a company gateway).",
+    caveat: "The key goes only to the host you typed. Prices are unknown to this app.",
+    docs: "",
+  },
+  "anthropic-gateway": {
+    id: "anthropic-gateway",
+    vendor: "Anthropic-compatible gateway",
+    monogram: "AG",
+    residence: "cloud",
+    capabilities: ["chat"],
+    billing: "metered",
+    catalogue: "hosted",
+    credential: { kind: "api-key", prefix: "", where: "The gateway's own settings", env: "" },
+    endpoint: { default: "", editable: true },
+    summary: "A gateway that speaks the Anthropic Messages API with an API key (not the Claude subscription).",
+    caveat: "The key goes only to the host you typed. Prices are unknown to this app.",
+    docs: "",
+  },
 };
+
 
 /**
  * The Ollama split is the interesting case in this app, so it gets an explicit
@@ -216,7 +255,7 @@ export const OLLAMA_CLOUD: ProviderSpec = {
     where: "ollama.com → Settings → API keys (or run `ollama signin`)",
     env: "OLLAMA_API_KEY",
   },
-  endpoint: { default: "https://ollama.com", editable: false },
+  endpoint: { default: "https://ollama.com/v1", editable: false },
   summary:
     "ollama.com as a remote host — same API surface, models too large for this machine.",
   caveat:

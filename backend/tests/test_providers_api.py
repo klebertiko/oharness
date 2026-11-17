@@ -311,7 +311,9 @@ def test_post_connection_accepts_the_default_or_empty_endpoint_for_a_non_editabl
 def test_post_connection_allows_any_endpoint_for_an_editable_provider(client: TestClient) -> None:
     r = client.post(
         "/providers/connections",
-        json={"id": "ollama-lan", "provider": "ollama", "label": "Ollama", "endpoint": "http://10.0.0.5:11434/v1"},
+        # residence defaults to "cloud", which makes an ollama row Ollama Cloud
+        # (fixed endpoint); a LAN daemon is a local row.
+        json={"id": "ollama-lan", "provider": "ollama", "label": "Ollama", "residence": "local", "endpoint": "http://10.0.0.5:11434/v1"},
     )
     assert r.status_code == 201
     assert r.json()["endpoint"] == "http://10.0.0.5:11434/v1"

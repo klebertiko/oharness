@@ -22,6 +22,7 @@ from models import Harness, ExecutionLog, CoworkProject, RunRecord, RunEvent, Ru
 from run_worktree import RunWorktree, require_workspace
 from run_store import RunWriter, metadata, event_view, artifact_view, journal_stream, lineage, is_resumable, continue_run, resume_seed, claim_start, release_start
 from adapters import get_adapter, AdapterConfig
+from adapters.cli_shared import reported_model
 from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
@@ -144,7 +145,7 @@ def _first_provider_ids(graph: dict) -> list[str]:
     return []
 
 
-async def _enforce_node_budget(model: str | None, residence: str | None) -> None:
+async def _enforce_node_budget(model: str | None, residence: str | None, billing: str | None = None) -> None:
     """`engine.execute_harness`'s `enforce_budget` callback for a harness
     graph run — called once per real node, from inside the node loop
     itself, right after that node's own `resolve_node_provider()` result is
@@ -165,7 +166,7 @@ async def _enforce_node_budget(model: str | None, residence: str | None) -> None
         # "nothing known yet" — see enforce_budget_or_raise's own docstring
         # (QA re-review, 2026-09-15: this was the OpenAI-shaped silent gap).
         await usage_tracking.enforce_budget_or_raise(
-            session, model=model, residence=residence, model_expected=True
+            session, model=model, residence=residence, billing=billing, model_expected=True
         )
 
 
@@ -260,7 +261,9 @@ def _usage_rows_from_events(
                 continue
             start = starts.get(node_id, {})
             connection_id = start.get("connection_id")
-            provider = (connections.get(connection_id) or {}).get("provider", "") if connection_id else ""
+            connection = connections.get(connection_id) if connection_id else None
+            provider = (connection or {}).get("provider", "")
+            residence, billing = usage_tracking.connection_billing(connection)
             rows.append(
                 dict(
                     run_id=run_id,
@@ -269,8 +272,15 @@ def _usage_rows_from_events(
                     connection_id=connection_id,
                     provider=provider,
                     adapter=start.get("adapter", ""),
-                    model=start.get("model", ""),
+                    # The effective model the provider reported wins over the
+                    # one requested at node_start (#418).
+                    model=data.get("model") or start.get("model", ""),
                     tokens_total=tokens,
+                    residence=residence,
+                    billing=billing,
+                    # Only an explicit False is a reported count; a node_error
+                    # that carries no flag is not claimed as reported (#418).
+                    tokens_estimated=data.get("tokens_estimated") is not False,
                 )
             )
     return rows
@@ -579,6 +589,9 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
             # no-adapter row, same guard `_usage_rows_from_events` above
             # already relies on for the same reason.
             if routed is not None and routed.engage_harness and routed.tokens > 0:
+                routed_residence, routed_billing = usage_tracking.connection_billing(
+                    (connections or {}).get(routed.connection_id) if routed.connection_id else None
+                )
                 usage_rows.append(
                     dict(
                         run_id=run_id,
@@ -591,6 +604,8 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                         adapter=routed.adapter_name,
                         model=routed.model,
                         tokens_total=routed.tokens,
+                        residence=routed_residence,
+                        billing=routed_billing,
                     )
                 )
             await usage_tracking.record_usage_rows(session, usage_rows)
@@ -646,6 +661,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
     # there is, matching `engine.py`'s per-node harness-loop check exactly.
     node_id = "direct"
     connection_id = None
+    residence: str | None = None
+    billing: str | None = None
     budget_status: usage_tracking.BudgetStatus | None = None
     if body.mode == "mock":
         adapter_name = "mock"
@@ -662,11 +679,13 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise HTTPException(400, str(exc)) from exc
         adapter_name, adapter, config = resolved.adapter_name, resolved.adapter, resolved.config
         connection_id = resolved.connection_id
+        residence, billing = usage_tracking.connection_billing(connections.get(connection_id))
         try:
             budget_status = None if preset_only else await usage_tracking.enforce_budget_or_raise(
                 db,
                 model=config.model or None,
-                residence=connections.get(connection_id, {}).get("residence"),
+                residence=residence,
+                billing=billing,
                 model_expected=True,
             )
         except BudgetExceededError as exc:
@@ -707,6 +726,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         status = STATUS_ERROR
         total_tokens = 0
         node_tokens = 0
+        effective_model = model  # replaced by the model the provider reports (#418)
         tokens_estimated = False
         collected: list[str] = []
         nodes_run = 0
@@ -805,6 +825,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             )
                         elif kind == "usage":
                             node_tokens = int(ev.get("tokens", 0))
+                            effective_model = reported_model(ev.get("model"), effective_model)
                             if not broker and budget_hit is None and run_budget.exceeded(node_tokens):
                                 # The provider's own count arrives after the text; it outranks the length estimate.
                                 budget_hit = {"max_tokens": run_budget.max_tokens, "used_tokens": node_tokens}
@@ -847,6 +868,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                                 "tokens": node_tokens,
                                 "tokens_estimated": tokens_estimated,
                                 "latency_ms": latency,
+                                **({"model": effective_model} if effective_model else {}),
                                 "connection_id": connection_id,
                                 "provider_verified": connection_id is not None and (not broker or broker.provider_called),
                             },
@@ -921,8 +943,11 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             connection_id=connection_id,
                             provider=connections.get(connection_id, {}).get("provider", ""),
                             adapter=adapter_name,
-                            model=model,
+                            model=effective_model,
                             tokens_total=total_tokens,
+                            residence=residence,
+                            billing=billing,
+                            tokens_estimated=tokens_estimated,
                         )
 
     return StreamingResponse(

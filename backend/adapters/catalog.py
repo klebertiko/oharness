@@ -9,8 +9,11 @@ with no backend).
 from __future__ import annotations
 
 from typing import Literal, TypedDict
+from urllib.parse import urlsplit
 
-ProviderId = Literal["anthropic", "cursor", "openai", "ollama", "openrouter"]
+ProviderId = Literal[
+    "anthropic", "cursor", "openai", "ollama", "openrouter", "openai-compatible", "anthropic-gateway"
+]
 Residence = Literal["local", "cloud"]
 Capability = Literal["chat", "agent", "embed"]
 Billing = Literal["subscription", "credits", "metered", "none"]
@@ -181,7 +184,10 @@ OLLAMA_CLOUD: ProviderSpec = {
         "where": "ollama.com → Settings → API keys (or run `ollama signin`)",
         "env": "OLLAMA_API_KEY",
     },
-    "endpoint": {"default": "https://ollama.com", "editable": False},
+    # /v1 is the OpenAI-compatible surface on ollama.com, the same as the local
+    # daemon: the bare host 404s `/chat/completions` (#503). The probe strips it
+    # and speaks the native `/api/*` routes on the origin.
+    "endpoint": {"default": "https://ollama.com/v1", "editable": False},
     "summary": (
         "ollama.com as a remote host — same API surface, models too large for this machine."
     ),
@@ -192,9 +198,117 @@ OLLAMA_CLOUD: ProviderSpec = {
 }
 
 
+# ── Connections a person creates (R-PRV-14, #402) ────────────────────────────
+# Generic protocols, not vendors: the person names the connection (its own id)
+# and points it at a server they chose. Both are `api-key` and metered, so the
+# subscription ids (`anthropic`, `openai`, `cursor`) keep `kind=cli` (I13).
+# The endpoint has no default: it is whatever the person typed, validated by
+# `validate_custom_endpoint` before it is stored.
+CUSTOM_PROVIDER_IDS: tuple[str, ...] = ("openai-compatible", "anthropic-gateway")
+
+PROVIDERS["openai-compatible"] = {  # type: ignore[index]
+    "id": "openai-compatible",
+    "vendor": "OpenAI-compatible endpoint",
+    "monogram": "OC",
+    "residence": "either",
+    "capabilities": ["chat"],
+    "billing": "metered",
+    "catalogue": "hosted",
+    "credential": {"kind": "api-key", "prefix": "", "where": "The server's own settings", "env": ""},
+    "endpoint": {"default": "", "editable": True},
+    "summary": "Any server that speaks the OpenAI chat-completions API (vLLM, LM Studio, a company gateway).",
+    "caveat": "The key goes only to the host you typed. Prices are unknown to this app.",
+    "docs": "",
+}
+
+PROVIDERS["anthropic-gateway"] = {  # type: ignore[index]
+    "id": "anthropic-gateway",
+    "vendor": "Anthropic-compatible gateway",
+    "monogram": "AG",
+    "residence": "cloud",
+    "capabilities": ["chat"],
+    "billing": "metered",
+    "catalogue": "hosted",
+    "credential": {"kind": "api-key", "prefix": "", "where": "The gateway's own settings", "env": ""},
+    "endpoint": {"default": "", "editable": True},
+    "summary": "A gateway that speaks the Anthropic Messages API with an API key (not the Claude subscription).",
+    "caveat": "The key goes only to the host you typed. Prices are unknown to this app.",
+    "docs": "",
+}
+
+
+def is_custom_provider(provider_id: str) -> bool:
+    return provider_id in CUSTOM_PROVIDER_IDS
+
+
+def validate_custom_endpoint(endpoint: str) -> str | None:
+    """Why a person-typed base URL is refused, or None when it is fine.
+
+    http or https, a host, and nothing that carries a secret or changes where a
+    request lands: no user/password, query or fragment, no whitespace or control
+    characters. The reason never repeats the typed value (it may hold a token)."""
+    if not endpoint:
+        return "Enter the server's base URL."
+    if any(ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in endpoint):
+        return "The base URL cannot contain spaces or control characters."
+    try:
+        parts = urlsplit(endpoint)
+        _ = parts.port  # raises on a malformed port
+    except ValueError:
+        return "The base URL is not a valid URL."
+    if parts.scheme not in ("http", "https"):
+        return "The base URL must start with http:// or https://."
+    if not parts.hostname:
+        return "The base URL needs a host."
+    if "@" in parts.netloc:
+        return "Put the key in the key field, not in the URL."
+    if "?" in endpoint:
+        return "The base URL cannot have a query string."
+    if "#" in endpoint:
+        return "The base URL cannot have a fragment."
+    return None
+
+
+def has_control_characters(value: str) -> bool:
+    """C0 controls and DEL: nothing a person means to type into a field."""
+    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value)
+
+
+# Same bound the OpenAI-compatible probe applies to a listed model id.
+MAX_CUSTOM_MODEL_LEN = 200
+
+
+def validate_custom_model(model: str) -> str | None:
+    """Why a model id for a connection a person created is refused, or None.
+
+    It is sent verbatim in the request body to a server the person chose, so it
+    is bounded and plain: no control characters, no surrounding spaces. Empty is
+    left to the "no default model" check at run time. The reason never repeats
+    the typed value."""
+    if not model:
+        return None
+    if len(model) > MAX_CUSTOM_MODEL_LEN:
+        return f"The model id can be at most {MAX_CUSTOM_MODEL_LEN} characters."
+    if has_control_characters(model) or any(ch.isspace() for ch in model):
+        return "The model id cannot contain spaces or control characters."
+    return None
+
+
+def endpoint_origin(endpoint: str) -> tuple[str, str, int | None]:
+    """(scheme, host, port): the part of a URL a stored key is bound to."""
+    parts = urlsplit(endpoint)
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return (parts.scheme.lower(), (parts.hostname or "").lower(), port)
+
+
 def list_catalog() -> list[ProviderSpec]:
-    """Return every base vendor spec (Ollama Cloud is a residence variant, not a row)."""
-    return [PROVIDERS[pid] for pid in ("anthropic", "cursor", "openai", "ollama", "openrouter")]
+    """Return every base vendor spec (Ollama Cloud is a residence variant, not a row),
+    then the generic protocols a person can create connections for."""
+    ids = ("anthropic", "cursor", "openai", "ollama", "openrouter", *CUSTOM_PROVIDER_IDS)
+    return [PROVIDERS[pid] for pid in ids]  # type: ignore[index]
 
 
 def get_provider(provider_id: str) -> ProviderSpec | None:

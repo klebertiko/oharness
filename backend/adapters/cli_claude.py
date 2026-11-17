@@ -40,6 +40,9 @@ from .cli_shared import (
     CliMissing,
     CliRunResult,
     classify_cli_failure,
+    completed_result_events,
+    reported_model,
+    reported_tokens,
     cli_model_args,
     find_cli,
     resolve_cwd,
@@ -140,12 +143,10 @@ class ClaudeCliAdapter(AgentAdapter):
                 content="", error=reported, failure=classify_cli_failure(returncode=1, text=reported),
             )
 
-        usage = payload.get("usage") or {}
-        tokens = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
         return AdapterResult(
             content=str(payload.get("result", "")),
-            tokens_used=tokens,
-            model=config.model or "",
+            tokens_used=reported_tokens(payload.get("usage")),
+            model=reported_model(_main_model(payload.get("modelUsage")), config.model),
         )
 
     async def stream(self, prompt: str, config: AdapterConfig) -> AsyncIterator[str]:
@@ -156,6 +157,10 @@ class ClaudeCliAdapter(AgentAdapter):
         if result.error:
             raise CliFailure(result.failure)
         yield result.content
+
+    async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
+        async for event in completed_result_events(self, prompt, config):
+            yield event
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:
         path = find_cli(CLI_NAME)
@@ -216,3 +221,19 @@ class ClaudeCliAdapter(AgentAdapter):
 def _last_line(text: str) -> str:
     stripped = text.strip()
     return stripped.splitlines()[-1] if stripped else ""
+
+
+def _main_model(model_usage: object) -> str | None:
+    """The model that wrote the answer, from `--output-format json`'s
+    `modelUsage` map ({model id: {inputTokens, outputTokens, ...}}): the one
+    with the most output tokens, since a turn can also touch a small helper
+    model. None when the map is missing or malformed."""
+    if not isinstance(model_usage, dict) or not model_usage:
+        return None
+    def output(item: tuple[object, object]) -> float:
+        stats = item[1]
+        value = stats.get("outputTokens", 0) if isinstance(stats, dict) else 0
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+    name, _stats = max(model_usage.items(), key=output)
+    return name if isinstance(name, str) else None
+
