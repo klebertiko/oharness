@@ -84,7 +84,6 @@ from .cli_shared import (
     CliRunResult,
     classify_cli_failure,
     completed_result_events,
-    reported_model,
     reported_tokens,
     cli_model_args,
     find_cli,

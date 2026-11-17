@@ -25,6 +25,7 @@ default rather than an open injection surface:
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import platform
 import re
@@ -322,19 +323,30 @@ class CliMissing(CliFailure, FileNotFoundError):
         CliFailure.__init__(self, CLI_MISSING)
 
 
+# No single CLI turn comes near this; a larger figure is a malformed report,
+# not a count to charge against the ceiling.
+MAX_REPORTED_TOKENS = 10**9
+
+
 def reported_tokens(usage: object) -> int:
     """Input + output tokens a CLI reported, in snake_case (claude, codex) or
-    camelCase (cursor-agent). 0 when nothing usable was reported: the caller
-    then keeps its honest length estimate instead of an invented count."""
+    camelCase (cursor-agent). 0 when nothing usable was reported (not a dict,
+    a bool, a string, negative, NaN/Inf, or above ``MAX_REPORTED_TOKENS``): the
+    caller then keeps its honest length estimate instead of an invented count."""
     if not isinstance(usage, dict):
         return 0
     total = 0
     for snake, camel in (("input_tokens", "inputTokens"), ("output_tokens", "outputTokens")):
         value = usage.get(snake, usage.get(camel, 0))
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+        # isfinite only on a float: on a huge int it would itself overflow.
+        if isinstance(value, float) and not math.isfinite(value):
+            return 0
+        if value < 0 or value > MAX_REPORTED_TOKENS:
             return 0
         total += int(value)
-    return total
+    return total if total <= MAX_REPORTED_TOKENS else 0
 
 
 def reported_model(value: object, fallback: str = "") -> str:

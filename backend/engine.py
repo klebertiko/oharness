@@ -394,9 +394,12 @@ async def execute_harness(
       node_stream       {node_id, chunk}             — answer text
       tool_call         {node_id, call_id, name, args}
       tool_result       {node_id, call_id, ok, result, duration_ms}
-      node_done         {node_id, output, tokens, tokens_estimated, latency_ms}
+      node_done         {node_id, output, tokens, tokens_estimated, latency_ms, model?}
                                                      — `tokens_estimated`: true when the count was derived from
                                                        output length because the adapter reported no usage
+                                                     — `model`: the effective model the CLI reported
+                                                       (claude, cursor-agent); else the requested one;
+                                                       (codex and HTTP name none); absent when neither is known
       node_error        {node_id, error, tokens?}      — `tokens` present only when real spend
                                                           happened before the failure (e.g. an
                                                           over-limit node, see node_token_warning)

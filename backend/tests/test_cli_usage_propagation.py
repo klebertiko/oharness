@@ -172,6 +172,7 @@ def test_codex_turn_completed_without_usage_emits_no_invented_count():
     {"input_tokens": float("inf"), "output_tokens": 4},
     {"input_tokens": 1e300, "output_tokens": 4},
     {"input_tokens": 10**9 + 1, "output_tokens": 0},
+    {"input_tokens": 10**400, "output_tokens": 0},
     {"input_tokens": 10**9, "output_tokens": 10**9},
     "6",
     [2, 4],
