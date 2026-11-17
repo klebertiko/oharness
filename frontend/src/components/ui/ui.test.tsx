@@ -189,28 +189,29 @@ describe("Skeleton and EmptyState", () => {
   });
 });
 
+function SegmentedDemo() {
+  const [v, setV] = useState<"ask" | "auto" | "plan">("ask");
+  return (
+    <Segmented
+      label="Permission mode"
+      value={v}
+      onChange={setV}
+      options={[{ value: "ask", label: "Ask" }, { value: "auto", label: "Auto" }, { value: "plan", label: "Plan", disabled: true }]}
+    />
+  );
+}
+
 describe("Segmented", () => {
-  function Demo() {
-    const [v, setV] = useState<"ask" | "auto" | "plan">("ask");
-    return (
-      <Segmented
-        label="Permission mode"
-        value={v}
-        onChange={setV}
-        options={[{ value: "ask", label: "Ask" }, { value: "auto", label: "Auto" }, { value: "plan", label: "Plan", disabled: true }]}
-      />
-    );
-  }
 
   it("is a named radio group with one checked option and one tab stop", () => {
-    render(<Demo />);
+    render(<SegmentedDemo />);
     expect(screen.getByRole("radiogroup", { name: "Permission mode" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Ask" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("radio", { name: "Auto" }).getAttribute("tabindex")).toBe("-1");
   });
 
   it("moves the choice with the arrow keys, skipping disabled options and wrapping", () => {
-    render(<Demo />);
+    render(<SegmentedDemo />);
     const ask = screen.getByRole("radio", { name: "Ask" });
     ask.focus();
     fireEvent.keyDown(ask, { key: "ArrowRight" });
@@ -221,7 +222,7 @@ describe("Segmented", () => {
   });
 
   it("has no axe violations", async () => {
-    const { container } = render(<Demo />);
+    const { container } = render(<SegmentedDemo />);
     expect(await axeViolations(container)).toEqual([]);
   });
 });
