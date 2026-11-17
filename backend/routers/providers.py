@@ -10,7 +10,7 @@ import re
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
@@ -19,10 +19,12 @@ from adapters.catalog import (
     endpoint_for_connection,
     endpoint_origin,
     get_provider,
+    has_control_characters,
     is_custom_provider,
     list_catalog,
     spec_for_connection,
     validate_custom_endpoint,
+    validate_custom_model,
 )
 from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
 from database import get_db
@@ -37,10 +39,19 @@ router = APIRouter(prefix="/providers", tags=["providers"])
 Residence = Literal["local", "cloud"]
 
 
+MAX_LABEL_LEN = 80
+
+
+def _plain_label(value: str | None) -> str | None:
+    if value is not None and has_control_characters(value):
+        raise ValueError("The name cannot contain control characters.")
+    return value
+
+
 class ConnectionCreate(BaseModel):
     id: str
     provider: str
-    label: str
+    label: str = Field(..., max_length=MAX_LABEL_LEN)
     residence: Residence = "cloud"
     endpoint: str = ""
     enabled: bool = False
@@ -51,13 +62,17 @@ class ConnectionCreate(BaseModel):
     # fallback (see resolve_node_provider in providers/resolution.py).
     defaultModel: str = ""
 
+    _label = field_validator("label")(_plain_label)
+
 
 class ConnectionUpdate(BaseModel):
-    label: str | None = None
+    label: str | None = Field(None, max_length=MAX_LABEL_LEN)
     residence: Residence | None = None
     endpoint: str | None = None
     enabled: bool | None = None
     defaultModel: str | None = None
+
+    _label = field_validator("label")(_plain_label)
 
 
 class SecretBody(BaseModel):
@@ -131,6 +146,13 @@ def _ensure_custom_endpoint_valid(endpoint: str) -> None:
         raise HTTPException(400, reason)
 
 
+def _ensure_custom_model_valid(provider: str, model: str | None) -> None:
+    if model and is_custom_provider(provider):
+        reason = validate_custom_model(model)
+        if reason:
+            raise HTTPException(400, reason)
+
+
 def _ensure_cli_model_allowed(spec: dict | None, model: str | None) -> None:
     """A subscription connection's model becomes the CLI's `--model` value, so it
     is validated before it is stored (fixed text: the typed value is not echoed)."""
@@ -178,6 +200,7 @@ async def create_connection(
         _ensure_custom_connection_allowed(body.id, body.endpoint)
     spec = get_provider(body.provider)
     _ensure_cli_model_allowed(spec, body.defaultModel)
+    _ensure_custom_model_valid(body.provider, body.defaultModel)
     default_endpoint = spec["endpoint"]["default"] if spec is not None else ""
     _ensure_endpoint_allowed(body.provider, body.endpoint, "", default_endpoint)
     row = {
@@ -225,6 +248,7 @@ async def update_connection(
         if row.get("secretRef") and endpoint_origin(body.endpoint) != endpoint_origin(row.get("endpoint", "")):
             raise HTTPException(409, "Remove the saved key before pointing this connection at another host.")
     _ensure_cli_model_allowed(get_provider(row["provider"]), body.defaultModel)
+    _ensure_custom_model_valid(row["provider"], body.defaultModel)
     # Commit a copy first; swap it into memory only once the DB accepted it, so
     # a failing write leaves memory and DB in agreement.
     updated = dict(row)
@@ -319,6 +343,9 @@ async def put_secret(
     value = body.key.strip()
     if not value:
         raise HTTPException(400, "empty credential")
+    if has_control_characters(value):
+        # Fixed text: the typed key is never echoed.
+        raise HTTPException(400, "The key cannot contain control characters.")
     ref = f"oharness/{connection_id}"
     store.put(ref, value)
     row["secretRef"] = ref

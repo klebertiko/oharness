@@ -104,6 +104,18 @@ Five vendors. Anthropic and OpenAI connect through the CLI you are already signe
 | **Ollama** | Local daemon, default `http://127.0.0.1:11434/v1`, no key | Ollama Cloud is a separate connection. |
 | **Cursor** | Local `cursor-agent` CLI (`cursor-agent login`) | Agent-only: an LLM node cannot use it, a Delegate node can. On Windows it runs inside WSL2 (distro `Ubuntu-24.04` by default, override with `OHARNESS_CURSOR_WSL_DISTRO`); the native Windows `cursor-agent` stays blocked. |
 
+**Connections you create.** Besides the five vendors, you can add your own connection of two kinds: **OpenAI-compatible** (any server with the OpenAI chat-completions API, such as vLLM, LM Studio or a company gateway) and **Anthropic gateway** (a server with Anthropic's Messages API). For now you create one through the sidecar API; it then shows in Providers like any other connection, where you paste its key:
+
+```bash
+curl -X POST http://127.0.0.1:8000/providers/connections -H "Content-Type: application/json"   -d '{"id":"my-vllm","provider":"openai-compatible","label":"My vLLM","endpoint":"https://llm.example.com/v1","defaultModel":"qwen3.5-32b"}'
+```
+
+- The **id** is a lowercase slug you choose. It cannot reuse a vendor's id (`anthropic`, `openai`, `openrouter`, `ollama`, `cursor`, …).
+- The **endpoint** is a plain `http://` or `https://` base URL with a host. It is refused if it carries a user or password, a query string (`?…`) or a fragment (`#…`): the key never goes in the URL. For an Anthropic gateway, give the base without `/v1`; OHarness calls `{base}/v1/messages`.
+- The **key** is stored only in the sidecar's secrets store (`OH_SECRETS`) and is sent only to that endpoint's host. To point a connection with a saved key at another host, remove the key first.
+- The **model** is up to 200 characters, with no spaces or control characters. It is required: without one, a run stops with an error. The **name** is up to 80 characters.
+- These connections are metered by the server you chose; OHarness does not know its prices. Anthropic and OpenAI themselves still run only through their CLIs.
+
 - **Chat picker.** Lists "Auto" (the first eligible connection, cloud before on-device) and, grouped by connection, the models of the connections that can answer now, with a search. `Enter` saves the model as the connection's default; `Shift+Enter` (or "This chat only") applies it to the open chat alone. Connections one step from working sit in a **Needs action** group, each with the one step that fixes it, in the same words as Providers. Setup stays on the Providers screen.
 - **Per-node pins and failover.** A node can pin an ordered list of connections. If one rejects the call, the next is tried, and the attempts show in the run transcript. A node with no pin uses the chat's choice. If neither resolves, the run stops at that node with an error; it never swaps providers silently. Rule: [`docs/product/provider-harness-rule.md`](docs/product/provider-harness-rule.md).
 - **Secrets** are written by the sidecar's secrets store (`OH_SECRETS`, below), never by the Tauri shell.

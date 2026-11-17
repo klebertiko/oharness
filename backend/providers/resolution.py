@@ -24,7 +24,12 @@ from dataclasses import dataclass
 
 from adapters import get_adapter
 from adapters.base import AdapterConfig, AgentAdapter
-from adapters.catalog import endpoint_for_connection, spec_for_connection
+from adapters.catalog import (
+    endpoint_for_connection,
+    is_custom_provider,
+    spec_for_connection,
+    validate_custom_model,
+)
 from adapters.cli_shared import INVALID_CLI_MODEL, valid_cli_model
 from secret_store.base import SecretsStore
 
@@ -240,6 +245,12 @@ def _resolve_connection(
             f"'{conn_label}' has no default model set. Open Providers and pick "
             "one for this connection, or pin a model on the node."
         )
+    if model and is_custom_provider(connection.get("provider", "")):
+        # Sent verbatim to a server the person chose: the same check as on save,
+        # and it also covers a model pinned on the node.
+        reason = validate_custom_model(model)
+        if reason:
+            raise ProviderResolutionError(f"'{conn_label}': {reason}")
     if credential.get("kind") == "cli" and model and not valid_cli_model(model):
         # The model becomes the CLI's `--model` value: refuse it here, with the
         # connection named, before any process is started.

@@ -266,6 +266,31 @@ def validate_custom_endpoint(endpoint: str) -> str | None:
     return None
 
 
+def has_control_characters(value: str) -> bool:
+    """C0 controls and DEL: nothing a person means to type into a field."""
+    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value)
+
+
+# Same bound the OpenAI-compatible probe applies to a listed model id.
+MAX_CUSTOM_MODEL_LEN = 200
+
+
+def validate_custom_model(model: str) -> str | None:
+    """Why a model id for a connection a person created is refused, or None.
+
+    It is sent verbatim in the request body to a server the person chose, so it
+    is bounded and plain: no control characters, no surrounding spaces. Empty is
+    left to the "no default model" check at run time. The reason never repeats
+    the typed value."""
+    if not model:
+        return None
+    if len(model) > MAX_CUSTOM_MODEL_LEN:
+        return f"The model id can be at most {MAX_CUSTOM_MODEL_LEN} characters."
+    if has_control_characters(model) or any(ch.isspace() for ch in model):
+        return "The model id cannot contain spaces or control characters."
+    return None
+
+
 def endpoint_origin(endpoint: str) -> tuple[str, str, int | None]:
     """(scheme, host, port): the part of a URL a stored key is bound to."""
     parts = urlsplit(endpoint)
