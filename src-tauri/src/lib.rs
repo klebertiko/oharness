@@ -647,6 +647,8 @@ mod tests {
                     .find_map(|key| l.strip_prefix(key))
             })
             .filter_map(|rest| rest.split('"').next())
+            // An empty `docs` renders no link (a connection a person created, #402).
+            .filter(|u| !u.is_empty())
             .map(|u| url(u).to_string())
             .collect();
         in_catalog.sort();
