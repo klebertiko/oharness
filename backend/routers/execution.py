@@ -144,7 +144,7 @@ def _first_provider_ids(graph: dict) -> list[str]:
     return []
 
 
-async def _enforce_node_budget(model: str | None, residence: str | None) -> None:
+async def _enforce_node_budget(model: str | None, residence: str | None, billing: str | None = None) -> None:
     """`engine.execute_harness`'s `enforce_budget` callback for a harness
     graph run — called once per real node, from inside the node loop
     itself, right after that node's own `resolve_node_provider()` result is
@@ -165,7 +165,7 @@ async def _enforce_node_budget(model: str | None, residence: str | None) -> None
         # "nothing known yet" — see enforce_budget_or_raise's own docstring
         # (QA re-review, 2026-09-15: this was the OpenAI-shaped silent gap).
         await usage_tracking.enforce_budget_or_raise(
-            session, model=model, residence=residence, model_expected=True
+            session, model=model, residence=residence, billing=billing, model_expected=True
         )
 
 
@@ -260,7 +260,9 @@ def _usage_rows_from_events(
                 continue
             start = starts.get(node_id, {})
             connection_id = start.get("connection_id")
-            provider = (connections.get(connection_id) or {}).get("provider", "") if connection_id else ""
+            connection = connections.get(connection_id) if connection_id else None
+            provider = (connection or {}).get("provider", "")
+            residence, billing = usage_tracking.connection_billing(connection)
             rows.append(
                 dict(
                     run_id=run_id,
@@ -271,6 +273,8 @@ def _usage_rows_from_events(
                     adapter=start.get("adapter", ""),
                     model=start.get("model", ""),
                     tokens_total=tokens,
+                    residence=residence,
+                    billing=billing,
                 )
             )
     return rows
@@ -579,6 +583,9 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
             # no-adapter row, same guard `_usage_rows_from_events` above
             # already relies on for the same reason.
             if routed is not None and routed.engage_harness and routed.tokens > 0:
+                routed_residence, routed_billing = usage_tracking.connection_billing(
+                    (connections or {}).get(routed.connection_id) if routed.connection_id else None
+                )
                 usage_rows.append(
                     dict(
                         run_id=run_id,
@@ -591,6 +598,8 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
                         adapter=routed.adapter_name,
                         model=routed.model,
                         tokens_total=routed.tokens,
+                        residence=routed_residence,
+                        billing=routed_billing,
                     )
                 )
             await usage_tracking.record_usage_rows(session, usage_rows)
@@ -646,6 +655,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
     # there is, matching `engine.py`'s per-node harness-loop check exactly.
     node_id = "direct"
     connection_id = None
+    residence: str | None = None
+    billing: str | None = None
     budget_status: usage_tracking.BudgetStatus | None = None
     if body.mode == "mock":
         adapter_name = "mock"
@@ -662,11 +673,13 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
             raise HTTPException(400, str(exc)) from exc
         adapter_name, adapter, config = resolved.adapter_name, resolved.adapter, resolved.config
         connection_id = resolved.connection_id
+        residence, billing = usage_tracking.connection_billing(connections.get(connection_id))
         try:
             budget_status = None if preset_only else await usage_tracking.enforce_budget_or_raise(
                 db,
                 model=config.model or None,
-                residence=connections.get(connection_id, {}).get("residence"),
+                residence=residence,
+                billing=billing,
                 model_expected=True,
             )
         except BudgetExceededError as exc:
@@ -923,6 +936,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                             adapter=adapter_name,
                             model=model,
                             tokens_total=total_tokens,
+                            residence=residence,
+                            billing=billing,
                         )
 
     return StreamingResponse(

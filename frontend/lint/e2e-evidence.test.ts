@@ -10,7 +10,7 @@ const e2e = readdirSync(scripts).filter((name) => /^e2e-.+\.mjs$/.test(name) && 
 describe("e2e evidence output", () => {
   it.each(e2e)("%s does not write under .harness/", (name) => {
     const source = readFileSync(path.join(scripts, name), "utf8");
-    expect(source.replace(/oh\.harness/g, "")).not.toMatch(/\.harness[\/]/);
+    expect(source.replace(/oh\.harness/g, "")).not.toMatch(/\.harness[/]/);
   });
 
   it("the shared helper defaults to the ignored .e2e-out folder", () => {

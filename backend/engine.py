@@ -38,7 +38,7 @@ from providers.resolution import (
 from providers.outcomes import failure_details
 from sandbox.approval import ToolApproval
 from runtime.router import select_runtime
-from usage_tracking import BudgetExceededError, WARN_THRESHOLD as TOKEN_BUDGET_WARN_THRESHOLD
+from usage_tracking import BudgetExceededError, WARN_THRESHOLD as TOKEN_BUDGET_WARN_THRESHOLD, connection_billing
 
 # ── Terminal states a run can land in ──────────────────────────────────────────
 STATUS_COMPLETE = "complete"
@@ -340,14 +340,14 @@ async def execute_harness(
     connections: dict[str, dict] | None = None,
     secrets_store: Any = None,
     cwd: str | None = None,
-    enforce_budget: Callable[[str | None, str | None], Awaitable[None]] | None = None,
+    enforce_budget: Callable[[str | None, str | None, str | None], Awaitable[None]] | None = None,
     decision_transport: httpx.BaseTransport | None = None,
     resume_outputs: dict[str, str] | None = None,
     flow_advice: bool = False,
 ) -> AsyncIterator[str]:
     """
     `enforce_budget`, when given, is called as `await enforce_budget(model,
-    residence)` once per real (non-mock) node, right after that node's own
+    residence, billing)` once per real (non-mock) node, right after that node's own
     `resolve_node_provider()` result is known and before its adapter is
     ever called -- never with a different node's claim. It should raise
     `usage_tracking.BudgetExceededError` to refuse the node, or return
@@ -819,9 +819,9 @@ async def execute_harness(
                 # refusal is a policy decision, not a transient fault — it is
                 # deliberately never retried against the next id.
                 if execution_mode != "mock" and enforce_budget is not None:
-                    residence = (connections or {}).get(candidate.connection_id, {}).get("residence")
+                    residence, billing = connection_billing((connections or {}).get(candidate.connection_id))
                     try:
-                        await enforce_budget(candidate.config.model, residence)
+                        await enforce_budget(candidate.config.model, residence, billing)
                     except BudgetExceededError as exc:
                         resolved = candidate
                         budget_error = exc

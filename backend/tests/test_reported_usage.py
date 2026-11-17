@@ -72,7 +72,7 @@ def reporting(monkeypatch, client):
 
 
 def _direct(client, **extra):
-    return client.post('/execute/direct', json={'instruction': 'hi', 'mode': 'live', 'connection_id': 'anthropic',
+    return client.post('/execute/direct', json={'instruction': 'hi', 'mode': 'live', 'connection_id': 'metered',
                                                  'model': 'claude-sonnet-5', **extra})
 
 

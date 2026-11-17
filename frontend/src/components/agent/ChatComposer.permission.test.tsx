@@ -94,9 +94,13 @@ it("says out loud when the backend refused a change", () => {
   expect(screen.getByRole("alert").textContent).toContain("Não foi possível salvar o modo");
 });
 
+function PlainComposer() {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  return <ChatComposer value="" onChange={() => {}} onSend={send} inputRef={ref} live={false} />;
+}
+
 it("renders no selector when the parent does not wire a mode (older callers)", () => {
-  const Plain = () => { const ref = useRef<HTMLTextAreaElement>(null); return <ChatComposer value="" onChange={() => {}} onSend={send} inputRef={ref} live={false} />; };
-  render(<Plain />);
+  render(<PlainComposer />);
   expect(screen.queryByRole("radiogroup")).toBeNull();
 });
 
