@@ -141,3 +141,48 @@ def test_malformed_reported_model_never_travels():
                       "modelUsage": {"bad model; rm -rf /": {"outputTokens": 9}}})
     events = asyncio.run(_events(ClaudeCliAdapter(runner=_runner(out)), model="claude-opus-5"))
     assert _usage(events) == {"kind": "usage", "tokens": 2, "model": "claude-opus-5"}
+
+
+# ── #509 review: a missing or malformed usage report is never a count ────────
+
+@pytest.mark.parametrize("usage", ["absent", None])
+def test_claude_without_usage_emits_no_invented_count(usage):
+    payload = {"type": "result", "is_error": False, "result": "pong"}
+    if usage != "absent":
+        payload["usage"] = usage
+    events = asyncio.run(_events(ClaudeCliAdapter(runner=_runner(json.dumps(payload)))))
+    assert "".join(e["text"] for e in events if e.get("kind") == "text") == "pong"
+    assert _usage(events) is None
+
+
+def test_codex_turn_completed_without_usage_emits_no_invented_count():
+    out = "\n".join(json.dumps(e) for e in (
+        {"type": "item.completed", "item": {"type": "agent_message", "text": "pong"}},
+        {"type": "turn.completed"},
+    ))
+    events = asyncio.run(_events(CodexCliAdapter(runner=_runner(out)), model="gpt-5.5"))
+    assert _usage(events) is None
+
+
+@pytest.mark.parametrize("usage", [
+    {"input_tokens": True, "output_tokens": 4},
+    {"input_tokens": -1, "output_tokens": 4},
+    {"input_tokens": "12", "output_tokens": 4},
+    {"input_tokens": float("nan"), "output_tokens": 4},
+    {"input_tokens": float("inf"), "output_tokens": 4},
+    {"input_tokens": 1e300, "output_tokens": 4},
+    {"input_tokens": 10**9 + 1, "output_tokens": 0},
+    {"input_tokens": 10**9, "output_tokens": 10**9},
+    "6",
+    [2, 4],
+])
+def test_reported_tokens_refuses_what_is_not_a_plausible_count(usage):
+    from adapters.cli_shared import reported_tokens
+    assert reported_tokens(usage) == 0
+
+
+def test_reported_tokens_accepts_a_count_at_the_ceiling():
+    from adapters.cli_shared import MAX_REPORTED_TOKENS, reported_tokens
+    assert MAX_REPORTED_TOKENS == 10**9
+    assert reported_tokens({"input_tokens": 10**9 - 4, "outputTokens": 4}) == 10**9
+    assert reported_tokens({"input_tokens": 2.0, "output_tokens": 4}) == 6
