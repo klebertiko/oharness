@@ -181,7 +181,10 @@ OLLAMA_CLOUD: ProviderSpec = {
         "where": "ollama.com → Settings → API keys (or run `ollama signin`)",
         "env": "OLLAMA_API_KEY",
     },
-    "endpoint": {"default": "https://ollama.com", "editable": False},
+    # /v1 is the OpenAI-compatible surface on ollama.com, the same as the local
+    # daemon: the bare host 404s `/chat/completions` (#503). The probe strips it
+    # and speaks the native `/api/*` routes on the origin.
+    "endpoint": {"default": "https://ollama.com/v1", "editable": False},
     "summary": (
         "ollama.com as a remote host — same API surface, models too large for this machine."
     ),

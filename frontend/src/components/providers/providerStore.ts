@@ -203,7 +203,7 @@ const seed: Connection[] = [
     provider: "ollama",
     label: "Ollama Cloud",
     residence: "cloud",
-    endpoint: "https://ollama.com",
+    endpoint: "https://ollama.com/v1",
     secret: null,
     health: "setup",
     detail: "No credential yet. Add a key from ollama.com, or run `ollama signin` and import it.",

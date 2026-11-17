@@ -216,7 +216,7 @@ export const OLLAMA_CLOUD: ProviderSpec = {
     where: "ollama.com → Settings → API keys (or run `ollama signin`)",
     env: "OLLAMA_API_KEY",
   },
-  endpoint: { default: "https://ollama.com", editable: false },
+  endpoint: { default: "https://ollama.com/v1", editable: false },
   summary:
     "ollama.com as a remote host — same API surface, models too large for this machine.",
   caveat:
