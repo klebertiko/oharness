@@ -57,6 +57,7 @@ Providers (`Alt+3`) lists your connections on the left and opens one on the righ
 
 - **Add a key.** Paste it into the key field and press **Save key**. It is stored by the sidecar and never shown again; you see its prefix and last four characters.
 - **Remove a key.** **Remove** asks first, with **Cancel** selected.
+- **Spend and the USD ceiling.** Runs on a subscription (Claude, Codex, Cursor, Ollama Cloud) count their tokens but stay outside the USD budget; only metered API connections count toward it.
 - **Sidecar not running.** A notice says so, with **Retry**; the rows then read "Can't check" instead of guessing.
 - **Language.** English and Brazilian Portuguese. The choice is the one you saved, otherwise the browser language; `Mod+K`, then "Language", switches it. The catalogues cover the shell, Chats, Studio, the inspector, Cowork, Providers, Forja, and the Flow and worktree switches. The chat welcome ("What are we working on?") and some run notices, including the worktree lines in the transcript, are still English outside the catalogue. Issue #279 is open for the rest, including a native-speaker review.
 
