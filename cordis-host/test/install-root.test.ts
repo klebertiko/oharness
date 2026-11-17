@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdtemp, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isConfinedSnapshot } from '../src/register-alias.ts'
 import { startHost, type RunningHost } from '../src/server.ts'
 import { asRecord, call, ourPluginDir, preview, tempPackage } from './client.ts'
 
@@ -101,7 +102,39 @@ test('install runs a host-owned snapshot, not the folder the caller can still ed
     assert.equal(install.status, 200)
     const url = (globalThis as { cordisSnapUrl?: string }).cordisSnapUrl
     assert.equal(typeof url, 'string')
+    // Compare resolved paths: tmpdir() can itself be a link (macOS /var).
+    assert.equal(fileURLToPath(url ?? '').startsWith(await realpath(dir)), false)
     assert.equal(fileURLToPath(url ?? '').startsWith(dir), false)
+  })
+})
+
+test('closing the host stops confining its snapshot folders', async () => {
+  const dir = await tempPackage({
+    'package.json': JSON.stringify({ name: 'snap-close', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'index.ts': 'const g = globalThis as { cordisSnapCloseUrl?: string }\ng.cordisSnapCloseUrl = import.meta.url\nexport const name = \'snap-close\'\nexport function apply() {}\n',
+  })
+  let snapshotDir = ''
+  await withRoot([path.dirname(dir)], async (host) => {
+    const seen = await preview(host, dir)
+    const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
+    assert.equal(install.status, 200)
+    snapshotDir = path.dirname(fileURLToPath((globalThis as { cordisSnapCloseUrl?: string }).cordisSnapCloseUrl ?? ''))
+    assert.equal(isConfinedSnapshot(snapshotDir), true)
+  })
+  assert.equal(isConfinedSnapshot(snapshotDir), false)
+})
+
+test('a plugin cannot import the host test or proof files', async () => {
+  const hostTestFile = pathToFileURL(fileURLToPath(new URL('./client.ts', import.meta.url))).href
+  const dir = await tempPackage({
+    'package.json': JSON.stringify({ name: 'host-test', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'index.ts': `import ${JSON.stringify(hostTestFile)}\nexport const name = 'host-test'\nexport function apply() {}\n`,
+  })
+  await withRoot([path.dirname(dir)], async (host) => {
+    const seen = await preview(host, dir)
+    const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
+    assert.equal(install.status, 400)
+    assert.equal(asRecord(install.json).code, 'path-rejected')
   })
 })
 

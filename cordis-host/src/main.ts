@@ -16,6 +16,8 @@ let closing = false
 async function shutdown(): Promise<void> {
   if (closing) return
   closing = true
+  // A plugin whose dispose never settles must not keep the host alive.
+  setTimeout(() => { process.exit(1) }, 5000).unref()
   await running.close()
   process.exit(0)
 }

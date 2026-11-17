@@ -28,15 +28,27 @@ function remap(specifier: string, from: string, to: string): string | undefined 
 
 const directoryPickerUrl = new URL('../vendor/dsh/directory-picker/index.ts', import.meta.url).href
 
-/** This package (src, node_modules, vendor): host-owned and pinned, so a plugin may import it. */
-const hostRootUrl = new URL('../', import.meta.url).href
+/** Host-owned, pinned code a plugin may import: src, vendor and node_modules. Not test/ or proofs/. */
+const hostRootUrls = ['../src/', '../vendor/', '../node_modules/'].map((dir) => new URL(dir, import.meta.url).href)
 
 /** Snapshot folders of installed plugins, as file URLs ending in `/`. */
 const snapshotRoots = new Set<string>()
 
+function rootUrl(dir: string): string {
+  return pathToFileURL(dir.endsWith(path.sep) ? dir : dir + path.sep).href
+}
+
 /** Confine modules loaded from `dir` to `dir` itself, Node built-ins, and this host's own files. */
 export function confineSnapshot(dir: string): void {
-  snapshotRoots.add(pathToFileURL(dir.endsWith(path.sep) ? dir : dir + path.sep).href)
+  snapshotRoots.add(rootUrl(dir))
+}
+
+export function releaseSnapshot(dir: string): void {
+  snapshotRoots.delete(rootUrl(dir))
+}
+
+export function isConfinedSnapshot(dir: string): boolean {
+  return snapshotRoots.has(rootUrl(dir))
 }
 
 export class OutsidePackageError extends Error {
@@ -60,7 +72,7 @@ function snapshotOf(url: string | undefined): string | undefined {
 function confined<T extends { url: string }>(parentURL: string | undefined, result: T): T {
   const root = snapshotOf(parentURL)
   if (root === undefined) return result
-  if (result.url.startsWith('node:') || result.url.startsWith(root) || result.url.startsWith(hostRootUrl)) return result
+  if (result.url.startsWith('node:') || result.url.startsWith(root) || hostRootUrls.some((host) => result.url.startsWith(host))) return result
   throw new OutsidePackageError()
 }
 

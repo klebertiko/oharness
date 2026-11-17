@@ -21,6 +21,8 @@ Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existi
 
 O pacote tem de estar dentro da pasta de plugins: `OH_CORDIS_PLUGINS_DIR` (absoluta) ou `~/.oharness/plugins`. O digest cobre o arquivo de entrada e o hash de todos os arquivos do pacote, então editar o pacote depois da prévia exige uma prévia nova. O token é da UI e do sidecar, nunca do agente.
 
+O plugin é código confiável. Ele roda no processo do host com os direitos do usuário. O hook de resolve recusa os imports que saem do pacote e evita que um arquivo não hasheado carregue por engano, mas não é sandbox: o plugin ainda alcança `createRequire`, `fs`, `child_process` e `process`. O isolamento real está pendente na #508.
+
 O processo pai segura o stdin do host. Quando ele fecha, o host sai. Por isso `npm start` num terminal funciona, e `npm start < /dev/null` sai logo.
 
 ## Cordis

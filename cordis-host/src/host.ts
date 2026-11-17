@@ -6,7 +6,7 @@ import { Context, type Fiber } from 'cordis'
 import { CommandsService } from './commands-service.ts'
 import { HostError } from './errors.ts'
 import { inspectPackage, snapshotPackage, type PackagePreview } from './manifest.ts'
-import { confineSnapshot, OutsidePackageError } from './register-alias.ts'
+import { confineSnapshot, OutsidePackageError, releaseSnapshot } from './register-alias.ts'
 import { CORDIS_PACKAGE, CORDIS_VERSION, SCHEMASTERY_PACKAGE, SCHEMASTERY_VERSION } from './pin.ts'
 import { SessionProjectionsRecord } from './session-projections.ts'
 import { ToolsService, type ToolExec } from './tools-service.ts'
@@ -244,6 +244,7 @@ export class CordisRuntime {
 
   async close(): Promise<void> {
     await this.context.fiber.dispose().catch(() => undefined)
+    for (const dir of this.#snapshots) releaseSnapshot(dir)
     await Promise.all(this.#snapshots.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)))
   }
 }
