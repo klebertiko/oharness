@@ -134,3 +134,36 @@ def test_subagent_spend_is_the_providers_report_through_the_real_adapter(tmp_pat
     events = asyncio.run(go())
     assert next(e for e in events if e['kind'] == 'subagent_done')['tokens'] == 120
     assert [e for e in events if e['kind'] == 'usage'][-1]['tokens'] == 30 + 120 + 50
+
+
+# ── #418: the ledger row says whether the count was reported or estimated ────
+
+
+def _ledger_rows():
+    import anyio
+    from sqlalchemy import select
+
+    from database import SessionLocal
+    from models import UsageRecord
+
+    async def read():
+        async with SessionLocal() as db:
+            return list((await db.execute(select(UsageRecord))).scalars())
+
+    return anyio.run(read)
+
+
+def test_a_reported_direct_turn_is_not_marked_estimated_in_the_ledger(client, reporting):
+    run_id = _direct(client, max_tokens=1000).headers['X-Execution-Id']
+    rows = [r for r in _ledger_rows() if r.run_id == run_id]
+    assert len(rows) == 1 and rows[0].tokens_total == 120
+    assert rows[0].tokens_estimated is False
+
+
+def test_an_unreported_direct_turn_is_marked_estimated_in_the_ledger(client, monkeypatch):
+    monkeypatch.setattr('routers.execution.get_adapter', lambda name: _Chatty())
+    monkeypatch.setattr('providers.resolution.get_adapter', lambda name: _Chatty())
+    run_id = _direct(client, max_tokens=100000).headers['X-Execution-Id']
+    rows = [r for r in _ledger_rows() if r.run_id == run_id]
+    assert len(rows) == 1 and rows[0].tokens_total > 0
+    assert rows[0].tokens_estimated is True
