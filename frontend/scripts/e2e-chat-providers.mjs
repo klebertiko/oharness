@@ -148,7 +148,7 @@ try {
   console.log('PASS isolated Chat/Providers journey: ' + checks.length + ' checks, 5 responsive sizes');
 } catch (error) {
   writeFileSync(resolve(output, 'e2e-chat.json'), JSON.stringify({ result: 'failed', step, error: error.stack, checks, requests, responsive, unexpected, errors }, null, 2));
-  writeFileSync(resolve(output, 'chat-failure.txt'), await page.locator('body').innerText());
+  writeFileSync(resolve(output, 'chat-failure.txt'), await page.locator('body').textContent());
   await page.screenshot({ path: resolve(output, 'chat-failure.png') });
   throw error;
 } finally { await context.close(); await browser.close(); }

@@ -23,6 +23,16 @@ const commands: Command[] = [
 ];
 beforeEach(() => vi.clearAllMocks());
 
+function PaletteHost() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Search and commands</button>
+      <CommandPalette open={open} commands={commands} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
 describe("CommandPalette", () => {
   it("is a named dialog with a combobox over a listbox, and announces the result count", () => {
     render(<CommandPalette open commands={commands} onClose={() => {}} />);
@@ -68,16 +78,7 @@ describe("CommandPalette", () => {
   });
 
   it("closes on Escape and returns focus to the control that opened it", async () => {
-    function Host() {
-      const [open, setOpen] = useState(false);
-      return (
-        <>
-          <button type="button" onClick={() => setOpen(true)}>Search and commands</button>
-          <CommandPalette open={open} commands={commands} onClose={() => setOpen(false)} />
-        </>
-      );
-    }
-    render(<Host />);
+    render(<PaletteHost />);
     const opener = screen.getByRole("button", { name: "Search and commands" });
     opener.focus();
     await userEvent.click(opener);

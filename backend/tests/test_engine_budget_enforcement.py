@@ -100,7 +100,7 @@ def _budget_gate(limit_usd: float | None):
     test_usage_tracking.py and test_execution_budget_enforcement.py's
     HTTP-level tests already cover."""
 
-    async def _check(model: str | None, residence: str | None) -> None:
+    async def _check(model: str | None, residence: str | None, billing: str | None = None) -> None:
         if limit_usd is None:
             return
         if model and residence != "local" and blended_price_per_mtok(model) is None:

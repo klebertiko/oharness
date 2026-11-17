@@ -35,32 +35,35 @@ const LINES: Record<NodeType, Line> = {
   },
 };
 
-function makeNode(type: NodeType) {
+function HarnessPlate({ id, data, selected, type }: NodeProps & { type: NodeType }) {
   const line = LINES[type];
-  function HarnessPlate({ id, data, selected }: NodeProps) {
-    const d = data as NodeData;
-    const connections = useProviderStore(s => s.connections);
-    const mode = useCanvasStore(s => s.executionMode);
-    return (
-      <BaseNode
-        id={id}
-        type={type}
-        data={d}
-        selected={selected}
-        spec={type === "agent" || type === "skill" ? nodeProviderSummary(d, mode, connections) : line.spec?.(d)}
-        note={line.note?.(d)}
-      />
-    );
-  }
-  HarnessPlate.displayName = `HarnessPlate(${type})`;
-  return HarnessPlate;
+  const d = data as NodeData;
+  const connections = useProviderStore(s => s.connections);
+  const mode = useCanvasStore(s => s.executionMode);
+  return (
+    <BaseNode
+      id={id}
+      type={type}
+      data={d}
+      selected={selected}
+      spec={type === "agent" || type === "skill" ? nodeProviderSummary(d, mode, connections) : line.spec?.(d)}
+      note={line.note?.(d)}
+    />
+  );
 }
 
+const AgentPlate = (props: NodeProps) => <HarnessPlate {...props} type="agent" />;
+const GatePlate = (props: NodeProps) => <HarnessPlate {...props} type="gate" />;
+const HitlPlate = (props: NodeProps) => <HarnessPlate {...props} type="hitl" />;
+const SkillPlate = (props: NodeProps) => <HarnessPlate {...props} type="skill" />;
+const McpPlate = (props: NodeProps) => <HarnessPlate {...props} type="mcp" />;
+const ToolPlate = (props: NodeProps) => <HarnessPlate {...props} type="tool" />;
+
 export const nodeTypes: NodeTypes = {
-  agent: makeNode("agent"),
-  gate: makeNode("gate"),
-  hitl: makeNode("hitl"),
-  skill: makeNode("skill"),
-  mcp: makeNode("mcp"),
-  tool: makeNode("tool"),
+  agent: AgentPlate,
+  gate: GatePlate,
+  hitl: HitlPlate,
+  skill: SkillPlate,
+  mcp: McpPlate,
+  tool: ToolPlate,
 };

@@ -187,7 +187,7 @@ try {
     assert.equal((await page.content()).includes(SECRET), false, "the key is not in the markup");
     const held = await page.evaluate((secret) => ({
       fields: [...document.querySelectorAll("input,textarea")].filter((e) => e.value.includes(secret)).length,
-      text: document.body.innerText.includes(secret),
+      text: document.body.textContent.includes(secret),
       storage: JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret),
     }), SECRET);
     assert.deepEqual(held, { fields: 0, text: false, storage: false }, "the key is in no field, no text and no storage");

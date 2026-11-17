@@ -17,3 +17,6 @@ tests/fixtures/ohm/*.json -text
 # The permission mode table is shipped twice and a test compares the bytes; keep LF on every checkout.
 backend/sandbox/permission_modes.json text eol=lf
 frontend/src/lib/permissionModes.json text eol=lf
+
+# Vendored DSH plugin files are pinned by git blob hash (cordis-host/vendor/dsh/PIN.json); keep the bytes exact on every checkout.
+cordis-host/vendor/** -text

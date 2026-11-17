@@ -28,7 +28,7 @@ def chatty(monkeypatch, client):
 
 def _direct(client, **extra):
     return client.post('/execute/direct', json={'instruction': 'hi', 'mode': 'live',
-                                                 'connection_id': 'anthropic', 'model': 'claude-sonnet-5', **extra})
+                                                 'connection_id': 'metered', 'model': 'claude-sonnet-5', **extra})
 
 
 def test_ceiling_reached_ends_run_with_explicit_status_in_journal(client):
