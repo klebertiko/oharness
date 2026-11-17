@@ -77,7 +77,7 @@ def test_record_usage_stores_the_estimate_flag():
     assert anyio.run(lambda: _record(tokens_estimated=True)).tokens_estimated is True
     assert anyio.run(lambda: _record(tokens_estimated=False)).tokens_estimated is False
     # Omitted: the caller had the provider's own count.
-    assert anyio.run(lambda: _record()).tokens_estimated is False
+    assert anyio.run(_record).tokens_estimated is False
 
 
 def test_rows_from_events_carry_the_node_done_flag():
