@@ -1,0 +1,24 @@
+{
+  "name": "@oharness/cordis-host",
+  "version": "0.0.1-alpha",
+  "private": true,
+  "type": "module",
+  "description": "Loopback Node host for Cordis plugins. Separate from the FastAPI sidecar.",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "scripts": {
+    "start": "node --experimental-transform-types --import ./src/register-alias.ts src/main.ts",
+    "test": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./src/register-alias.ts --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "cordis": "4.0.0-rc.11",
+    "schemastery": "3.18.0",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  }
+}

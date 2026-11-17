@@ -66,22 +66,40 @@ def usage_kwargs(**overrides):
                 provider='openrouter', adapter='openai-compatible', model='claude-sonnet-5',
                 tokens_total=100, **overrides)
 
-@pytest.mark.parametrize('residence,billing,price', [('local', 'none', 0.0), ('cloud', 'subscription', None)])
-def test_billing_record_distinguishes_local_and_subscription(residence, billing, price):
+@pytest.mark.parametrize('residence,billing,price,cost', [
+    ('local', 'none', 0.0, 0.0),
+    # I11: a seat's cost is unknown — never 0.0, never the API list price.
+    ('cloud', 'subscription', None, None),
+])
+def test_billing_record_distinguishes_local_and_subscription(residence, billing, price, cost):
     async def go():
         async with SessionLocal() as db:
             row = await ut.record_usage(db, **usage_kwargs(residence=residence, billing=billing))
             assert row.price_per_mtok == price
-            assert row.cost_usd == 0
+            assert row.cost_usd == cost
+            assert row.billing == billing
     anyio.run(go)
 
 @pytest.mark.parametrize('residence,billing', [('cloud', 'subscription'), ('local', 'subscription')])
-def test_subscription_never_uses_api_catalog_to_pass_budget(residence, billing):
+@pytest.mark.parametrize('model', ['claude-sonnet-5', 'uncatalogued-seat-model', None])
+def test_subscription_never_uses_api_catalog_to_pass_budget(residence, billing, model):
+    """R-PRV-06 (#416): a subscription is outside the USD ceiling — its run is
+    neither priced from the API catalog nor refused for lacking a price or a
+    default model (F5 used to refuse it)."""
     async def go():
         async with SessionLocal() as db:
             await ut.set_budget_limit(db, 5)
-            with pytest.raises(ut.BudgetExceededError, match='subscription'):
-                await ut.enforce_budget_or_raise(db, model='claude-sonnet-5', residence=residence, billing=billing, model_expected=True)
+            status = await ut.enforce_budget_or_raise(db, model=model, residence=residence, billing=billing, model_expected=True)
+            assert status.state == 'ok'
+    anyio.run(go)
+
+def test_exhausted_usd_budget_still_stops_a_subscription_run():
+    """The global stops (exceeded/invalid/unknown) still apply to every run."""
+    async def go():
+        async with SessionLocal() as db:
+            await ut.set_budget_limit(db, 0)
+            with pytest.raises(ut.BudgetExceededError, match='reached'):
+                await ut.enforce_budget_or_raise(db, model=None, residence='cloud', billing='subscription', model_expected=True)
     anyio.run(go)
 
 def test_unknown_history_blocks_and_summary_exposes_incomplete_cost(client):

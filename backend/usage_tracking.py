@@ -33,11 +33,11 @@ from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from weakref import WeakKeyDictionary
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from adapters.catalog import get_model_price
+from adapters.catalog import get_model_price, spec_for_connection
 from models import BudgetConfig, UsageRecord
 
 WARN_THRESHOLD = 0.8
@@ -65,6 +65,18 @@ _budget_lock = asyncio.Lock()
 
 class BudgetExceededError(Exception):
     """The global USD ceiling is already at or over its limit."""
+
+
+def connection_billing(connection: dict | None) -> tuple[str | None, str | None]:
+    """`(residence, billing)` of a stored connection, from the catalog spec it
+    really uses (`spec_for_connection`). `billing="subscription"` means the
+    spend rides a seat or plan, never a per-token USD price (I11, R-PRV-06):
+    the USD ceiling does not count it and the ledger stores its cost as
+    unknown. `(None, None)` when the connection is unknown."""
+    if not connection:
+        return None, None
+    spec = spec_for_connection(connection)
+    return connection.get("residence"), (spec.get("billing") if spec else None)
 
 
 def blended_price_per_mtok(model: str) -> float | None:
@@ -116,6 +128,8 @@ async def record_usage(
     if residence == "local" and billing == "none":
         cost_usd, price_per_mtok = 0.0, 0.0
     elif billing == "subscription":
+        # A seat has no per-token price: the cost is unknown, never 0.0 and
+        # never the API list price of the same model (I11).
         cost_usd, price_per_mtok = None, None
     else:
         cost_usd, price_per_mtok = compute_cost(tokens_total, model)
@@ -129,7 +143,10 @@ async def record_usage(
         model=model,
         tokens_total=tokens_total,
         price_per_mtok=price_per_mtok,
-        cost_usd=cost_usd if cost_usd is not None else 0.0,
+        # Uncatalogued metered spend keeps the legacy 0.0 known subtotal (its
+        # NULL price marks it unknown); only a subscription stores NULL cost.
+        cost_usd=None if billing == "subscription" else (cost_usd if cost_usd is not None else 0.0),
+        billing=billing,
     )
     if call_id is not None:
         if not call_id.strip():
@@ -227,8 +244,11 @@ async def get_budget_status(db: AsyncSession) -> BudgetStatus:
     spent_usd = await total_spend_usd(db)
     status = _status_from(limit_usd, spent_usd)
     if limit_usd is not None and status.state not in {"invalid", "exceeded"}:
+        # A subscription row has no USD price by design, not by omission: it
+        # sits outside the USD ceiling and never makes it "unknown" (I11).
         unknown = await db.scalar(select(func.count()).select_from(UsageRecord).where(
-            UsageRecord.price_per_mtok.is_(None), UsageRecord.tokens_total > 0
+            UsageRecord.price_per_mtok.is_(None), UsageRecord.tokens_total > 0,
+            or_(UsageRecord.billing.is_(None), UsageRecord.billing != "subscription"),
         ))
         if unknown:
             return BudgetStatus(limit_usd, spent_usd, None, None, "unknown")
@@ -302,8 +322,12 @@ async def enforce_budget_or_raise(
                 f"${status.spent_usd:,.2f} so far). Raise or clear the budget "
                 f"under Providers to keep running."
             )
-        if status.limit_usd is not None and billing == "subscription":
-            raise BudgetExceededError("Cannot enforce USD budget for subscription billing; price and balance are unknown.")
+        # A subscription spends no USD: the price/model checks below exist so
+        # metered spend is never invisible to the ceiling, and a seat's spend is
+        # outside it by definition (R-PRV-06, I11). The global stops above
+        # (exceeded/invalid/unknown) still apply to every run.
+        if billing == "subscription":
+            return status
         if status.limit_usd is not None and not (residence == "local" and billing in (None, "none")):
             if model:
                 if blended_price_per_mtok(model) is None:
