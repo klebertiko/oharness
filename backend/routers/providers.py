@@ -93,6 +93,16 @@ def get_connections(request: Request) -> dict[str, dict[str, Any]]:
     return conns
 
 
+def _effective_endpoint(row: dict[str, Any]) -> str:
+    """Where this connection's calls really go. A fixed endpoint is the catalog
+    default (a row saved before that default changed, #503, still shows the
+    host the run uses); an editable one stays as stored, empty included."""
+    spec = spec_for_connection(row)
+    if spec and not spec.get("endpoint", {}).get("editable", True):
+        return endpoint_for_connection(row, spec)
+    return row.get("endpoint", "")
+
+
 def _public_connection(row: dict[str, Any]) -> dict[str, Any]:
     """Strip anything that could be raw credential material."""
     return {
@@ -100,7 +110,7 @@ def _public_connection(row: dict[str, Any]) -> dict[str, Any]:
         "provider": row["provider"],
         "label": row["label"],
         "residence": row["residence"],
-        "endpoint": row["endpoint"],
+        "endpoint": _effective_endpoint(row),
         "enabled": row.get("enabled", False),
         "secretRef": row.get("secretRef"),
         "defaultModel": row.get("defaultModel", ""),
@@ -313,8 +323,8 @@ async def probe_connection(
     spec = spec_for_connection(row)
     # A fixed endpoint is the catalog default; an editable one stays as stored
     # (empty still means the adapter's own default, as before).
-    endpoint = endpoint_for_connection(row, spec) if spec and not spec["endpoint"]["editable"] else row.get("endpoint", "")
-    if spec and spec["credential"]["kind"] == "api-key" and row.get("secretRef"):
+    endpoint = _effective_endpoint(row)
+    if spec and spec.get("credential", {}).get("kind") == "api-key" and row.get("secretRef"):
         api_key = store.get(row["secretRef"]) or ""
 
     config = AdapterConfig(adapter=adapter_name, model="", endpoint=endpoint, api_key=api_key)
