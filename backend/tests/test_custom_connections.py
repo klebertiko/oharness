@@ -297,3 +297,62 @@ def test_probe_route_attaches_the_key_to_a_custom_endpoint(client: TestClient, m
     assert r.status_code == 200 and r.json()["ok"] is True
     assert str(seen[0].url) == "https://llm.example.test/v1/models"
     assert seen[0].headers["authorization"] == f"Bearer {RAW_KEY}"
+
+
+# ── #507 review: typed values are validated on the way in ────────────────────
+
+_BAD_MODELS = ["x" * 201, "qwen\n3.5", "qwen\x00", " qwen3.5", "qwen3.5 ", "qwen\t3.5"]
+
+
+@pytest.mark.parametrize("provider_id", ["openai-compatible", "anthropic-gateway"])
+@pytest.mark.parametrize("model", _BAD_MODELS)
+def test_custom_connection_rejects_a_malformed_default_model_on_create(client: TestClient, provider_id: str, model: str) -> None:
+    r = _create(client, provider=provider_id, defaultModel=model)
+    assert r.status_code == 400
+    assert model not in r.text  # the typed value is not echoed back
+    assert "my-vllm" not in client.app.state.provider_connections
+
+
+@pytest.mark.parametrize("model", _BAD_MODELS)
+def test_custom_connection_rejects_a_malformed_default_model_on_update(client: TestClient, model: str) -> None:
+    assert _create(client).status_code == 201
+    r = client.put("/providers/connections/my-vllm", json={"defaultModel": model})
+    assert r.status_code == 400
+    assert client.app.state.provider_connections["my-vllm"]["defaultModel"] == "qwen3.5-32b"
+
+
+def test_custom_connection_accepts_a_model_at_the_length_limit(client: TestClient) -> None:
+    assert _create(client, defaultModel="m" * 200).status_code == 201
+
+
+@pytest.mark.parametrize("provider_id", ["openai-compatible", "anthropic-gateway"])
+@pytest.mark.parametrize("model", _BAD_MODELS)
+def test_run_refuses_a_malformed_model_for_a_custom_connection(provider_id: str, model: str) -> None:
+    store = MemorySecrets()
+    store.put("oharness/c", RAW_KEY)
+    conns = {"c": {"id": "c", "provider": provider_id, "label": "C", "residence": "cloud",
+                   "endpoint": "https://x.example.test", "enabled": True, "secretRef": "oharness/c",
+                   "defaultModel": "ok-model"}}
+    with pytest.raises(ProviderResolutionError) as err:
+        resolve_node_provider({"providerIds": ["c"], "model": model}, "llm", "n", connections=conns, secrets_store=store)
+    assert model not in str(err.value)
+
+
+@pytest.mark.parametrize("label", ["L" * 81, "My\nvLLM", "My\x1bvLLM"])
+def test_connection_label_is_bounded_and_has_no_control_characters(client: TestClient, label: str) -> None:
+    assert _create(client, label=label).status_code in (400, 422)
+    assert _create(client, id="other", label="ok").status_code == 201
+    assert client.put("/providers/connections/other", json={"label": label}).status_code in (400, 422)
+
+
+def test_label_at_the_limit_is_accepted(client: TestClient) -> None:
+    assert _create(client, label="L" * 80).status_code == 201
+
+
+@pytest.mark.parametrize("key", ["sk-abc\ndef", "sk-abc\x00", "sk-\x7fabc"])
+def test_secret_with_a_control_character_is_refused(client: TestClient, key: str) -> None:
+    assert _create(client).status_code == 201
+    r = client.post("/providers/my-vllm/secret", json={"key": key})
+    assert r.status_code == 400
+    assert key not in r.text
+    assert client.app.state.secrets_store.get("oharness/my-vllm") is None
