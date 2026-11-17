@@ -86,7 +86,8 @@ def test_create_list_delete_custom_connection_with_key_only_in_vault(client: Tes
     assert RAW_KEY not in json.dumps(listed)
     assert RAW_KEY not in json.dumps(app.state.provider_connections)
 
-    assert client.delete("/providers/connections/my-vllm").status_code == 204
+    deleted = client.delete("/providers/connections/my-vllm")
+    assert deleted.status_code == 204
     assert client.get("/providers/connections").json()["connections"] == []
     assert app.state.secrets_store.get(ref) in (None, "")
 

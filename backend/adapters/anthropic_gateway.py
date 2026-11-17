@@ -93,33 +93,36 @@ class AnthropicGatewayAdapter(AgentAdapter):
             yield {"kind": "usage", "tokens": tokens}
 
     async def probe(self, config: AdapterConfig) -> ProbeResult:
-        base = _base(config)
-        if not base:
-            return ProbeResult(ok=False, health="setup", detail="Set the gateway's base URL first.")
+        # The failing `detail` strings reuse the OpenAI-compatible templates, so
+        # the front end's classifier (test_probe_detail_contract.py) reads them.
+        endpoint = _base(config)
         started = time.monotonic()
         raw = b""
         try:
             async with self._client(PROBE_TIMEOUT) as client:
-                async with client.stream("GET", f"{base}/v1/models", headers=_headers(config)) as resp:
-                    status = resp.status_code
+                async with client.stream("GET", f"{endpoint}/v1/models", headers=_headers(config)) as resp:
+                    status_code = resp.status_code
                     async for chunk in resp.aiter_bytes():
                         raw += chunk
                         if len(raw) > MAX_PROBE_BODY_BYTES:
                             return ProbeResult(
-                                ok=False, health="degraded", detail="The gateway sent a model list larger than 2 MB."
+                                ok=False, health="degraded", detail=f"{endpoint} sent a model list larger than 2 MB."
                             )
         except httpx.TimeoutException:
-            return ProbeResult(ok=False, health="fault", detail="The gateway did not respond in time.", code="timeout")
+            return ProbeResult(ok=False, health="fault", detail=f"{endpoint} did not respond in time.", code="timeout")
         except httpx.HTTPError:
-            return ProbeResult(ok=False, health="fault", detail="Could not reach the gateway.", code="error")
-        latency = max(1, int((time.monotonic() - started) * 1000))
-        if status in (401, 403):
+            return ProbeResult(ok=False, health="fault", detail=f"Could not reach {endpoint}.", code="error")
+        latency_ms = max(1, int((time.monotonic() - started) * 1000))
+        if status_code == 401:
             return ProbeResult(
-                ok=False, health="setup", detail="The gateway refused the key. Check it and save it again.",
-                latency_ms=latency, code="error",
+                ok=False, health="setup", latency_ms=latency_ms, code="error",
+                detail="401 unauthorized — the key was rejected or has been revoked.",
             )
-        if status >= 400:
-            return ProbeResult(ok=False, health="fault", detail=f"HTTP {status} from the gateway.", latency_ms=latency, code="error")
+        if status_code >= 400:
+            return ProbeResult(
+                ok=False, health="fault", latency_ms=latency_ms, code="error",
+                detail=f"HTTP {status_code} from {endpoint}.",
+            )
         models: list[str] = []
         try:
             body = json.loads(raw)
@@ -129,8 +132,7 @@ class AnthropicGatewayAdapter(AgentAdapter):
                 if isinstance(mid, str) and 0 < len(mid) <= MAX_MODEL_ID_LEN:
                     models.append(mid)
         except ValueError:
-            pass
-        return ProbeResult(
-            ok=True, health="live", detail="The gateway answered and accepted the key.",
-            latency_ms=latency, models=models,
-        )
+            # Reachable and the key was accepted, but the list is not JSON:
+            # report live with no models; the UI falls back to its catalog.
+            models = []
+        return ProbeResult(ok=True, health="live", latency_ms=latency_ms, detail="Reachable.", models=models)

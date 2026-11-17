@@ -546,7 +546,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       // Rows a person created (R-PRV-14) have no seed: build them from the
       // sidecar row. A provider this build does not know is skipped, not guessed.
       const created = body.connections
-        .filter((row) => !known.has(row.id) && Object.prototype.hasOwnProperty.call(PROVIDERS, row.provider))
+        .filter((row) => !known.has(row.id) && Object.hasOwn(PROVIDERS, row.provider))
         .map(customTemplate);
       set({
         loadState: "ready",
