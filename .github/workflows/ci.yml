@@ -118,7 +118,7 @@ jobs:
       - name: Test
         run: python -m pytest -q tests/test_turn_diff.py tests/test_sandbox_p3_followups.py tests/test_permission_policy.py tests/test_sandbox_paths.py tests/workspace_manager/test_workspaces_links.py tests/workspace_manager/test_workspaces_admin_links.py tests/workspace_manager/test_workspaces_registry.py tests/workspace_manager/test_workspaces_digest.py tests/factory_intake -k "link or junction or symlink or digest or orphan or python3 or path"
       - name: Test the file vault (whole file)
-        run: python -m pytest -q tests/test_secrets_store.py
+        run: python -m pytest -q tests/test_secrets_store.py tests/test_secrets_store_p3.py
 
   rust-tauri:
     name: cargo fmt clippy test
