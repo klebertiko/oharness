@@ -49,7 +49,6 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
 from security.sidecar_token import restrict_fd_to_current_user, restrict_to_current_user
 
 from .keychain import KeyringBackend

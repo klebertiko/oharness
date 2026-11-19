@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
-
 from secret_store import file_store
 from secret_store.file_store import FileSecrets, _filename_for_ref
 from security import sidecar_token
