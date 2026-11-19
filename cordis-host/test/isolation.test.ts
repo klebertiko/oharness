@@ -167,7 +167,14 @@ test('a malformed message from the plugin process stops that plugin', async () =
   await withHost(async (host) => {
     const dir = await tempPackage({
       'package.json': JSON.stringify({ name: 'liar', version: '1.0.0', type: 'module', main: './index.ts' }),
-      'index.ts': "export function apply() { process.send?.({ type: 'loaded', status: 'active', extra: { '__proto__': 1 } }); process.send?.({ type: 'nonsense' }) }\n",
+      'index.ts': [
+        "import { writeSync } from 'node:fs'",
+        'export function apply() {',
+        "  writeSync(3, JSON.stringify({ type: 'loaded', status: 'active', extra: { '__proto__': 1 } }) + '\\n')",
+        "  writeSync(3, '{\"type\":\"nonsense\"}\\n')",
+        '}',
+        '',
+      ].join('\n'),
     })
     const installed = await installConfirmed(host, dir)
     assert.notEqual(installed.json.status, 'active', JSON.stringify(installed.json))

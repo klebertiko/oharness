@@ -7,13 +7,13 @@
  * gets no environment variables from the host. Network is not gated: Node
  * 22 and 24 have no network permission (see ADR 0071, item 10).
  */
-import { fork, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { PROCESSES_ARG } from './child-guard.ts'
-import { parseChildMessage, type ChildMessage, type ParentMessage, type ServiceRow } from './ipc.ts'
+import { CHILD_MESSAGE_LIMIT, parseChildLine, PROCESSES_ARG, SESSION_APPEND_LIMIT, SESSION_APPENDS_PER_CALL, SESSION_EVENTS, type ChildMessage, type ParentMessage, type ServiceRow } from './ipc.ts'
+import { LineSplitter, outputLine } from './lines.ts'
 import type { Capability } from './manifest.ts'
 import { isRecord } from './plugin-load.ts'
 
@@ -30,9 +30,14 @@ export const HOST_READ_PATHS: readonly string[] = [
   path.join(hostDir, 'package.json'),
 ]
 
+/** V8 old-space limit of one plugin process, in MiB. */
+export const PLUGIN_HEAP_MB = 512
 export const DEFAULT_CALL_TIMEOUT_MS = 30_000
 const LOAD_TIMEOUT_MS = 30_000
+/** How long a plugin process has to exit after dispose, or to answer a ping after a call timed out. */
 const STOP_GRACE_MS = 2_000
+/** Longest line of plugin output passed on; a longer one is cut. */
+const OUTPUT_LINE_LIMIT = 8 * 1024
 
 /** Node flags for one plugin process. A capability adds its grant; nothing else is ever granted. */
 export function permissionFlags(snapshot: string, capabilities: readonly Capability[]): string[] {
@@ -64,14 +69,24 @@ interface PendingCall {
   readonly reject: (error: Error) => void
   readonly timer: NodeJS.Timeout
   readonly agent: unknown
+  appends: number
 }
 
 export interface IsolatedStart {
+  /** Package name, used to prefix the plugin's output. */
+  readonly name: string
   readonly entry: string
   readonly snapshot: string
   readonly capabilities: readonly Capability[]
   readonly config?: unknown
   readonly callTimeoutMs?: number
+  /** Where each line of plugin output goes. Defaults to the host's stderr. */
+  readonly output?: (line: string) => void
+}
+
+function toStderr(line: string): void {
+  process.stderr.write(`${line}
+`)
 }
 
 export class IsolatedPlugin {
@@ -90,27 +105,47 @@ export class IsolatedPlugin {
   readonly #callTimeoutMs: number
   readonly #exited: Promise<void>
   #onLoaded: ((loaded: boolean) => void) | undefined
+  #pingTimer: NodeJS.Timeout | undefined
 
   private constructor(start: IsolatedStart) {
     this.#callTimeoutMs = start.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
-    this.#child = fork(childEntry, start.capabilities.includes('processes') ? [PROCESSES_ARG] : [], {
+    // No Node IPC channel: Node parses each IPC message whole before anyone
+    // can measure it. The plugin process writes NDJSON on fd 3 instead, and
+    // the host counts bytes before it parses a line (see ipc.ts).
+    this.#child = spawn(process.execPath, [
+      ...permissionFlags(start.snapshot, start.capabilities),
+      `--max-old-space-size=${String(PLUGIN_HEAP_MB)}`,
+      '--experimental-transform-types',
+      '--disable-warning=ExperimentalWarning',
+      '--import',
+      registerAlias,
+      childEntry,
+      ...(start.capabilities.includes('processes') ? [PROCESSES_ARG] : []),
+    ], {
       // Not the snapshot: a working directory there keeps Windows from deleting it.
       cwd: here,
       env: childEnv(start.capabilities),
-      execArgv: [
-        ...permissionFlags(start.snapshot, start.capabilities),
-        '--experimental-transform-types',
-        '--disable-warning=ExperimentalWarning',
-        '--import',
-        registerAlias,
-      ],
-      // The host's stdout carries its banner to the parent, so plugin output goes to stderr.
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      serialization: 'json',
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     })
     this.pid = this.#child.pid
-    this.#child.stdout?.pipe(process.stderr, { end: false })
-    this.#child.stderr?.pipe(process.stderr, { end: false })
+    // The host's stdout carries its banner to the parent, so plugin output goes
+    // to stderr: line by line, prefixed, without terminal control sequences.
+    const output = start.output ?? toStderr
+    for (const stream of [this.#child.stdout, this.#child.stderr]) {
+      const lines = new LineSplitter(OUTPUT_LINE_LIMIT, (line) => {
+        const text = outputLine(line)
+        if (text !== '') output(`[plugin ${outputLine(start.name)}] ${text}`)
+      }, 'cut')
+      stream?.on('data', (chunk: Buffer) => { lines.push(chunk) })
+    }
+    const channel = this.#child.stdio[3]
+    const messages = new LineSplitter(CHILD_MESSAGE_LIMIT, (line) => { this.#receive(line, start) }, () => {
+      this.#fail('the plugin process sent a message over the size limit')
+    })
+    channel?.on('data', (chunk: Buffer) => { messages.push(chunk) })
+    channel?.on('error', () => undefined)
+    this.#child.stdin?.on('error', () => undefined)
     this.#exited = new Promise((resolve) => {
       this.#child.once('exit', () => {
         this.#fail('the plugin process exited')
@@ -118,7 +153,6 @@ export class IsolatedPlugin {
       })
     })
     this.#child.once('error', () => { this.#fail('the plugin process failed to start') })
-    this.#child.on('message', (raw: unknown) => { this.#receive(raw, start) })
   }
 
   /** Start the process, load the plugin in it, and resolve once it reports its state. */
@@ -142,11 +176,14 @@ export class IsolatedPlugin {
   }
 
   #send(message: ParentMessage): void {
-    if (this.#child.connected) this.#child.send(message)
+    const stdin = this.#child.stdin
+    if (stdin !== null && stdin.writable) stdin.write(`${JSON.stringify(message)}
+`)
   }
 
-  #receive(raw: unknown, start: IsolatedStart): void {
-    const message = parseChildMessage(raw)
+  #receive(line: string, start: IsolatedStart): void {
+    if (this.status === 'failed' || this.status === 'stopped') return
+    const message = parseChildLine(line)
     if (message === undefined) {
       this.#fail('the plugin process sent a malformed message')
       return
@@ -175,9 +212,21 @@ export class IsolatedPlugin {
       this.#onLoaded?.(true)
       return
     }
+    if (message.type === 'pong') {
+      clearTimeout(this.#pingTimer)
+      this.#pingTimer = undefined
+      return
+    }
     const pending = this.#pending.get(message.id)
     if (pending === undefined) return
     if (message.type === 'session-append') {
+      const refused = this.#refuseAppend(pending, message.event, message.data)
+      if (refused !== undefined) {
+        this.#pending.delete(message.id)
+        clearTimeout(pending.timer)
+        pending.reject(new Error(refused))
+        return
+      }
       const agent = pending.agent
       const session = isRecord(agent) ? agent.session : undefined
       if (isRecord(session) && typeof session.append === 'function') {
@@ -191,7 +240,28 @@ export class IsolatedPlugin {
     else pending.reject(new Error(message.error))
   }
 
+  /** Why one session-append is refused, or undefined when it may pass to the caller's session. */
+  #refuseAppend(pending: PendingCall, event: string, data: unknown): string | undefined {
+    if (!SESSION_EVENTS.includes(event)) return `session event "${event}" is not allowed`
+    if ((JSON.stringify(data) ?? '').length > SESSION_APPEND_LIMIT) return 'session event data is too large'
+    pending.appends += 1
+    if (pending.appends > SESSION_APPENDS_PER_CALL) return 'too many session events in one call'
+    return undefined
+  }
+
+  /** After a call timed out: a process that does not answer a ping in time is stuck, so kill it. */
+  #ping(): void {
+    if (this.#pingTimer !== undefined || !this.running) return
+    this.#pingTimer = setTimeout(() => {
+      this.#pingTimer = undefined
+      this.#fail('the plugin process stopped responding')
+    }, STOP_GRACE_MS)
+    this.#send({ type: 'ping' })
+  }
+
   #fail(reason: string): void {
+    clearTimeout(this.#pingTimer)
+    this.#pingTimer = undefined
     if (this.status !== 'stopped' && this.status !== 'failed') {
       this.status = 'failed'
       this.message = reason
@@ -217,8 +287,9 @@ export class IsolatedPlugin {
         this.#pending.delete(id)
         this.#send({ type: 'abort', id })
         reject(new Error('the plugin call timed out'))
+        this.#ping()
       }, this.#callTimeoutMs)
-      this.#pending.set(id, { resolve, reject, timer, agent })
+      this.#pending.set(id, { resolve, reject, timer, agent, appends: 0 })
       signal?.addEventListener('abort', () => { this.#send({ type: 'abort', id }) }, { once: true })
       this.#send(message(id))
     })

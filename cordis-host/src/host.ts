@@ -151,6 +151,7 @@ export class CordisRuntime {
 
   async #installIsolated(preview: PackagePreview, snapshot: { dir: string; entry: string }, config: unknown): Promise<Loaded> {
     const plugin = await IsolatedPlugin.start({
+      name: preview.name,
       entry: snapshot.entry,
       snapshot: snapshot.dir,
       capabilities: preview.capabilities as Capability[],

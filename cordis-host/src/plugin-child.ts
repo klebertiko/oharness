@@ -4,20 +4,32 @@
  * The host starts this file with Node's permission model on (see
  * isolated-plugin.ts for the flags), so the plugin shares this process with
  * nothing of the host's but the pinned modules it may read. This file trusts
- * its parent and answers over the IPC channel; the parent does not trust it.
+ * its parent: it reads NDJSON from stdin and answers on fd 3 (see ipc.ts).
+ * The parent does not trust what arrives on fd 3.
  */
 // Must stay first: it locks down `process` before anything else, and long before plugin code, runs.
 import './child-guard.ts'
+import { Socket } from 'node:net'
+import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { HostError } from './errors.ts'
-import type { ParentMessage } from './ipc.ts'
+import { CHILD_MESSAGE_LIMIT, type ParentMessage } from './ipc.ts'
 import { asPlugin, BASE_SERVICES, hostContext, listServices, loadPlugin } from './plugin-load.ts'
 import { confineSnapshot, OutsidePackageError } from './register-alias.ts'
 
 const ERROR_LIMIT = 4000
 
-function send(message: Record<string, unknown>): void {
-  process.send?.(message)
+const channel = new Socket({ fd: 3, readable: false, writable: true })
+
+/** One line to the host. A line the host would refuse is replaced by `fallback`, if any, so the plugin keeps running. */
+function send(message: Record<string, unknown>, fallback?: Record<string, unknown>): void {
+  let line = JSON.stringify(message)
+  if (Buffer.byteLength(line) >= CHILD_MESSAGE_LIMIT) {
+    if (fallback === undefined) return
+    line = JSON.stringify(fallback)
+  }
+  channel.write(`${line}
+`)
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -74,7 +86,8 @@ async function answer(id: string, run: (signal: AbortSignal) => Promise<unknown>
   const controller = new AbortController()
   aborts.set(id, controller)
   try {
-    send({ type: 'result', id, ok: true, value: plain(await run(controller.signal)) })
+    const value = plain(await run(controller.signal))
+    send({ type: 'result', id, ok: true, value }, { type: 'result', id, ok: false, error: 'the result is larger than the limit' })
   } catch (error) {
     send({ type: 'result', id, ok: false, error: errorText(error, 'plugin call failed') })
   } finally {
@@ -92,8 +105,8 @@ function agentFor(id: string): unknown {
   }
 }
 
-process.on('message', (raw: unknown) => {
-  const message = raw as ParentMessage
+function receive(line: string): void {
+  const message = JSON.parse(line) as ParentMessage
   switch (message.type) {
     case 'load':
       void load(message)
@@ -108,6 +121,9 @@ process.on('message', (raw: unknown) => {
     case 'command':
       void answer(message.id, async (signal) => (await context.commands.execute(message.line, signal)) ?? null)
       return
+    case 'ping':
+      send({ type: 'pong' })
+      return
     case 'abort':
       aborts.get(message.id)?.abort()
       return
@@ -120,7 +136,9 @@ process.on('message', (raw: unknown) => {
       void context.fiber.dispose().catch(() => undefined).finally(() => { process.exit(0) })
       return
   }
-})
-// The host holds the IPC channel. When it goes away, so does this process.
-process.on('disconnect', () => { process.exit(0) })
+}
+
+createInterface({ input: process.stdin, crlfDelay: Infinity }).on('line', receive)
+// The host holds stdin. When it goes away, so does this process.
+process.stdin.on('end', () => { process.exit(0) })
 send({ type: 'ready' })

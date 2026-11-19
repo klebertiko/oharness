@@ -19,8 +19,7 @@
  * `process.getBuiltinModule('node:process')` are the same object.
  */
 
-/** fork() argument that grants the "processes" capability to this guard. */
-export const PROCESSES_ARG = '--oh-capability-processes'
+import { PROCESSES_ARG } from './ipc.ts'
 
 const host = process.ppid
 const processes = process.argv.includes(PROCESSES_ARG)
