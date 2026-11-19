@@ -28,10 +28,23 @@ function denied(what: string): Error {
   return Object.assign(new Error(`${what} is not allowed in an isolated plugin`), { code: 'ERR_ACCESS_DENIED' })
 }
 
-function checkTarget(pid: unknown, what: string): void {
-  const target = Number(pid)
-  if (target === process.pid) return
-  if (processes && Number.isInteger(target) && target > 0 && target !== host) return
+/**
+ * The pid that may be signalled, as a plain number. Only a primitive integer
+ * passes: an object would be converted again by Node after this check, and
+ * its valueOf could answer another pid the second time. The returned number,
+ * not the argument, is what reaches Node.
+ */
+function checkTarget(pid: unknown, what: string): number {
+  if (typeof pid !== 'number' || !Number.isInteger(pid)) throw denied(what)
+  if (pid === process.pid) return pid
+  if (processes && pid > 0 && pid !== host) return pid
+  throw denied(what)
+}
+
+/** A signal as Node accepts it, primitive only, for the same reason. */
+function checkSignal(signal: unknown, what: string, optional: boolean): string | number | undefined {
+  if (optional && signal === undefined) return undefined
+  if (typeof signal === 'string' || (typeof signal === 'number' && Number.isInteger(signal))) return signal
   throw denied(what)
 }
 
@@ -44,11 +57,13 @@ const kill = process.kill.bind(process) as Kill
 const rawKill = (process as unknown as { _kill: Kill })._kill.bind(process)
 
 lock('_debugProcess', () => { throw denied('process._debugProcess') })
-lock('_kill', (pid: number, signal: number) => {
-  checkTarget(pid, 'process._kill')
-  return rawKill(pid, signal)
+lock('_kill', (pid: unknown, signal: unknown) => {
+  const target = checkTarget(pid, 'process._kill')
+  const checked = checkSignal(signal, 'process._kill', false)
+  if (typeof checked !== 'number') throw denied('process._kill')
+  return rawKill(target, checked)
 })
-lock('kill', (pid: number, signal?: string | number) => {
-  checkTarget(pid, 'process.kill')
-  return kill(pid, signal)
+lock('kill', (pid: unknown, signal?: unknown) => {
+  const target = checkTarget(pid, 'process.kill')
+  return kill(target, checkSignal(signal, 'process.kill', true))
 })

@@ -38,7 +38,7 @@ const LOAD_TIMEOUT_MS = 30_000
 /** How long a plugin process has to exit after dispose, or to answer a ping after a call timed out. */
 const STOP_GRACE_MS = 2_000
 /** Longest line of plugin output passed on; a longer one is cut. */
-const OUTPUT_LINE_LIMIT = 8 * 1024
+export const OUTPUT_LINE_LIMIT = 8 * 1024
 
 /** Node flags for one plugin process. A capability adds its grant; nothing else is ever granted. */
 export function permissionFlags(snapshot: string, capabilities: readonly Capability[]): string[] {
@@ -248,7 +248,7 @@ export class IsolatedPlugin {
   /** Why one session-append is refused, or undefined when it may pass to the caller's session. */
   #refuseAppend(pending: PendingCall, event: string, data: unknown): string | undefined {
     if (!SESSION_EVENTS.includes(event)) return `session event "${event}" is not allowed`
-    if ((JSON.stringify(data) ?? '').length > SESSION_APPEND_LIMIT) return 'session event data is too large'
+    if (Buffer.byteLength(JSON.stringify(data) ?? '', 'utf8') > SESSION_APPEND_LIMIT) return 'session event data is too large'
     pending.appends += 1
     if (pending.appends > SESSION_APPENDS_PER_CALL) return 'too many session events in one call'
     return undefined

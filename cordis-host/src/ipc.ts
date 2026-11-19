@@ -21,7 +21,7 @@ export const SESSION_EVENTS: readonly string[] = ['todo/write']
  */
 export const CHILD_MESSAGE_LIMIT = 1024 * 1024
 
-/** Largest `data` one session-append may carry, as serialized JSON. */
+/** Largest `data` one session-append may carry, in UTF-8 bytes of its serialized JSON. */
 export const SESSION_APPEND_LIMIT = 64 * 1024
 /** Most session-append messages one tool call may send. */
 export const SESSION_APPENDS_PER_CALL = 100

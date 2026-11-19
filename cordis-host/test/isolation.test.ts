@@ -37,6 +37,18 @@ const PROBE_PLUGIN = [
   "      if (args.op === 'spawn-debug') return attempt(() => execFileSync(process.execPath, ['-e', `process._debugProcess(${String(process.ppid)})`], { stdio: 'ignore' }))",
   "      if (args.op === 'inspector') return fetch('http://127.0.0.1:9229/json/list').then(() => 'reachable', () => 'unreachable')",
   "      if (args.op === 'can-write') return (process as any).permission?.has('fs.write') ?? 'no permission model'",
+      "      if (args.op === 'flip') {",
+      "        const { fn, after, signal } = JSON.parse(args.target ?? '{}')",
+      "        let reads = 0",
+      "        const pid = { valueOf: () => (reads++ < after ? process.pid : process.ppid), toString: () => String(reads++ < after ? process.pid : process.ppid) }",
+      "        const call = fn === '_kill' ? () => { const errno = (process as any)._kill(pid, signal); if (errno !== 0) throw Object.assign(new Error('errno'), { code: String(errno) }) } : () => process.kill(pid as any, signal)",
+      "        return attempt(call)",
+      '      }',
+      "      if (args.op === 'flip-signal') {",
+      "        let reads = 0",
+      "        const signal = { valueOf: () => (reads++ < 1 ? 0 : 9), toString: () => (reads++ < 1 ? 'SIGCONT' : 'SIGKILL') }",
+      "        return [attempt(() => process.kill(process.pid, signal as any)), attempt(() => (process as any)._kill(process.pid, signal))]",
+      '      }',
   "      return 'unknown op'",
   '    },',
   '  })',
@@ -229,5 +241,40 @@ test('the permission model is on in the plugin process: no write grant without "
   await withHost(async (host) => {
     await installConfirmed(host, await probePackage({ capabilities: [] }))
     assert.equal(await probe(host, 'can-write'), false)
+  })
+})
+
+/**
+ * A pid object whose valueOf answers the plugin's own pid on the first reads
+ * and the host's pid after: the guard must check the value it passes on, not
+ * a value read once before Node converts it again.
+ */
+test('a pid that changes value between reads cannot reach the host', async () => {
+  await withHost(async (host) => {
+    await installConfirmed(host, await probePackage({ capabilities: [] }))
+    for (const fn of ['kill', '_kill']) {
+      for (let after = 0; after <= 6; after += 1) {
+        assert.equal(await probe(host, 'flip', JSON.stringify({ fn, after, signal: 0 })), 'ERR_ACCESS_DENIED', `${fn} after ${String(after)} reads`)
+      }
+    }
+    assert.equal(await probe(host, 'flip', JSON.stringify({ fn: 'kill', after: 5, signal: 'SIGKILL' })), 'ERR_ACCESS_DENIED')
+    assert.equal(await probe(host, 'flip', JSON.stringify({ fn: '_kill', after: 2, signal: 9 })), 'ERR_ACCESS_DENIED')
+    assert.equal(await probe(host, 'pid') !== process.pid, true, 'the host still answers')
+  })
+  await withHost(async (host) => {
+    await installConfirmed(host, await probePackage({ capabilities: ['processes'] }))
+    for (const fn of ['kill', '_kill']) {
+      for (let after = 0; after <= 6; after += 1) {
+        assert.equal(await probe(host, 'flip', JSON.stringify({ fn, after, signal: 0 })), 'ERR_ACCESS_DENIED', `processes: ${fn} after ${String(after)} reads`)
+      }
+    }
+  })
+})
+
+test('a signal that is not a plain string or number is refused', async () => {
+  await withHost(async (host) => {
+    await installConfirmed(host, await probePackage({ capabilities: [] }))
+    assert.deepEqual(await probe(host, 'flip-signal'), ['ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED'])
+    assert.equal(typeof await probe(host, 'pid'), 'number', 'the plugin, and the host, are still alive')
   })
 })
