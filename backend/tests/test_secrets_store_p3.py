@@ -347,7 +347,10 @@ def test_the_acl_is_not_applied_to_a_file_the_name_no_longer_points_at(tmp_path:
         return os.stat_result((info.st_mode, info.st_ino + 1, info.st_dev, *tuple(info)[3:]))
 
     monkeypatch.setattr(file_store.os, "lstat", other)
+    def open_and_close(**kwargs: bool) -> None:
+        fd = file_store._open_checked(path, file_store._open_flags(os.O_RDONLY), **kwargs)
+        os.close(fd)
+
     with pytest.raises(OSError):
-        file_store._open_checked(path, file_store._open_flags(os.O_RDONLY), write_dac=True)
-    fd = file_store._open_checked(path, file_store._open_flags(os.O_RDONLY))  # a plain read keeps tolerating a swap
-    os.close(fd)
+        open_and_close(write_dac=True)
+    open_and_close()  # a plain read keeps tolerating a swap
