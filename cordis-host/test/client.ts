@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import http from 'node:http'
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,6 +8,13 @@ import { fileURLToPath } from 'node:url'
 import { startHost, type RunningHost } from '../src/server.ts'
 
 export const packageRoot = fileURLToPath(new URL('..', import.meta.url))
+/** Node arguments of `npm start`, read from package.json so the tests run the real start line. */
+export const HOST_ARGS: readonly string[] = (() => {
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: { start: string } }
+  const [node, ...args] = manifest.scripts.start.split(' ')
+  if (node !== 'node') throw new Error('the start script must run node')
+  return args
+})()
 export const ourPluginDir = fileURLToPath(new URL('../proofs/our-plugin/', import.meta.url))
 export const directoryPickerDir = fileURLToPath(new URL('../proofs/dsh-directory-picker/', import.meta.url))
 export const toolTodoDir = fileURLToPath(new URL('../vendor/dsh/tool-todo/', import.meta.url))
@@ -18,6 +26,9 @@ export function asRecord(value: unknown): Record<string, unknown> {
   assert.equal(Array.isArray(value), false)
   return value as Record<string, unknown>
 }
+
+/** Manifest fields for a test plugin that must run in this process (it reads host globals). */
+export const IN_PROCESS = { runtime: 'in-process', capabilities: ['files', 'network', 'processes', 'credentials'] } as const
 
 /** Test plugin folders: this package (proofs/, vendor/) and the OS temp folder (tempPackage). */
 export const testPluginRoots: readonly string[] = [packageRoot, tmpdir()]

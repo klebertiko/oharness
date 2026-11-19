@@ -1,6 +1,7 @@
 import { writeSync } from 'node:fs'
 import './register-alias.ts'
 import { startHost } from './server.ts'
+import { createShutdown } from './shutdown.ts'
 
 const running = await startHost()
 // Synchronous write so a piped parent sees the line without waiting for a buffer flush.
@@ -9,19 +10,18 @@ writeSync(1, `${JSON.stringify({
   port: running.port,
   token: running.token,
   cordis: running.runtime.cordisVersion,
-  runtime: 'in-process',
+  runtime: 'isolated',
 })}\n`)
 
-let closing = false
-async function shutdown(): Promise<void> {
-  if (closing) return
-  closing = true
-  // A plugin whose dispose never settles must not keep the host alive.
-  setTimeout(() => { process.exit(1) }, 5000).unref()
-  await running.close()
-  process.exit(0)
-}
+const shutdown = createShutdown({
+  close: () => running.close(),
+  abandon: () => { running.runtime.abandon() },
+  exit: (code) => { process.exit(code) },
+})
 
+// npm start runs with --disable-sigusr1, so SIGUSR1 never opens the inspector.
+// Without a listener its default action would end the host; ignore it instead.
+process.on('SIGUSR1', () => undefined)
 process.on('SIGINT', () => { void shutdown() })
 process.on('SIGTERM', () => { void shutdown() })
 // The parent (sidecar or app) holds our stdin. If it dies, even without

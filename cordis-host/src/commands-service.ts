@@ -6,7 +6,7 @@ import { Context, Service } from 'cordis'
  * (packages/interaction/commands/src/index.ts, parseCommand). The pattern is
  * fixed. Input is not compiled into a regular expression.
  */
-const COMMAND_LINE = /^\/([a-z][a-z0-9_-]*)(?=$|[\t\n\r ])/u
+export const COMMAND_LINE = /^\/([a-z][a-z0-9_-]*)(?=$|[\t\n\r ])/u
 const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u
 
 export interface CommandResult {

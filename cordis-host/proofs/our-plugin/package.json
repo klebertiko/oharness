@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Cordis plugin used to prove the host loads our own plugin in-process.",
+  "description": "Cordis plugin used to prove the host loads our own plugin in its own process.",
   "main": "./index.ts",
   "oharness": {
-    "runtime": "in-process",
+    "runtime": "isolated",
     "capabilities": []
   }
 }

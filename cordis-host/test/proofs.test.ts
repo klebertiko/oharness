@@ -13,27 +13,23 @@ import {
   withHost,
 } from './client.ts'
 
-test('proof 1: our plugin stays unloaded until confirmation, then tools, commands, events, and a service run in this process', async () => {
+test('proof 1: our plugin stays unloaded until confirmation, then tools, commands, events, and a service run in its own process', async () => {
   await withHost(async (host) => {
-    const marked = globalThis as typeof globalThis & { oharnessProofPluginEvaluated?: number }
-    delete marked.oharnessProofPluginEvaluated
     const seen = await preview(host, ourPluginDir)
-    assert.equal(seen.runtime, 'in-process')
+    assert.equal(seen.runtime, 'isolated')
     assert.equal(seen.runtimeDefaulted, false)
     assert.equal(seen.capabilitiesDeclared, true)
     assert.deepEqual(seen.capabilities, [])
     const early = await call(host, '/v1/plugins/install', { body: { packageDir: ourPluginDir } })
     assert.equal(early.status, 409)
-    assert.equal(marked.oharnessProofPluginEvaluated, undefined)
+    assert.deepEqual(asRecord((await call(host, '/v1/plugins')).json).plugins, [])
+    const before = await call(host, '/v1/tools/invoke', { body: { name: 'proof_echo', args: { text: 'x' } } })
+    assert.equal(asRecord(before.json).ok, false)
     const installed = await installConfirmed(host, ourPluginDir)
     assert.equal(installed.status, 200)
     assert.equal(installed.json.status, 'active')
-    assert.equal(installed.json.runtime, 'in-process')
+    assert.equal(installed.json.runtime, 'isolated')
     assert.equal(installed.json.scriptsExecuted, false)
-    assert.equal(marked.oharnessProofPluginEvaluated, 1)
-    const again = await installConfirmed(host, ourPluginDir)
-    assert.equal(again.json.status, 'active')
-    assert.equal(marked.oharnessProofPluginEvaluated, 1)
 
     const echo = await call(host, '/v1/tools/invoke', { body: { name: 'proof_echo', args: { text: 'nilo-host' } } })
     assert.equal(echo.status, 200)
@@ -41,27 +37,34 @@ test('proof 1: our plugin stays unloaded until confirmation, then tools, command
     assert.equal(echoBody.ok, true)
     const echoValue = asRecord(echoBody.value)
     assert.equal(echoValue.echoed, 'nilo-host')
-    assert.equal(echoValue.pid, process.pid)
+    const pluginPid = echoValue.pid
+    assert.equal(typeof pluginPid, 'number')
+    assert.notEqual(pluginPid, process.pid)
+    const again = await installConfirmed(host, ourPluginDir)
+    assert.equal(again.json.status, 'active')
+    const echoAgain = asRecord(asRecord((await call(host, '/v1/tools/invoke', { body: { name: 'proof_echo', args: { text: 'y' } } })).json).value)
+    assert.equal(echoAgain.pid, pluginPid)
     assert.equal(host.runtime.toolUsesSubset('proof_echo'), false)
 
     const command = await call(host, '/v1/commands/execute', { body: { line: '/proof hello' } })
     const commandBody = asRecord(command.json)
     const commandResult = asRecord(commandBody.result)
     assert.equal(commandResult.kind, 'success')
-    assert.equal(commandResult.text, `proof hello pid ${String(process.pid)}`)
+    assert.equal(commandResult.text, `proof hello pid ${String(pluginPid)}`)
 
     const emitted = await call(host, '/v1/events/emit', { body: { name: 'proof/ping', payload: { n: 1 } } })
     assert.equal(emitted.status, 200)
     const heard = await call(host, '/v1/tools/invoke', { body: { name: 'proof_seen', args: {} } })
     const heardValue = asRecord(asRecord(heard.json).value)
     assert.deepEqual(heardValue.events, [{ n: 1 }])
-    assert.equal(heardValue.pid, process.pid)
+    assert.equal(heardValue.pid, pluginPid)
 
     const services = await call(host, '/v1/services')
     const rows = asRecord(services.json).services
     assert.ok(Array.isArray(rows))
     const proof = rows.map((row) => asRecord(row)).find((row) => row.name === 'proofMark')
     assert.ok(proof)
+    assert.equal(proof.plugin, '@oharness/proof-plugin')
     assert.ok(Array.isArray(proof.chain))
     assert.ok(proof.chain.includes('Service'))
     const internal = await call(host, '/v1/events/emit', { body: { name: 'internal/plugin', payload: {} } })
@@ -108,7 +111,7 @@ test('proof 3: DSH tool-todo registers todo_write on the tools subset and its ow
     const seen = await preview(host, toolTodoDir)
     assert.equal(seen.name, '@deepseek-ai/dsh-tool-todo')
     assert.equal(seen.version, '0.2.2-rc.2')
-    assert.equal(seen.runtime, 'in-process')
+    assert.equal(seen.runtime, 'isolated')
     assert.equal(seen.runtimeDefaulted, true)
     assert.equal(seen.capabilitiesDeclared, false)
     const missing = await call(host, '/v1/tools/invoke', {
