@@ -215,6 +215,8 @@ async def create_connection(
     seed_provider = "ollama" if body.id in ("ollama-local", "ollama-cloud") else body.id
     if body.id in RESERVED_CONNECTION_IDS and body.provider != seed_provider:
         raise HTTPException(400, "That id belongs to a built-in connection. Choose another id.")
+    if body.id in RESERVED_CONNECTION_IDS and body.residence != ("local" if body.id == "ollama-local" else "cloud"):
+        raise HTTPException(400, "That built-in connection has a fixed residence.")
     if is_custom_provider(body.provider):
         _ensure_custom_connection_allowed(body.id, body.endpoint)
     spec = get_provider(body.provider)

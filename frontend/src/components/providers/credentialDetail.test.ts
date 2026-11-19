@@ -20,4 +20,6 @@ it("says the offline credential state in Portuguese, with where-to-get from the 
     expect(d).not.toMatch(/Not connected|Add a key|The server's own/);
   }
   expect(credentialDetail(conn("openai-compatible"))).toContain("As configurações do próprio servidor");
+  expect(credentialDetail({ ...conn("ollama"), residence: "local" })).toBe("Não conectado. Nada a adicionar: ligue quando quiser.");
+  expect(credentialDetail(conn("anthropic"))).toBe("Não conectado. Rode `claude login` (ou abra o Claude Code uma vez e entre).");
 });

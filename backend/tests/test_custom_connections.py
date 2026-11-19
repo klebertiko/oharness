@@ -433,3 +433,15 @@ def test_a_built_in_id_is_refused_for_a_provider_that_is_not_its_own(client: Tes
     r = _create(client, id=reserved, provider=provider, endpoint="")
     assert r.status_code == 400
     assert "built-in" in r.text
+
+
+@pytest.mark.parametrize("reserved, residence", [("ollama-local", "cloud"), ("ollama-cloud", "local")])
+def test_a_built_in_ollama_id_needs_its_own_residence(client: TestClient, reserved: str, residence: str) -> None:
+    r = _create(client, id=reserved, provider="ollama", endpoint="", residence=residence)
+    assert r.status_code == 400
+    assert reserved not in client.app.state.provider_connections
+
+
+@pytest.mark.parametrize("reserved, residence", [("ollama-local", "local"), ("ollama-cloud", "cloud")])
+def test_a_built_in_ollama_id_with_its_own_residence_still_creates(client: TestClient, reserved: str, residence: str) -> None:
+    assert _create(client, id=reserved, provider="ollama", endpoint="", residence=residence, defaultModel="").status_code == 201
