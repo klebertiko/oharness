@@ -72,24 +72,26 @@ def restrict_to_current_user(path: Path) -> bool:
         # /reset drops every explicit ACE (a foreign principal's grant survives /grant:r),
         # /inheritance:r then cuts the parent's, and the grant leaves only this user.
         # /L acts on a link itself, so a swapped-in junction never aims the ACL at its target.
-        steps = (
-            ["icacls", str(path), "/L", "/reset"],
-            ["icacls", str(path), "/L", "/inheritance:r", "/grant:r", grant],
-        )
-        for argv in steps:
-            try:
-                done = subprocess.run(
-                    argv,
-                    capture_output=True,
-                    env=scrub_env(),  # icacls needs no credential: the sidecar and human tokens never reach a child
-                    timeout=5,
-                    check=False,
-                )
-            except (OSError, subprocess.SubprocessError):
+        try:
+            reset = subprocess.run(
+                ["icacls", str(path), "/L", "/reset"],
+                capture_output=True,
+                env=scrub_env(),  # icacls needs no credential: the sidecar and human tokens never reach a child
+                timeout=5,
+                check=False,
+            )
+            if reset.returncode != 0:
                 return False
-            if done.returncode != 0:
-                return False
-        return True
+            done = subprocess.run(
+                ["icacls", str(path), "/L", "/inheritance:r", "/grant:r", grant],
+                capture_output=True,
+                env=scrub_env(),
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return done.returncode == 0
     try:
         os.chmod(path, 0o700 if path.is_dir() else 0o600)
     except OSError:

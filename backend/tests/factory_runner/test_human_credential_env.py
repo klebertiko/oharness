@@ -17,7 +17,7 @@ def test_tool_and_cli_environments_never_carry_the_human_credential(monkeypatch)
 
 
 def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_path):
-    """A canary in the environment must not reach the two child processes the sidecar starts on its own (git in the policy, icacls for the token file)."""
+    """A canary in the environment must not reach the child processes the sidecar starts on its own (git in the policy, icacls for the token file)."""
     from types import SimpleNamespace
 
     from sandbox import permission
@@ -37,7 +37,7 @@ def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_
     monkeypatch.setattr(sidecar_token.platform, 'system', lambda: 'Windows')
     monkeypatch.setattr(sidecar_token.subprocess, 'run', fake_run)
     sidecar_token.restrict_to_current_user(tmp_path)
-    assert len(seen) == 2 and all(env is not None for env in seen), 'both children must get an explicit environment'
+    assert len(seen) == 3 and all(env is not None for env in seen), 'every child (git, then icacls reset and grant) must get an explicit environment'
     for env in seen:
         assert 'canary-human' not in env.values() and 'canary-sidecar' not in env.values()
 
