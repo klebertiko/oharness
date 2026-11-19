@@ -52,7 +52,7 @@ def test_concurrent_puts_and_gets_never_error(tmp_path: Path) -> None:
         while time.monotonic() < stop:
             try:
                 store.put(REF, f"w{n}-{i}")
-            except BaseException as exc:  # noqa: BLE001 - the test counts every failure
+            except (OSError, AssertionError) as exc:  # the test counts every failure
                 errors.append(exc)
             i += 1
 
@@ -60,7 +60,7 @@ def test_concurrent_puts_and_gets_never_error(tmp_path: Path) -> None:
         while time.monotonic() < stop:
             try:
                 assert store.get(REF) is not None
-            except BaseException as exc:  # noqa: BLE001 - the test counts every failure
+            except (OSError, AssertionError) as exc:  # the test counts every failure
                 errors.append(exc)
 
     threads = [threading.Thread(target=writer, args=(n,)) for n in range(2)]

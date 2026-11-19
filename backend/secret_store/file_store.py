@@ -73,7 +73,6 @@ _REPLACE_ATTEMPTS = 20
 _REPLACE_DELAY_S = 0.025
 _USE_POSIX_RENAME = True  # Windows: swap the name even while a reader has the old file open
 _OWNER_RWX = stat.S_IRWXU
-_OWNER_RW = stat.S_IRUSR | stat.S_IWUSR
 
 
 def _is_link(path: Path) -> bool:
