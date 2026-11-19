@@ -13,7 +13,7 @@
  * non-configurable guards, so the plugin cannot restore them. A plugin may
  * signal itself; with the "processes" capability it may signal other
  * processes, but never the host. The host also runs with `--disable-sigusr1`,
- * which covers a process the plugin starts (see ADR 0071, item 13).
+ * which covers a process the plugin starts (see ADR 0071, item 10).
  *
  * `process`, `globalThis.process`, `import process from 'node:process'` and
  * `process.getBuiltinModule('node:process')` are the same object.

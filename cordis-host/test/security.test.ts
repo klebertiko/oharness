@@ -82,6 +82,11 @@ test('installation does not import the plugin until the human confirms the warni
     assert.match(String(warning['pt-BR']), /credenciais/)
     assert.match(String(warning['pt-BR']), /ações do agente/)
     assert.match(String(warning['pt-BR']), /código do próprio plugin/)
+    // The network is not limited, so loopback services, this host included, are in reach; files reaches this host's code.
+    assert.match(String(warning.en), /services on this computer, this host included/)
+    assert.match(String(warning.en), /including this host's code/)
+    assert.match(String(warning['pt-BR']), /serviços deste computador, inclusive este host/)
+    assert.match(String(warning['pt-BR']), /inclusive o código deste host/)
     const missing = await call(host, '/v1/plugins/install', { body: { packageDir: dir } })
     assert.equal(missing.status, 409)
     assert.equal(asRecord(missing.json).code, 'confirmation-required')

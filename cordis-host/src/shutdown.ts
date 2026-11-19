@@ -27,8 +27,9 @@ export function createShutdown(deps: ShutdownDeps): () => Promise<void> {
         deps.exit(code)
         resolve()
       }
+      // Kept referenced on purpose: a dispose stuck on a promise that holds no
+      // handle would otherwise let the loop drain and exit 0, skipping abandon.
       const timer = setTimeout(() => { finish(1) }, deps.timeoutMs ?? SHUTDOWN_TIMEOUT_MS)
-      timer.unref()
       deps.close().then(() => { finish(0) }, () => { finish(1) })
     })
     return started

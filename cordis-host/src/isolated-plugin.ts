@@ -4,8 +4,9 @@
  * Without a capability the plugin process can read only its snapshot and
  * this host's pinned modules (`src/`, `vendor/`, `node_modules/`), cannot
  * write anywhere, cannot start a process, worker, addon or WASI instance, and
- * gets no environment variables from the host. Network is not gated: Node
- * 22 and 24 have no network permission (see ADR 0071, item 10).
+ * gets none of the host's own environment variables. Network is not gated:
+ * Node 22 and 24 have no network permission, so the plugin reaches loopback
+ * services, this host included (see ADR 0071, item 10).
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -51,8 +52,12 @@ export function permissionFlags(snapshot: string, capabilities: readonly Capabil
 
 /**
  * Environment of one plugin process. Without "credentials" it gets none of
- * the host's variables (only `SystemRoot` on Windows, which Windows needs to
- * start Node). `NODE_OPTIONS` never passes: it could add permission flags.
+ * the host's own variables: on POSIX the environment is empty, and on Windows
+ * the host passes only `SystemRoot`, which Node needs to start. libuv then
+ * fills in Windows' per-user defaults (HOMEPATH, USERNAME, USERPROFILE, TEMP,
+ * PATH and others), so the child is not empty there, but no variable the
+ * host set reaches it. `NODE_OPTIONS` never passes: it could add permission
+ * flags.
  */
 export function childEnv(capabilities: readonly Capability[], env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   if (capabilities.includes('credentials')) {
