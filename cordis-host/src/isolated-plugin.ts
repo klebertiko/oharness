@@ -93,7 +93,8 @@ export class IsolatedPlugin {
   private constructor(start: IsolatedStart) {
     this.#callTimeoutMs = start.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
     this.#child = fork(childEntry, [], {
-      cwd: start.snapshot,
+      // Not the snapshot: a working directory there keeps Windows from deleting it.
+      cwd: here,
       env: childEnv(start.capabilities),
       execArgv: [
         ...permissionFlags(start.snapshot, start.capabilities),
