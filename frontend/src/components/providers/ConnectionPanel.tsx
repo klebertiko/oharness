@@ -8,7 +8,7 @@ import { Row, Rows, WithCode } from "./rows";
 import { VAULT_LABEL, activeVault, prefixMatches } from "./secrets";
 import { specOf, useProviderStore, type Connection } from "./providerStore";
 import { ENDPOINT_FIELD_ID, KEY_FIELD_ID, type ConnectionActions } from "./useConnectionActions";
-import { providerKey } from "./providerText";
+import { providerKey, vendorName } from "./providerText";
 
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "");
 
@@ -120,7 +120,7 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
         {confirming && (
           <ConfirmInline
             className="mt-2"
-            prompt={t("key.remove.prompt", { vendor: spec.vendor })}
+            prompt={t("key.remove.prompt", { vendor: vendorName(c, t) })}
             confirmLabel={t("key.remove.confirm")}
             busy={busy}
             onCancel={() => {
@@ -197,7 +197,7 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
         autoComplete="off"
         spellCheck={false}
         data-1p-ignore
-        aria-label={t("key.aria", { vendor: spec.vendor })}
+        aria-label={t("key.aria", { vendor: vendorName(c, t) })}
         aria-describedby={`${KEY_FIELD_ID}-help`}
         placeholder={expected ? `${expected}…` : t("key.placeholder")}
         onChange={(e) => {
@@ -211,11 +211,11 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
         {!prefixOk && (
           <p className="flex items-start gap-1.5 text-warn-text">
             <TriangleAlert size={12} strokeWidth={1.8} className="mt-0.5 flex-none" aria-hidden />
-            <span>{t("key.prefix", { vendor: spec.vendor, prefix: expected ?? "" })}</span>
+            <span>{t("key.prefix", { vendor: vendorName(c, t), prefix: expected ?? "" })}</span>
           </p>
         )}
         <p className="text-ink-mute">{t("key.hint", { vault: VAULT_LABEL[vault] })}</p>
-        <p className="text-ink-mute">{t("key.where", { where: spec.credential.where })}</p>
+        <p className="text-ink-mute">{t("key.where", { where: t(PROVIDER_TEXT_KEY[providerKey(c)].where) })}</p>
         {vault === "memory" && <p className="text-warn-text">{t("key.memory")}</p>}
         {failure === "store" && (
           <p role="alert" className="text-fault-text">
@@ -247,7 +247,7 @@ export function ConnectionPanel({ c, actions }: { c: Connection; actions: Connec
               rel="noreferrer"
               className="inline-flex h-control-md items-center gap-1.5 rounded-control px-2 text-body text-ink-dim transition-colors hover:bg-sub-200 hover:text-ink pointer-coarse:h-control-touch"
             >
-              {t("endpoint.docs", { vendor: spec.vendor })}
+              {t("endpoint.docs", { vendor: vendorName(c, t) })}
               <ExternalLink size={12} strokeWidth={1.7} aria-hidden />
             </a>
             ) : undefined

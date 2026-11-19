@@ -1,6 +1,7 @@
 import { modelNotPulled, providerFault, providerReadiness } from "@/components/agent/chatProvider";
 import { tr } from "@/i18n/store";
 import { specOf, type Connection } from "./providerStore";
+import { vendorName } from "./providerText";
 import { ACTION_TEXT, STATE_TABLE, type ActionId } from "./stateTable";
 
 /**
@@ -84,7 +85,7 @@ export function nextStep(c: Connection): NextStep | null {
   if (fault) return fault;
   switch (providerReadiness(c).missing) {
     case "credential": {
-      const vendor = specOf(c).vendor;
+      const vendor = vendorName(c, tr);
       const article = /^[aeiou]/i.test(vendor) ? "an" : "a";
       return { kind: "paste", label: tr("step.paste", { article, vendor }), hint: tr("step.paste.hint") };
     }

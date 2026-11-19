@@ -12,6 +12,8 @@ import {
 } from "./catalog";
 import { activeVault, forgetSecret, saveSecret, type SecretRef } from "./secrets";
 import { apiUrl } from "@/lib/apiBase";
+import { tr } from "@/i18n/store";
+import { PROVIDER_TEXT_KEY } from "./labels";
 import { modelNotPulled } from "./modelPull";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
@@ -254,11 +256,14 @@ const seed: Connection[] = [
   } as unknown as Connection,
 ];
 
-function credentialDetail(c: Connection): string {
-  const cred = specOf(c).credential;
-  if (cred.kind === "cli") return `Not connected. ${cred.where}`;
-  if (cred.kind === "none") return "Not connected. Nothing to add — turn it on when ready.";
-  return `Not connected. Add a key from ${cred.where}.`;
+/** The offline sentence for a connection with no credential yet, in the language chosen when it is built. */
+export function credentialDetail(c: Connection): string {
+  const spec = specOf(c);
+  const key = spec.id === "ollama" && spec.catalogue === "hosted" ? "ollamaCloud" : spec.id;
+  const where = tr(PROVIDER_TEXT_KEY[key as keyof typeof PROVIDER_TEXT_KEY].where);
+  if (spec.credential.kind === "cli") return tr("detail.cred.cli", { where });
+  if (spec.credential.kind === "none") return tr("detail.cred.none");
+  return tr("detail.cred.key", { where: where.replace(/\.$/, "") });
 }
 
 /** What the dossier header says about a connection right after hydrate. Only

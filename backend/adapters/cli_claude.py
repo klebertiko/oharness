@@ -137,6 +137,10 @@ class ClaudeCliAdapter(AgentAdapter):
             # guess at the shape.
             return AdapterResult(content="", error="claude CLI returned unreadable output (expected JSON).", failure="cli-error")
 
+        if not isinstance(payload, dict):
+            # Valid JSON of another shape (list, string, number, null): same closed failure.
+            return AdapterResult(content="", error="claude CLI returned unreadable output (expected JSON).", failure="cli-error")
+
         if payload.get("is_error"):
             reported = str(payload.get("result") or "claude CLI reported an error")
             return AdapterResult(
@@ -189,7 +193,9 @@ class ClaudeCliAdapter(AgentAdapter):
 
         try:
             status = json.loads(result.stdout)
-        except json.JSONDecodeError:
+            if not isinstance(status, dict):
+                raise ValueError("not an object")
+        except (json.JSONDecodeError, ValueError):
             return ProbeResult(ok=False, health="fault", code="error", detail="claude auth status returned unreadable output.")
 
         if not status.get("loggedIn"):
