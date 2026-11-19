@@ -36,10 +36,13 @@ import os
 import platform
 import secrets
 import stat
+import time
 from pathlib import Path
 
 TOKEN_HEADER = "authorization"
 TOKEN_ENV_VAR = "OH_SIDECAR_TOKEN"
+_WINNER_READ_ATTEMPTS = 50
+_WINNER_READ_DELAY_S = 0.02
 
 
 def _token_dir() -> Path:
@@ -53,7 +56,7 @@ def _token_path() -> Path:
     return _token_dir() / "sidecar.token"
 
 
-def _set_protected_dacl(path: Path, is_dir: bool) -> bool:
+def _set_protected_dacl(path: Path | None, is_dir: bool, handle: int | None = None) -> bool:
     """Windows: replace the whole DACL in one call, with one ACE for this user and nothing inherited.
 
     One ``SetNamedSecurityInfoW`` with ``PROTECTED_DACL_SECURITY_INFORMATION``: the object goes
@@ -61,6 +64,10 @@ def _set_protected_dacl(path: Path, is_dir: bool) -> bool:
     end state (a reset-then-grant sequence hands back the parent's inherited ACL in between, and
     a failed grant would leave it). Foreign explicit ACEs go with the old DACL. A directory's ACE
     is inherited by what is written inside it.
+
+    With ``handle`` (an open file, opened with ``WRITE_DAC``) the ACL is set on that object with
+    ``SetSecurityInfo``: no name is resolved, so a junction swapped in after a check cannot
+    redirect it. Without it the ACL is set by ``path`` (a directory is only ever set by name).
     """
     import ctypes
     import ctypes.wintypes
@@ -86,6 +93,10 @@ def _set_protected_dacl(path: Path, is_dir: bool) -> bool:
         wintypes.LPWSTR, ctypes.c_int, wintypes.DWORD, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
     ]
     advapi32.SetNamedSecurityInfoW.restype = wintypes.DWORD
+    advapi32.SetSecurityInfo.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.DWORD, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+    ]
+    advapi32.SetSecurityInfo.restype = wintypes.DWORD
 
     token = wintypes.HANDLE()
     if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):  # TOKEN_QUERY
@@ -109,7 +120,10 @@ def _set_protected_dacl(path: Path, is_dir: bool) -> bool:
         if not advapi32.GetSecurityDescriptorDacl(descriptor, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)):
             return False
         # SE_FILE_OBJECT; DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION
-        return advapi32.SetNamedSecurityInfoW(str(path), 1, 0x00000004 | 0x80000000, None, None, dacl, None) == 0
+        info = 0x00000004 | 0x80000000
+        if handle is not None:
+            return advapi32.SetSecurityInfo(handle, 1, info, None, None, dacl, None) == 0
+        return advapi32.SetNamedSecurityInfoW(str(path), 1, info, None, None, dacl, None) == 0
     finally:
         if descriptor.value:
             kernel32.LocalFree(descriptor)
@@ -139,6 +153,26 @@ def restrict_to_current_user(path: Path) -> bool:
     return True
 
 
+def restrict_fd_to_current_user(fd: int) -> bool:
+    """Owner-only access for an open file, set through its descriptor (no name is re-resolved).
+
+    Windows: the protected DACL goes on the handle behind ``fd``, which must have been opened with
+    ``WRITE_DAC``. POSIX: ``fchmod`` 0600. True only when it is known to have worked.
+    """
+    if platform.system() == "Windows":
+        try:
+            import msvcrt
+
+            return _set_protected_dacl(None, False, msvcrt.get_osfhandle(fd))
+        except (OSError, ValueError, AttributeError, ImportError):
+            return False
+    try:
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        return False
+    return True
+
+
 def _write_all(fd: int, data: bytes) -> None:
     view = memoryview(data)
     while view:
@@ -148,36 +182,63 @@ def _write_all(fd: int, data: bytes) -> None:
         view = view[written:]
 
 
+def _read_winner_token(path: Path) -> str | None:
+    """The token another process created at ``path``, waiting a bounded time while it is still empty.
+
+    A symlink at the name is never followed. ``None`` when nothing usable shows up: the caller then
+    keeps its own token in memory instead of writing a different one on top of a live writer's file.
+    """
+    for _ in range(_WINNER_READ_ATTEMPTS):
+        if path.is_symlink():
+            return None
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return None
+        except OSError:
+            return None
+        if text:
+            return text
+        time.sleep(_WINNER_READ_DELAY_S)
+    return None
+
+
+def _create_exclusive(path: Path) -> int:
+    """Create ``path`` for writing; ``FileExistsError`` if the name is taken (a link included)."""
+    if platform.system() == "Windows":
+        from . import win_files
+
+        # WRITE_DAC: the ACL is set on this very handle, before any byte is written.
+        return win_files.open_file(
+            path,
+            access=win_files.GENERIC_WRITE | win_files.WRITE_DAC,
+            disposition=win_files.CREATE_NEW,
+            binary_flags=os.O_WRONLY | getattr(os, "O_BINARY", 0),
+        )
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+    return os.open(path, flags, 0o600)
+
+
 def _persist_token(path: Path, token: str) -> str | None:
     """Create ``path`` exclusively and owner-only, restrict it, and only then write the token.
 
     Returns the token on disk (this one, or a concurrent winner's) or ``None`` when it could not
     be stored restricted, in which case nothing is left behind and the caller keeps its token in
-    memory for this run.
+    memory for this run. The restriction is applied to the open descriptor (``fchmod``, or the
+    handle's DACL on Windows), never to a name that could be swapped.
     """
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
-        fd = os.open(path, flags, 0o600)
+        fd = _create_exclusive(path)
     except FileExistsError:
-        try:
-            return path.read_text(encoding="utf-8").strip() or None
-        except OSError:
-            return None
+        return _read_winner_token(path)
     except OSError:
         return None
     try:
-        if platform.system() == "Windows":
-            os.close(fd)  # the ACL is set on the closed file, then it is reopened to write
-            fd = -1
-            if not restrict_to_current_user(path):
-                raise OSError("could not restrict the token file")
-            fd = os.open(path, os.O_WRONLY | getattr(os, "O_BINARY", 0), 0o600)
-        else:
-            os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        if not restrict_fd_to_current_user(fd):
+            raise OSError("could not restrict the token file")
         _write_all(fd, token.encode("utf-8"))
     except OSError:
-        if fd >= 0:
-            os.close(fd)
+        os.close(fd)
         path.unlink(missing_ok=True)
         return None
     os.close(fd)

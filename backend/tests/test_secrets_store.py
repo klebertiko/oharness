@@ -138,8 +138,16 @@ def test_secret_bytes_hit_the_vault_path_only_after_restrict(tmp_path: Path, mon
         writes.append((info.st_size, stat.S_IMODE(info.st_mode)))
         real_write(fd, data)
 
+    real_fd = sidecar_token.restrict_fd_to_current_user
+
+    def fd_spy(fd: int) -> bool:
+        seen["files"] += 1
+        first_sizes.setdefault(Path(str(fd)), os.fstat(fd).st_size)  # the descriptor, not a name
+        return real_fd(fd)
+
     monkeypatch.setattr(sidecar_token, "restrict_to_current_user", spy)
     monkeypatch.setattr(file_store, "restrict_to_current_user", spy)
+    monkeypatch.setattr(file_store, "restrict_fd_to_current_user", fd_spy)
     monkeypatch.setattr(file_store, "_write_all", write_spy)
     parent_mode = tmp_path.stat().st_mode
     vault = tmp_path / "vault"
@@ -322,6 +330,7 @@ def _break_file_restriction(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(file_store.os, "fchmod", _boom_fchmod)
     else:
         monkeypatch.setattr(file_store, "restrict_to_current_user", lambda path: False)
+        monkeypatch.setattr(file_store, "restrict_fd_to_current_user", lambda fd: False)
 
 
 def test_no_secret_is_written_when_restrict_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -429,13 +438,13 @@ def _token_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 def test_the_token_file_is_restricted_before_a_byte_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = _token_env(monkeypatch, tmp_path)
     sizes: list[int] = []
-    real = sidecar_token.restrict_to_current_user
+    real_fd = sidecar_token.restrict_fd_to_current_user
 
-    def spy(target: Path) -> bool:
-        sizes.append(target.stat().st_size)
-        return real(target)
+    def spy(fd: int) -> bool:
+        sizes.append(os.fstat(fd).st_size)
+        return real_fd(fd)
 
-    monkeypatch.setattr(sidecar_token, "restrict_to_current_user", spy)
+    monkeypatch.setattr(sidecar_token, "restrict_fd_to_current_user", spy)
     real_write = sidecar_token._write_all
     seen_modes: list[int] = []
 
@@ -460,7 +469,7 @@ def test_the_token_file_is_restricted_before_a_byte_is_written(tmp_path: Path, m
 
 def test_a_token_that_cannot_be_restricted_is_not_left_on_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = _token_env(monkeypatch, tmp_path)
-    monkeypatch.setattr(sidecar_token, "restrict_to_current_user", lambda target: False)
+    monkeypatch.setattr(sidecar_token, "restrict_fd_to_current_user", lambda fd: False)
     if os.name != "nt":
         monkeypatch.setattr(sidecar_token.os, "fchmod", _boom_fchmod)
     token = sidecar_token.get_or_create_token()
@@ -723,10 +732,10 @@ def test_opening_skips_an_in_flight_tmp_and_a_file_that_vanishes(tmp_path: Path,
     gone.write_bytes(b"x")
     real_open = file_store._open_checked
 
-    def vanishing(path: Path, flags: int) -> int:
+    def vanishing(path: Path, flags: int, **kwargs: object) -> int:
         if Path(path) == gone:
             raise FileNotFoundError(str(path))
-        return real_open(path, flags)
+        return real_open(path, flags, **kwargs)
 
     monkeypatch.setattr(file_store, "_open_checked", vanishing)
     assert FileSecrets(vault, use_keychain=False).get(SECRET_REF) == SECRET_VALUE

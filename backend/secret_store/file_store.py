@@ -50,7 +50,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from security.sidecar_token import restrict_to_current_user
+from security.sidecar_token import restrict_fd_to_current_user, restrict_to_current_user
 
 from .keychain import KeyringBackend
 
@@ -65,6 +65,13 @@ _WINNER_READ_DELAY_S = 0.02
 # the name, then wrote). Nothing was ever encrypted under it, so it is safe to drop.
 _STALE_EMPTY_S = 30.0
 _STALE_TMP_S = 60.0
+# ``os.replace`` onto a name a reader holds open can fail on Windows with these codes for a moment
+# (access denied, sharing violation: antivirus and indexers also open files briefly). Bounded, then
+# the put fails closed with the last error.
+_REPLACE_BUSY_WINERRORS = (5, 32)
+_REPLACE_ATTEMPTS = 20
+_REPLACE_DELAY_S = 0.025
+_USE_POSIX_RENAME = True  # Windows: swap the name even while a reader has the old file open
 _OWNER_RWX = stat.S_IRWXU
 _OWNER_RW = stat.S_IRUSR | stat.S_IWUSR
 
@@ -89,7 +96,22 @@ def _is_link_stat(info: os.stat_result) -> bool:
     return stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) in _REPARSE_LINK_TAGS
 
 
-def _open_checked(path: Path, flags: int) -> int:
+def _open_fd(path: Path, flags: int, *, write_dac: bool = False) -> int:
+    """``os.open`` on POSIX. On Windows a read-only open goes through ``CreateFileW`` with every
+    share mode, ``FILE_SHARE_DELETE`` included: ``os.open`` omits it, and a reader opened that way
+    makes ``os.replace`` of the name fail with ``WinError 5`` until the reader closes.
+    """
+    if platform.system() != "Windows" or flags & (os.O_WRONLY | os.O_RDWR):
+        return os.open(path, flags)
+    from security import win_files
+
+    access = win_files.GENERIC_READ | (win_files.WRITE_DAC if write_dac else 0)
+    return win_files.open_file(
+        path, access=access, disposition=win_files.OPEN_EXISTING, binary_flags=os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    )
+
+
+def _open_checked(path: Path, flags: int, *, write_dac: bool = False) -> int:
     """Open a regular file and refuse it if the name is a link.
 
     ``O_NOFOLLOW`` covers POSIX at open. Windows has no such flag, so ``lstat`` must also not
@@ -98,7 +120,7 @@ def _open_checked(path: Path, flags: int) -> int:
     regular file* is not refused: ``put`` swaps the inode with ``os.replace``, and a reader that
     opened the old one still holds a complete, consistent copy.
     """
-    fd = os.open(path, flags)
+    fd = _open_fd(path, flags, write_dac=write_dac)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise OSError("the secret path is not a regular file")
@@ -212,29 +234,22 @@ def _ensure_private_dir(path: Path) -> None:
 def _restrict_file(path: Path) -> bool:
     """Owner-only mode for a file already on disk.
 
-    POSIX: open without following links (non-blocking, so a FIFO cannot hang
-    the open), require a regular file, and ``fchmod`` the descriptor. Windows:
-    the ACL helper, after the same regular-file proof.
+    Both platforms open the file once, refuse anything but a regular file (a link included) and
+    restrict *that open file*: POSIX ``fchmod`` on a non-blocking descriptor (so a FIFO cannot hang
+    the open), Windows the DACL on a ``WRITE_DAC`` handle. No step re-resolves the name.
     """
+    windows = platform.system() == "Windows"
+    flags = _open_flags(os.O_RDONLY, 0 if windows else getattr(os, "O_NONBLOCK", 0))
     try:
-        fd = _open_checked(path, _open_flags(os.O_RDONLY, getattr(os, "O_NONBLOCK", 0)))
+        fd = _open_checked(path, flags, write_dac=True) if windows else _open_checked(path, flags)
     except FileNotFoundError:
         return True  # another process removed it first: nothing left to restrict
     except OSError:
         return False
     try:
-        if platform.system() == "Windows":
-            os.close(fd)
-            fd = -1
-            return restrict_to_current_user(path)
-        try:
-            os.fchmod(fd, _OWNER_RW)
-        except OSError:
-            return False
-        return True
+        return restrict_fd_to_current_user(fd)
     finally:
-        if fd >= 0:
-            os.close(fd)
+        os.close(fd)
 
 
 def _is_tmp_name(name: str) -> bool:
@@ -297,36 +312,38 @@ def _write_all(fd: int, data: bytes) -> None:
         view = view[written:]
 
 
+def _create_staged(tmp: Path) -> int:
+    """Create ``tmp`` exclusively (a name that exists, link included, is never opened).
+
+    Windows opens it with ``WRITE_DAC`` so the ACL can be set on the open handle.
+    """
+    if platform.system() == "Windows":
+        from security import win_files
+
+        return win_files.open_file(
+            tmp,
+            access=win_files.GENERIC_WRITE | win_files.WRITE_DAC,
+            disposition=win_files.CREATE_NEW,
+            binary_flags=os.O_WRONLY | getattr(os, "O_BINARY", 0),
+        )
+    return os.open(tmp, _open_flags(os.O_WRONLY, os.O_CREAT, os.O_EXCL), 0o600)
+
+
 def _stage_private(path: Path, data: bytes) -> Path:
     """A complete, owner-only copy of ``data`` under a temporary name beside ``path``.
 
-    Created ``O_EXCL`` (a name that exists, link included, is never opened) and
-    restricted before any secret byte is written. POSIX restricts the open
-    descriptor. Windows must close it first to set the ACL, then reopens by name
-    and checks it is the same file. Any failure removes the staged file.
+    Created exclusively and restricted *through the open descriptor* before any secret byte is
+    written (``fchmod``; on Windows the DACL on the handle), so no name is re-resolved between the
+    check and the restriction. Any failure removes the staged file.
     """
     tmp = path.with_name("." + path.name + "." + secrets.token_hex(6) + ".tmp")
-    fd = os.open(tmp, _open_flags(os.O_WRONLY, os.O_CREAT, os.O_EXCL), 0o600)
+    fd = _create_staged(tmp)
     try:
-        if platform.system() == "Windows":
-            created = os.fstat(fd)
-            os.close(fd)
-            fd = -1
-            if not restrict_to_current_user(tmp):
-                raise OSError("could not restrict the secret file to the current user")
-            fd = os.open(tmp, _open_flags(os.O_WRONLY), 0o600)
-            opened = os.fstat(fd)
-            if (opened.st_ino, opened.st_dev) != (created.st_ino, created.st_dev):
-                raise OSError("the staged secret file changed while it was restricted")
-        else:
-            try:
-                os.fchmod(fd, _OWNER_RW)
-            except OSError:
-                raise OSError("could not restrict the secret file to the current user") from None
+        if not restrict_fd_to_current_user(fd):
+            raise OSError("could not restrict the secret file to the current user")
         _write_all(fd, data)
     except BaseException:
-        if fd >= 0:
-            os.close(fd)
+        os.close(fd)
         tmp.unlink(missing_ok=True)
         raise
     os.close(fd)
@@ -347,6 +364,37 @@ def _write_new(path: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def _replace_once(src: Path, dst: Path) -> None:
+    """Swap ``src`` over ``dst``. Windows first tries a POSIX-semantics rename, which succeeds while a
+    reader still has ``dst`` open; if the system refuses it, ``os.replace`` is the fallback.
+    """
+    if _USE_POSIX_RENAME and platform.system() == "Windows":
+        from security import win_files
+
+        try:
+            win_files.rename_replace(src, dst)
+            return
+        except OSError:
+            pass  # not supported here, or a reader without FILE_SHARE_DELETE: the plain replace decides
+    os.replace(src, dst)
+
+
+def _replace_retrying(src: Path, dst: Path) -> None:
+    """The swap, retried a bounded number of times while Windows reports the name busy.
+
+    Only ``WinError 5`` and ``32`` are retried, and only ``_REPLACE_ATTEMPTS`` times; the last
+    error is then raised, so a vault that stays locked fails closed instead of looping.
+    """
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            _replace_once(src, dst)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in _REPLACE_BUSY_WINERRORS or attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_DELAY_S)
+
+
 def _write_private(path: Path, data: bytes) -> None:
     """Write ``data`` at ``path``, replacing a value already there.
 
@@ -361,7 +409,7 @@ def _write_private(path: Path, data: bytes) -> None:
         try:
             os.link(tmp, path)
         except FileExistsError:
-            os.replace(tmp, path)
+            _replace_retrying(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -586,7 +634,7 @@ def _replace_if_unchanged(path: Path, data: bytes, seen: tuple[int, int, int] | 
     tmp = _stage_private(path, data)
     try:
         if _identity(path) == seen:
-            os.replace(tmp, path)
+            _replace_retrying(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
 
