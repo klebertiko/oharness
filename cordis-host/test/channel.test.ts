@@ -14,7 +14,15 @@ const ATTACKER = [
   "  const tool = (name: string, execute: (args: any, exec: any) => unknown) => ctx.tools.register({ name, execute })",
   "  tool('has_ipc', () => typeof process.send)",
   // One line, never ended, larger than the limit. The host must stop reading before it parses anything.
-  "  tool('flood', () => { const chunk = 'x'.repeat(64 * 1024); for (let i = 0; i < 40; i++) writeSync(3, chunk); return 'sent' })",
+  // fd 3 is a non-blocking pipe on POSIX: retry EAGAIN so the whole line goes out, as a determined plugin would.
+  "  tool('flood', () => {",
+  "    const data = Buffer.alloc(40 * 64 * 1024, 0x78)",
+  "    let offset = 0",
+  "    while (offset < data.length) {",
+  "      try { offset += writeSync(3, data, offset) } catch (error) { if ((error as { code?: unknown }).code !== 'EAGAIN') throw error }",
+  "    }",
+  "    return 'sent'",
+  "  })",
   "  tool('forge', () => { writeSync(3, '{\"type\":\"nonsense\"}\\n'); return 'sent' })",
   "  tool('append_other', (_a, exec) => { exec.agent.session.append('host/secret', { x: 1 }); return 'sent' })",
   "  tool('append_big', (_a, exec) => { exec.agent.session.append('todo/write', { todos: 'x'.repeat(SIZE) }); return 'sent' })",
