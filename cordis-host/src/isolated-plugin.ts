@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { PROCESSES_ARG } from './child-guard.ts'
 import { parseChildMessage, type ChildMessage, type ParentMessage, type ServiceRow } from './ipc.ts'
 import type { Capability } from './manifest.ts'
 import { isRecord } from './plugin-load.ts'
@@ -92,7 +93,7 @@ export class IsolatedPlugin {
 
   private constructor(start: IsolatedStart) {
     this.#callTimeoutMs = start.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
-    this.#child = fork(childEntry, [], {
+    this.#child = fork(childEntry, start.capabilities.includes('processes') ? [PROCESSES_ARG] : [], {
       // Not the snapshot: a working directory there keeps Windows from deleting it.
       cwd: here,
       env: childEnv(start.capabilities),

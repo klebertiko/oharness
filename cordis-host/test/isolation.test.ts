@@ -14,6 +14,7 @@ import type { RunningHost } from '../src/server.ts'
 const PROBE_PLUGIN = [
   "import { readFileSync, writeFileSync } from 'node:fs'",
   "import { execFileSync } from 'node:child_process'",
+  "import imported from 'node:process'",
   "export const name = 'probe'",
   "export const inject = ['tools']",
   'function attempt(run: () => unknown): string {',
@@ -29,6 +30,13 @@ const PROBE_PLUGIN = [
   "      if (args.op === 'self') return attempt(() => readFileSync(new URL('./index.ts', import.meta.url)))",
   "      if (args.op === 'env') return process.env.OH_ISOLATION_TEST_SECRET ?? 'absent'",
   "      if (args.op === 'pid') return process.pid",
+  "      if (args.op === 'debug') return [process, globalThis.process, imported, process.getBuiltinModule('node:process')].map((p: any) => attempt(() => p._debugProcess(process.ppid)))",
+  "      if (args.op === 'kill') return attempt(() => process.kill(Number(args.target === 'self' ? process.pid : process.ppid), args.target === 'self' ? 0 : (args.target ?? 0) as any))",
+  "      if (args.op === 'raw-kill') return attempt(() => { const errno = (process as any)._kill(process.ppid, 0); if (errno !== 0) throw Object.assign(new Error('errno'), { code: String(errno) }) })",
+  "      if (args.op === 'redefine') return [attempt(() => Object.defineProperty(process, 'kill', { value: () => true })), attempt(() => { if (!delete (process as any)._debugProcess) throw new Error('kept') })]",
+  "      if (args.op === 'spawn-debug') return attempt(() => execFileSync(process.execPath, ['-e', `process._debugProcess(${String(process.ppid)})`], { stdio: 'ignore' }))",
+  "      if (args.op === 'inspector') return fetch('http://127.0.0.1:9229/json/list').then(() => 'reachable', () => 'unreachable')",
+  "      if (args.op === 'can-write') return (process as any).permission?.has('fs.write') ?? 'no permission model'",
   "      return 'unknown op'",
   '    },',
   '  })',
@@ -49,6 +57,12 @@ async function probe(host: RunningHost, op: string, target?: string): Promise<un
   const body = asRecord(response.json)
   assert.equal(body.ok, true, JSON.stringify(body))
   return body.value
+}
+
+/** Ask the plugin, after an attempt on the host, whether the host's inspector answers. Waits for it to open. */
+async function inspectorAfterWait(host: RunningHost): Promise<unknown> {
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return probe(host, 'inspector')
 }
 
 async function outsideFile(): Promise<string> {
@@ -173,5 +187,40 @@ test('a plugin process that dies fails its tool calls instead of hanging the hos
     const plugins = asRecord((await call(host, '/v1/plugins')).json).plugins
     assert.ok(Array.isArray(plugins))
     assert.equal(asRecord(plugins[0]).status, 'failed')
+  })
+})
+
+test('without "processes" the plugin cannot open the host inspector or signal the host', async () => {
+  await withHost(async (host) => {
+    const installed = await installConfirmed(host, await probePackage({ capabilities: [] }))
+    assert.equal(installed.json.status, 'active', JSON.stringify(installed.json))
+    // process, globalThis.process, `import process from 'node:process'` and getBuiltinModule are one object.
+    assert.deepEqual(await probe(host, 'debug'), ['ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED'])
+    for (const signal of ['0', 'SIGUSR1', 'SIGTERM', 'SIGKILL']) {
+      assert.equal(await probe(host, 'kill', signal), 'ERR_ACCESS_DENIED', signal)
+    }
+    assert.equal(await probe(host, 'raw-kill'), 'ERR_ACCESS_DENIED')
+    const [redefined, deleted] = await probe(host, 'redefine') as unknown[]
+    assert.notEqual(redefined, 'ok')
+    assert.notEqual(deleted, 'ok')
+    assert.equal(await probe(host, 'debug').then((codes) => (codes as unknown[])[0]), 'ERR_ACCESS_DENIED')
+    // The plugin may still signal itself, and the host is still alive and answering.
+    assert.equal(await probe(host, 'kill', 'self'), 'ok')
+    assert.equal(await inspectorAfterWait(host), 'unreachable')
+  })
+})
+
+test('with "processes" a spawned process still cannot open the host inspector', async () => {
+  await withHost(async (host) => {
+    await installConfirmed(host, await probePackage({ capabilities: ['processes'] }))
+    await probe(host, 'spawn-debug')
+    assert.equal(await inspectorAfterWait(host), 'unreachable')
+  })
+})
+
+test('the permission model is on in the plugin process: no write grant without "files"', async () => {
+  await withHost(async (host) => {
+    await installConfirmed(host, await probePackage({ capabilities: [] }))
+    assert.equal(await probe(host, 'can-write'), false)
   })
 })

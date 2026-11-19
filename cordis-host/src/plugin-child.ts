@@ -6,6 +6,8 @@
  * nothing of the host's but the pinned modules it may read. This file trusts
  * its parent and answers over the IPC channel; the parent does not trust it.
  */
+// Must stay first: it locks down `process` before anything else, and long before plugin code, runs.
+import './child-guard.ts'
 import { pathToFileURL } from 'node:url'
 import { HostError } from './errors.ts'
 import type { ParentMessage } from './ipc.ts'

@@ -19,6 +19,9 @@ const shutdown = createShutdown({
   exit: (code) => { process.exit(code) },
 })
 
+// npm start runs with --disable-sigusr1, so SIGUSR1 never opens the inspector.
+// Without a listener its default action would end the host; ignore it instead.
+process.on('SIGUSR1', () => undefined)
 process.on('SIGINT', () => { void shutdown() })
 process.on('SIGTERM', () => { void shutdown() })
 // The parent (sidecar or app) holds our stdin. If it dies, even without

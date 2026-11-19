@@ -4,7 +4,7 @@ import { access, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
 import { assertLoopbackBind } from '../src/server.ts'
-import { asRecord, call, httpGet, IN_PROCESS, installConfirmed, packageRoot, preview, tempPackage, withHost } from './client.ts'
+import { asRecord, call, HOST_ARGS, httpGet, IN_PROCESS, installConfirmed, packageRoot, preview, tempPackage, withHost } from './client.ts'
 
 test('bind helper rejects anything except 127.0.0.1', () => {
   assert.throws(() => assertLoopbackBind(null), /TCP port/)
@@ -185,7 +185,7 @@ test('an entry path outside the package is refused before import', async () => {
 })
 
 test('the process entry prints one loopback line and does not repeat the token on stderr', async () => {
-  const child = spawn(process.execPath, ['--experimental-transform-types', '--disable-warning=ExperimentalWarning', '--import', './src/register-alias.ts', './src/main.ts'], {
+  const child = spawn(process.execPath, [...HOST_ARGS], {
     cwd: packageRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
   })
