@@ -356,3 +356,51 @@ def test_secret_with_a_control_character_is_refused(client: TestClient, key: str
     assert r.status_code == 400
     assert key not in r.text
     assert client.app.state.secrets_store.get("oharness/my-vllm") is None
+
+
+# ── #510: C1 and format (Cf) characters are spoofing, not text ───────────────
+
+_INVISIBLE = ["​", "‮", "﻿", "\u0085", "\u009f"]
+
+
+@pytest.mark.parametrize("ch", _INVISIBLE)
+def test_label_with_a_c1_or_format_character_is_refused(client: TestClient, ch: str) -> None:
+    assert _create(client, label=f"My{ch}vLLM").status_code in (400, 422)
+    assert _create(client, id="other", label="ok").status_code == 201
+    assert client.put("/providers/connections/other", json={"label": f"My{ch}vLLM"}).status_code in (400, 422)
+
+
+@pytest.mark.parametrize("ch", _INVISIBLE)
+def test_model_with_a_c1_or_format_character_is_refused(client: TestClient, ch: str) -> None:
+    r = _create(client, defaultModel=f"qwen{ch}3.5")
+    assert r.status_code == 400
+    assert ch not in r.text
+
+
+@pytest.mark.parametrize("ch", _INVISIBLE)
+def test_secret_with_a_c1_or_format_character_is_refused(client: TestClient, ch: str) -> None:
+    assert _create(client).status_code == 201
+    r = client.post("/providers/my-vllm/secret", json={"key": f"sk-abc{ch}def"})
+    assert r.status_code == 400
+    assert client.app.state.secrets_store.get("oharness/my-vllm") is None
+
+
+def test_ordinary_unicode_in_a_label_and_a_model_still_passes(client: TestClient) -> None:
+    assert _create(client, label="Servidor da ação/β: v1.0", defaultModel="org/modelo:7b.q4").status_code == 201
+
+
+# ── #511: the reserved ids come from the catalogue, not a second list ────────
+
+def test_reserved_connection_ids_derive_from_the_catalogue() -> None:
+    from adapters.catalog import PROVIDERS, RESERVED_CONNECTION_IDS
+
+    assert set(PROVIDERS) <= RESERVED_CONNECTION_IDS
+    assert {"ollama-local", "ollama-cloud"} <= RESERVED_CONNECTION_IDS
+    assert RESERVED_CONNECTION_IDS == set(PROVIDERS) | {"ollama-local", "ollama-cloud"}
+
+
+def test_router_uses_the_catalogue_reserved_ids() -> None:
+    from adapters import catalog
+    from routers import providers
+
+    assert providers.RESERVED_CONNECTION_IDS is catalog.RESERVED_CONNECTION_IDS

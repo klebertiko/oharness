@@ -187,3 +187,33 @@ def test_reported_tokens_accepts_a_count_at_the_ceiling():
     assert MAX_REPORTED_TOKENS == 10**9
     assert reported_tokens({"input_tokens": 10**9 - 4, "outputTokens": 4}) == 10**9
     assert reported_tokens({"input_tokens": 2.0, "output_tokens": 4}) == 6
+
+
+# ── #513: a valid JSON that is not an object fails closed ────────────────────
+
+@pytest.mark.parametrize("stdout", ["[]", '["a"]', '"text"', "42", "null", "true"])
+def test_claude_non_object_json_fails_closed_with_the_fixed_message(stdout):
+    adapter = ClaudeCliAdapter(runner=_runner(stdout))
+    result = asyncio.run(adapter.invoke("hi", AdapterConfig(adapter="x", model="", extra={})))
+    assert result.failure == "cli-error"
+    assert result.error == "claude CLI returned unreadable output (expected JSON)."
+
+
+# ── #512: cursor-agent's result shape is unverified, so it is read tolerantly ─
+
+@pytest.mark.parametrize("extra", [
+    {"usage": "lots"}, {"usage": [1, 2]}, {"usage": {"inputTokens": -5, "outputTokens": "x"}},
+    {"model": {"name": "gpt"}}, {"model": "bad model; rm -rf /"}, {"model": 7},
+])
+def test_cursor_unrecognised_usage_or_model_never_travels(extra):
+    out = json.dumps({"type": "result", "is_error": False, "result": "pong", **extra})
+    events = asyncio.run(_events(CursorCliAdapter(runner=_runner(out)), model="auto"))
+    assert "".join(e["text"] for e in events if e.get("kind") == "text") == "pong"
+    usage = _usage(events)
+    assert usage is None or (usage.get("model") == "auto" and "tokens" not in usage)
+
+
+def test_claude_probe_of_non_object_status_is_a_fault_not_a_crash():
+    adapter = ClaudeCliAdapter(runner=_runner("[]"))
+    result = asyncio.run(adapter.probe(AdapterConfig(adapter="x", model="", extra={})))
+    assert result.ok is False and result.code == "error"

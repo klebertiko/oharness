@@ -19,6 +19,7 @@ from adapters.catalog import (
     endpoint_for_connection,
     endpoint_origin,
     get_provider,
+    RESERVED_CONNECTION_IDS,
     has_control_characters,
     is_custom_provider,
     list_catalog,
@@ -131,13 +132,6 @@ def _ensure_endpoint_allowed(provider: str, endpoint: str | None, *unchanged: st
         raise HTTPException(400, "This provider's endpoint is fixed and cannot be changed.")
 
 
-# The ids the app ships with (frontend seed rows + base providers). A connection
-# a person creates never takes one: hydrate merges sidecar rows onto the seed by
-# id, so a custom row named `anthropic` would wear the subscription's spec (I13).
-RESERVED_CONNECTION_IDS = frozenset(
-    {"anthropic", "cursor", "openai", "ollama", "ollama-local", "ollama-cloud", "openrouter",
-     *CUSTOM_PROVIDER_IDS}
-)
 # The id is also the vault reference (`oharness/{id}`), so keep it a plain slug.
 _CUSTOM_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 

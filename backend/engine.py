@@ -398,8 +398,10 @@ async def execute_harness(
                                                      — `tokens_estimated`: true when the count was derived from
                                                        output length because the adapter reported no usage
                                                      — `model`: the effective model the CLI reported
-                                                       (claude, cursor-agent); else the requested one;
-                                                       (codex and HTTP name none); absent when neither is known
+                                                       (claude; cursor-agent when its JSON carries a
+                                                       well-formed `model`, a shape not yet seen on a
+                                                       real run); else the requested one; codex and
+                                                       HTTP name none; absent when neither is known
       node_error        {node_id, error, tokens?}      — `tokens` present only when real spend
                                                           happened before the failure (e.g. an
                                                           over-limit node, see node_token_warning)

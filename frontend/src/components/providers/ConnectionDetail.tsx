@@ -8,7 +8,7 @@ import { ActivityPanel } from "./ActivityPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { ModelsPanel } from "./ModelsPanel";
-import { providerKey } from "./providerText";
+import { providerKey, vendorName } from "./providerText";
 import { specOf, type Connection } from "./providerStore";
 import { WithCode } from "./rows";
 import { useConnectionActions } from "./useConnectionActions";
@@ -109,12 +109,12 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             </>
           )}
 
-          <Panel title={t("about.title", { vendor: spec.vendor })} titleId="oh-about" level={3}>
+          <Panel title={t("about.title", { vendor: vendorName(c, t) })} titleId="oh-about" level={3}>
             <div className="space-y-3 p-3">
               <p className="t-body max-w-[62ch] text-ink-dim">
                 <WithCode text={t(textKeys.summary)} />
               </p>
-              <p className="t-body text-ink-dim">{t(c.residence === "local" ? "about.local" : "about.cloud", { vendor: spec.vendor })}</p>
+              <p className="t-body text-ink-dim">{t(c.residence === "local" ? "about.local" : "about.cloud", { vendor: vendorName(c, t) })}</p>
               {textKeys.caveat && (
                 <Notice tone="info">
                   <WithCode text={t(textKeys.caveat)} />

@@ -680,6 +680,8 @@ export const en = {
   "provider.openrouter.where": "openrouter.ai, Keys.",
   "provider.openrouter.summary": "One key, many vendors. Pick the model this connection runs; OpenRouter routes it to a vendor that serves it.",
   "provider.openrouter.caveat": "Prices and availability are set by the upstream vendor and move without notice.",
+  "provider.openaiCompatible.vendor": "OpenAI-compatible endpoint",
+  "provider.anthropicGateway.vendor": "Anthropic-compatible gateway",
   "provider.openaiCompatible.where": "The server's own settings.",
   "provider.openaiCompatible.summary": "Any server that speaks the OpenAI chat-completions API: vLLM, LM Studio, a company gateway.",
   "provider.openaiCompatible.caveat": "The key goes only to the host you typed. This app does not know the prices.",
