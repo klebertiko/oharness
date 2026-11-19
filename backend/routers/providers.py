@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
 from adapters.catalog import (
+    builtin_residence,
     endpoint_for_connection,
     endpoint_origin,
     get_provider,
@@ -154,6 +155,12 @@ def _ensure_custom_connection_allowed(connection_id: str, endpoint: str) -> None
     _ensure_custom_endpoint_valid(endpoint)
 
 
+def _ensure_residence_fixed(connection_id: str, residence: str | None) -> None:
+    expected = builtin_residence(connection_id)
+    if residence is not None and expected is not None and residence != expected:
+        raise HTTPException(400, "That built-in connection has a fixed residence.")
+
+
 def _ensure_custom_endpoint_valid(endpoint: str) -> None:
     reason = validate_custom_endpoint(endpoint)
     if reason:
@@ -215,6 +222,7 @@ async def create_connection(
     seed_provider = "ollama" if body.id in ("ollama-local", "ollama-cloud") else body.id
     if body.id in RESERVED_CONNECTION_IDS and body.provider != seed_provider:
         raise HTTPException(400, "That id belongs to a built-in connection. Choose another id.")
+    _ensure_residence_fixed(body.id, body.residence)
     if is_custom_provider(body.provider):
         _ensure_custom_connection_allowed(body.id, body.endpoint)
     spec = get_provider(body.provider)
@@ -266,6 +274,7 @@ async def update_connection(
         # removed (and typed again) first, so it never follows a URL edit.
         if row.get("secretRef") and endpoint_origin(body.endpoint) != endpoint_origin(row.get("endpoint", "")):
             raise HTTPException(409, "Remove the saved key before pointing this connection at another host.")
+    _ensure_residence_fixed(connection_id, body.residence)
     _ensure_cli_model_allowed(get_provider(row["provider"]), body.defaultModel)
     _ensure_custom_model_valid(row["provider"], body.defaultModel)
     # Commit a copy first; swap it into memory only once the DB accepted it, so

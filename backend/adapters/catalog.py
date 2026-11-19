@@ -245,6 +245,20 @@ PROVIDERS["anthropic-gateway"] = {  # type: ignore[index]
 RESERVED_CONNECTION_IDS: frozenset[str] = frozenset({*PROVIDERS, "ollama-local", "ollama-cloud"})
 
 
+def builtin_residence(connection_id: str) -> str | None:
+    """The residence a built-in connection id is pinned to, or None when the id is
+    not built in or its provider can sit in either place. Taken from the catalogue:
+    the stamp drives billing and budget, so it is not an editable field."""
+    if connection_id == "ollama-local":
+        return "local"
+    if connection_id == "ollama-cloud":
+        return OLLAMA_CLOUD["residence"]
+    spec = PROVIDERS.get(connection_id)  # type: ignore[call-overload]
+    if spec is None or spec["residence"] == "either":
+        return None
+    return spec["residence"]
+
+
 def is_custom_provider(provider_id: str) -> bool:
     return provider_id in CUSTOM_PROVIDER_IDS
 
