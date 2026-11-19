@@ -61,9 +61,10 @@ export class LineSplitter {
 const CSI = /\u001b\[[0-?]*[ -/]*[@-~]/gu
 const OSC = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/gu
 const ESCAPE = /\u001b[@-_]?/gu
-// Every other C0 and C1 control character, DEL included, and the bidi marks,
-// embeddings, overrides and isolates that reorder what a terminal shows. Tab stays.
-const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/gu
+// Every other C0 and C1 control character, DEL included; the bidi marks
+// (ALM, LRM, RLM), embeddings, overrides and isolates that reorder what a
+// terminal shows; and the line and paragraph separators. Tab stays.
+const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu
 
 /** One line of plugin output as plain text: no escape sequences, control characters or bidi controls. */
 export function outputLine(line: string): string {

@@ -15,6 +15,8 @@ const PROBE_PLUGIN = [
   "import { readFileSync, writeFileSync } from 'node:fs'",
   "import { execFileSync } from 'node:child_process'",
   "import imported from 'node:process'",
+  "import os, { setPriority } from 'node:os'",
+  "import { createRequire } from 'node:module'",
   "export const name = 'probe'",
   "export const inject = ['tools']",
   'function attempt(run: () => unknown): string {',
@@ -43,6 +45,24 @@ const PROBE_PLUGIN = [
       "        const pid = { valueOf: () => (reads++ < after ? process.pid : process.ppid), toString: () => String(reads++ < after ? process.pid : process.ppid) }",
       "        const call = fn === '_kill' ? () => { const errno = (process as any)._kill(pid, signal); if (errno !== 0) throw Object.assign(new Error('errno'), { code: String(errno) }) } : () => process.kill(pid as any, signal)",
       "        return attempt(call)",
+      '      }',
+      "      if (args.op === 'wide-pid') {",
+      "        const pids: Record<string, number> = { 'host+2^32': process.ppid + 2 ** 32, '2^32': 2 ** 32, '2^31': 2 ** 31, '-2^32': -(2 ** 32), 'self+2^32': process.pid + 2 ** 32 }",
+      "        const out: Record<string, string[]> = {}",
+      "        for (const [label, pid] of Object.entries(pids)) out[label] = [attempt(() => process.kill(pid, 0)), attempt(() => { const errno = (process as any)._kill(pid, 0); if (errno !== 0) throw Object.assign(new Error('errno'), { code: String(errno) }) })]",
+      "        return out",
+      '      }',
+      "      if (args.op === 'priority') {",
+      "        const required = createRequire(import.meta.url)('node:os')",
+      "        return [",
+      "          attempt(() => os.setPriority(process.ppid, 19)),",
+      "          attempt(() => setPriority(process.ppid, 19)),",
+      "          attempt(() => required.setPriority(process.ppid, 19)),",
+      "          attempt(() => (process as any).getBuiltinModule('node:os').setPriority(process.ppid, 19)),",
+      "          attempt(() => Object.defineProperty(os, 'setPriority', { value: () => undefined })),",
+      "          attempt(() => os.setPriority(os.getPriority())),",
+      "          attempt(() => os.setPriority(process.pid, os.getPriority())),",
+      "        ]",
       '      }',
       "      if (args.op === 'flip-signal') {",
       "        let reads = 0",
@@ -277,4 +297,32 @@ test('a signal that is not a plain string or number is refused', async () => {
     assert.deepEqual(await probe(host, 'flip-signal'), ['ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED'])
     assert.equal(typeof await probe(host, 'pid'), 'number', 'the plugin, and the host, are still alive')
   })
+})
+
+/** Node truncates a pid to int32: 2^32 becomes 0 (the process group), and host + 2^32 becomes the host. */
+test('a pid outside the positive int32 range is refused, with or without "processes"', async () => {
+  for (const capabilities of [[], ['processes']]) {
+    await withHost(async (host) => {
+      await installConfirmed(host, await probePackage({ capabilities }))
+      const seen = asRecord(await probe(host, 'wide-pid'))
+      for (const label of ['host+2^32', '2^32', '2^31', '-2^32', 'self+2^32']) {
+        assert.deepEqual(seen[label], ['ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED'], `${JSON.stringify(capabilities)} ${label}`)
+      }
+      assert.equal(typeof await probe(host, 'pid'), 'number', 'the host still answers')
+    })
+  }
+})
+
+/** os.setPriority is not gated by the permission model: a plugin could slow its host down. */
+test('the plugin cannot change the priority of another process, the host included', async () => {
+  for (const capabilities of [[], ['processes']]) {
+    await withHost(async (host) => {
+      await installConfirmed(host, await probePackage({ capabilities }))
+      assert.deepEqual(await probe(host, 'priority'), [
+        'ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED', 'ERR_ACCESS_DENIED',
+        'error',
+        'ok', 'ok',
+      ], JSON.stringify(capabilities))
+    })
+  }
 })

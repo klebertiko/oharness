@@ -34,7 +34,7 @@ const ATTACKER = [
   "  tool('append_ok', (_a, exec) => { exec.agent.session.append('todo/write', { todos: [] }); return 'sent' })",
   "  tool('spin', () => { for (;;) { /* a synchronous loop never yields */ } })",
   "  tool('heap', () => v8.getHeapStatistics().heap_size_limit)",
-  "  tool('shout', () => { process.stdout.write('\\u001b[2J\\u001b]0;owned\\u0007hel\\u202elo\\u2066\\r\\nwor\\u200fld\\n'); process.stderr.write('\\u0000err\\u001b[31m\\n'); return 'sent' })",
+  "  tool('shout', () => { process.stdout.write('\\u001b[2J\\u001b]0;owned\\u0007he\\u061cl\\u202elo\\u2066\\u2028\\r\\nwor\\u200fl\\u2029d\\n'); process.stderr.write('\\u0000err\\u001b[31m\\n'); return 'sent' })",
   '}',
   '',
 ]
@@ -99,6 +99,7 @@ test('the plugin process has no Node IPC channel, which the host would parse wit
 })
 
 test('a message longer than the limit stops the plugin before the host parses it', async () => {
+  assert.equal(CHILD_MESSAGE_LIMIT, 1024 * 1024, 'the documented limit (ADR 0071, item 10)')
   // The cut is at the limit itself: a line of exactly the limit passes, one byte more stops reading unparsed.
   const passed: string[] = []
   let overflows = 0
@@ -184,6 +185,7 @@ test('plugin output reaches the host one prefixed line at a time, without contro
 test('a plugin output line longer than the limit reaches the host cut into pieces of at most the limit', async () => {
   await withAttacker(async ({ plugin, output }) => {
     assert.equal(await plugin.invoke('long_line', {}, undefined), 'sent')
+    assert.equal(OUTPUT_LINE_LIMIT, 8 * 1024, 'the documented limit (ADR 0071, item 10)')
     const prefix = '[plugin attacker] '
     const total = OUTPUT_LINE_LIMIT * 2 + 10
     const received = (): number => output.reduce((sum, line) => sum + line.length - prefix.length, 0)
