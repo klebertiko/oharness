@@ -13,9 +13,18 @@ themselves in the keychain — or install ``keyring`` so only the wrapping
 secret is there. See ADR 0070.
 
 The directory is created mode ``0700`` and each file mode ``0600``. On
-Windows the ACL comes from ``security.sidecar_token.restrict_to_current_user``.
-Restrict runs before any secret bytes are written. If it fails, the empty
-file is removed and nothing is stored.
+Windows the ACL comes from ``security.sidecar_token.restrict_to_current_user``
+(a reset, then only this user). On POSIX every mode is set with ``fchmod`` on
+the descriptor that was opened without following links, so no step re-resolves
+a path. A vault that is a link or junction is refused on every platform.
+
+A secret file is never created in place. It is staged under a temporary name
+(created ``O_EXCL``, restricted, then written) and published with
+``os.link``, which is atomic and fails if the name exists. The final name is
+therefore never empty, and a writer that dies leaves nothing at it. If the
+restriction fails, the staged file is removed and nothing is stored. The vault
+must be on a file system that supports hard links (any local NTFS, ext4,
+APFS); on one that does not, opening fails closed.
 
 Files written by older builds were encrypted with a key derived only from
 the absolute store path (``openharness.file-secrets.v1``). The first open
@@ -26,9 +35,9 @@ blob neither key can open is left untouched.
 from __future__ import annotations
 
 import base64
-import hashlib
 import contextlib
 import errno
+import hashlib
 import os
 import platform
 import re
@@ -52,6 +61,11 @@ FILE_STORE_KEYCHAIN_SERVICE = "oharness.file-store"
 _MAX_BLOB_BYTES = 1024 * 1024
 _WINNER_READ_ATTEMPTS = 50
 _WINNER_READ_DELAY_S = 0.02
+# An empty key/id file this old was left by a writer that died (older builds created
+# the name, then wrote). Nothing was ever encrypted under it, so it is safe to drop.
+_STALE_EMPTY_S = 30.0
+_OWNER_RWX = stat.S_IRWXU
+_OWNER_RW = stat.S_IRUSR | stat.S_IWUSR
 
 
 def _is_link(path: Path) -> bool:
@@ -65,6 +79,26 @@ def _open_flags(*parts: int) -> int:
     for name in ("O_NOFOLLOW", "O_CLOEXEC", "O_BINARY"):
         flags |= getattr(os, name, 0)
     return flags
+
+
+def _open_checked(path: Path, flags: int) -> int:
+    """Open a regular file and prove the descriptor is what the name still points at.
+
+    ``O_NOFOLLOW`` covers POSIX at open. Windows has no such flag, so the opened
+    object must also be the very file ``lstat`` sees at that name: a link swapped
+    in after a ``_is_link`` check opens its target, whose identity then differs.
+    """
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError("the secret path is not a regular file")
+        if not os.path.samestat(info, os.lstat(path)):
+            raise OSError("refusing to follow a link in the secrets directory")
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def _legacy_fernet_for_root(root: Path) -> Fernet:
@@ -109,13 +143,17 @@ def _filename_for_ref(ref: str) -> str:
 def _restrict_directory(path: Path) -> bool:
     """Owner-only directory.
 
-    On POSIX the directory is opened once without following links, checked
-    through that descriptor (a directory, owned by this user), and set to
-    ``0700`` with ``fchmod`` on the same descriptor. A link swapped in for the
-    vault, or a folder another user owns, is refused: fail closed. This is not
-    ``restrict_to_current_user``, which chmods to ``0600`` and would drop the
-    search bit a directory needs. On Windows the helper is the ACL.
+    A link or junction in place of the vault is refused on every platform: it
+    would aim the restriction, and every later write, at its target. On POSIX
+    the directory is opened once without following links, checked through that
+    descriptor (a directory, owned by this user), and set to ``0700`` with
+    ``fchmod`` on the same descriptor. A folder another user owns is refused:
+    fail closed. This is not ``restrict_to_current_user``, which chmods to
+    ``0600`` and would drop the search bit a directory needs. On Windows the
+    helper resets and sets the ACL (``/L``, so it never follows a link).
     """
+    if _is_link(path):
+        raise OSError("the secrets path is a link or not a directory")
     if platform.system() == "Windows":
         return restrict_to_current_user(path)
     try:
@@ -131,9 +169,7 @@ def _restrict_directory(path: Path) -> bool:
         if info.st_uid != os.geteuid():
             raise OSError("the secrets directory belongs to another user")
         try:
-            # A directory needs the search bit; 0o700 gives group and other nothing.
-            # The rule below compares the mode with 0o644 as a number, so it flags 0o700.
-            os.fchmod(fd, 0o700)  # nosemgrep: opengrep-rules.python.lang.security.audit.insecure-file-permissions
+            os.fchmod(fd, _OWNER_RWX)  # a directory needs the search bit: 0700
         except OSError:
             return False
     finally:
@@ -160,17 +196,43 @@ def _ensure_private_dir(path: Path) -> None:
         raise OSError("could not restrict the secrets directory to the current user")
 
 
+def _restrict_file(path: Path) -> bool:
+    """Owner-only mode for a file already on disk.
+
+    POSIX: open without following links (non-blocking, so a FIFO cannot hang
+    the open), require a regular file, and ``fchmod`` the descriptor. Windows:
+    the ACL helper, after the same regular-file proof.
+    """
+    try:
+        fd = _open_checked(path, _open_flags(os.O_RDONLY, getattr(os, "O_NONBLOCK", 0)))
+    except OSError:
+        return False
+    try:
+        if platform.system() == "Windows":
+            os.close(fd)
+            fd = -1
+            return restrict_to_current_user(path)
+        try:
+            os.fchmod(fd, _OWNER_RW)
+        except OSError:
+            return False
+        return True
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def _restrict_existing_files(root: Path) -> None:
     """Tighten files already on disk before they are read or rewritten."""
     for entry in root.iterdir():
         if _is_link(entry) or not entry.is_file():
             continue
-        if not restrict_to_current_user(entry):
+        if not _restrict_file(entry):
             raise OSError("could not restrict the secret file to the current user")
 
 
 def _read_all(path: Path) -> bytes:
-    fd = os.open(path, _open_flags(os.O_RDONLY))
+    fd = _open_checked(path, _open_flags(os.O_RDONLY, getattr(os, "O_NONBLOCK", 0)))
     try:
         chunks: list[bytes] = []
         size = 0
@@ -196,53 +258,74 @@ def _write_all(fd: int, data: bytes) -> None:
         view = view[written:]
 
 
-def _write_new(path: Path, data: bytes) -> None:
-    """Create ``path`` owner-only, restrict it, and only then write ``data``.
+def _stage_private(path: Path, data: bytes) -> Path:
+    """A complete, owner-only copy of ``data`` under a temporary name beside ``path``.
 
-    ``O_EXCL`` so an existing name (including a link) is not opened. The
-    first descriptor is closed before restrict so Windows can set the ACL,
-    and it is closed before any secret byte exists. Failure deletes the
-    empty file.
+    Created ``O_EXCL`` (a name that exists, link included, is never opened) and
+    restricted before any secret byte is written. POSIX restricts the open
+    descriptor. Windows must close it first to set the ACL, then reopens by name
+    and checks it is the same file. Any failure removes the staged file.
     """
-    if _is_link(path):
-        raise OSError("refusing to follow a link in the secrets directory")
-    fd = os.open(path, _open_flags(os.O_WRONLY, os.O_CREAT, os.O_EXCL), 0o600)
-    os.close(fd)
+    tmp = path.with_name("." + path.name + "." + secrets.token_hex(6) + ".tmp")
+    fd = os.open(tmp, _open_flags(os.O_WRONLY, os.O_CREAT, os.O_EXCL), 0o600)
     try:
-        if not restrict_to_current_user(path):
-            raise OSError("could not restrict the secret file to the current user")
-        fd = os.open(path, _open_flags(os.O_WRONLY, os.O_TRUNC), 0o600)
-        try:
-            if hasattr(os, "fchmod"):
-                os.fchmod(fd, 0o600)
-            _write_all(fd, data)
-        finally:
+        if platform.system() == "Windows":
+            created = os.fstat(fd)
             os.close(fd)
-    except Exception:
-        path.unlink(missing_ok=True)
+            fd = -1
+            if not restrict_to_current_user(tmp):
+                raise OSError("could not restrict the secret file to the current user")
+            fd = os.open(tmp, _open_flags(os.O_WRONLY), 0o600)
+            opened = os.fstat(fd)
+            if (opened.st_ino, opened.st_dev) != (created.st_ino, created.st_dev):
+                raise OSError("the staged secret file changed while it was restricted")
+        else:
+            try:
+                os.fchmod(fd, _OWNER_RW)
+            except OSError:
+                raise OSError("could not restrict the secret file to the current user") from None
+        _write_all(fd, data)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+            fd = -1
+        tmp.unlink(missing_ok=True)
         raise
+    os.close(fd)
+    return tmp
+
+
+def _write_new(path: Path, data: bytes) -> None:
+    """Publish ``data`` at ``path`` only if the name is free; ``FileExistsError`` if not.
+
+    ``os.link`` from a complete staged file is atomic and refuses an existing
+    name (a link too), so the name is never visible empty and nothing is
+    written through whatever was there.
+    """
+    tmp = _stage_private(path, data)
+    try:
+        os.link(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _write_private(path: Path, data: bytes) -> None:
+    """Write ``data`` at ``path``, replacing a value already there.
+
+    No ``exists()`` probe: the publish itself decides. A name that exists (or
+    appears meanwhile) is replaced by the staged file with ``os.replace``, which
+    swaps the name and never writes through a link that was there.
+    """
     if _is_link(path):
         raise OSError("refusing to follow a link in the secrets directory")
-    if not path.exists():
-        try:
-            _write_new(path, data)
-            return
-        except FileExistsError:
-            pass
-    if not restrict_to_current_user(path):
-        raise OSError("could not restrict the secret file to the current user")
-    tmp = path.with_name("." + path.name + "." + secrets.token_hex(6) + ".tmp")
+    tmp = _stage_private(path, data)
     try:
-        _write_new(tmp, data)
-        os.replace(tmp, path)
-    except Exception:
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            os.replace(tmp, path)
+    finally:
         tmp.unlink(missing_ok=True)
-        raise
-    if not restrict_to_current_user(path):
-        raise OSError("could not restrict the secret file to the current user")
 
 
 def _ascii_secret(raw: bytes, *, what: str) -> bytes:
@@ -257,11 +340,32 @@ def _ascii_secret(raw: bytes, *, what: str) -> bytes:
 
 
 def _read_named(path: Path, *, what: str) -> bytes | None:
-    if _is_link(path):
-        raise OSError("refusing to follow a link in the secrets directory")
-    if not path.is_file():
+    """The secret at ``path``; ``None`` when there is no such file.
+
+    A file seen empty is a first open in progress (an older build created the
+    name before it wrote), so wait a short, bounded time for the bytes, as
+    ``_read_winner`` does. One that is still empty and old was left by a writer
+    that died; nothing was encrypted under it, so it is removed and read as
+    absent. A recent empty file is never deleted: its writer may be alive.
+    """
+    for _ in range(_WINNER_READ_ATTEMPTS):
+        if _is_link(path):
+            raise OSError("refusing to follow a link in the secrets directory")
+        try:
+            data = _read_all(path)
+        except FileNotFoundError:
+            return None
+        if data.strip():
+            return _ascii_secret(data, what=what)
+        time.sleep(_WINNER_READ_DELAY_S)
+    try:
+        age = time.time() - path.stat().st_mtime
+    except FileNotFoundError:
         return None
-    return _ascii_secret(_read_all(path), what=what)
+    if age > _STALE_EMPTY_S:
+        path.unlink(missing_ok=True)
+        return None
+    raise OSError(f"the file-store {what} is not usable")
 
 
 def _load_keyring() -> KeyringBackend | None:
@@ -277,7 +381,7 @@ def _load_keyring() -> KeyringBackend | None:
         return None
     try:
         backend = keyring.get_keyring()
-    except Exception:
+    except Exception:  # noqa: BLE001 - any third-party backend failure means "no keychain", not a crash
         return None
     if not getattr(backend, "priority", 0):
         return None
@@ -287,7 +391,7 @@ def _load_keyring() -> KeyringBackend | None:
 def _keychain_get(backend: KeyringBackend, store_id: str) -> str | None:
     try:
         value = backend.get_password(FILE_STORE_KEYCHAIN_SERVICE, store_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a failing backend reads as absent; the file key is the fallback
         return None
     return value or None
 
@@ -297,7 +401,7 @@ def _keychain_set(backend: KeyringBackend, store_id: str, secret: bytes) -> bool
     try:
         backend.set_password(FILE_STORE_KEYCHAIN_SERVICE, store_id, text)
         return backend.get_password(FILE_STORE_KEYCHAIN_SERVICE, store_id) == text
-    except Exception:
+    except Exception:  # noqa: BLE001 - a failing backend means the secret stays in the key file
         return False
 
 
@@ -316,11 +420,7 @@ def _load_or_create_secret(root: Path, backend: KeyringBackend | None) -> bytes:
 
     if file_secret is not None:
         if backend is not None:
-            if store_id is None:
-                store_id = secrets.token_urlsafe(16)
-                _write_private(id_path, store_id.encode("ascii"))
-            if _keychain_set(backend, store_id, file_secret):
-                key_path.unlink()
+            _move_key_to_keychain(backend, key_path, id_path, store_id, file_secret)
         return file_secret
 
     if store_id is not None:
@@ -356,19 +456,37 @@ def _load_or_create_secret(root: Path, backend: KeyringBackend | None) -> bytes:
     return secret
 
 
-def _read_winner(path: Path, *, what: str) -> bytes:
-    """The value another process just created at ``path``.
+def _move_key_to_keychain(
+    backend: KeyringBackend, key_path: Path, id_path: Path, store_id: str | None, file_secret: bytes
+) -> None:
+    """Move the key file's secret into the keychain, without clobbering anything.
 
-    ``_write_new`` creates the file empty, restricts it, then writes, so a
-    reader can briefly see it empty. Wait a short, bounded time for the bytes.
+    The store id is created exclusively: if another process wrote one first,
+    adopt it. A keychain entry that already holds a *different* secret is
+    another process's; it is left alone and the key file stays, so neither
+    side's ciphertext is made unreadable by an overwrite.
     """
-    for _ in range(_WINNER_READ_ATTEMPTS):
-        if _is_link(path):
-            raise OSError("refusing to follow a link in the secrets directory")
-        if path.is_file() and path.stat().st_size > 0:
-            return _ascii_secret(_read_all(path), what=what)
-        time.sleep(_WINNER_READ_DELAY_S)
-    raise OSError(f"the file-store {what} is not usable")
+    if store_id is None:
+        candidate = secrets.token_urlsafe(16)
+        try:
+            _write_new(id_path, candidate.encode("ascii"))
+            store_id = candidate
+        except FileExistsError:
+            store_id = _read_winner(id_path, what="id file").decode("ascii")
+    text = file_secret.decode("ascii")
+    existing = _keychain_get(backend, store_id)
+    if existing is not None and existing != text:
+        return
+    if existing == text or _keychain_set(backend, store_id, file_secret):
+        key_path.unlink(missing_ok=True)
+
+
+def _read_winner(path: Path, *, what: str) -> bytes:
+    """The value another process just created at ``path``."""
+    found = _read_named(path, what=what)
+    if found is None:
+        raise OSError(f"the file-store {what} is not usable")
+    return found
 
 
 def _keychain_forget(backend: KeyringBackend, store_id: str) -> None:
@@ -437,7 +555,7 @@ class FileSecrets:
             return None
         try:
             plain = self._fernet.decrypt(_read_all(path))
-        except InvalidToken:
+        except (InvalidToken, FileNotFoundError):
             return None
         try:
             return plain.decode("utf-8")
