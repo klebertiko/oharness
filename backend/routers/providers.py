@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
 from adapters.catalog import (
-    CUSTOM_PROVIDER_IDS,
     endpoint_for_connection,
     endpoint_origin,
     get_provider,
