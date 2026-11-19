@@ -63,7 +63,8 @@ def _set_protected_dacl(path: Path, is_dir: bool) -> bool:
     is inherited by what is written inside it.
     """
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes
+    wintypes = ctypes.wintypes
 
     advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
