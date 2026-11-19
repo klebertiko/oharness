@@ -1,38 +1,35 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { Context, type Fiber } from 'cordis'
-import { CommandsService } from './commands-service.ts'
+import type { Context } from 'cordis'
+import { COMMAND_LINE } from './commands-service.ts'
 import { HostError } from './errors.ts'
-import { inspectPackage, snapshotPackage, type PackagePreview } from './manifest.ts'
-import { confineSnapshot, OutsidePackageError, releaseSnapshot } from './register-alias.ts'
+import { IsolatedPlugin } from './isolated-plugin.ts'
+import { inspectPackage, snapshotPackage, type Capability, type PackagePreview, type Runtime } from './manifest.ts'
 import { CORDIS_PACKAGE, CORDIS_VERSION, SCHEMASTERY_PACKAGE, SCHEMASTERY_VERSION } from './pin.ts'
-import { SessionProjectionsRecord } from './session-projections.ts'
-import { ToolsService, type ToolExec } from './tools-service.ts'
+import { asPlugin, hostContext, isRecord, listServices, loadPlugin, type ServiceInfo } from './plugin-load.ts'
+import { confineSnapshot, OutsidePackageError, releaseSnapshot } from './register-alias.ts'
+import type { ToolExec } from './tools-service.ts'
 import { digestEqual } from './warnings.ts'
 
-const FIBER_STATE = ['pending', 'loading', 'active', 'failed', 'disposed', 'unloading'] as const
+export type { ServiceInfo } from './plugin-load.ts'
 
 export interface InstallResult {
   readonly status: 'active' | 'pending' | 'failed'
   readonly name: string
   readonly version: string
-  readonly runtime: 'in-process'
+  readonly runtime: Runtime
   readonly unmet: readonly string[]
   readonly scriptsExecuted: false
   readonly bundlePatchIgnored: boolean
   readonly message?: string
 }
 
-export interface ServiceInfo {
-  readonly name: string
-  readonly implementation?: string
-  readonly chain: readonly string[]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+interface Loaded {
+  readonly tree: string
+  readonly result: InstallResult
+  readonly isolated?: IsolatedPlugin
 }
 
 function packageVersion(name: string): string {
@@ -57,37 +54,6 @@ function assertPins(): { cordis: string; schemastery: string } {
   return { cordis, schemastery }
 }
 
-function prototypeChain(value: object): string[] {
-  const names: string[] = []
-  let ctor: unknown = value.constructor
-  while (typeof ctor === 'function' && ctor.name !== '' && ctor.name !== 'Function' && names.length < 8) {
-    names.push(ctor.name)
-    ctor = Object.getPrototypeOf(ctor) as unknown
-  }
-  return names
-}
-
-function asPlugin(mod: object): unknown {
-  const record = mod as Record<string, unknown>
-  const candidate = record.default ?? record
-  if (typeof candidate === 'function') return candidate
-  if (isRecord(candidate) && typeof candidate.apply === 'function') {
-    return {
-      ...(typeof candidate.name === 'string' ? { name: candidate.name } : {}),
-      ...(candidate.inject !== undefined ? { inject: candidate.inject } : {}),
-      ...(candidate.Config !== undefined ? { Config: candidate.Config } : {}),
-      apply: candidate.apply,
-    }
-  }
-  throw new HostError('not-a-plugin', 'module has no plugin class or apply function')
-}
-
-function unmetInjections(fiber: Fiber): string[] {
-  const inject: unknown = fiber.inject
-  if (!isRecord(inject)) return []
-  return Object.entries(inject).filter(([, value]) => value == null).map(([key]) => key)
-}
-
 function requireConfirmation(preview: PackagePreview, confirmation: unknown): void {
   if (!isRecord(confirmation)) {
     throw new HostError('confirmation-required', 'installation requires human confirmation', preview)
@@ -109,32 +75,42 @@ function requireConfirmation(preview: PackagePreview, confirmation: unknown): vo
   }
 }
 
+export interface RuntimeOptions {
+  readonly pluginRoots: readonly string[]
+  /** Longest a tool call or command may take in an isolated plugin. */
+  readonly callTimeoutMs?: number
+}
+
 export class CordisRuntime {
   readonly context: Context
   readonly cordisVersion: string
   readonly schemasteryVersion: string
   readonly pluginRoots: readonly string[]
-  readonly #loaded = new Map<string, InstallResult>()
+  readonly #callTimeoutMs: number | undefined
+  readonly #loaded = new Map<string, Loaded>()
   readonly #snapshots: string[] = []
 
-  private constructor(context: Context, versions: { cordis: string; schemastery: string }, pluginRoots: readonly string[]) {
+  private constructor(context: Context, versions: { cordis: string; schemastery: string }, options: RuntimeOptions) {
     this.context = context
-    this.pluginRoots = pluginRoots
+    this.pluginRoots = [...options.pluginRoots]
+    this.#callTimeoutMs = options.callTimeoutMs
     this.cordisVersion = versions.cordis
     this.schemasteryVersion = versions.schemastery
   }
 
-  static async create(options: { pluginRoots: readonly string[] }): Promise<CordisRuntime> {
+  static async create(options: RuntimeOptions): Promise<CordisRuntime> {
     const versions = assertPins()
-    const context = new Context()
-    await context.plugin(ToolsService)
-    await context.plugin(CommandsService)
-    await context.plugin(SessionProjectionsRecord)
-    return new CordisRuntime(context, versions, [...options.pluginRoots])
+    return new CordisRuntime(await hostContext(), versions, options)
   }
 
   preview(packageDir: string): Promise<PackagePreview> {
     return inspectPackage(packageDir, this.pluginRoots)
+  }
+
+  #isolated(): IsolatedPlugin[] {
+    const found: IsolatedPlugin[] = []
+    for (const loaded of this.#loaded.values()) if (loaded.isolated?.running === true) found.push(loaded.isolated)
+    return found
   }
 
   async install(packageDir: string, confirmation: unknown, config?: unknown): Promise<InstallResult> {
@@ -142,10 +118,25 @@ export class CordisRuntime {
     // digest the person confirmed must match the bytes that are about to run.
     const preview = await inspectPackage(packageDir, this.pluginRoots)
     const existing = this.#loaded.get(preview.realpath)
-    if (existing !== undefined && existing.status !== 'failed') return existing
+    // A package that is still running answers with its result, but only when
+    // its files are the ones that were loaded; changed files need a new confirmation.
+    if (existing !== undefined && existing.tree === preview.tree && this.#statusOf(existing) !== 'failed') {
+      return this.#resultOf(existing)
+    }
+    if (existing !== undefined && this.#statusOf(existing) !== 'failed') {
+      throw new HostError('confirmation-mismatch', 'a different version of this package is already loaded; restart the host to replace it', preview)
+    }
     requireConfirmation(preview, confirmation)
     const snapshot = await snapshotPackage(preview)
     this.#snapshots.push(snapshot.dir)
+    const loaded = preview.runtime === 'isolated'
+      ? await this.#installIsolated(preview, snapshot, config)
+      : await this.#installInProcess(preview, snapshot, config)
+    this.#loaded.set(preview.realpath, loaded)
+    return this.#resultOf(loaded)
+  }
+
+  async #installInProcess(preview: PackagePreview, snapshot: { dir: string; entry: string }, config: unknown): Promise<Loaded> {
     confineSnapshot(snapshot.dir)
     let imported: unknown
     try {
@@ -154,75 +145,93 @@ export class CordisRuntime {
       if (error instanceof OutsidePackageError) throw new HostError('path-rejected', error.message, preview)
       throw error
     }
-    if (!isRecord(imported) && typeof imported !== 'function') {
-      throw new HostError('not-a-plugin', 'plugin module did not evaluate to an object')
+    const outcome = await loadPlugin(this.context, asPlugin(imported), config)
+    return { tree: preview.tree, result: this.#result(preview, outcome.status, outcome.unmet, outcome.message) }
+  }
+
+  async #installIsolated(preview: PackagePreview, snapshot: { dir: string; entry: string }, config: unknown): Promise<Loaded> {
+    const plugin = await IsolatedPlugin.start({
+      entry: snapshot.entry,
+      snapshot: snapshot.dir,
+      capabilities: preview.capabilities as Capability[],
+      ...(config === undefined ? {} : { config }),
+      ...(this.#callTimeoutMs === undefined ? {} : { callTimeoutMs: this.#callTimeoutMs }),
+    })
+    if (plugin.code !== undefined) {
+      await plugin.stop()
+      throw new HostError(plugin.code, plugin.message ?? 'plugin was refused', preview)
     }
-    const plugin = asPlugin(isRecord(imported) ? imported : { default: imported })
-    const load = this.context.plugin as unknown as (plugin: unknown, config?: unknown) => Fiber & PromiseLike<Fiber>
-    const fiber = config === undefined ? load(plugin) : load(plugin, config)
-    try {
-      await fiber
-    } catch (error) {
-      await fiber.dispose().catch(() => undefined)
-      const message = error instanceof Error ? error.message : 'plugin failed'
-      const result: InstallResult = {
-        status: 'failed',
-        name: preview.name,
-        version: preview.version,
-        runtime: 'in-process',
-        unmet: [],
-        scriptsExecuted: false,
-        bundlePatchIgnored: preview.bundlePatchIgnored,
-        message,
-      }
-      this.#loaded.set(preview.realpath, result)
-      return result
+    const taken = new Set([...this.context.tools.names(), ...this.#isolated().flatMap((other) => other.tools)])
+    const takenCommands = new Set([...this.context.commands.names(), ...this.#isolated().flatMap((other) => other.commands)])
+    const clash = plugin.tools.find((name) => taken.has(name)) ?? plugin.commands.find((name) => takenCommands.has(name))
+    if (clash !== undefined) {
+      await plugin.stop()
+      return { tree: preview.tree, result: this.#result(preview, 'failed', [], `"${clash}" is already registered by another plugin`) }
     }
-    const state = FIBER_STATE[fiber.state] ?? 'failed'
-    const status = state === 'active' ? 'active' : state === 'pending' ? 'pending' : 'failed'
-    const result: InstallResult = {
+    return { tree: preview.tree, result: this.#result(preview, 'active', [], undefined), isolated: plugin }
+  }
+
+  #result(preview: PackagePreview, status: InstallResult['status'], unmet: readonly string[], message: string | undefined): InstallResult {
+    return {
       status,
       name: preview.name,
       version: preview.version,
-      runtime: 'in-process',
-      unmet: status === 'pending' ? unmetInjections(fiber) : [],
+      runtime: preview.runtime,
+      unmet,
       scriptsExecuted: false,
       bundlePatchIgnored: preview.bundlePatchIgnored,
-      ...(status === 'failed' ? { message: `plugin fiber is ${state}` } : {}),
+      ...(message === undefined ? {} : { message }),
     }
-    this.#loaded.set(preview.realpath, result)
-    return result
+  }
+
+  #statusOf(loaded: Loaded): InstallResult['status'] {
+    const isolated = loaded.isolated
+    if (isolated === undefined) return loaded.result.status
+    return isolated.status === 'active' || isolated.status === 'pending' ? isolated.status : 'failed'
+  }
+
+  #resultOf(loaded: Loaded): InstallResult {
+    const isolated = loaded.isolated
+    if (isolated === undefined) return loaded.result
+    const status = this.#statusOf(loaded)
+    const message = status === 'failed' ? isolated.message ?? 'plugin failed' : isolated.message
+    const { message: _drop, ...rest } = loaded.result
+    return { ...rest, status, unmet: isolated.unmet, ...(message === undefined ? {} : { message }) }
   }
 
   plugins(): readonly InstallResult[] {
-    return [...this.#loaded.values()]
+    return [...this.#loaded.values()].map((loaded) => this.#resultOf(loaded))
   }
 
   services(): ServiceInfo[] {
-    const props = this.context.reflect.props as Record<string, { type?: string }>
-    const infos: ServiceInfo[] = []
-    for (const [name, property] of Object.entries(props)) {
-      if (property.type !== 'service') continue
-      const value: unknown = this.context.get(name)
-      const implementation = isRecord(value) && typeof value.implementation === 'string' ? value.implementation : undefined
-      infos.push({
-        name,
-        ...(implementation === undefined ? {} : { implementation }),
-        chain: typeof value === 'object' && value !== null ? prototypeChain(value) : [],
-      })
+    const rows = listServices(this.context)
+    for (const loaded of this.#loaded.values()) {
+      if (loaded.isolated?.running !== true) continue
+      for (const row of loaded.isolated.services) rows.push({ ...row, plugin: loaded.result.name })
     }
-    return infos
+    return rows
+  }
+
+  #toolOwner(name: string): IsolatedPlugin | undefined {
+    return this.#isolated().find((plugin) => plugin.tools.includes(name))
   }
 
   invokeTool(name: string, args: unknown, exec: ToolExec): Promise<unknown> {
+    const owner = this.#toolOwner(name)
+    if (owner !== undefined) return owner.invoke(name, args, exec.agent, exec.signal)
     return this.context.tools.invoke(name, args, exec)
   }
 
   toolUsesSubset(name: string): boolean {
+    const owner = this.#toolOwner(name)
+    if (owner !== undefined) return owner.subsetTools.includes(name)
     return this.context.tools.usesSubset(name)
   }
 
-  executeCommand(line: string, signal: AbortSignal) {
+  async executeCommand(line: string, signal: AbortSignal): Promise<unknown> {
+    const command = COMMAND_LINE.exec(line)?.[1]
+    const owner = command === undefined ? undefined : this.#isolated().find((plugin) => plugin.commands.includes(command))
+    if (owner !== undefined) return owner.command(line, signal)
     return this.context.commands.execute(line, signal)
   }
 
@@ -232,19 +241,40 @@ export class CordisRuntime {
     }
     const emit = this.context.emit as (event: string, payload: unknown) => void
     emit(name, payload)
+    for (const plugin of this.#isolated()) plugin.emit(name, payload)
   }
 
   sessionProjectionKeys(): readonly string[] {
-    return this.context.sessionProjections.keys()
+    return [...this.context.sessionProjections.keys(), ...this.#isolated().flatMap((plugin) => plugin.projections)]
   }
 
+  /** Always 0 for isolated plugins: their record-only service never replays either. */
   sessionProjectionApplyCalls(): number {
     return this.context.sessionProjections.applyCalls
   }
 
+  /** Folders this runtime created for snapshots. */
+  snapshotDirs(): readonly string[] {
+    return [...this.#snapshots]
+  }
+
   async close(): Promise<void> {
+    await Promise.all([...this.#loaded.values()].map((loaded) => loaded.isolated?.stop()))
     await this.context.fiber.dispose().catch(() => undefined)
     for (const dir of this.#snapshots) releaseSnapshot(dir)
     await Promise.all(this.#snapshots.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)))
+  }
+
+  /**
+   * Last resort for a host that must exit now (a dispose that never settles):
+   * kill plugin processes and delete snapshot folders synchronously, so
+   * nothing is left behind in the temp folder.
+   */
+  abandon(): void {
+    for (const loaded of this.#loaded.values()) loaded.isolated?.killNow()
+    for (const dir of this.#snapshots) {
+      releaseSnapshot(dir)
+      try { rmSync(dir, { recursive: true, force: true }) } catch { /* best effort on exit */ }
+    }
   }
 }

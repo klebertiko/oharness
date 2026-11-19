@@ -9,7 +9,7 @@ writeSync(1, `${JSON.stringify({
   port: running.port,
   token: running.token,
   cordis: running.runtime.cordisVersion,
-  runtime: 'in-process',
+  runtime: 'isolated',
 })}\n`)
 
 let closing = false

@@ -19,6 +19,9 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+/** Manifest fields for a test plugin that must run in this process (it reads host globals). */
+export const IN_PROCESS = { runtime: 'in-process', capabilities: ['files', 'network', 'processes', 'credentials'] } as const
+
 /** Test plugin folders: this package (proofs/, vendor/) and the OS temp folder (tempPackage). */
 export const testPluginRoots: readonly string[] = [packageRoot, tmpdir()]
 

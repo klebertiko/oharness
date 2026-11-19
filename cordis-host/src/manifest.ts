@@ -8,6 +8,19 @@ import { installDigest, warningText, type WarningText } from './warnings.ts'
 
 export const CAPABILITIES = ['files', 'network', 'processes', 'credentials'] as const
 export type Capability = (typeof CAPABILITIES)[number]
+export type Runtime = 'isolated' | 'in-process'
+
+/**
+ * Capabilities an isolated plugin process is denied unless the package
+ * declares them and the person confirms. Network is not here: Node 22 and 24
+ * have no network permission, so an isolated plugin can still use the network.
+ */
+export const ENFORCED_CAPABILITIES: readonly Capability[] = ['files', 'processes', 'credentials']
+
+export interface Isolation {
+  readonly enforced: readonly Capability[]
+  readonly notEnforced: readonly Capability[]
+}
 
 const LIFECYCLE_SCRIPTS = ['preinstall', 'install', 'postinstall', 'prepare'] as const
 const PACKAGE_JSON_LIMIT = 256 * 1024
@@ -19,8 +32,10 @@ export interface PackagePreview {
   readonly version: string
   readonly realpath: string
   readonly entry: string
-  readonly runtime: 'in-process'
+  readonly runtime: Runtime
   readonly runtimeDefaulted: boolean
+  /** What the host enforces for this package. In-process enforces nothing. */
+  readonly isolation: Isolation
   readonly capabilities: readonly string[]
   readonly capabilitiesDeclared: boolean
   readonly scripts: readonly string[]
@@ -79,21 +94,40 @@ async function readPackageJson(file: string): Promise<Record<string, unknown>> {
   }
 }
 
-function readRuntime(oharness: Record<string, unknown> | undefined): { runtime: 'in-process'; runtimeDefaulted: boolean } {
+function readRuntime(oharness: Record<string, unknown> | undefined): { runtime: Runtime; runtimeDefaulted: boolean } {
   const declared = oharness?.runtime
-  if (declared === undefined) return { runtime: 'in-process', runtimeDefaulted: true }
-  if (declared === 'in-process') return { runtime: 'in-process', runtimeDefaulted: false }
-  if (declared === 'isolated') {
-    throw new HostError('runtime-not-supported', 'runtime isolated is not available; only in-process is supported')
+  if (declared === undefined) return { runtime: 'isolated', runtimeDefaulted: true }
+  if (declared === 'isolated' || declared === 'in-process') return { runtime: declared, runtimeDefaulted: false }
+  throw new HostError('runtime-not-supported', 'runtime must be isolated or in-process')
+}
+
+/**
+ * In-process code has the host's full reach, so the package has to say so:
+ * it must declare every capability before the person is asked to confirm.
+ */
+function checkInProcess(runtime: Runtime, capabilities: readonly string[]): void {
+  if (runtime !== 'in-process') return
+  const missing = CAPABILITIES.filter((item) => !capabilities.includes(item))
+  if (missing.length > 0) {
+    throw new HostError(
+      'runtime-not-supported',
+      `runtime in-process runs with the host's full reach; declare every capability (missing: ${missing.join(', ')}) or use isolated`,
+    )
   }
-  throw new HostError('runtime-not-supported', 'runtime must be in-process')
+}
+
+function isolationOf(runtime: Runtime, capabilities: readonly string[]): Isolation {
+  if (runtime === 'in-process') return { enforced: [], notEnforced: [...CAPABILITIES] }
+  return {
+    enforced: ENFORCED_CAPABILITIES.filter((item) => !capabilities.includes(item)),
+    notEnforced: CAPABILITIES.filter((item) => !ENFORCED_CAPABILITIES.includes(item)),
+  }
 }
 
 function readCapabilities(oharness: Record<string, unknown> | undefined): { capabilities: string[]; capabilitiesDeclared: boolean } {
   const declared = oharness?.capabilities
-  if (declared === undefined) {
-    return { capabilities: [...CAPABILITIES], capabilitiesDeclared: false }
-  }
+  // Nothing declared grants nothing: an isolated plugin gets no capability by default.
+  if (declared === undefined) return { capabilities: [], capabilitiesDeclared: false }
   if (!Array.isArray(declared) || declared.some((item) => typeof item !== 'string')) {
     throw new HostError('bad-request', 'oharness.capabilities must be an array of strings')
   }
@@ -315,6 +349,7 @@ export async function inspectPackage(packageDir: string, roots: readonly string[
   }
   const { runtime, runtimeDefaulted } = readRuntime(isRecord(oharness) ? oharness : undefined)
   const { capabilities, capabilitiesDeclared } = readCapabilities(isRecord(oharness) ? oharness : undefined)
+  checkInProcess(runtime, capabilities)
   const scripts = readScripts(manifest.scripts)
   const dsh = readDsh(manifest.dsh)
   const entry = await resolveEntry(root, manifest.main)
@@ -328,6 +363,7 @@ export async function inspectPackage(packageDir: string, roots: readonly string[
     entry,
     runtime,
     runtimeDefaulted,
+    isolation: isolationOf(runtime, capabilities),
     capabilities,
     capabilitiesDeclared,
     scripts,

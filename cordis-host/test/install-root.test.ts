@@ -7,7 +7,7 @@ import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isConfinedSnapshot } from '../src/register-alias.ts'
 import { startHost, type RunningHost } from '../src/server.ts'
-import { asRecord, call, ourPluginDir, preview, tempPackage } from './client.ts'
+import { asRecord, call, IN_PROCESS, ourPluginDir, preview, tempPackage } from './client.ts'
 
 async function withRoot(roots: readonly string[], run: (host: RunningHost) => Promise<void>): Promise<void> {
   const host = await startHost({ pluginRoots: roots })
@@ -93,7 +93,7 @@ test('changing a file the entry imports also changes the digest', async () => {
 
 test('install runs a host-owned snapshot, not the folder the caller can still edit', async () => {
   const dir = await tempPackage({
-    'package.json': JSON.stringify({ name: 'snap', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'package.json': JSON.stringify({ name: 'snap', version: '1.0.0', oharness: IN_PROCESS }),
     'index.ts': 'const g = globalThis as { cordisSnapUrl?: string }\ng.cordisSnapUrl = import.meta.url\nexport const name = \'snap\'\nexport function apply() {}\n',
   })
   await withRoot([path.dirname(dir)], async (host) => {
@@ -110,7 +110,7 @@ test('install runs a host-owned snapshot, not the folder the caller can still ed
 
 test('closing the host stops confining its snapshot folders', async () => {
   const dir = await tempPackage({
-    'package.json': JSON.stringify({ name: 'snap-close', version: '1.0.0', oharness: { capabilities: ['files'] } }),
+    'package.json': JSON.stringify({ name: 'snap-close', version: '1.0.0', oharness: IN_PROCESS }),
     'index.ts': 'const g = globalThis as { cordisSnapCloseUrl?: string }\ng.cordisSnapCloseUrl = import.meta.url\nexport const name = \'snap-close\'\nexport function apply() {}\n',
   })
   let snapshotDir = ''

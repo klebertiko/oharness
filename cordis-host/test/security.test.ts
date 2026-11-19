@@ -4,7 +4,7 @@ import { access, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
 import { assertLoopbackBind } from '../src/server.ts'
-import { asRecord, call, httpGet, installConfirmed, packageRoot, preview, tempPackage, withHost } from './client.ts'
+import { asRecord, call, httpGet, IN_PROCESS, installConfirmed, packageRoot, preview, tempPackage, withHost } from './client.ts'
 
 test('bind helper rejects anything except 127.0.0.1', () => {
   assert.throws(() => assertLoopbackBind(null), /TCP port/)
@@ -21,7 +21,7 @@ test('the listener is loopback, the token is required, and the query string is n
     const body = asRecord(health.json)
     assert.equal(body.host, '127.0.0.1')
     assert.equal(body.port, host.port)
-    assert.equal(body.runtime, 'in-process')
+    assert.equal(body.runtime, 'isolated')
     assert.equal(body.pid, process.pid)
     assert.equal(JSON.stringify(body).includes(host.token), false)
     assert.equal((await call(host, '/v1/health', { token: null })).status, 401)
@@ -59,6 +59,7 @@ test('installation does not import the plugin until the human confirms the warni
         version: '1.0.0',
         type: 'module',
         main: './index.ts',
+        oharness: IN_PROCESS,
       }),
       'index.ts': [
         'const mark = globalThis as { oharnessProofPluginEvaluated?: number }',
@@ -75,7 +76,8 @@ test('installation does not import the plugin until the human confirms the warni
     assert.match(String(warning.en), /credentials/)
     assert.match(String(warning.en), /agent's actions/)
     assert.match(String(warning.en), /plugin's own code/)
-    assert.match(String(warning.en), /not a sandbox/)
+    assert.match(String(warning.en), /own process/)
+    assert.match(String(warning.en), /network/)
     assert.match(String(warning['pt-BR']), /arquivos/)
     assert.match(String(warning['pt-BR']), /credenciais/)
     assert.match(String(warning['pt-BR']), /ações do agente/)
@@ -99,7 +101,7 @@ test('installation does not import the plugin until the human confirms the warni
   })
 })
 
-test('isolated runtime is refused and build approval cannot load a plugin', async () => {
+test('an unknown runtime is refused and build approval cannot load a plugin', async () => {
   await withHost(async (host) => {
     const marked = globalThis as typeof globalThis & { oharnessIsolatedEvaluated?: number }
     delete marked.oharnessIsolatedEvaluated
@@ -109,7 +111,7 @@ test('isolated runtime is refused and build approval cannot load a plugin', asyn
         version: '1.0.0',
         type: 'module',
         main: './index.ts',
-        oharness: { runtime: 'isolated' },
+        oharness: { runtime: 'sandboxed' },
       }),
       'index.ts': [
         'const mark = globalThis as { oharnessIsolatedEvaluated?: number }',
@@ -210,7 +212,7 @@ test('the process entry prints one loopback line and does not repeat the token o
   try {
     const printed = asRecord(JSON.parse(line) as unknown)
     assert.equal(printed.host, '127.0.0.1')
-    assert.equal(printed.runtime, 'in-process')
+    assert.equal(printed.runtime, 'isolated')
     assert.equal(typeof printed.token, 'string')
     assert.equal(stderr.includes(String(printed.token)), false)
     const health = await fetch(`http://127.0.0.1:${String(printed.port)}/v1/health`, {
