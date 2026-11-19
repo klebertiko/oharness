@@ -123,18 +123,28 @@ test('on Windows, a host file named with other letter case is still refused', as
     t.skip('letter case only aliases a path on Windows')
     return
   }
-  const hostTestFile = fileURLToPath(new URL('./client.ts', import.meta.url))
-  const swapped = pathToFileURL(hostTestFile.replace(/[a-z]/giu, (c) => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()))).href
+  // A host module a plugin may import by its own spelling. Only the case of its folder changes, so
+  // the same file is refused only because the letter case differs from the allowed prefix.
+  const allowed = fileURLToPath(new URL('../src/errors.ts', import.meta.url))
+  const swapped = path.join(path.dirname(path.dirname(allowed)), 'SRC', 'errors.ts')
   for (const oharness of [IN_PROCESS, undefined]) {
-    const dir = await tempPackage({
-      'package.json': JSON.stringify({ name: 'case', version: '1.0.0', type: 'module', ...(oharness ? { oharness } : {}) }),
-      'index.ts': `import ${JSON.stringify(swapped)}\nexport function apply() {}\n`,
-    })
-    await withHost(async (host) => {
-      const seen = await preview(host, dir)
-      const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
-      assert.equal(install.status, 400, JSON.stringify(install.json))
-      assert.equal(asRecord(install.json).code, 'path-rejected')
-    })
+    for (const [target, refused] of [[allowed, false], [swapped, true]] as const) {
+      const dir = await tempPackage({
+        'package.json': JSON.stringify({ name: 'case', version: '1.0.0', type: 'module', ...(oharness ? { oharness } : {}) }),
+        'index.ts': `import ${JSON.stringify(pathToFileURL(target).href)}
+export function apply() {}
+`,
+      })
+      await withHost(async (host) => {
+        const seen = await preview(host, dir)
+        const install = await call(host, '/v1/plugins/install', { body: { packageDir: dir, confirmation: { accept: true, digest: seen.digest } } })
+        if (!refused) {
+          assert.equal(install.status, 200, `${target}: ${JSON.stringify(install.json)}`)
+          return
+        }
+        assert.equal(install.status, 400, JSON.stringify(install.json))
+        assert.equal(asRecord(install.json).code, 'path-rejected')
+      })
+    }
   }
 })
