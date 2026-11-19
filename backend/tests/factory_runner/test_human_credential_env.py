@@ -16,12 +16,11 @@ def test_tool_and_cli_environments_never_carry_the_human_credential(monkeypatch)
         assert HUMAN_ENV not in {key.upper() for key in env}
 
 
-def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_path):
-    """A canary in the environment must not reach the child processes the sidecar starts on its own (git in the policy, icacls for the token file)."""
+def test_the_git_child_never_inherits_the_credentials(monkeypatch, tmp_path):
+    """A canary in the environment must not reach the child process the sidecar starts on its own (git in the policy). The token file's ACL is set by an API call, with no child."""
     from types import SimpleNamespace
 
     from sandbox import permission
-    from security import sidecar_token
 
     monkeypatch.setenv(HUMAN_ENV, 'canary-human')
     monkeypatch.setenv('OH_SIDECAR_TOKEN', 'canary-sidecar')
@@ -34,10 +33,7 @@ def test_git_and_icacls_children_never_inherit_the_credentials(monkeypatch, tmp_
     monkeypatch.setattr(permission.subprocess, 'run', fake_run)
     monkeypatch.setattr(permission, '_GIT_EXE', 'git')
     permission._git_run(['--version'], str(tmp_path))
-    monkeypatch.setattr(sidecar_token.platform, 'system', lambda: 'Windows')
-    monkeypatch.setattr(sidecar_token.subprocess, 'run', fake_run)
-    sidecar_token.restrict_to_current_user(tmp_path)
-    assert len(seen) == 3 and all(env is not None for env in seen), 'every child (git, then icacls reset and grant) must get an explicit environment'
+    assert len(seen) == 1 and seen[0] is not None, 'the git child must get an explicit environment'
     for env in seen:
         assert 'canary-human' not in env.values() and 'canary-sidecar' not in env.values()
 

@@ -64,6 +64,7 @@ _WINNER_READ_DELAY_S = 0.02
 # An empty key/id file this old was left by a writer that died (older builds created
 # the name, then wrote). Nothing was ever encrypted under it, so it is safe to drop.
 _STALE_EMPTY_S = 30.0
+_STALE_TMP_S = 60.0
 _OWNER_RWX = stat.S_IRWXU
 _OWNER_RW = stat.S_IRUSR | stat.S_IWUSR
 
@@ -81,19 +82,31 @@ def _open_flags(*parts: int) -> int:
     return flags
 
 
-def _open_checked(path: Path, flags: int) -> int:
-    """Open a regular file and prove the descriptor is what the name still points at.
+_REPARSE_LINK_TAGS = (0xA000000C, 0xA0000003)  # IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POINT
 
-    ``O_NOFOLLOW`` covers POSIX at open. Windows has no such flag, so the opened
-    object must also be the very file ``lstat`` sees at that name: a link swapped
-    in after a ``_is_link`` check opens its target, whose identity then differs.
+
+def _is_link_stat(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or getattr(info, "st_reparse_tag", 0) in _REPARSE_LINK_TAGS
+
+
+def _open_checked(path: Path, flags: int) -> int:
+    """Open a regular file and refuse it if the name is a link.
+
+    ``O_NOFOLLOW`` covers POSIX at open. Windows has no such flag, so ``lstat`` must also not
+    report a symlink or reparse point at the name: a link swapped in after a ``_is_link`` check
+    opens its target, and ``lstat`` still sees the link. A name that now points at a *different
+    regular file* is not refused: ``put`` swaps the inode with ``os.replace``, and a reader that
+    opened the old one still holds a complete, consistent copy.
     """
     fd = os.open(path, flags)
     try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode):
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise OSError("the secret path is not a regular file")
-        if not os.path.samestat(info, os.lstat(path)):
+        try:
+            named = os.lstat(path)
+        except FileNotFoundError:
+            named = None  # replaced or removed since the open: the descriptor is still a regular file
+        if named is not None and _is_link_stat(named):
             raise OSError("refusing to follow a link in the secrets directory")
     except BaseException:
         os.close(fd)
@@ -205,6 +218,8 @@ def _restrict_file(path: Path) -> bool:
     """
     try:
         fd = _open_checked(path, _open_flags(os.O_RDONLY, getattr(os, "O_NONBLOCK", 0)))
+    except FileNotFoundError:
+        return True  # another process removed it first: nothing left to restrict
     except OSError:
         return False
     try:
@@ -222,10 +237,34 @@ def _restrict_file(path: Path) -> bool:
             os.close(fd)
 
 
-def _restrict_existing_files(root: Path) -> None:
-    """Tighten files already on disk before they are read or rewritten."""
+def _is_tmp_name(name: str) -> bool:
+    return name.startswith(".") and name.endswith(".tmp")
+
+
+def _sweep_stale_tmp(root: Path) -> None:
+    """Remove staged files a dead writer left. A staged key file holds the whole key.
+
+    One younger than ``_STALE_TMP_S`` may be a live writer's, mid-``put``: it is never touched.
+    """
+    now = time.time()
     for entry in root.iterdir():
-        if _is_link(entry) or not entry.is_file():
+        if not _is_tmp_name(entry.name) or _is_link(entry):
+            continue
+        try:
+            if entry.is_file() and now - entry.stat().st_mtime > _STALE_TMP_S:
+                entry.unlink()
+        except FileNotFoundError:
+            continue
+
+
+def _restrict_existing_files(root: Path) -> None:
+    """Tighten files already on disk before they are read or rewritten.
+
+    A staged ``.tmp`` is another process's put in flight (it is created owner-only): skipped.
+    """
+    _sweep_stale_tmp(root)
+    for entry in root.iterdir():
+        if _is_tmp_name(entry.name) or _is_link(entry) or not entry.is_file():
             continue
         if not _restrict_file(entry):
             raise OSError("could not restrict the secret file to the current user")
@@ -288,7 +327,6 @@ def _stage_private(path: Path, data: bytes) -> Path:
     except BaseException:
         if fd >= 0:
             os.close(fd)
-            fd = -1
         tmp.unlink(missing_ok=True)
         raise
     os.close(fd)
@@ -463,7 +501,7 @@ def _move_key_to_keychain(
 
     The store id is created exclusively: if another process wrote one first,
     adopt it. A keychain entry that already holds a *different* secret is
-    another process's; it is left alone and the key file stays, so neither
+    another process's: refuse with an error and change nothing, so neither
     side's ciphertext is made unreadable by an overwrite.
     """
     if store_id is None:
@@ -476,7 +514,11 @@ def _move_key_to_keychain(
     text = file_secret.decode("ascii")
     existing = _keychain_get(backend, store_id)
     if existing is not None and existing != text:
-        return
+        raise OSError(
+            "the vault has two different install secrets (one in the OS keychain, one in the key file), "
+            "usually from two processes opening a new vault at once; remove the key file or the keychain "
+            "entry (service oharness.file-store) to choose which to keep"
+        )
     if existing == text or _keychain_set(backend, store_id, file_secret):
         key_path.unlink(missing_ok=True)
 
@@ -495,6 +537,14 @@ def _keychain_forget(backend: KeyringBackend, store_id: str) -> None:
         backend.delete_password(FILE_STORE_KEYCHAIN_SERVICE, store_id)
 
 
+def _identity(path: Path) -> tuple[int, int, int] | None:
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    return (info.st_ino, info.st_mtime_ns, info.st_size)
+
+
 def _migrate_legacy(root: Path, fernet: Fernet) -> None:
     blobs = [
         entry
@@ -508,7 +558,11 @@ def _migrate_legacy(root: Path, fernet: Fernet) -> None:
         return
     legacy: Fernet | None = None
     for path in blobs:
-        data = _read_all(path)
+        seen = _identity(path)
+        try:
+            data = _read_all(path)
+        except FileNotFoundError:
+            continue
         try:
             fernet.decrypt(data)
             continue
@@ -520,7 +574,21 @@ def _migrate_legacy(root: Path, fernet: Fernet) -> None:
             plain = legacy.decrypt(data)
         except InvalidToken:
             continue
-        _write_private(path, fernet.encrypt(plain))
+        _replace_if_unchanged(path, fernet.encrypt(plain), seen)
+
+
+def _replace_if_unchanged(path: Path, data: bytes, seen: tuple[int, int, int] | None) -> None:
+    """Rewrite ``path`` unless it changed since ``seen``: a ``put`` that landed meanwhile wins.
+
+    Stage first, compare right before the swap, so the window is the gap between ``lstat`` and
+    ``os.replace``, not the whole read-decrypt-encrypt.
+    """
+    tmp = _stage_private(path, data)
+    try:
+        if _identity(path) == seen:
+            os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 class FileSecrets:

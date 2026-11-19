@@ -11,7 +11,6 @@ import stat
 import subprocess
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
@@ -371,45 +370,102 @@ def test_the_windows_vault_directory_must_not_be_a_link(tmp_path: Path, monkeypa
     assert list(vault.iterdir()) == []
 
 
-def _icacls_calls(monkeypatch: pytest.MonkeyPatch, target: Path) -> list[list[str]]:
-    calls: list[list[str]] = []
+def _windows_restrict(monkeypatch: pytest.MonkeyPatch, target: Path, result: object) -> list[tuple[Path, bool]]:
+    """Run restrict_to_current_user as on Windows with the DACL call replaced; no child process may start."""
+    calls: list[tuple[Path, bool]] = []
     monkeypatch.setattr(sidecar_token.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(sidecar_token.getpass, "getuser", lambda: "someone")
-    monkeypatch.delenv("USERNAME", raising=False)
 
-    def fake_run(argv: list[str], **kwargs: object) -> SimpleNamespace:
-        calls.append(list(argv))
-        return SimpleNamespace(returncode=0)
+    def no_child(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the ACL must not need a child process")
 
-    monkeypatch.setattr(sidecar_token.subprocess, "run", fake_run)
-    assert sidecar_token.restrict_to_current_user(target) is True
+    monkeypatch.setattr(subprocess, "run", no_child)
+
+    def fake(path: Path, is_dir: bool) -> bool:
+        calls.append((path, is_dir))
+        if isinstance(result, BaseException):
+            raise result
+        return bool(result)
+
+    monkeypatch.setattr(sidecar_token, "_set_protected_dacl", fake)
     return calls
 
 
 @pytest.mark.parametrize("as_directory", [True, False])
-def test_windows_restrict_resets_the_acl_so_foreign_explicit_aces_go(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, as_directory: bool
-) -> None:
-    """``/grant:r`` leaves other principals' explicit ACEs alone: reset first, then cut inheritance."""
+def test_windows_restrict_is_one_atomic_protected_dacl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, as_directory: bool) -> None:
+    """One call replaces the whole DACL (protected, only this user), so no step can be wider than the end state.
+
+    A reset-then-grant sequence hands back the parent's inherited ACL before the grant; if the grant then
+    failed, the folder would be left more open than it started.
+    """
     target = tmp_path / "t"
     if as_directory:
         target.mkdir()
     else:
         target.write_text("x")
-    calls = _icacls_calls(monkeypatch, target)
-    assert len(calls) >= 2
-    first, last = calls[0], calls[-1]
-    assert first[0] == "icacls" and "/reset" in first
-    assert "/inheritance:r" in last and any(arg.startswith("/grant:r") for arg in last)
-    assert all("/L" in call for call in calls)  # act on a link itself, never on its target
+    calls = _windows_restrict(monkeypatch, target, True)
+    assert sidecar_token.restrict_to_current_user(target) is True
+    assert calls == [(target, as_directory)]
 
 
-def test_windows_restrict_reports_a_failed_reset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("failure", [False, OSError("access denied")])
+def test_windows_restrict_reports_a_failed_dacl_and_changes_nothing_else(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: object
+) -> None:
     target = tmp_path / "t"
     target.write_text("x")
-    monkeypatch.setattr(sidecar_token.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(sidecar_token.subprocess, "run", lambda argv, **k: SimpleNamespace(returncode=5 if "/reset" in argv else 0))
+    calls = _windows_restrict(monkeypatch, target, failure)
     assert sidecar_token.restrict_to_current_user(target) is False
+    assert len(calls) == 1  # no second, wider or narrower, step to leave a half state
+
+
+def _token_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    monkeypatch.delenv(sidecar_token.TOKEN_ENV_VAR, raising=False)
+    path = tmp_path / "OHarness" / "sidecar.token"
+    path.parent.mkdir()
+    monkeypatch.setattr(sidecar_token, "_token_path", lambda: path)
+    return path
+
+
+def test_the_token_file_is_restricted_before_a_byte_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = _token_env(monkeypatch, tmp_path)
+    sizes: list[int] = []
+    real = sidecar_token.restrict_to_current_user
+
+    def spy(target: Path) -> bool:
+        sizes.append(target.stat().st_size)
+        return real(target)
+
+    monkeypatch.setattr(sidecar_token, "restrict_to_current_user", spy)
+    real_write = sidecar_token._write_all
+    seen_modes: list[int] = []
+
+    def write_spy(fd: int, data: bytes) -> None:
+        seen_modes.append(stat.S_IMODE(os.fstat(fd).st_mode))
+        real_write(fd, data)
+
+    monkeypatch.setattr(sidecar_token, "_write_all", write_spy)
+    old = os.umask(0)
+    try:
+        token = sidecar_token.get_or_create_token()
+    finally:
+        os.umask(old)
+    assert path.read_text(encoding="utf-8") == token
+    if os.name != "nt":
+        assert seen_modes == [0o600]
+        assert path.stat().st_mode & 0o777 == 0o600
+    else:
+        assert sizes and all(size == 0 for size in sizes)
+    assert sidecar_token.get_or_create_token() == token
+
+
+def test_a_token_that_cannot_be_restricted_is_not_left_on_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = _token_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(sidecar_token, "restrict_to_current_user", lambda target: False)
+    if os.name != "nt":
+        monkeypatch.setattr(sidecar_token.os, "fchmod", _boom_fchmod)
+    token = sidecar_token.get_or_create_token()
+    assert token
+    assert not path.exists()  # it lives in this process only: no unrestricted copy
 
 
 def test_a_linked_secret_file_is_not_written_through(tmp_path: Path) -> None:
@@ -548,12 +604,14 @@ def test_put_that_loses_a_create_race_replaces_through_a_staged_file(tmp_path: P
 def test_the_migration_branch_adopts_a_store_id_that_appeared_in_the_race(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A key file exists and a keychain is now available; another process just wrote .store-id.
 
-    The migration must adopt that id, not overwrite it, and must not replace the
-    secret the other process put in the keychain.
+    The migration adopts that id. The keychain already holds a different secret for it, so two
+    secrets exist for one vault: refuse with a clear error and change nothing, instead of letting
+    one side's ciphertext become unreadable in silence.
     """
     vault = tmp_path / "vault"
     FileSecrets(vault, use_keychain=False).put(SECRET_REF, SECRET_VALUE)
     file_key = (vault / INSTALL_KEY_NAME).read_bytes()
+    blob = next(vault.glob("*.bin")).read_bytes()
     keyring = _FakeKeyring()
     winner_id = "winner-store-id"
     other_secret = Fernet.generate_key().decode("ascii")
@@ -564,12 +622,14 @@ def test_the_migration_branch_adopts_a_store_id_that_appeared_in_the_race(tmp_pa
         return "loser-store-id"
 
     monkeypatch.setattr(file_store.secrets, "token_urlsafe", racing_token)
-    store = FileSecrets(vault, keyring_backend=keyring)
+    with pytest.raises(OSError, match="two different install secrets"):
+        FileSecrets(vault, keyring_backend=keyring)
     monkeypatch.undo()
     assert (vault / STORE_ID_NAME).read_text(encoding="ascii") == winner_id
     assert keyring.get_password(FILE_STORE_KEYCHAIN_SERVICE, winner_id) == other_secret  # not clobbered
-    assert (vault / INSTALL_KEY_NAME).read_bytes() == file_key  # not removed: nothing safe to migrate to
-    assert store.get(SECRET_REF) == SECRET_VALUE  # still readable with the file key
+    assert (vault / INSTALL_KEY_NAME).read_bytes() == file_key  # not removed
+    assert next(vault.glob("*.bin")).read_bytes() == blob  # no ciphertext touched
+    assert FileSecrets(vault, use_keychain=False).get(SECRET_REF) == SECRET_VALUE
 
 
 def test_the_migration_moves_the_key_when_the_existing_id_holds_the_same_secret(tmp_path: Path) -> None:
@@ -611,6 +671,153 @@ def test_a_link_swapped_in_after_the_link_check_is_not_read(tmp_path: Path, monk
     monkeypatch.setattr(file_store, "_is_link", lambda path: False)
     with pytest.raises(OSError):
         store.get(SECRET_REF)
+
+
+def test_a_read_that_races_a_replace_is_not_mistaken_for_a_link(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """put swaps the inode with os.replace; a get that opened the old one must still read it.
+
+    The name then points at a different regular file, which is not a link. Only a symlink or
+    reparse point at the name is refused.
+    """
+    vault = tmp_path / "vault"
+    store = FileSecrets(vault, use_keychain=False)
+    store.put(SECRET_REF, SECRET_VALUE)
+    other = tmp_path / "replacement.bin"
+    other.write_bytes(b"another inode")
+    real_lstat = os.lstat
+    blob = vault / _filename_for_ref(SECRET_REF)
+
+    def swapped(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        return real_lstat(other if Path(str(path)) == blob else path, *args, **kwargs)
+
+    monkeypatch.setattr(file_store.os, "lstat", swapped)
+    assert store.get(SECRET_REF) == SECRET_VALUE
+
+
+def test_a_name_that_lstat_reports_as_a_symlink_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault"
+    store = FileSecrets(vault, use_keychain=False)
+    store.put(SECRET_REF, SECRET_VALUE)
+    blob = vault / _filename_for_ref(SECRET_REF)
+    real_lstat = os.lstat
+
+    def as_link(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        info = real_lstat(path, *args, **kwargs)
+        if Path(str(path)) != blob:
+            return info
+        fields = list(info)
+        fields[0] = stat.S_IFLNK | 0o777
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(file_store.os, "lstat", as_link)
+    with pytest.raises(OSError, match="link"):
+        store.get(SECRET_REF)
+
+
+def test_opening_skips_an_in_flight_tmp_and_a_file_that_vanishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Another process mid-put must not make this open fail."""
+    vault = tmp_path / "vault"
+    FileSecrets(vault, use_keychain=False).put(SECRET_REF, SECRET_VALUE)
+    (vault / ".pending.abc.tmp").write_bytes(b"in flight")
+    gone = vault / _filename_for_ref("oharness/gone")
+    gone.write_bytes(b"x")
+    real_open = file_store._open_checked
+
+    def vanishing(path: Path, flags: int) -> int:
+        if Path(path) == gone:
+            raise FileNotFoundError(str(path))
+        return real_open(path, flags)
+
+    monkeypatch.setattr(file_store, "_open_checked", vanishing)
+    assert FileSecrets(vault, use_keychain=False).get(SECRET_REF) == SECRET_VALUE
+    assert (vault / ".pending.abc.tmp").read_bytes() == b"in flight"
+
+
+def test_an_old_orphan_tmp_is_swept_and_a_fresh_one_is_kept(tmp_path: Path) -> None:
+    """A staged key file holds the whole key: one a dead writer left must not linger."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    stale = vault / ".install-key.dead.tmp"
+    fresh = vault / ".install-key.live.tmp"
+    for path in (stale, fresh):
+        path.write_bytes(Fernet.generate_key())
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+    FileSecrets(vault, use_keychain=False)
+    assert not stale.exists()
+    assert fresh.exists()
+
+
+def test_put_replaces_the_inode_and_never_writes_through_the_old_one(tmp_path: Path) -> None:
+    """A hard link to the blob keeps the old ciphertext: the new one went to a new file."""
+    vault = tmp_path / "vault"
+    store = FileSecrets(vault, use_keychain=False)
+    store.put(SECRET_REF, "first")
+    blob = vault / _filename_for_ref(SECRET_REF)
+    alias = tmp_path / "alias.bin"
+    os.link(blob, alias)
+    before = alias.read_bytes()
+    store.put(SECRET_REF, "second")
+    assert alias.read_bytes() == before
+    assert store.get(SECRET_REF) == "second"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="FIFOs and fchmod: POSIX only")
+def test_existing_files_are_restricted_through_the_descriptor_not_the_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    blob = vault / _filename_for_ref(SECRET_REF)
+    blob.write_bytes(b"not-a-token")
+    blob.chmod(0o644)
+
+    def no_path_chmod(*args: object, **kwargs: object) -> None:
+        raise AssertionError("chmod by path re-resolves the name")
+
+    monkeypatch.setattr(file_store.os, "chmod", no_path_chmod)
+    FileSecrets(vault, use_keychain=False)
+    assert blob.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(os.name == "nt", reason="FIFOs: POSIX only")
+def test_a_fifo_in_place_of_the_key_file_fails_instead_of_hanging(tmp_path: Path) -> None:
+    import threading
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    os.mkfifo(vault / INSTALL_KEY_NAME)
+    outcome: list[BaseException | None] = []
+
+    def attempt() -> None:
+        try:
+            FileSecrets(vault, use_keychain=False)
+            outcome.append(None)
+        except OSError as exc:
+            outcome.append(exc)
+
+    worker = threading.Thread(target=attempt, daemon=True)
+    worker.start()
+    worker.join(5)
+    assert not worker.is_alive(), "opening a FIFO blocked the vault"
+    assert isinstance(outcome[0], OSError)
+
+
+def test_migration_does_not_overwrite_a_put_made_in_the_meantime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    legacy = _path_derived_fernet(vault)
+    blob = vault / _filename_for_ref(SECRET_REF)
+    blob.write_bytes(legacy.encrypt(SECRET_VALUE.encode()))
+    real = file_store._legacy_fernet_for_root
+
+    class Racing:
+        def decrypt(self, data: bytes) -> bytes:
+            plain = real(vault).decrypt(data)
+            blob.write_bytes(b"a newer put from another process")  # lands after the read, before the rewrite
+            return plain
+
+    monkeypatch.setattr(file_store, "_legacy_fernet_for_root", lambda root: Racing())
+    FileSecrets(vault, use_keychain=False)
+    assert blob.read_bytes() == b"a newer put from another process"
 
 
 class _FakeKeyring:
