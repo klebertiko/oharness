@@ -445,3 +445,33 @@ def test_a_built_in_ollama_id_needs_its_own_residence(client: TestClient, reserv
 @pytest.mark.parametrize("reserved, residence", [("ollama-local", "local"), ("ollama-cloud", "cloud")])
 def test_a_built_in_ollama_id_with_its_own_residence_still_creates(client: TestClient, reserved: str, residence: str) -> None:
     assert _create(client, id=reserved, provider="ollama", endpoint="", residence=residence, defaultModel="").status_code == 201
+
+
+# ── #518 review (SEC): a built-in connection's residence cannot be edited ────
+
+@pytest.mark.parametrize("reserved, provider, own, other", [
+    ("ollama-local", "ollama", "local", "cloud"),
+    ("ollama-cloud", "ollama", "cloud", "local"),
+    ("openai", "openai", "cloud", "local"),
+])
+def test_put_cannot_change_the_residence_of_a_built_in_connection(client: TestClient, reserved: str, provider: str, own: str, other: str) -> None:
+    assert _create(client, id=reserved, provider=provider, endpoint="", residence=own, defaultModel="").status_code == 201
+    r = client.put(f"/providers/connections/{reserved}", json={"residence": other})
+    assert r.status_code == 400
+    assert client.app.state.provider_connections[reserved]["residence"] == own
+    # Its own residence, restated, is harmless.
+    assert client.put(f"/providers/connections/{reserved}", json={"residence": own}).status_code == 200
+
+
+def test_a_custom_connection_can_still_change_residence(client: TestClient) -> None:
+    assert _create(client).status_code == 201
+    assert client.put("/providers/connections/my-vllm", json={"residence": "local"}).status_code == 200
+
+
+def test_built_in_residence_comes_from_the_catalogue() -> None:
+    from adapters.catalog import builtin_residence
+
+    assert builtin_residence("ollama-local") == "local"
+    assert builtin_residence("ollama-cloud") == "cloud"
+    assert builtin_residence("openai") == "cloud"
+    assert builtin_residence("my-vllm") is None

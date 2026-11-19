@@ -10,6 +10,7 @@ afterEach(() => useLocaleStore.setState({ locale: "en" }));
 it("says the offline credential state in English", () => {
   expect(credentialDetail(conn("openrouter"))).toBe("Not connected. Add a key from openrouter.ai, Keys.");
   expect(credentialDetail(conn("ollama"))).toContain("Not connected.");
+  expect(credentialDetail(conn("anthropic"))).toBe("Not connected. Run `claude login` (or open Claude Code once and sign in).");
 });
 
 it("says the offline credential state in Portuguese, with where-to-get from the catalogue of messages", () => {
