@@ -9,6 +9,7 @@ with no backend).
 from __future__ import annotations
 
 from typing import Literal, TypedDict
+import unicodedata
 from urllib.parse import urlsplit
 
 ProviderId = Literal[
@@ -237,6 +238,13 @@ PROVIDERS["anthropic-gateway"] = {  # type: ignore[index]
 }
 
 
+# The ids the app ships with: every catalogue provider plus the two Ollama rows
+# (one provider, two residences). A connection a person creates never takes one:
+# hydrate merges sidecar rows onto the frontend seed by id, so a custom row named
+# `anthropic` would wear the subscription's spec (I13). Derived, never retyped.
+RESERVED_CONNECTION_IDS: frozenset[str] = frozenset({*PROVIDERS, "ollama-local", "ollama-cloud"})
+
+
 def is_custom_provider(provider_id: str) -> bool:
     return provider_id in CUSTOM_PROVIDER_IDS
 
@@ -270,8 +278,12 @@ def validate_custom_endpoint(endpoint: str) -> str | None:
 
 
 def has_control_characters(value: str) -> bool:
-    """C0 controls and DEL: nothing a person means to type into a field."""
-    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value)
+    """Control (Cc: C0, DEL, C1) and format (Cf: zero-width, bidi, BOM) characters.
+
+    Nothing a person means to type into a field, and the invisible ones are how a
+    label or model id is made to read as something else. Letters, accents, and
+    `/ : .` are other categories and pass."""
+    return any(unicodedata.category(ch) in ("Cc", "Cf") for ch in value)
 
 
 # Same bound the OpenAI-compatible probe applies to a listed model id.

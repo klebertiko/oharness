@@ -429,6 +429,25 @@ describe("activity and spend", () => {
   });
 });
 
+describe("catalogue copy comes from the i18n catalogue (#511)", () => {
+  const custom = () =>
+    conn({ id: "my-vllm", provider: "openai-compatible", label: "My vLLM", residence: "cloud", endpoint: "https://llm.example.test/v1", health: "setup", enabled: false, models: [] });
+
+  it("shows where to get the key in the chosen language, not the catalogue's English", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    show([custom()]);
+    expect(screen.getByText(/Pegue uma em As configurações do próprio servidor/)).toBeTruthy();
+    expect(screen.queryByText(/The server's own settings/)).toBeNull();
+  });
+
+  it("names the generic protocols in the chosen language", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    show([custom()]);
+    expect(screen.queryByText(/OpenAI-compatible endpoint/)).toBeNull();
+    expect(screen.getAllByText(/Endpoint compatível com a OpenAI/).length).toBeGreaterThan(0);
+  });
+});
+
 describe("language and accessibility", () => {
   it("speaks Portuguese end to end, keeping commands and ids as they are", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
