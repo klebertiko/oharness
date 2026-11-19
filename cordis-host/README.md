@@ -1,6 +1,6 @@
 # Host Node de Cordis plugins
 
-Processo Node separado do sidecar FastAPI. Escuta só em `127.0.0.1`, com porta escolhida pelo sistema e um token novo a cada arranque. O plugin roda no mesmo processo (`runtime: in-process`).
+Processo Node separado do sidecar FastAPI. Escuta só em `127.0.0.1`, com porta escolhida pelo sistema e um token novo a cada arranque. Cada plugin roda num processo Node próprio, com o Permission Model do Node (`runtime: isolated`, o padrão).
 
 ```bash
 cd cordis-host
@@ -15,13 +15,24 @@ npm start
 
 `POST /v1/plugins/preview` lê o pacote e devolve o aviso, sem importar o código. `POST /v1/plugins/install` só importa depois de `confirmation.accept: true` e do `digest` dessa prévia.
 
-O aviso, em inglês e pt-BR, diz que um plugin de terceiros pode alcançar arquivos, rede, processos e credenciais, e que sandbox e aprovação protegem as ações do agente, não o código do plugin. `oharness.capabilities` é uma declaração confirmada pela pessoa. Não é um sandbox.
+O aviso, em inglês e pt-BR, diz o que o processo do plugin não alcança sem capacidade e o que cada capacidade concede. `oharness.capabilities` é a lista que a pessoa confirma, e confirmar concede. A omissão não concede nada.
 
-Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existirem, a confirmação leva `scripts: "do-not-run"`. `approvedBuilds` e `allowBuilds` são recusados. `oharness.runtime: "isolated"` é recusado.
+Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existirem, a confirmação leva `scripts: "do-not-run"`. `approvedBuilds` e `allowBuilds` são recusados.
 
 O pacote tem de estar dentro da pasta de plugins: `OH_CORDIS_PLUGINS_DIR` (absoluta) ou `~/.oharness/plugins`. O digest cobre o arquivo de entrada e o hash de todos os arquivos do pacote, então editar o pacote depois da prévia exige uma prévia nova. O token é da UI e do sidecar, nunca do agente.
 
-O plugin é código confiável. Ele roda no processo do host com os direitos do usuário. O hook de resolve recusa os imports que saem do pacote e evita que um arquivo não hasheado carregue por engano, mas não é sandbox: o plugin ainda alcança `createRequire`, `fs`, `child_process` e `process`. O isolamento real está pendente na #508.
+## Isolamento
+
+Com `runtime: isolated`, sem capacidade, o processo do plugin só lê o snapshot do pacote e os módulos fixados do host. Ele não escreve em disco, não abre processo e não recebe o ambiente do host. Cada capacidade tira um limite:
+
+| Capacidade | Concede |
+|---|---|
+| `files` | ler e escrever qualquer arquivo que o usuário alcança |
+| `processes` | abrir processos, que rodam fora desses limites |
+| `credentials` | o ambiente do host |
+| `network` | nada a mais: no Node 22 e no 24 a rede não é limitada |
+
+Tools, comandos, eventos e serviços atravessam por IPC, e o host valida cada mensagem do filho. `runtime: in-process` roda no processo do host e só é aceito com as quatro capacidades declaradas. Os limites e as fontes estão no ADR 0071, item 10. Os testes de cada recusa estão em `test/isolation.test.ts`.
 
 O processo pai segura o stdin do host. Quando ele fecha, o host sai. Por isso `npm start` num terminal funciona, e `npm start < /dev/null` sai logo.
 
@@ -37,10 +48,10 @@ O Node 22 precisa de `--experimental-transform-types` para carregar essas fontes
 
 ## O que as provas mostram
 
-1. Um plugin nosso só é avaliado depois da confirmação. Ferramenta, comando, evento e serviço rodam neste processo (o pid coincide).
-2. O serviço `DirectoryPicker` do DSH, cujo único import de biblioteca é Cordis, registra `directoryPicker` e a instância viva estende a classe vendorizada.
-3. O `tool-todo` do DSH registra `todo_write` no serviço `tools` deste host. Sem sessão de agente, o corpo do plugin recusa a chamada. Com um objeto de sessão mínimo, ele grava `todo/write` e devolve as contagens. A projeção `todos` fica só registrada: `apply` não é chamado.
+1. Um plugin nosso só é avaliado depois da confirmação. Ferramenta, comando, evento e serviço rodam no processo isolado dele (o pid é outro) e atravessam por IPC.
+2. O serviço `DirectoryPicker` do DSH, carregado `in-process`, cujo único import de biblioteca é Cordis, registra `directoryPicker` e a instância viva estende a classe vendorizada.
+3. O `tool-todo` do DSH, isolado, registra `todo_write` no serviço `tools`. Sem sessão de agente, o corpo do plugin recusa a chamada. Com um objeto de sessão mínimo, cujo `append` atravessa o IPC, ele grava `todo/write` e devolve as contagens. A projeção `todos` fica só registrada: `apply` não é chamado.
 
-O que não fecha, de propósito: o `defineTool` daqui não valida o schema (um campo extra passa, e o teste mostra isso); não há pipeline, prompt de sistema nem guarda do DSH; não há log de sessão; patches de bundle são ignorados; não há runtime isolado.
+O que não fecha, de propósito: o `defineTool` daqui não valida o schema (um campo extra passa, e o teste mostra isso); não há pipeline, prompt de sistema nem guarda do DSH; não há log de sessão; patches de bundle são ignorados; a rede não é limitada no runtime isolado.
 
 A decisão está no ADR 0071.
