@@ -92,4 +92,10 @@ describe("nextStep - detected CLI state, before any run (R-PRV-01)", () => {
   it("a probe that came back live outranks an older detection", () => {
     expect(nextStep(cli({ cliState: "not-installed", health: "live", enabled: true }))).toBeNull();
   });
+
+  it("names a generic protocol in the chosen language when it asks for a key (#511)", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    const step = nextStep(conn({ provider: "openai-compatible", health: "setup", enabled: false, secret: null }));
+    expect(step?.label).toBe("Colar a chave Endpoint compatível com a OpenAI");
+  });
 });

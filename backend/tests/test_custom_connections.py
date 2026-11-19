@@ -389,7 +389,7 @@ def test_ordinary_unicode_in_a_label_and_a_model_still_passes(client: TestClient
     assert _create(client, label="Servidor da ação/β: v1.0", defaultModel="org/modelo:7b.q4").status_code == 201
 
 
-# ── #511: the reserved ids come from the catalogue, not a second list ────────
+# ── #511 (review): the reserved ids come from the catalogue, not a second list ────────
 
 def test_reserved_connection_ids_derive_from_the_catalogue() -> None:
     from adapters.catalog import PROVIDERS, RESERVED_CONNECTION_IDS
@@ -404,3 +404,32 @@ def test_router_uses_the_catalogue_reserved_ids() -> None:
     from routers import providers
 
     assert providers.RESERVED_CONNECTION_IDS is catalog.RESERVED_CONNECTION_IDS
+
+
+# ── #515 review (SEC): label must show something, key has no inner space ─────
+
+@pytest.mark.parametrize("label", ["", "   ", "ㅤ", "ᅟᅠ", "⠀", "́", "  ", " "])
+def test_label_with_nothing_visible_is_refused(client: TestClient, label: str) -> None:
+    assert _create(client, label=label).status_code in (400, 422)
+
+
+def test_label_is_stripped_and_keeps_letters_or_digits(client: TestClient) -> None:
+    r = _create(client, label="  Meu servidor 2  ")
+    assert r.status_code == 201
+    assert client.app.state.provider_connections["my-vllm"]["label"] == "Meu servidor 2"
+
+
+@pytest.mark.parametrize("key", ["sk-abc def", "sk-abc def", "sk-abc def"])
+def test_secret_with_an_inner_space_is_refused(client: TestClient, key: str) -> None:
+    assert _create(client).status_code == 201
+    assert client.post("/providers/my-vllm/secret", json={"key": key}).status_code == 400
+    assert client.app.state.secrets_store.get("oharness/my-vllm") is None
+
+
+@pytest.mark.parametrize("reserved, provider", [
+    ("anthropic", "openrouter"), ("openai", "anthropic"), ("ollama-cloud", "openrouter"), ("cursor", "ollama"),
+])
+def test_a_built_in_id_is_refused_for_a_provider_that_is_not_its_own(client: TestClient, provider: str, reserved: str) -> None:
+    r = _create(client, id=reserved, provider=provider, endpoint="")
+    assert r.status_code == 400
+    assert "built-in" in r.text

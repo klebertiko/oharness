@@ -10,7 +10,7 @@ test("bind placeholder does not mention Wallet", () => {
   expect(PROVIDERS_BIND_NONE).toContain("Providers");
 });
 
-test("every catalogue provider has its summary, caveat, where and vendor text in both languages", () => {
+test("every catalogue provider has its summary, caveat and where text, and the generic ones their vendor name in both languages", () => {
   const specs = [...Object.values(PROVIDERS), OLLAMA_CLOUD];
   for (const spec of specs) {
     const key = spec.id === "ollama" && spec.catalogue === "hosted" ? "ollamaCloud" : spec.id;
@@ -20,5 +20,10 @@ test("every catalogue provider has its summary, caveat, where and vendor text in
       expect((en as Record<string, string>)[name], `en ${name}`).toBeTruthy();
       expect((ptBR as Record<string, string>)[name], `pt-BR ${name}`).toBeTruthy();
     }
+  }
+  for (const id of ["openaiCompatible", "anthropicGateway"]) {
+    const name = `provider.${id}.vendor` as keyof typeof en;
+    expect(en[name], `en ${name}`).toBeTruthy();
+    expect(ptBR[name], `pt-BR ${name}`).toBeTruthy();
   }
 });

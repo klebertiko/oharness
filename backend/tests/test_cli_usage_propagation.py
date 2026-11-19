@@ -217,3 +217,9 @@ def test_claude_probe_of_non_object_status_is_a_fault_not_a_crash():
     adapter = ClaudeCliAdapter(runner=_runner("[]"))
     result = asyncio.run(adapter.probe(AdapterConfig(adapter="x", model="", extra={})))
     assert result.ok is False and result.code == "error"
+
+
+def test_cursor_probe_of_non_object_status_is_a_fault_not_a_crash():
+    adapter = CursorCliAdapter(runner=_runner("[]"))
+    result = asyncio.run(adapter.probe(AdapterConfig(adapter="x", model="", extra={})))
+    assert result.ok is False and result.code == "error"
