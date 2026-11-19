@@ -7,6 +7,7 @@ once, stores it, and returns only ``{secretRef}``.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import AdapterConfig, get_adapter
 from adapters.catalog import (
-    CUSTOM_PROVIDER_IDS,
     endpoint_for_connection,
     endpoint_origin,
     get_provider,
+    RESERVED_CONNECTION_IDS,
     has_control_characters,
     is_custom_provider,
     list_catalog,
@@ -40,11 +41,21 @@ Residence = Literal["local", "cloud"]
 
 
 MAX_LABEL_LEN = 80
+# Category Lo but blank on screen (Hangul fillers).
+_INVISIBLE_LETTERS = frozenset("ㅤᅟᅠﾠ")
 
 
 def _plain_label(value: str | None) -> str | None:
-    if value is not None and has_control_characters(value):
+    """A name a person can read: no control/format characters, trimmed, and at
+    least one letter or digit (so an all-invisible or all-blank name is refused).
+    ZWJ/ZWNJ are Cf, so they are refused too: a deliberately conservative call."""
+    if value is None:
+        return value
+    if has_control_characters(value):
         raise ValueError("The name cannot contain control characters.")
+    value = value.strip()
+    if not any(unicodedata.category(ch)[0] in ("L", "N") and ch not in _INVISIBLE_LETTERS for ch in value):
+        raise ValueError("The name needs at least one letter or digit.")
     return value
 
 
@@ -131,13 +142,6 @@ def _ensure_endpoint_allowed(provider: str, endpoint: str | None, *unchanged: st
         raise HTTPException(400, "This provider's endpoint is fixed and cannot be changed.")
 
 
-# The ids the app ships with (frontend seed rows + base providers). A connection
-# a person creates never takes one: hydrate merges sidecar rows onto the seed by
-# id, so a custom row named `anthropic` would wear the subscription's spec (I13).
-RESERVED_CONNECTION_IDS = frozenset(
-    {"anthropic", "cursor", "openai", "ollama", "ollama-local", "ollama-cloud", "openrouter",
-     *CUSTOM_PROVIDER_IDS}
-)
 # The id is also the vault reference (`oharness/{id}`), so keep it a plain slug.
 _CUSTOM_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
@@ -206,6 +210,11 @@ async def create_connection(
 ):
     if body.id in connections:
         raise HTTPException(409, f"Connection '{body.id}' already exists")
+    # A built-in id is only for its own provider (the frontend seeds POST exactly
+    # those pairs); any other pairing would wear that row's spec after hydrate.
+    seed_provider = "ollama" if body.id in ("ollama-local", "ollama-cloud") else body.id
+    if body.id in RESERVED_CONNECTION_IDS and body.provider != seed_provider:
+        raise HTTPException(400, "That id belongs to a built-in connection. Choose another id.")
     if is_custom_provider(body.provider):
         _ensure_custom_connection_allowed(body.id, body.endpoint)
     spec = get_provider(body.provider)
@@ -353,9 +362,9 @@ async def put_secret(
     value = body.key.strip()
     if not value:
         raise HTTPException(400, "empty credential")
-    if has_control_characters(value):
+    if has_control_characters(value) or any(ch.isspace() for ch in value):
         # Fixed text: the typed key is never echoed.
-        raise HTTPException(400, "The key cannot contain control characters.")
+        raise HTTPException(400, "The key cannot contain spaces or control characters.")
     ref = f"oharness/{connection_id}"
     store.put(ref, value)
     row["secretRef"] = ref

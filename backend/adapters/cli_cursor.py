@@ -246,7 +246,9 @@ class CursorCliAdapter(AgentAdapter):
 
         try:
             status = json.loads(result.stdout)
-        except json.JSONDecodeError:
+            if not isinstance(status, dict):
+                raise ValueError("not an object")
+        except (json.JSONDecodeError, ValueError):
             return ProbeResult(ok=False, health="fault", code="error", detail="cursor-agent status returned unreadable output.")
 
         if not status.get("isAuthenticated"):
@@ -277,6 +279,11 @@ class CursorCliAdapter(AgentAdapter):
 def _parse_result(stdout: str, *, model: str = "") -> AdapterResult:
     """
     Extract completion text from cursor-agent's ``--output-format json``.
+
+    Re-checked 2026-11-19 (#512): still not observed — the local CLI was not
+    signed in, so no successful run was available. Usage and model are therefore
+    read only when present and well-formed; anything else is ignored and the
+    step falls back to an estimate and the requested model.
 
     The exact success shape was not observed live in this review — the
     verifying account was over its Cursor usage quota (a real, subscription
