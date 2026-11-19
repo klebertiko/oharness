@@ -82,7 +82,7 @@ def rename_replace(src: Path, dst: Path) -> None:
     kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
     fd = open_file(src, access=_DELETE, disposition=OPEN_EXISTING, binary_flags=os.O_RDONLY)
     try:
-        target = _NT_PREFIX + str(dst.resolve(strict=False))  # an NT path: no RootDirectory is given
+        target = _NT_PREFIX + os.path.abspath(dst)  # never resolve(): that would follow a link at the destination  # an NT path: no RootDirectory is given
         name = ctypes.create_unicode_buffer(target)
         name_bytes = len(target) * 2
         header = _RenameInfoEx.FileNameLength.offset + 4  # FileName follows the length; sizeof() adds tail padding

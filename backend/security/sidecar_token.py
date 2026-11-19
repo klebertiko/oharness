@@ -43,6 +43,7 @@ TOKEN_HEADER = "authorization"
 TOKEN_ENV_VAR = "OH_SIDECAR_TOKEN"
 _WINNER_READ_ATTEMPTS = 50
 _WINNER_READ_DELAY_S = 0.02
+_STALE_EMPTY_S = 30.0
 
 
 def _token_dir() -> Path:
@@ -262,10 +263,16 @@ def get_or_create_token() -> str:
 
     path = _token_path()
     if path.is_file():
-        existing = path.read_text(encoding="utf-8").strip()
+        existing = _read_winner_token(path)  # an empty file may be a live writer's: wait, never delete it
         if existing:
             return existing
-        path.unlink(missing_ok=True)  # an empty leftover: nothing was ever stored in it
+        try:
+            stale = time.time() - path.stat().st_mtime > _STALE_EMPTY_S
+        except OSError:
+            stale = False
+        if not stale:
+            return secrets.token_urlsafe(32)  # this run only; the other writer's file is left alone
+        path.unlink(missing_ok=True)  # empty and old: its writer died, nothing was ever stored in it
 
     token = secrets.token_urlsafe(32)
     return _persist_token(path, token) or token

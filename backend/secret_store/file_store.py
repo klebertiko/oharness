@@ -121,7 +121,8 @@ def _open_checked(path: Path, flags: int, *, write_dac: bool = False) -> int:
     """
     fd = _open_fd(path, flags, write_dac=write_dac)
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
             raise OSError("the secret path is not a regular file")
         try:
             named = os.lstat(path)
@@ -129,6 +130,8 @@ def _open_checked(path: Path, flags: int, *, write_dac: bool = False) -> int:
             named = None  # replaced or removed since the open: the descriptor is still a regular file
         if named is not None and _is_link_stat(named):
             raise OSError("refusing to follow a link in the secrets directory")
+        if write_dac and named is not None and (named.st_ino, named.st_dev) != (opened.st_ino, opened.st_dev):
+            raise OSError("the secret file changed while it was opened")  # the ACL goes only on the file checked
     except BaseException:
         os.close(fd)
         raise
