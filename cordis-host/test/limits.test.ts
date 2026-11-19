@@ -37,9 +37,15 @@ test('shutdown exits 1 after the timeout when close never settles, and cleans up
     exit: (code) => { events.push(`exit ${String(code)}`); exited(code) },
     timeoutMs: 50,
   })
+  // The shutdown timer is unref'd, as in the host; hold the loop open while we wait for it.
+  const keepAlive = setInterval(() => undefined, 1000)
   void shutdown()
   void shutdown()
-  assert.equal(await done, 1)
+  try {
+    assert.equal(await done, 1)
+  } finally {
+    clearInterval(keepAlive)
+  }
   assert.deepEqual(events, ['close', 'abandon', 'exit 1'])
 })
 
