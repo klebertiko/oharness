@@ -69,7 +69,7 @@ The app has four destinations, reachable with `Alt+1` to `Alt+4`.
 
 | Surface | Intent |
 | --- | --- |
-| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar. Each chat has a permission mode (Plan, Read-only, Ask, Auto, Workspace write, Full): in Ask, `/exec` waits for your approval; Auto runs only an explicit allowlist without asking; Plan refuses every command and ends each turn in a plan you approve before anything runs; Read-only refuses any command that could write, with the reason shown; Workspace write asks before a path outside the workspace; Full is a confirmed choice. There is no bypass mode. Run history is saved and survives a restart ([`docs/product/durable-run-history.md`](docs/product/durable-run-history.md)). Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). |
+| **Chats** (`Alt+1`) | Direct runs and harness-bound conversations. Chat tools (`/exec`, `/read`, `/ls`) run through the sidecar. Each chat has a permission mode (Plan, Read-only, Ask, Auto, Workspace write, Full): in Ask, `/exec` waits for your approval; Auto runs only an explicit allowlist without asking; Plan refuses every command and ends each turn in a plan you approve before anything runs; Read-only refuses any command that could write, with the reason shown; Workspace write asks before a path outside the workspace; Full is a confirmed choice. There is no bypass mode. Run history is saved and survives a restart ([`docs/product/durable-run-history.md`](docs/product/durable-run-history.md)). Composer chips pick the provider for the chat and the workspace folder it works in (no folder runs in a scratch directory). The assistant's replies render a safe markdown subset (paragraphs, lists, code, emphasis, `http(s)` links); HTML is never interpreted and images are never loaded ([ADR 0069](docs/adr/0069-assistant-markdown.md)). |
 | **Studio** (`Alt+2`) | Visual harness authoring, validation, mock/live modes. Describe a flow to Nilo or open a bundled harness. |
 | **Providers** (`Alt+3`) | The roster of connections — cloud, local, CLI. See [Providers](#providers). |
 | **Forja** (`Alt+4`) | The local software factory: work items, an inbox, definition setup and metrics. It never merges on its own. See [`docs/forja/control-room.md`](docs/forja/control-room.md). |
@@ -117,11 +117,30 @@ curl -X POST http://127.0.0.1:8000/providers/connections -H "Content-Type: appli
 - The **model** is up to 200 characters, with no spaces or control characters. It is required: without one, a run stops with an error. The **name** is up to 80 characters.
 - These connections are metered by the server you chose; OHarness does not know its prices. Anthropic and OpenAI themselves still run only through their CLIs.
 
+- **Subscription use.** A connection with `credential.kind=cli` (Anthropic, OpenAI and Cursor through their CLIs) runs on your own subscription. The budget and the usage ledger do not turn that into dollars: such a run is recorded with its tokens and an unknown cost (never `$0.00` and never an API list price), is not refused for lacking a price, and is shown apart from the metered spend. When a CLI does not report its tokens, the ledger estimates them from the text length and marks the row as estimated; the model recorded is the one the CLI reports, when it reports one. A run that fails because the CLI is signed out or missing moves the connection out of *Verified* to the matching setup step ("Sign-in needed" or "Not installed"), and a later successful run or probe brings it back. Providers also shows which subscription CLIs are installed and signed in (`GET /providers/clis`, which only runs `--version` and the CLI's own status command; no prompt is sent).
+- **Ollama Cloud.** Its key is sent on the probe and on the run, and its endpoint is the `/v1` one. It counts as a subscription in the catalog and so also stays outside the dollar total.
 - **Chat picker.** Lists "Auto" (the first eligible connection, cloud before on-device) and, grouped by connection, the models of the connections that can answer now, with a search. `Enter` saves the model as the connection's default; `Shift+Enter` (or "This chat only") applies it to the open chat alone. Connections one step from working sit in a **Needs action** group, each with the one step that fixes it, in the same words as Providers. Setup stays on the Providers screen.
 - **Per-node pins and failover.** A node can pin an ordered list of connections. If one rejects the call, the next is tried, and the attempts show in the run transcript. A node with no pin uses the chat's choice. If neither resolves, the run stops at that node with an error; it never swaps providers silently. Rule: [`docs/product/provider-harness-rule.md`](docs/product/provider-harness-rule.md).
 - **Secrets** are written by the sidecar's secrets store (`OH_SECRETS`, below), never by the Tauri shell.
 - **Experimental: Laya.** A local classifier ([ADR 0005](docs/adr/0005-laya-decision-node.md), [ADR 0006](docs/adr/0006-laya-front-door-cascade.md)). It needs a separate Laya process on loopback (`LAYA_LOOPBACK_PORT`, default 8761). With it running, a chat message goes to Laya first to decide between a direct answer and starting the harness; below 0.80 confidence, or when Laya is unavailable, the model-based triage decides as before. The decision is recorded as a `route_decision` event. A Laya `decision` node in a graph is advisory evidence only; no gate, edge or HITL step reads it.
 - **Flow (off by default).** A switch in the run settings (and `GET/PUT /flow/config`, or `"flow": true` on one run) makes a harness run record a `flow_advice` event at each step: an action and a reason from plain rules over structured facts (operator stop, a step marked `unsafe`, the node's `goal`, a repeated last result). It is evidence only: gates and the final status are the same on or off ([ADR 0065](docs/adr/0065-flow-advice.md)).
+
+---
+
+### Command line
+
+The `oharness` CLI shares the app's data directory, so it sees the same connections. None of these commands sends a prompt or prints a secret; `--json` follows [`providers-cli.schema.json`](backend/oharness/schema/providers-cli.schema.json).
+
+```bash
+cd backend
+python -m oharness providers list [--json]        # stored connections, never their secrets
+python -m oharness providers test <id> [--json]   # run one probe; exit 1 unless it is live
+python -m oharness providers doctor [--json]      # secret-free diagnostics (same as GET /providers/diagnostics)
+python -m oharness providers dump-config [--json] # each effective field and where it came from: default, app or env
+python -m oharness doctor [--json]                # version, data directory, database, secrets store, sandbox, connections
+```
+
+`doctor` only looks: it creates no directory, database or token, tests no provider and does not load the app. The sidecar check is always `skipped`, because the CLI does not know a running sidecar's port or token. See [`doctor-global.md`](docs/product/doctor-global.md), [`providers-diagnostics.md`](docs/product/providers-diagnostics.md) and [`providers-dump-config.md`](docs/product/providers-dump-config.md).
 
 ---
 
@@ -259,6 +278,20 @@ With `file`, each value is encrypted with a per-install random secret. That secr
 ### Data directory
 
 The installed app and the `oharness` CLI use the same data directory for **the connections database (`harness.db`) and the secrets store (`secrets/`)** — and only for those: `OH_DATA_DIR` when set (it must be an absolute path), otherwise the app's own folder, named after its bundle identifier `dev.oharness.app` — `%LOCALAPPDATA%\dev.oharness.app` on Windows, `~/Library/Application Support/dev.oharness.app` on macOS, `$XDG_DATA_HOME` or `~/.local/share/dev.oharness.app` on Linux. `backend/data_dir.py` resolves it for both, and a test pins it to the identifier in `src-tauri/tauri.conf.json`. A folder it creates is private to you (mode `0700`, or a Windows ACL for your account only); the default folder is never followed through a link. The Forja intake database, the sidecar token file, the workspaces folder and the CLI working directory still resolve their own locations (tracked in a separate issue). There is no migration: a CLI from before this fix kept its data in `%LOCALAPPDATA%\OHarness`, so after updating `oharness` sees an empty directory until you run it with `OH_DATA_DIR` pointing at that folder.
+
+---
+
+## Plugins (experimental)
+
+Two different things share the word "plugin" ([ADR 0068](docs/adr/0068-plugin-kinds-and-ohm-package.md)). A **Plugin** is a harness package (agents, skills, scripts, hooks, commands, MCP, instructions); the backend can project a harness bundle onto a Claude Code plugin root (`backend/oharness/claude_plugin_export.py`), with no screen or command for it yet. A **Cordis Plugin** is code that extends a Node host; that host lives in [`cordis-host/`](cordis-host) ([ADR 0071](docs/adr/0071-cordis-plugin-host.md)).
+
+What the host does today:
+
+- Listens only on `127.0.0.1`, on an ephemeral port, with a bearer token that stays with the UI and the sidecar, never the agent.
+- Installs a package only after you confirm a digest bound to its name, version, files, runtime, capabilities and lifecycle scripts. Install scripts (`preinstall`, `install`, `postinstall`, `prepare`) never run. The package must sit inside a plugins folder the app controls (`OH_CORDIS_PLUGINS_DIR` or `~/.oharness/plugins`), and the host runs a private copy of the bytes it hashed.
+- Runs each plugin in its own Node process under the Node Permission Model (`--permission`): without a declared capability it cannot write files, spawn processes or read the host's environment, and its heap is capped at 512 MiB. `files`, `processes` and `credentials` each lift one of those limits; `in-process` has no boundary and requires all four capabilities declared.
+
+What it does **not** do, as the ADR states: **plugin network access is not limited** (Node 22 and 24 have no network permission, so `network` is a declaration and the warning says so; a plugin can still reach the internet and the machine's loopback services); there is no per-plugin CPU limit; `files` is the user's full disk reach, which includes the host's own code; and `emit` events reach every isolated plugin. The app does not start this host yet (packaging into the installer is an open decision), and there is no Cordis Plugins screen. The CI runs the `cordis host` job on Linux only: a few Windows-specific cases (letter-case import refusal, `process._debugProcess` by remote thread, the environment Node completes for the child) run only on a developer's Windows machine.
 
 ---
 
