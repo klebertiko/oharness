@@ -72,6 +72,33 @@ O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671c
 
 **Não coberto.** O recurso do instalador e a resolução do `resource_dir` no Windows não foram exercitados num `tauri build` completo nesta fatia. O job `cordis host` e o pytest rodam em Linux; o Windows só roda o subconjunto do item "O que o CI não cobre no Windows".
 
+## Modo criador, Descobrir e rotas de proxy
+
+**Modo criador: o agente nunca instala.** A pessoa liga o modo na tela (`POST /cordis/creator`, só humano; fica em `<data_dir>/cordis-creator.json`). Só então o `ToolBroker` do chat oferece a ferramenta `cordis_plugins` e acrescenta ao prompt de sistema a skill `backend/cordis/skill/SKILL.md`. Com o modo ligado, `/execute/direct` cria o broker mesmo quando o pedido não traz `tools`, e o composer não muda. As ações são `list`, `scaffold {name, kind: tool|command|service}`, `write_file`, `read_file`, `preview`, `request_install` e `logs`:
+- todas passam pelo `tool_approval` das outras ferramentas, uma aprovação por ação;
+- o modo Plan recusa a ferramenta;
+- argumento que nunca seria válido falha antes de pedir aprovação;
+- o resultado traz `status` (`applied`, `pending-approval`, `failed`) e `nextStep`.
+
+A ferramenta só escreve em `<plugins>/dev/<nome>`. O caminho é relativo, com `/`, sem parte vazia, `.`, `..`, oculta, drive ou `:`, e não passa por link nem junção. Cada arquivo tem até 256 KiB, e o pacote até 200 arquivos e 2 MiB. O `scaffold` sai `isolated` e sem capacidades.
+
+`request_install` copia o pacote pela fonte local, faz a prévia no host e deixa um pedido pendente com o digest dos arquivos de dev. Só `POST /cordis/requests/{id}/approve`, com a credencial humana, instala, com o digest da prévia que a pessoa viu. Se os arquivos mudaram depois do pedido, ele fica `stale` e é recusado (409). Um pacote mudado depois de instalado precisa de pedido novo; a cópia instalada não muda. `logs` só lê plugins que vieram da área de dev. O token do host continua só no sidecar (item 11).
+
+**Descobrir.** A pessoa informa a URL https de um índice estático `format: 1`, e o sidecar o busca por `POST /cordis/index/fetch` (só humano):
+- o host da URL é normalizado e resolvido, e qualquer endereço que não seja global recusa;
+- a conexão vai ao IP checado, com SNI e Host do nome, o que fecha o rebinding de DNS, e redirect é recusado;
+- timeout de 10 s e teto de 512 KiB;
+- só passam texto limpo (sem controles C0/C1 nem bidi, com teto por campo) e fontes instaláveis: npm com versão exata ou GitHub com commit de 40 hex;
+- a tela mostra o texto sem HTML, sob o aviso fixo "índices são de terceiros; confira a fonte antes de instalar";
+- "Instalar" só preenche o fluxo de adicionar, com prévia e confirmação.
+
+**Rotas de proxy.** `POST /cordis/tools/invoke {name, args}` e `POST /cordis/commands/execute {line}` repassam ao host com o token do sidecar. São o caminho do agente até as tools e os comandos dos plugins, sem receber o token do host. `POST /cordis/plugins/install` aceita `config` (JSON até 16 KiB), guardado no registro e repassado ao `apply(ctx, config)`; o `tool-todo` do DSH exige um.
+
+**Compatibilidade.** `backend/tests/test_cordis_compat.py` copia três pacotes de `cordis-host/` para uma pasta, instala pela fonte local nas rotas `/cordis/*`, com o host real, e exercita cada um:
+- o nosso (`proofs/our-plugin`): tool, comando e evento pelas rotas de proxy;
+- o `directory-picker` do DSH: a prévia mostra `in-process` e as quatro capacidades;
+- o `tool-todo` do DSH: isolado no serviço `tools`, e a regra de sessão do próprio plugin recusa a chamada sem agente.
+
 ## Consequências
 
 As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`: a prova 1 roda isolada (pid diferente do host), a prova 2 roda `in-process`, e a prova 3 roda o `tool-todo` do DSH isolado, com `session.append` atravessando o canal do fd 3. As recusas do item 10 estão em `cordis-host/test/isolation.test.ts`, uma por limite (inclusive a prova direta de que o Permission Model está ligado no filho: `process.permission.has('fs.write')` é `false`), as do canal em `test/channel.test.ts` e a do inspector em `test/lifecycle.test.ts`. Rodam no job `cordis host` do CI, em Linux.
@@ -82,7 +109,7 @@ As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`: a prova
 - o ambiente do filho completado pelo libuv (HOMEPATH, USERPROFILE, TEMP, PATH e outras). O teste de `credentials` só prova a ausência de uma variável própria do host;
 - `--disable-sigusr1` num sistema sem SIGUSR1. O teste do inspector no Windows só chama `_debugProcess`, e o teste de SIGTERM faz `skip` lá.
 
-O que os testes desta fatia não fecham, em nenhum sistema: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e a rede no runtime isolado. A tela "Cordis Plugins" e o creator-mode ficam fora.
+O que os testes desta fatia não fecham, em nenhum sistema: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e a rede no runtime isolado. A tela "Cordis Plugins" e o modo criador estão na seção anterior.
 
 ## Alternativas rejeitadas
 
