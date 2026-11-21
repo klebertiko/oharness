@@ -1,39 +1,63 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { shellNavCommands } from "./commands";
+import { chordsIn, shellNavCommands } from "./commands";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useShellStore } from "./shellStore";
+import { useThreadStore } from "@/store/threadStore";
 
 describe("shellNavCommands", () => {
   beforeEach(() => {
     useHarnessSessionStore.setState({ enabled: true, activeBundle: null, hydrated: false });
-    useShellStore.setState({ section: "chats" });
+    useShellStore.setState({ section: "chats", sidebar: "hidden", dockOpen: false, leftOpen: false, rightOpen: false });
+    useThreadStore.setState({ threads: [], activeThreadId: null, messagesByThread: {} });
   });
 
-  it("exposes every destination plus the harness library and on/off", () => {
+  it("exposes every destination, the session command and the harness verbs", () => {
     const ids = shellNavCommands().map((c) => c.id);
     expect(ids).toEqual([
       "go:chats",
-      "go:studio",
-      "go:providers",
       "go:forja",
+      "go:studio",
+      "go:plugins",
+      "go:settings",
+      "go:providers",
+      "session:new",
+      "sidebar:cycle",
+      "dock:toggle",
+      "dock:toggle-alt",
+      "palette:open",
+      "shortcuts:open",
+      "regions:cycle",
+      "theme:toggle",
       "harness:library",
       "harness:on",
       "harness:off",
     ]);
   });
 
-  it("Go to Studio selects the studio section and opens the inspector", () => {
-    useShellStore.setState({ section: "chats", rightOpen: false });
-    shellNavCommands().find((c) => c.id === "go:studio")!.run();
-    expect(useShellStore.getState().section).toBe("studio");
-    expect(useShellStore.getState().rightOpen).toBe(true);
+  it("keeps the shortcut list equal to the registry chords", () => {
+    const commands = shellNavCommands();
+    expect(chordsIn(commands)).toEqual(commands.flatMap((command) => (command.chord ? [command.chord] : [])));
+    const seen = new Set<string>();
+    for (const chord of chordsIn(commands)) {
+      expect(seen.has(chord), chord).toBe(false);
+      seen.add(chord);
+    }
   });
 
-  it("Go to Chats selects chats and hides the inspector", () => {
-    useShellStore.setState({ section: "studio", rightOpen: true });
+  it("Go to Studio changes the destination and leaves the sidebar and the dock alone", () => {
+    useShellStore.setState({ section: "chats", sidebar: "hidden", dockOpen: false, leftOpen: false, rightOpen: false });
+    shellNavCommands().find((c) => c.id === "go:studio")!.run();
+    expect(useShellStore.getState().section).toBe("studio");
+    expect(useShellStore.getState().sidebar).toBe("hidden");
+    expect(useShellStore.getState().dockOpen).toBe(false);
+  });
+
+  it("Go to Chats keeps a closed dock closed", () => {
+    useShellStore.setState({ section: "studio", sidebar: "rail", dockOpen: false, leftOpen: true, rightOpen: false });
     shellNavCommands().find((c) => c.id === "go:chats")!.run();
     expect(useShellStore.getState().section).toBe("chats");
-    expect(useShellStore.getState().rightOpen).toBe(false);
+    expect(useShellStore.getState().sidebar).toBe("rail");
+    expect(useShellStore.getState().dockOpen).toBe(false);
   });
 
   it("harness on/off toggles harnessSessionStore.enabled", () => {

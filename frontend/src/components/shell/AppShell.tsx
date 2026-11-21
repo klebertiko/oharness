@@ -1,97 +1,51 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TitleBar } from "./TitleBar";
-import { ActivityRail } from "./ActivityRail";
-import { StatusBar } from "./StatusBar";
+import { Sidebar } from "./Sidebar";
 import { CommandPalette } from "./CommandPalette";
-import { KeymapSheet } from "./KeymapSheet";
+import { ShortcutsModal } from "./ShortcutsModal";
 import { HarnessLibrarySheet } from "./HarnessLibrarySheet";
-import { useShellStore, LEFT_MIN, LEFT_MAX, RIGHT_MIN, RIGHT_MAX, type RailSection } from "./shellStore";
-import { isEditingTarget, isTypeaheadTarget, matchesChord, useIsMac } from "./keys";
-import { Sheet } from "@/components/ui";
-import { shellNavCommands, type Command } from "./commands";
+import { Resizer } from "./Resizer";
+import { useShellStore, type RailSection } from "./shellStore";
+import { isEditingTarget, isTypeaheadTarget, matchesChord, chordCaps, useIsMac } from "./keys";
+import { shellNavCommands, startSession, type Command } from "./commands";
+import { cycleRegion } from "./regions";
+import { hydrateShortcuts, useShortcutStore } from "./shortcuts";
+import {
+  DOCK_MAX,
+  DOCK_MIN,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN,
+  SIDEBAR_OPEN,
+  SIDEBAR_RAIL,
+  dockBox,
+  flowWidth,
+  showsDrawer,
+  showsPeek,
+  type SidebarMode,
+} from "./frame";
+import { DockHost } from "@/components/dock/DockHost";
 import { useModeStore } from "@/store/modeStore";
 import { useProviderStore } from "@/components/providers/providerStore";
 import { useLocaleStore, useT } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
 
-/**
- * Split handle. 5px hit area over a 1px visual rule — the standard trick, but
- * the rule only takes on signal while actually dragging, so a pointer sweeping
- * across the window does not light the frame up like a christmas tree.
- * Arrow keys move it 16px at a time, because a mouse-only resize is a resize
- * some people cannot perform.
- */
-function Resizer({
-  side,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  side: "left" | "right";
-  value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-}) {
-  const t = useT();
-  const dragging = useRef(false);
-  const el = useRef<HTMLDivElement>(null);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    dragging.current = true;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    el.current?.setAttribute("data-dragging", "true");
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-    onChange(side === "left" ? e.clientX - rect.left : rect.right - e.clientX);
-  };
-  const end = () => {
-    dragging.current = false;
-    el.current?.removeAttribute("data-dragging");
-  };
-
-  return (
-    <div
-      ref={el}
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={side === "left" ? t("shell.resize.nav") : t("shell.resize.inspector")}
-      aria-valuenow={value}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      tabIndex={0}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={end}
-      onPointerCancel={end}
-      onKeyDown={(e) => {
-        const step = e.shiftKey ? 48 : 16;
-        if (e.key === "ArrowLeft") {
-          e.preventDefault();
-          onChange(value + (side === "left" ? -step : step));
-        } else if (e.key === "ArrowRight") {
-          e.preventDefault();
-          onChange(value + (side === "left" ? step : -step));
-        }
-      }}
-      className={`group absolute inset-y-0 z-10 w-[5px] cursor-col-resize bg-transparent ${side === "left" ? "right-[-3px]" : "left-[-3px]"}`}
-    >
-      <span className="pointer-events-none absolute inset-y-0 left-0.5 w-px bg-transparent transition-colors group-hover:bg-line-strong group-data-dragging:bg-signal" />
-    </div>
-  );
-}
-
-/** What the header calls each destination. */
 const DESTINATION: Record<RailSection, MessageKey> = {
   chats: "shell.rail.chats",
-  studio: "shell.title.studio",
-  providers: "shell.rail.providers",
   forja: "shell.rail.forja",
+  studio: "shell.title.studio",
+  plugins: "shell.nav.plugins",
+  providers: "shell.rail.providers",
+  settings: "shell.nav.settings",
 };
+
+function sidebarCopy(mode: SidebarMode, viewport: number, drawerOpen: boolean): MessageKey {
+  if (viewport < 768) return drawerOpen ? "shell.sidebar.hide" : "shell.sidebar.show";
+  if (viewport <= 1024) return mode === "hidden" ? "shell.sidebar.show" : "shell.sidebar.hide";
+  if (mode === "open") return "shell.sidebar.collapse";
+  if (mode === "rail") return "shell.sidebar.hide";
+  return "shell.sidebar.show";
+}
 
 interface Props {
   commands: Command[];
@@ -108,82 +62,103 @@ interface Props {
   left: React.ReactNode;
   stage: React.ReactNode;
   right: React.ReactNode;
-  /** Closes the right panel's content. Below 1020px the panel is a sheet and this is what dismissing it does. */
+  /** Closes the right panel's content. */
   onDismissRight?: () => void;
+  breadcrumb?: string;
 }
 
 export function AppShell({
   commands,
   harnessName,
   onHarnessNameChange,
-  mode,
   running,
   nodeCount,
-  edgeCount,
-  selectedId,
-  backendOk,
   immersive = false,
   toolbar,
-  left,
   stage,
   right,
-  onDismissRight,
+  breadcrumb,
 }: Props) {
   const mac = useIsMac();
   const t = useT();
   const locale = useLocaleStore((s) => s.locale);
   const shell = useShellStore();
+  const bindings = useShortcutStore((s) => s.bindings);
   const shellMode = useModeStore((s) => s.mode);
   const hydrateProviders = useProviderStore((s) => s.hydrate);
+  const [viewport, setViewport] = useState(1280);
+  const [ready, setReady] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Hydration runs once, deliberately
   useEffect(() => {
     shell.hydrate();
+    hydrateShortcuts();
     useLocaleStore.getState().hydrate();
     void hydrateProviders();
-  }, []);
-
-  /* Narrow-window policy. A stated preference is never overwritten — the
-     panels are *suppressed* while the window is too small to hold them and
-     come back at full width, so resizing a window never silently loses the
-     layout someone chose. */
-  const [narrow, setNarrow] = useState<{ right: boolean; left: boolean }>({
-    right: false,
-    left: false,
-  });
-  useEffect(() => {
-    const measure = () =>
-      setNarrow({ right: window.innerWidth < 1020, left: window.innerWidth < 640 });
+    const measure = () => setViewport(window.innerWidth);
     measure();
+    setReady(true);
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
 
   const {
-    hydrated,
-    leftOpen: leftPref,
-    rightOpen: rightPref,
-    leftWidth,
-    rightWidth,
+    sidebar,
+    sidebarWidth,
+    dockOpen,
+    dockSuppressed,
+    dockWidth,
+    drawerOpen,
     paletteOpen,
     keymapOpen,
-    setLeftWidth,
-    setRightWidth,
     toggleLeft,
     toggleRight,
+    resizeSidebar,
+    resizeDock,
+    resetSidebarWidth,
+    resetDockWidth,
     setPaletteOpen,
     setKeymapOpen,
-    setSection,
+    setDrawerOpen,
     dismissOverlays,
   } = shell;
 
-  const leftOpen = leftPref && !narrow.left;
-  const rightOpen = rightPref && !narrow.right;
+  const flow = ready ? flowWidth(sidebar, viewport, sidebarWidth) : null;
+  const drawer = ready && showsDrawer(viewport);
+  const peekable = ready && showsPeek(sidebar, viewport);
+  const wantsDock = !immersive && dockOpen && !dockSuppressed;
+  const dock = dockBox(viewport, flow ?? SIDEBAR_OPEN, wantsDock, dockWidth);
+  // An empty dock must not cover the stage. A column can sit beside it; a sheet only when it has content.
+  const showDock = dock.kind === "column" || (dock.kind === "overlay" && Boolean(right));
+  const sideLabel = t(sidebarCopy(sidebar, ready ? viewport : 1280, drawerOpen));
 
-  const allCommands = useMemo(() => [...shellNavCommands(), ...commands], [commands, locale]);
-
+  const allCommands = useMemo(() => [...shellNavCommands(), ...commands], [commands, locale, bindings]);
   const commandsRef = useRef(allCommands);
   commandsRef.current = allCommands;
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const root = document.getElementById("oh-sidebar");
+    const items = () =>
+      [...(root?.querySelectorAll<HTMLElement>("button, [href], input, select, textarea") ?? [])].filter((el) => !el.hasAttribute("disabled"));
+    items()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = items();
+      if (!list.length) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    root?.addEventListener("keydown", onKey);
+    return () => root?.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -191,51 +166,33 @@ export function AppShell({
       const editing = isEditingTarget(e.target);
       const typing = editing || isTypeaheadTarget(e.target);
 
-      // Overlay-owning chords first: the palette must open from anywhere,
-      // including from inside the harness-name field.
       if (matchesChord(e, "Mod+K", mac)) {
         e.preventDefault();
         setPaletteOpen(!useShellStore.getState().paletteOpen);
         return;
       }
+      if (matchesChord(e, "Mod+/", mac)) {
+        e.preventDefault();
+        setKeymapOpen(true);
+        return;
+      }
+      if (e.key === "F6") {
+        e.preventDefault();
+        cycleRegion(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (e.key === "Escape") {
+        if (useShellStore.getState().drawerOpen) {
+          e.preventDefault();
+          setDrawerOpen(false);
+          return;
+        }
         dismissOverlays();
         return;
       }
       if (useShellStore.getState().paletteOpen || useShellStore.getState().keymapOpen || useShellStore.getState().libraryOpen) return;
 
-      if (!editing && e.key === "?") {
-        e.preventDefault();
-        setKeymapOpen(true);
-        return;
-      }
-      if (matchesChord(e, "Mod+B", mac)) {
-        e.preventDefault();
-        toggleLeft();
-        return;
-      }
-      if (matchesChord(e, "Mod+Alt+B", mac)) {
-        e.preventDefault();
-        toggleRight();
-        return;
-      }
-      // Alt+1..3 — the destinations, same order as the rail, everywhere.
-      const NAV_CHORDS: [string, RailSection][] = [
-        ["Alt+1", "chats"],
-        ["Alt+2", "studio"],
-        ["Alt+3", "providers"],
-        ["Alt+4", "forja"],
-      ];
-      for (const [chord, target] of NAV_CHORDS) {
-        if (matchesChord(e, chord, mac)) {
-          e.preventDefault();
-          setSection(target);
-          return;
-        }
-      }
       for (const c of commandsRef.current) {
-        // A bare (or Shift-only) chord is a letter someone may be typing, in a
-        // field or in a typeahead widget (Select, menu, listbox, combobox).
         if (typing && c.chord && !/Mod|Alt/.test(c.chord)) continue;
         if (c.chord && !c.disabled && matchesChord(e, c.chord, mac)) {
           e.preventDefault();
@@ -244,16 +201,7 @@ export function AppShell({
         }
       }
     },
-    [
-      mac,
-      setPaletteOpen,
-      setKeymapOpen,
-      toggleLeft,
-      toggleRight,
-      setSection,
-
-      dismissOverlays,
-    ]
+    [mac, setPaletteOpen, setKeymapOpen, setDrawerOpen, dismissOverlays],
   );
 
   useEffect(() => {
@@ -261,12 +209,10 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
 
+  const sidebarNode = <Sidebar variant={drawer ? "drawer" : flow === SIDEBAR_RAIL || peekable ? "rail" : "open"} />;
+
   return (
-    <div
-      className="oh-shell flex h-screen flex-col overflow-hidden"
-      data-shell-mode={shellMode}
-    >
-      {/* First tab stop: lets a keyboard user skip the header and rail. */}
+    <div className="oh-shell flex h-screen flex-col overflow-hidden" data-shell-mode={shellMode} data-sidebar={drawer ? "drawer" : sidebar} data-dock={dock.kind} data-vw={viewport} data-side={flow ?? -1}>
       {/* biome-ignore lint/a11y/useValidAnchor: a real in-page link; the handler only moves focus into the main region as well as scrolling to it */}
       <a
         href="#oh-main"
@@ -287,63 +233,117 @@ export function AppShell({
         nodeCount={nodeCount}
         editingHarness={shellMode === "studio" && shell.studioView === "editor"}
         onOpenPalette={() => setPaletteOpen(true)}
-        railCollapsed={narrow.left}
+        railCollapsed={flow === SIDEBAR_RAIL}
+        sidebarLabel={sideLabel}
+        sidebarTooltip={t("shell.sidebar.tooltip", { action: sideLabel, keys: chordCaps("Mod+B", mac).join("+") })}
+        onToggleSidebar={toggleLeft}
+        onNewSession={startSession}
+        clusterWidth={flow === null ? undefined : flow === 0 ? "auto" : flow}
+        breadcrumb={breadcrumb}
       />
 
       {toolbar}
 
-      <div className="flex min-h-0 flex-1">
-        <ActivityRail
-          collapsed={narrow.left}
-          edge={!narrow.left ? <Resizer side="left" value={leftWidth} min={LEFT_MIN} max={LEFT_MAX} onChange={setLeftWidth} /> : null}
-        >
-          {leftOpen && !immersive ? left : null}
-        </ActivityRail>
-
-        <main id="oh-main" tabIndex={-1} className="relative min-w-0 flex-1 bg-sub-000 outline-hidden">{stage}</main>
-
-        {rightOpen && !immersive && right && (
-          <aside
-            aria-label={t("shell.inspector")}
-            className="relative min-h-0 flex-none border-l border-line"
-            style={{ width: hydrated ? rightWidth : undefined, minWidth: RIGHT_MIN }}
+      <div className="relative flex min-h-0 flex-1">
+        {!drawer && (
+          <div
+            className="oh-peek-host relative h-full flex-none"
+            style={{ width: flow === null ? "var(--oh-side-w, 280px)" : flow }}
           >
-            <Resizer side="right" value={rightWidth} min={RIGHT_MIN} max={RIGHT_MAX} onChange={setRightWidth} />
-            {right}
+            <div
+              id="oh-sidebar"
+              role="region"
+              aria-label={t("shell.regions.sidebar")}
+              tabIndex={-1}
+              data-mode={sidebar}
+              className={`oh-side relative flex h-full min-w-0 flex-col overflow-hidden bg-sub-100 outline-hidden ${flow === 0 ? "" : "border-r border-line"}`}
+              style={{
+                width: flow === null ? "var(--oh-side-w, 280px)" : flow,
+                minWidth: 0,
+                transition: "width var(--duration-base) var(--ease-standard)",
+              }}
+            >
+              {flow !== 0 && sidebarNode}
+              {flow !== null && flow > SIDEBAR_RAIL && (
+                <Resizer
+                  side="left"
+                  value={sidebarWidth}
+                  min={SIDEBAR_MIN}
+                  max={SIDEBAR_MAX}
+                  label={t("shell.resize.nav")}
+                  onChange={resizeSidebar}
+                  onReset={resetSidebarWidth}
+                />
+              )}
+            </div>
+            {peekable && (
+              <div
+                className="oh-peek absolute top-0 z-40 h-full flex-col overflow-hidden border-r border-line bg-sub-100 shadow-(--shadow-float)"
+                style={{ left: SIDEBAR_RAIL, width: SIDEBAR_OPEN }}
+              >
+                <Sidebar variant="open" />
+              </div>
+            )}
+          </div>
+        )}
+
+        <main id="oh-main" tabIndex={-1} className="relative min-w-0 flex-1 bg-sub-000 outline-hidden">
+          {stage}
+        </main>
+
+        {showDock && dock.kind === "overlay" && (
+          <aside
+            id="oh-dock"
+            aria-label={t("shell.dock.label")}
+            tabIndex={-1}
+            className="fixed bottom-0 right-0 z-40 flex flex-col border-l border-line bg-sub-100 shadow-(--shadow-float) outline-hidden"
+            style={{ top: "var(--h-titlebar)", width: dock.width }}
+          >
+            <DockHost onClose={toggleRight}>{right}</DockHost>
           </aside>
         )}
+
+        {showDock && dock.kind === "column" && (
+          <aside
+            id="oh-dock"
+            aria-label={t("shell.dock.label")}
+            tabIndex={-1}
+            className="oh-dock-col relative flex min-h-0 flex-none flex-col border-l border-line bg-sub-100 outline-hidden"
+            style={{ width: dock.width, minWidth: 0, transition: "width var(--duration-base) var(--ease-standard)" }}
+          >
+            <Resizer
+              side="right"
+              value={dock.width}
+              min={DOCK_MIN}
+              max={DOCK_MAX}
+              label={t("shell.resize.dock")}
+              onChange={resizeDock}
+              onReset={resetDockWidth}
+            />
+            <DockHost onClose={toggleRight}>{right}</DockHost>
+          </aside>
+        )}
+
       </div>
 
-      {shellMode === "studio" && shell.studioView === "editor" && (
-        <StatusBar
-          mode={mode.charAt(0).toUpperCase() + mode.slice(1)}
-          running={running}
-          nodeCount={nodeCount}
-          edgeCount={edgeCount}
-          selectedId={selectedId}
-          backendOk={backendOk}
-        />
+      {drawer && drawerOpen && (
+        <>
+          <button type="button" className="fixed inset-0 z-40 bg-(--overlay-backdrop)" aria-label={t("shell.sidebar.hide")} onClick={() => setDrawerOpen(false)} />
+          <div
+            id="oh-sidebar"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("shell.regions.sidebar")}
+            className="fixed bottom-0 left-0 z-50 flex flex-col border-r border-line bg-sub-100 shadow-(--shadow-float)"
+            style={{ top: "var(--h-titlebar)", width: `min(${SIDEBAR_OPEN}px, calc(100vw - 48px))` }}
+          >
+            {sidebarNode}
+          </div>
+        </>
       )}
 
-      {/* Too narrow for a column: the same panel opens as a sheet, so a node can
-          still be inspected and Nilo still reached on a phone or a small window. */}
-      <Sheet
-        open={narrow.right && !immersive && Boolean(right) && Boolean(onDismissRight)}
-        onOpenChange={(v) => !v && onDismissRight?.()}
-        title={t("shell.inspector")}
-        hideTitle
-        showClose
-        className="h-[min(640px,calc(100dvh-var(--h-titlebar)-20px))] w-[min(520px,calc(100vw-24px))]"
-      >
-        <div className="min-h-0 flex-1">{right}</div>
-      </Sheet>
-
-      <CommandPalette
-        open={paletteOpen}
-        commands={allCommands}
-        onClose={() => setPaletteOpen(false)}
-      />
-      <KeymapSheet open={keymapOpen} onClose={() => setKeymapOpen(false)} />
+      <CommandPalette open={paletteOpen} commands={allCommands} onClose={() => setPaletteOpen(false)} />
+      <ShortcutsModal open={keymapOpen} commands={allCommands} onClose={() => setKeymapOpen(false)} />
       <HarnessLibrarySheet />
     </div>
   );

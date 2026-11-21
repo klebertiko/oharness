@@ -21,6 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Blocking on purpose: the theme must be known before first paint. */}
         {/* biome-ignore lint/performance/noSyncScripts: same-origin theme bootstrap; async/defer would flash the wrong theme */}
         <script src="/theme-init.js" />
+        {/* biome-ignore lint/performance/noSyncScripts: language and frame width must be known before first paint */}
+        <script src="/shell-init.js" />
+        <style>{`html[data-resizing] .oh-side, html[data-resizing] .oh-dock-col { transition: none !important; } .oh-peek { display: none; pointer-events: none; } .oh-peek-host:hover > .oh-peek, .oh-peek-host:focus-within > .oh-peek { display: flex; }`}</style>
       </head>
       <body>{children}</body>
     </html>

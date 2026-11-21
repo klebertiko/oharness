@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./AppShell";
+import { useShellStore } from "./shellStore";
 
 vi.mock("@/components/providers/providerStore", () => ({
   useProviderStore: (sel: (s: { hydrate: () => Promise<void> }) => unknown) => sel({ hydrate: async () => {} }),
@@ -10,7 +11,6 @@ vi.mock("@/components/providers/providerStore", () => ({
 const setWidth = (w: number) => {
   Object.defineProperty(window, "innerWidth", { value: w, configurable: true, writable: true });
 };
-const onDismiss = vi.fn();
 
 const renderShell = (right: React.ReactNode = <div>Node settings</div>) =>
   render(
@@ -27,40 +27,45 @@ const renderShell = (right: React.ReactNode = <div>Node settings</div>) =>
       toolbar={null}
       left={null}
       right={right}
-      onDismissRight={onDismiss}
       stage={<div>stage</div>}
     />,
   );
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  useShellStore.setState({ dockOpen: true, dockSuppressed: false, dockWidth: 420, sidebar: "open", sidebarWidth: 280, hydrated: true });
+});
 afterEach(() => {
   cleanup();
-  setWidth(1024);
-});
-
-it("on a wide window the inspector is a column, not a sheet", () => {
   setWidth(1280);
+});
+
+it("on a wide window the dock is a column anchored to the right, not a centered dialog", () => {
+  setWidth(1440);
   renderShell();
   expect(screen.queryByRole("dialog")).toBeNull();
+  const dock = document.getElementById("oh-dock");
+  expect(dock).toBeTruthy();
+  expect(dock?.className).toContain("border-l");
+  expect(screen.getByText("Node settings")).toBeTruthy();
 });
 
-it("below 1020px the inspector opens as a sheet with a visible Close", async () => {
-  setWidth(800);
+it("when the center cannot keep its minimum, the dock anchors to the right edge", () => {
+  setWidth(700);
   renderShell();
-  const dialog = await screen.findByRole("dialog", { name: "Inspector" });
-  expect(within(dialog).getByText("Node settings")).toBeTruthy();
-  await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
-  expect(onDismiss).toHaveBeenCalled();
+  const dock = document.getElementById("oh-dock");
+  expect(dock?.className).toContain("right-0");
+  expect(document.getElementById("oh-main")).toBeTruthy();
 });
 
-it("with nothing to inspect there is no sheet", () => {
-  setWidth(800);
+it("with the dock closed there is no dock", () => {
+  setWidth(1440);
+  useShellStore.setState({ dockOpen: false, dockSuppressed: true });
   renderShell(null);
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.getElementById("oh-dock")).toBeNull();
 });
 
 it("the first tab stop is the skip link, and it lands on the main region", async () => {
-  setWidth(1280);
+  setWidth(1440);
   renderShell();
   await userEvent.tab();
   const skip = screen.getByRole("link", { name: "Skip to main content" });
