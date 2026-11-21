@@ -185,6 +185,6 @@ def fetch_index(request: Request, body: IndexBody):
     _human(request)  # the person names the index; the sidecar fetches it so the screen never talks to a third party
     service = _service(request)
     try:
-        return index.fetch(body.url, fetcher=service.index_fetcher)
+        return index.fetch(body.url, fetcher=service.index_fetcher, resolve=service.index_resolver)
     except index.IndexError_ as error:
         raise HTTPException(status_code=422, detail={'code': error.code, 'message': error.message}) from None

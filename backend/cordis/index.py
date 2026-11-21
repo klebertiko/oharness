@@ -1,15 +1,18 @@
 """Descobrir (ADR 0071): a static plugin index, `format: 1`, fetched by the sidecar and checked before the screen sees it.
 
-The person gives an https address; the sidecar fetches it with a timeout and a size ceiling, refuses local and private addresses,
-and keeps only plain text and sources it can install: npm with an exact version, or GitHub at a full commit. An index is a third
-party's list: nothing in it is trusted, rendered as HTML, or installed without the usual preview and confirmation.
+The person gives an https address; the sidecar resolves it, refuses it when any address is not public, connects to the checked
+address (no redirect), with a timeout and a size ceiling, and keeps only plain text and sources it can install: npm with an
+exact version, or GitHub at a full commit. An index is a third party's list: nothing in it is trusted, rendered as HTML, or
+installed without the usual preview and confirmation.
 """
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import json
 import re
-import urllib.request
+import socket
+import ssl
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlsplit
@@ -27,6 +30,7 @@ _GITHUB_PATH = re.compile(r'^/([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9._-]{1,
 _HIDDEN = {c: None for c in (*range(0x00, 0x20), *range(0x7F, 0xA0), 0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A), 0x2028, 0x2029)}
 
 Fetcher = Callable[[str, int], bytes]
+Resolver = Callable[[str], list[str]]
 
 
 class IndexError_(Exception):  # noqa: N801 - the builtin IndexError is another thing
@@ -35,39 +39,76 @@ class IndexError_(Exception):  # noqa: N801 - the builtin IndexError is another 
         self.code, self.message = code, message
 
 
-def check_url(url: str) -> None:
+def _normal_host(url: str) -> tuple[str, Any]:
     parts = urlsplit(url)
-    host = (parts.hostname or '').lower()
-    bad = parts.scheme != 'https' or not host or parts.username is not None or parts.password is not None
-    if not bad and (host == 'localhost' or host.endswith('.localhost')):
-        bad = True
-    if not bad:
+    host = (parts.hostname or '').rstrip('.').lower()
+    if parts.scheme != 'https' or not host or parts.username is not None or parts.password is not None:
+        raise IndexError_('invalid_url', 'Give a public https address of the index.')
+    if host == 'localhost' or host.endswith('.localhost'):
+        raise IndexError_('invalid_url', 'Give a public https address of the index.')
+    return host, parts
+
+
+def default_resolve(host: str) -> list[str]:
+    try:
+        return sorted({info[4][0] for info in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
+    except (OSError, UnicodeError):
+        return []
+
+
+def check_url(url: str, resolve: Resolver | None = None) -> tuple[str, str]:
+    """(host, address): the normalized host and one of its addresses, after every address it resolves to was found public.
+    The connection then goes to that address, so a second DNS answer (rebinding) cannot point it elsewhere."""
+    host, _parts = _normal_host(url)
+    try:
+        literal = ipaddress.ip_address(host.strip('[]'))
+    except ValueError:
+        literal = None
+    answers = [str(literal)] if literal is not None else (resolve or default_resolve)(host)
+    addresses = []
+    for answer in answers:
         try:
-            address = ipaddress.ip_address(host)
+            address = ipaddress.ip_address(answer.split('%', 1)[0])
         except ValueError:
             address = None
-        if address is not None and not address.is_global:
-            bad = True
-    if bad:
-        raise IndexError_('invalid_url', 'Give a public https address of the index.')
+        if address is None or not address.is_global:
+            raise IndexError_('invalid_url', 'The index address is local or private; give a public https address.')
+        addresses.append(str(address))
+    if not addresses:
+        raise IndexError_('invalid_url', 'The index address does not resolve.')
+    return host, addresses[0]
 
 
-class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
-        check_url(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+class _PinnedConnection(http.client.HTTPSConnection):
+    """HTTPS to a checked address, with the name for TLS (SNI and certificate) and for the Host header."""
+
+    def __init__(self, host: str, address: str, timeout: float):
+        super().__init__(host, 443, timeout=timeout, context=ssl.create_default_context())
+        self._address = address
+
+    def connect(self) -> None:
+        sock = socket.create_connection((self._address, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
-def default_fetcher(url: str, limit: int) -> bytes:
-    opener = urllib.request.build_opener(_CheckedRedirects)
-    request = urllib.request.Request(url, headers={'User-Agent': 'oharness-cordis', 'Accept': 'application/json'})
+def _pinned_get(url: str, host: str, address: str, limit: int) -> bytes:
+    parts = urlsplit(url)
+    path = (parts.path or '/') + (f'?{parts.query}' if parts.query else '')
+    connection = _PinnedConnection(host, address, TIMEOUT_S)
     try:
-        with opener.open(request, timeout=TIMEOUT_S) as response:
-            return response.read(limit + 1)
+        connection.request('GET', path, headers={'User-Agent': 'oharness-cordis', 'Accept': 'application/json'})
+        response = connection.getresponse()
+        if 300 <= response.status < 400:
+            raise IndexError_('redirect_refused', 'The index address redirects; give its final https address.')
+        if response.status != 200:
+            raise IndexError_('download_failed', 'The index could not be downloaded.')
+        return response.read(limit + 1)
     except IndexError_:
         raise
-    except OSError as error:
+    except (OSError, http.client.HTTPException) as error:
         raise IndexError_('download_failed', 'The index could not be downloaded.') from error
+    finally:
+        connection.close()
 
 
 def _text(value: Any, field: str) -> str:
@@ -139,9 +180,10 @@ def parse(data: bytes) -> dict[str, Any]:
     return {'title': _text(body.get('title'), 'title'), 'plugins': plugins, 'skipped': skipped}
 
 
-def fetch(url: str, *, fetcher: Fetcher | None = None) -> dict[str, Any]:
-    check_url(url)
-    data = (fetcher or default_fetcher)(url, LIMIT_BYTES)
+def fetch(url: str, *, fetcher: Fetcher | None = None, resolve: Resolver | None = None) -> dict[str, Any]:
+    """`fetcher` replaces the pinned https request in tests; the address checks run either way, before anything is sent."""
+    host, address = check_url(url, resolve)
+    data = fetcher(url, LIMIT_BYTES) if fetcher is not None else _pinned_get(url, host, address, LIMIT_BYTES)
     if len(data) > LIMIT_BYTES:
         raise IndexError_('index_too_large', 'The index is larger than 512 KiB.')
     return parse(data)

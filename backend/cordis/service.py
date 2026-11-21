@@ -63,6 +63,7 @@ class CordisService:
         self._requests: dict[str, dict[str, Any]] = {}
         self._creator_file = data_dir / 'cordis-creator.json'
         self.index_fetcher: index.Fetcher | None = None  # tests inject one; None is the https fetcher
+        self.index_resolver: index.Resolver | None = None  # tests inject one; None is getaddrinfo
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:

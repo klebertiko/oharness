@@ -14,6 +14,11 @@ from cordis.service import CordisService
 
 HUMAN = {'x-oharness-human': 'human-secret'}
 SHA = 'c' * 40
+PUBLIC = {'example.com': ['93.184.215.14']}
+
+
+def resolver(table):
+    return lambda host: table.get(host, [])
 
 
 def good(**over):
@@ -71,13 +76,13 @@ def test_text_fields_are_capped_and_stripped_of_control_characters():
 def test_only_public_https_addresses_are_fetched(url):
     calls = []
     with pytest.raises(IndexError_) as error:
-        index.fetch(url, fetcher=lambda u, limit: calls.append(u) or b'{}')
+        index.fetch(url, fetcher=lambda u, limit: calls.append(u) or b'{}', resolve=resolver(PUBLIC))
     assert error.value.code == 'invalid_url' and calls == []
 
 
 def test_the_fetch_has_a_size_ceiling():
     with pytest.raises(IndexError_) as error:
-        index.fetch('https://example.com/i.json', fetcher=lambda u, limit: b'x' * (limit + 1))
+        index.fetch('https://example.com/i.json', fetcher=lambda u, limit: b'x' * (limit + 1), resolve=resolver(PUBLIC))
     assert error.value.code == 'index_too_large'
 
 
@@ -85,6 +90,7 @@ def test_the_route_needs_the_human_credential_and_answers_the_parsed_index(tmp_p
     monkeypatch.setenv('OH_HUMAN_TOKEN', 'human-secret')
     service = CordisService(tmp_path, enabled=False)
     service.index_fetcher = lambda u, limit: good()
+    service.index_resolver = resolver(PUBLIC)
     app = FastAPI()
     app.include_router(router)
     app.state.cordis = service
@@ -94,3 +100,67 @@ def test_the_route_needs_the_human_credential_and_answers_the_parsed_index(tmp_p
     assert done.status_code == 200 and [p['name'] for p in done.json()['plugins']] == ['notes-tool', 'git-thing']
     bad = client.post('/cordis/index/fetch', headers=HUMAN, json={'url': 'http://example.com/i.json'})
     assert bad.status_code == 422 and bad.json()['detail']['code'] == 'invalid_url'
+
+
+@pytest.mark.parametrize('answers', [['127.0.0.1'], ['10.1.2.3'], ['169.254.169.254'], ['93.184.215.14', '192.168.0.9'], ['::1'], ['fd00::1'], []])
+def test_a_name_that_resolves_to_a_local_or_private_address_is_refused(answers):
+    calls = []
+    with pytest.raises(IndexError_) as error:
+        index.fetch('https://Index.Example.org./i.json', fetcher=lambda u, limit: calls.append(u) or good(),
+                    resolve=resolver({'index.example.org': answers}))
+    assert error.value.code == 'invalid_url' and calls == []
+
+
+def test_the_host_is_normalized_before_it_is_resolved():
+    asked = []
+    seen = index.fetch('https://EXAMPLE.com./i.json', fetcher=lambda u, limit: good(), resolve=lambda host: asked.append(host) or ['93.184.215.14'])
+    assert asked == ['example.com'] and seen['plugins']
+
+
+def test_the_connection_goes_to_the_checked_address_with_the_name_for_tls_and_host(monkeypatch):
+    opened = {}
+
+    class FakeResponse:
+        status = 200
+
+        def read(self, n):
+            return good()
+
+    class FakeConnection:
+        def __init__(self, host, address, timeout):
+            opened.update(host=host, address=address, timeout=timeout)
+
+        def request(self, method, path, headers):
+            opened.update(method=method, path=path, headers=headers)
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            opened['closed'] = True
+
+    monkeypatch.setattr(index, '_PinnedConnection', FakeConnection)
+    seen = index.fetch('https://example.com/list/i.json?x=1', resolve=resolver(PUBLIC))
+    assert seen['plugins'] and opened['host'] == 'example.com' and opened['address'] == '93.184.215.14'
+    assert opened['path'] == '/list/i.json?x=1' and opened['timeout'] == index.TIMEOUT_S and opened['closed']
+
+
+@pytest.mark.parametrize('status', [301, 302, 307, 308])
+def test_a_redirect_is_refused(monkeypatch, status):
+    class Redirect:
+        def __init__(self, *a):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            return type('R', (), {'status': status, 'read': lambda self, n: b''})()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(index, '_PinnedConnection', Redirect)
+    with pytest.raises(IndexError_) as error:
+        index.fetch('https://example.com/i.json', resolve=resolver(PUBLIC))
+    assert error.value.code == 'redirect_refused'
