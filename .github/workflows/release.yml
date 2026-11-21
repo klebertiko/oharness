@@ -26,6 +26,8 @@ on:
       - .github/actions/setup-safe-chain/**
       - src-tauri/**
       - scripts/build-sidecar.mjs
+      - scripts/build-cordis-host.mjs
+      - cordis-host/**
       - scripts/smoke-desktop.ps1
       - scripts/smoke-sidecar.mjs
       - scripts/check-webview.mjs
@@ -173,6 +175,10 @@ jobs:
         run: node scripts/build-sidecar.mjs
       - name: Smoke packaged sidecar
         run: node scripts/smoke-sidecar.mjs src-tauri/binaries/oharness-sidecar-x86_64-pc-windows-msvc.exe
+
+      # The plugin host (ADR 0071): pinned Node runtime + cordis-host sources and production dependencies, bundled as a resource.
+      - name: Stage plugin host
+        run: node scripts/build-cordis-host.mjs
 
       # Sign inside-out: sidecar, app exe, then the installers that embed them.
       # Each signing step logs in again because OIDC assertions are short-lived.
@@ -463,6 +469,8 @@ jobs:
         env:
           TRIPLE: ${{ matrix.triple }}
         run: node scripts/smoke-sidecar.mjs "src-tauri/binaries/oharness-sidecar-${TRIPLE}"
+      - name: Stage plugin host
+        run: node scripts/build-cordis-host.mjs
 
       - name: Build and bundle
         env:

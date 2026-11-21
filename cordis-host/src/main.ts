@@ -10,6 +10,7 @@ writeSync(1, `${JSON.stringify({
   port: running.port,
   token: running.token,
   cordis: running.runtime.cordisVersion,
+  node: process.version,
   runtime: 'isolated',
 })}\n`)
 

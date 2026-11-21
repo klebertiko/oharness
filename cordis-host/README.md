@@ -9,7 +9,7 @@ npm test
 npm start
 ```
 
-`npm start` escreve uma linha JSON em stdout: `host`, `port`, `token`, `cordis`, `runtime`. O token não sai em outro canal. As rotas exigem `Authorization: Bearer <token>` e `Host: 127.0.0.1:<porta>`.
+`npm start` escreve uma linha JSON em stdout: `host`, `port`, `token`, `cordis`, `runtime` e `node` (o `process.version`, que o sidecar usa para recusar Node abaixo de 22.20). O token não sai em outro canal. As rotas exigem `Authorization: Bearer <token>` e `Host: 127.0.0.1:<porta>`.
 
 ## Instalação
 
@@ -20,6 +20,8 @@ O aviso, em inglês e pt-BR, diz o que o processo do plugin não alcança sem ca
 Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existirem, a confirmação leva `scripts: "do-not-run"`. `approvedBuilds` e `allowBuilds` são recusados.
 
 O pacote tem de estar dentro da pasta de plugins: `OH_CORDIS_PLUGINS_DIR` (absoluta) ou `~/.oharness/plugins`. O digest cobre o arquivo de entrada e o hash de todos os arquivos do pacote, então editar o pacote depois da prévia exige uma prévia nova. O token é da UI e do sidecar, nunca do agente.
+
+`POST /v1/plugins/unload {name}` para o plugin (`name` é o nome do pacote, como em `GET /v1/plugins`) e o esquece: um plugin isolado tem o processo parado, um `in-process` tem o fiber descartado, e a cópia privada é apagada. Depois disso outra versão pode ser instalada sem reiniciar o host. Nome desconhecido responde 404 `plugin-not-found`.
 
 ## Isolamento
 
