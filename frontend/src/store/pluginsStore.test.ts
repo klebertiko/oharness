@@ -84,6 +84,14 @@ describe("pluginsStore", () => {
     expect(usePluginsStore.getState().plugins.some((p) => p.name === "notes-tool")).toBe(true);
   });
 
+  it("drops the answer of a download the person cancelled", async () => {
+    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    const pending = usePluginsStore.getState().fetchPackage({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
+    usePluginsStore.getState().resetAdd();
+    await pending;
+    expect(usePluginsStore.getState().add.step).toBe("form");
+  });
+
   it("keeps the form with the reason when fetch fails and returns to the form on cancel", async () => {
     routes.set("POST /cordis/plugins/fetch", { status: 422, body: { detail: { code: "not_found", message: "No such package" } } });
     await usePluginsStore.getState().fetchPackage({ kind: "npm", spec: "nope", version: "1.0.0" });

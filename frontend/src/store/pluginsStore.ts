@@ -54,7 +54,8 @@ const initial = () => ({
   phase: "loading" as const, status: null, plugins: [], refreshError: null, actionError: null, busy: {}, selectedId: null, logs: emptyLogs(), add: emptyAdd(),
 });
 
-const unavailable = (error: unknown): boolean => error instanceof PluginsError && error.code === "cordis_unavailable";
+let addRun = 0;
+const unavailable =(error: unknown): boolean => error instanceof PluginsError && error.code === "cordis_unavailable";
 
 export const usePluginsStore = create<PluginsState>((set, get) => ({
   ...initial(),
@@ -113,12 +114,13 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
   },
 
   async fetchPackage(request) {
+    const mine = ++addRun;
     set({ add: { ...emptyAdd(), step: "fetching" } });
     try {
       const fetched = await pluginsApi.fetchPackage(request);
-      set({ add: { ...emptyAdd(), step: "preview", fetched } });
+      if (mine === addRun) set({ add: { ...emptyAdd(), step: "preview", fetched } });
     } catch (error) {
-      set({ add: { ...emptyAdd(), error: problem(error) } });
+      if (mine === addRun) set({ add: { ...emptyAdd(), error: problem(error) } });
     }
   },
 
@@ -141,7 +143,11 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
     }
   },
 
-  resetAdd: () => set({ add: emptyAdd() }),
+  // Cancelling while the download runs drops its answer: the staged files are collected by the sidecar and nothing is installed.
+  resetAdd: () => {
+    addRun += 1;
+    set({ add: emptyAdd() });
+  },
   clearActionError: () => set({ actionError: null }),
   reset: () => set(initial()),
 }));
