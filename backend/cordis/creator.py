@@ -11,12 +11,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from cordis.devarea import KINDS, MAX_FILE_BYTES, DevArea, DevError
+from cordis.devarea import KINDS, MAX_FILE_BYTES, DevArea, DevError, check_name, check_relative
 from cordis.service import CordisService, ServiceError
 from cordis.sources import SourceError
 from cordis.supervisor import CordisUnavailable, HostRequestError
 
-__all__ = ['DevArea', 'DevError', 'MAX_FILE_BYTES', 'TOOL_NAME', 'TOOL_SCHEMA', 'active_service', 'bind', 'run_action', 'skill_prompt']
+__all__ = ['DevArea', 'DevError', 'MAX_FILE_BYTES', 'TOOL_NAME', 'TOOL_SCHEMA', 'active_service', 'bind', 'precheck', 'run_action', 'skill_prompt']
 
 TOOL_NAME = 'cordis_plugins'
 SKILL_FILE = Path(__file__).resolve().parent / 'skill' / 'SKILL.md'
@@ -84,6 +84,21 @@ def _check(args: Any) -> tuple[str, dict[str, Any]]:
         if not isinstance(args.get(key), str):
             raise DevError('invalid_arguments', f'{action} needs {key} as text.')
     return action, args
+
+
+def precheck(args: Any) -> dict[str, Any] | None:
+    """The failed result for arguments that can never be valid, so the person is not asked to approve them; None when they may be."""
+    try:
+        action, args = _check(args)
+        if 'name' in _ARGS[action]:
+            check_name(args['name'])
+        if 'path' in _ARGS[action]:
+            check_relative(args['path'])
+        if action == 'scaffold' and args['kind'] not in KINDS:
+            raise DevError('invalid_kind', 'kind is tool, command or service.')
+    except DevError as error:
+        return _failed(error.code, error.message, 'Fix the arguments and call again; paths stay inside dev/<name>.')
+    return None
 
 
 def run_action(service: CordisService, args: Any) -> dict[str, Any]:

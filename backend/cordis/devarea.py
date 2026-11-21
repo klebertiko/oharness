@@ -38,6 +38,21 @@ def _reserved(part: str) -> bool:
     return part.split('.', 1)[0].lower() in _RESERVED
 
 
+def check_name(name: object) -> None:
+    if not isinstance(name, str) or not _NAME.match(name) or _reserved(name):
+        raise DevError('invalid_name', 'A package name is lowercase letters, digits and dashes, starting with a letter (at most 64).')
+
+
+def check_relative(relative: object) -> list[str]:
+    """The parts of a plain relative path, or `invalid_path`. Checked before anything on disk is touched."""
+    if not isinstance(relative, str) or not relative or len(relative) > 400 or any(c in relative for c in '\\:\0'):
+        raise DevError('invalid_path', 'Give a relative path inside the package, with / between folders.')
+    parts = relative.split('/')
+    if any(not _PART.match(part) or _reserved(part) for part in parts):
+        raise DevError('invalid_path', 'Give a relative path inside the package: no .., no hidden or empty part.')
+    return parts
+
+
 class DevArea:
     def __init__(self, root: Path):
         self.root = root
@@ -50,8 +65,7 @@ class DevArea:
         return self.root
 
     def path(self, name: str, *, must_exist: bool = True) -> Path:
-        if not isinstance(name, str) or not _NAME.match(name) or _reserved(name):
-            raise DevError('invalid_name', 'A package name is lowercase letters, digits and dashes, starting with a letter (at most 64).')
+        check_name(name)
         package = self._base() / name
         if _is_link(package):
             raise DevError('invalid_path', 'The package folder is a link.')
@@ -60,12 +74,8 @@ class DevArea:
         return package
 
     def _file(self, name: str, relative: str) -> Path:
+        parts = check_relative(relative)
         package = self.path(name)
-        if not isinstance(relative, str) or not relative or len(relative) > 400 or any(c in relative for c in '\\:\0'):
-            raise DevError('invalid_path', 'Give a relative path inside the package, with / between folders.')
-        parts = relative.split('/')
-        if any(not _PART.match(part) or _reserved(part) for part in parts):
-            raise DevError('invalid_path', 'Give a relative path inside the package: no .., no hidden or empty part.')
         current = package
         for part in parts:
             current = current / part
