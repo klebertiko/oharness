@@ -96,6 +96,12 @@ export const forjaApi = {
   decideProposal: (id: string, action: "approve" | "request_changes" | "reject", note?: string) =>
     call<Proposal>(`/factory/improvements/${encodeURIComponent(id)}/decide`, { method: "POST", ...json({ action, note }) }),
   scoreRun: (body: Record<string, unknown>) => call<{ id: string; passed: boolean; score: number }>(`/factory/improvements/score`, { method: "POST", ...json(body) }),
+  saveBlueprint: (body: { factory_id: string; blueprint: Record<string, unknown>; stages?: Record<string, unknown> }) =>
+    call<{ mode?: string; status?: string; reasons?: { code: string }[] }>("/factory/blueprint", { method: "POST", ...json(body) }),
+  wouldFire: (body: { provider: string; event: string; filter: Record<string, unknown>; fields: Record<string, unknown> }) =>
+    call<{ fires: boolean; failed: string[] }>("/factory/blueprint/would-fire", { method: "POST", ...json(body) }),
+  niloWorkflow: (body: { recipe: string; name: string; request: string }) =>
+    call<{ ok: boolean; errors: { message: string }[]; review_required: boolean }>("/factory/blueprint/nilo", { method: "POST", ...json(body) }),
 };
 
 export interface Proposal {

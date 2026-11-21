@@ -205,6 +205,23 @@ describe("setup and metrics", () => {
   });
 });
 
+describe("the blueprint", () => {
+  it("asks whether an automation would fire and builds a workflow with Nilo", async () => {
+    routes.set("GET /factory/work-items", { body: { items: [] } });
+    routes.set("POST /factory/blueprint/would-fire", { body: { fires: false, failed: ["labels"] } });
+    routes.set("POST /factory/blueprint/nilo", { body: { ok: true, errors: [], review_required: true } });
+    render(<ForjaScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "Blueprint" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Would it fire?" }));
+    await userEvent.click(screen.getByRole("button", { name: "Would it fire?" }));
+    expect(await screen.findByText("The labels do not match.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio", { name: "Build with Nilo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Build with Nilo" }));
+    expect(await screen.findByText("The definition is valid. The review gate is still required.")).toBeTruthy();
+    expect(document.body.textContent ?? "").not.toMatch(/\.ohm|Bundle/);
+  });
+});
+
 describe("rendered text", () => {
   it("does not show raw event names or ISO stamps, in either theme", async () => {
     routes.set("GET /factory/work-items", { body: { items: [item()] } });
