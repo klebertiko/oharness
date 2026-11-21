@@ -13,7 +13,8 @@ import unicodedata
 from urllib.parse import urlsplit
 
 ProviderId = Literal[
-    "anthropic", "cursor", "openai", "ollama", "openrouter", "openai-compatible", "anthropic-gateway"
+    "anthropic", "cursor", "openai", "ollama", "openrouter", "xai", "deepseek", "gemini",
+    "openai-compatible", "anthropic-gateway",
 ]
 Residence = Literal["local", "cloud"]
 Capability = Literal["chat", "agent", "embed"]
@@ -171,6 +172,48 @@ PROVIDERS: dict[ProviderId, ProviderSpec] = {
             "notice. A route with no fallback will fail when its first choice is down."
         ),
         "docs": "https://openrouter.ai/docs",
+    },
+    "xai": {
+        "id": "xai",
+        "vendor": "xAI",
+        "monogram": "XA",
+        "residence": "cloud",
+        "capabilities": ["chat"],
+        "billing": "metered",
+        "catalogue": "hosted",
+        "credential": {"kind": "api-key", "prefix": "xai-", "where": "The key page for this account", "env": "XAI_API_KEY"},
+        "endpoint": {"default": "https://api.x.ai/v1", "editable": False},
+        "summary": "Chat models behind one API key.",
+        "caveat": "The key is stored once and never shown again.",
+        "docs": "",
+    },
+    "deepseek": {
+        "id": "deepseek",
+        "vendor": "DeepSeek",
+        "monogram": "DS",
+        "residence": "cloud",
+        "capabilities": ["chat"],
+        "billing": "metered",
+        "catalogue": "hosted",
+        "credential": {"kind": "api-key", "prefix": "sk-", "where": "The key page for this account", "env": "DEEPSEEK_API_KEY"},
+        "endpoint": {"default": "https://api.deepseek.com", "editable": False},
+        "summary": "Chat models behind one API key.",
+        "caveat": "The key is stored once and never shown again.",
+        "docs": "",
+    },
+    "gemini": {
+        "id": "gemini",
+        "vendor": "Gemini",
+        "monogram": "GE",
+        "residence": "cloud",
+        "capabilities": ["chat"],
+        "billing": "metered",
+        "catalogue": "hosted",
+        "credential": {"kind": "api-key", "prefix": "AIza", "where": "The key page for this account", "env": "GEMINI_API_KEY"},
+        "endpoint": {"default": "https://generativelanguage.googleapis.com/v1beta/openai", "editable": False},
+        "summary": "Chat models behind one API key.",
+        "caveat": "The key is stored once and never shown again.",
+        "docs": "",
     },
 }
 
@@ -333,7 +376,7 @@ def endpoint_origin(endpoint: str) -> tuple[str, str, int | None]:
 def list_catalog() -> list[ProviderSpec]:
     """Return every base vendor spec (Ollama Cloud is a residence variant, not a row),
     then the generic protocols a person can create connections for."""
-    ids = ("anthropic", "cursor", "openai", "ollama", "openrouter", *CUSTOM_PROVIDER_IDS)
+    ids = ("anthropic", "cursor", "openai", "ollama", "openrouter", "xai", "deepseek", "gemini", *CUSTOM_PROVIDER_IDS)
     return [PROVIDERS[pid] for pid in ids]  # type: ignore[index]
 
 

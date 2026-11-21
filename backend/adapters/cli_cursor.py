@@ -259,20 +259,20 @@ class CursorCliAdapter(AgentAdapter):
                 detail="cursor-agent CLI is installed but not logged in. Run `cursor-agent login`.",
             )
 
-        user = status.get("userInfo") or {}
-        email = user.get("email", "")
-        facts = [
-            f for f in [
-                ("account", email, "dim"),
-                ("cli", f"{CLI_NAME} · on PATH", "signal"),
-            ]
-            if f[1]
-        ]
+        from providers.plan import enumerated_plan
+
+        user = status.get("userInfo") if isinstance(status.get("userInfo"), dict) else {}
+        plan = enumerated_plan(user.get("plan") or status.get("plan"))
+        facts = [("cli", f"{CLI_NAME} · on PATH", "signal")]
+        if plan:
+            facts.insert(0, ("plan", plan, "signal"))
+        detail = f"Signed in ({plan} plan). Delegation only." if plan else "Signed in. Delegation only."
         return ProbeResult(
             ok=True,
             health="live",
-            detail=f"Logged in as {email or 'unknown'}. Delegation only — no completion endpoint exists.",
+            detail=detail,
             facts=facts,
+            plan=plan or "",
         )
 
 

@@ -100,14 +100,15 @@ describe("subscription contract (R-PRV-00 frontend)", () => {
       expect(screen.queryByRole("button", { name: /Save key/i })).toBeNull();
     });
 
-    it("shows the signed-in account when the probe reported one", () => {
+    it("shows the plan and never an address", () => {
       render(
         <ConnectionPanel
-          c={conn({ provider: "anthropic", facts: [{ k: "account", v: "user@example.com" }] })}
+          c={conn({ provider: "anthropic", facts: [{ k: "account", v: "user@example.com" }, { k: "plan", v: "Max" }] })}
           actions={stubActions()}
         />,
       );
-      expect(screen.getByText(/Signed in as user@example.com/)).toBeTruthy();
+      expect(screen.getByText(/Max/)).toBeTruthy();
+      expect(document.body.textContent).not.toContain("user@example.com");
     });
   });
 });
