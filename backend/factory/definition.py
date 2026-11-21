@@ -22,7 +22,7 @@ from sandbox.secrets import redact
 
 # The free-text string fields of the schema: a contract test compares this set with the schema, so a new text field cannot skip the check.
 FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks', 'description', 'rubric', 'task',
-                             'successCriteria'})
+                             'successCriteria', 'when', 'prompt', 'reason'})
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'

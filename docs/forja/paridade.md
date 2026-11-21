@@ -29,13 +29,13 @@ Legenda:
 
 | # | Capacidade | Situação |
 |---|---|---|
-| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2 — diagrama só de leitura e edição que gera uma versão nova, sem mudar o que já corre |
-| W12 | Entrada condicional (a primeira transição que a condição aceita) | Fatia 2 — teste: um item com o rótulo certo entra direto em implementação |
-| W13 | Devolver a revisão para implementação, com teto | Já na base o retorno e o teto da política. Teto por transição: Fatia 2 |
-| W14 | Rota condicional que encerra o item com um motivo | Fatia 2 |
-| W15 | Simular o caminho com um payload de exemplo | Fatia 2 |
+| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2, neste PR — editar grava um teste; o item que já corre fica na versão antiga; remover o gate de revisão é recusado |
+| W12 | Entrada condicional (a primeira transição que a condição aceita) | Fatia 2, neste PR — um item com o rótulo `docs` entra em implementação |
+| W13 | Devolver a revisão para implementação, com teto | Já na base o retorno da política. Neste PR (fatia 2) o teto por transição manda o item para uma pessoa |
+| W14 | Rota condicional que encerra o item com um motivo | Fatia 2, neste PR |
+| W15 | Simular o caminho com um payload de exemplo | Fatia 2, neste PR |
 | W16 | Gate de aprovação da especificação | Já na base |
-| W17 | Gate condicional: perguntar quando uma condição em prosa for verdadeira | Fatia 2 — o gate declarado pausa, e a resposta pode decidir a transição |
+| W17 | Gate condicional: perguntar quando uma condição em prosa for verdadeira | Fatia 2, neste PR — o gate pausa com a pergunta declarada |
 | W18 | Mudança de definição não altera o que já está em execução | Já na base. Neste PR o teste de canário confirma que o item antigo fica na versão em que nasceu |
 | W19 | Merge só de pessoa; o validador recusa uma ação de merge | Já na base a regra de merge. Neste PR o validador de proposta recusa merge, com motivo, antes de chegar à pessoa |
 
@@ -47,8 +47,8 @@ Legenda:
 | W21 | Filtros: todos precisam bater; lista vazia não restringe | Já na base |
 | W22 | Filtro de payload em webhook | Já na base |
 | W23 | Agenda | Já na base. A tela mostra a próxima execução no horário local: Fatia 2 |
-| W24 | Evento interno quando o item muda de estágio, para encadear outra automação | Fatia 2 — teste: chegar a concluído dispara a automação de resumo |
-| W25 | "Dispararia?" contra um payload de exemplo, dizendo qual filtro falhou | Fatia 2 |
+| W24 | Evento interno quando o item muda de estágio, para encadear outra automação | Fatia 2, neste PR — chegar a concluído dispara a automação de resumo |
+| W25 | "Dispararia?" contra um payload de exemplo, dizendo qual filtro falhou | Fatia 2, neste PR |
 | W26 | Aviso quando duas automações disparam o mesmo evento e o mesmo alvo | Fatia 2 |
 | W27 | Webhooks autenticados | Já na base no servidor. Tela com URL, copiar segredo, rotação e as últimas entregas: Fatia 2 |
 | W28 | Limite de tamanho, retentativa e idempotência | Já na base |
@@ -124,7 +124,7 @@ Legenda:
 | W78 | Definição em `.oharness/forja`, com scorers, benchmarks, política de rede e autoaperfeiçoamento | Neste PR essas seções no schema, opcionais, sem quebrar uma definição antiga. Roteadores e um schema por tipo de arquivo: Fatia 2 e Fatia 3 |
 | W79 | Validar a definição | Já na base na rota e na CLI. A ferramenta MCP: Fatia 3 |
 | W80 | Roteador que escolhe o modelo por regra | Fatia 3 |
-| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2 — o Nilo gera a definição a partir de um pedido e o validador confere antes de gravar |
+| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2, neste PR — o Nilo monta a definição e o validador confere antes de gravar; um pedido para tirar a revisão não tira o gate |
 | W82 | Um item com dois repositórios e a ordem de merge declarada por pessoa | Fatia 3 |
 | W83 | O setup pergunta o escopo e o validador recusa item fora dele | Fatia 2 |
 | W84 | Primeiro teste: um item pequeno e um checklist de avaliação | Fatia 2 |

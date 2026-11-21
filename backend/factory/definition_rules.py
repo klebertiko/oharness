@@ -192,6 +192,25 @@ def build_schema() -> dict:
                 'sampleDays': _ints(1, 90),
                 'canaryPercent': _ints(1, 50),
             }),
+            'blueprint': _object({
+                'entry': {'type': 'array', 'maxItems': 20, 'items': _object({
+                    'to': {'enum': ['intake', 'triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor', 'end']},
+                    'when': _text(500),
+                }, ('to',))},
+                'routes': {'type': 'array', 'maxItems': 40, 'items': _object({
+                    'from': {'enum': ['intake', 'triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor']},
+                    'to': {'enum': ['intake', 'triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor', 'end']},
+                    'when': _text(500),
+                    'reason': _text(500),
+                    'maxReturns': _ints(0, MAX_REVIEW_RETURNS_CAP),
+                }, ('from', 'to'))},
+                'gates': {'type': 'array', 'maxItems': 20, 'items': _object({
+                    'id': ident,
+                    'stage': {'enum': ['intake', 'triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor']},
+                    'prompt': _text(2000, 1),
+                    'when': _text(500),
+                }, ('id', 'stage', 'prompt'))},
+            }),
             'reserved': _object({
                 'automations': {'type': 'object', 'additionalProperties': {'type': 'string'}},
                 'webhooks': {'type': 'object', 'additionalProperties': {'type': 'string'}},

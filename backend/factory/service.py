@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from factory.models import ORIGIN_LIMIT_BYTES, ActionBody, WorkItemCreate
 from factory.orm import WorkItem, WorkItemArtifact, WorkItemEvent, WorkItemRun
+from factory.blueprint import entry_stage, matching_gate, route_decision
 from factory.stages import CLOSED_STATUSES, may_enter, pairs_for_column, column_of
 from run_store import redact_value
 
@@ -95,6 +96,7 @@ async def create(db: AsyncSession, body: WorkItemCreate, actor: tuple[str, str |
             return winner, False, False
         raise
     await add_event(db, item, 'created', actor, {'source': src.kind, 'reopens': item.reopens, 'origin_truncated': truncated})
+    await _apply_entry(db, item, actor, body.labels)
     await db.commit()
     return item, True, False
 
@@ -182,6 +184,7 @@ async def enter_stage(db: AsyncSession, item: WorkItem, stage: str, actor: tuple
         await add_event(db, item, 'verify_failed' if cause == 'verify_failed' else 'returned_to_implement', actor, {'reason': reason})
     _move(item, stage, status)
     await add_event(db, item, 'stage_entered', actor, {'stage': stage, 'status': status})
+    await _apply_blueprint(db, item, actor, stage)
 
 
 async def request_checkpoint(db: AsyncSession, item: WorkItem, actor: tuple[str, str | None], kind: str, question: str = '',
@@ -270,6 +273,7 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         await add_event(db, item, 'merge_observed', actor, {'via': 'human_confirmation'})
         _move(item, item.stage, 'done')
         await add_event(db, item, 'completed', actor)
+        await _notify_stage(db, item, 'done', actor)
     elif a == 'advance':
         if item.status in ('claimed', 'parked') or await _open_question(db, item):
             raise FactoryError('cannot_advance')
@@ -313,3 +317,88 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
 
 def column(item: WorkItem) -> str:
     return column_of(item.stage, item.status)
+
+
+async def _definition_of(db: AsyncSession, item: WorkItem) -> dict | None:
+    if not item.factory_version:
+        return None
+    from factory import versions
+    try:
+        row = await versions.snapshot(db, item.factory_id, item.factory_version)
+    except FactoryError:
+        return None
+    return json.loads(row.definition_json)
+
+
+async def _facts(db: AsyncSession, item: WorkItem) -> dict:
+    labels = json.loads(item.labels_json or '[]')
+    events = list(await db.scalars(select(WorkItemEvent).where(WorkItemEvent.work_item_id == item.id)))
+    returns = 0
+    answer = None
+    for event in events:
+        if event.type == 'returned_to_implement':
+            returns += 1
+        if event.type == 'checkpoint_resolved':
+            data = json.loads(event.data_json or '{}')
+            if data.get('answer'):
+                answer = data['answer']
+    return {'labels': labels, 'returns': returns, 'answer': answer, 'stage': item.stage}
+
+
+async def _apply_entry(db: AsyncSession, item: WorkItem, actor: tuple[str, str | None], labels: list[str]) -> None:
+    definition = await _definition_of(db, item)
+    blueprint = (definition or {}).get('blueprint')
+    target = entry_stage(blueprint, {'labels': labels, 'stage': 'intake'})
+    if target == 'end':
+        _move(item, item.stage, 'cancelled')
+        item.closed_at = _now()
+        await add_event(db, item, 'route_ended', actor, {'reason': 'The entry route ends the item.', 'stage': 'end'})
+        return
+    if target != 'intake' and target in ('triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor') and may_enter('intake', target):
+        _move(item, target, 'queued')
+        await add_event(db, item, 'stage_entered', actor, {'stage': target, 'status': 'queued', 'via': 'entry'})
+    await _apply_blueprint(db, item, actor, item.stage)
+
+
+async def _apply_blueprint(db: AsyncSession, item: WorkItem, actor: tuple[str, str | None], stage: str) -> None:
+    if item.status in CLOSED_STATUSES:
+        await _notify_stage(db, item, stage, actor)
+        return
+    definition = await _definition_of(db, item)
+    blueprint = (definition or {}).get('blueprint')
+    facts = await _facts(db, item)
+    gate = matching_gate(blueprint, stage, facts)
+    if gate is not None:
+        await request_checkpoint(db, item, actor, 'question', str(gate.get('prompt') or ''))
+        await _notify_stage(db, item, stage, actor)
+        return
+    route, capped = route_decision(blueprint, stage, facts)
+    if capped and route is None:
+        _move(item, item.stage, 'awaiting_human')
+        await add_event(db, item, 'checkpoint_requested', actor, {'kind': 'question', 'question': 'The return cap was reached.', 'question_id': str(uuid.uuid4())})
+    elif route is not None and route.get('to') == 'end':
+        _move(item, item.stage, 'cancelled')
+        item.closed_at = _now()
+        await add_event(db, item, 'route_ended', actor, {'reason': route.get('reason') or '', 'stage': 'end'})
+    await _notify_stage(db, item, stage, actor)
+
+
+async def _notify_stage(db: AsyncSession, item: WorkItem, stage: str, actor: tuple[str, str | None]) -> None:
+    definition = await _definition_of(db, item)
+    texts = ((definition or {}).get('reserved') or {}).get('automations') or {}
+    if not isinstance(texts, dict) or not texts:
+        return
+    from factory_intake.automations import AutomationError, Event, parse_automation, trigger_matches
+    event = Event('factory', 'work_item_stage_changed', fields={'stage': stage, 'status': item.status}, title=item.title, ref=item.id)
+    matched = []
+    for auto_id, text in texts.items():
+        if not isinstance(text, str):
+            continue
+        try:
+            auto = parse_automation(str(auto_id), text)
+        except AutomationError:
+            continue
+        if any(trigger_matches(trigger, event) for trigger in auto.triggers):
+            matched.append(auto.id)
+    if matched:
+        await add_event(db, item, 'automation_matched', actor, {'automations': matched, 'stage': stage})
