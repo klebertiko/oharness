@@ -31,6 +31,7 @@ from adapters.catalog import (
     validate_custom_model,
 )
 from adapters.cli_shared import INVALID_CLI_MODEL, valid_cli_model
+from providers.preference import order_for_failover
 from secret_store.base import SecretsStore
 
 # connection.provider -> the adapters.get_adapter() key that actually talks to
@@ -140,6 +141,9 @@ def resolve_node_provider_with_failover(
     """
     connections = connections or {}
     provider_ids = [str(p) for p in (data.get("providerIds") or []) if p]
+    preference = data.get("preference")
+    if isinstance(preference, list) and provider_ids:
+        provider_ids = order_for_failover(provider_ids, [str(item) for item in preference if item])
     if not provider_ids:
         raise ProviderResolutionError(
             "No provider is set for this node. Pin one on the node, or pick one "
