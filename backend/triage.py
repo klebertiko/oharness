@@ -68,20 +68,17 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from functools import lru_cache
 import os
 import math
-from pathlib import Path
 from time import perf_counter
 from typing import Awaitable, Callable
 
 import httpx
 
 from adapters.base import AdapterConfig
+from nilo.voice import memory_block_for, nilo_system_prompt
 from providers.resolution import ProviderResolutionError, resolve_node_provider
 from usage_tracking import connection_billing
-
-_SOUL_PATH = Path(__file__).resolve().parent.parent / "SOUL.md"
 
 _ENGAGE_HARNESS_TOKEN = "<<ENGAGE_HARNESS>>"
 _LAYA_LOOPBACK_DEFAULT_PORT = 8761
@@ -168,46 +165,6 @@ async def decide_with_laya(instruction: str) -> LayaRouteDecision:
         )
     response.raise_for_status()
     return _parse_laya_decision(response.json(), (perf_counter() - started) * 1000)
-
-
-@lru_cache(maxsize=1)
-def _soul() -> str:
-    """Nilo's voice, read once per process. Missing SOUL.md is not fatal —
-    the intake call still works, just without her voice layered on; that
-    degrades gracefully rather than breaking routing over a missing file."""
-    try:
-        return _SOUL_PATH.read_text(encoding="utf-8")
-    except OSError:
-        return ""
-
-
-def _workspace_context(cwd: str | None) -> str:
-    """One factual sentence naming the chat's chosen working folder.
-
-    The composer's WorkspacePicker already threads a chosen Cowork project's
-    `rootPath` this far as `cwd` (see `providers/resolution.py`'s
-    `resolve_node_provider`, which validated it before it ever reached
-    here) — but until this, nothing turned that path into text the model
-    itself reads: `OpenAICompatibleAdapter.invoke()` (Ollama/OpenAI/
-    OpenRouter) never looks at `AdapterConfig.extra` at all, and a CLI
-    adapter only uses `extra["cwd"]` as the *subprocess's* working
-    directory, never as something mentioned in the prompt. Real bug,
-    reported 2026-09-17: the composer chip showed "Development" selected,
-    and "em que folder estamos agora?" still got "Não tenho visibilidade do
-    diretório de trabalho daqui" — an honest answer to what the model had
-    actually been sent (nothing), but a misleading one given what the UI
-    told the person was already known.
-
-    SOUL.md is what lets Nilo explain *why* she still can't act inside this
-    folder (chat is deliberately tool-free — see this module's own docstring
-    and `cli_claude.py`'s); this function only supplies the one variable
-    fact, the folder's own name, so that gets stated correctly instead of
-    invented or omitted. Empty when no folder is chosen, so she never
-    invents one — same graceful-degradation shape as `_soul()` itself."""
-    if not cwd:
-        return ""
-    name = Path(cwd).name or cwd
-    return f'This chat\'s working folder is "{name}" ({cwd}).'
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,20 +294,11 @@ async def route_message(
                 model=resolved.config.model,
                 endpoint=resolved.config.endpoint,
                 api_key=resolved.config.api_key,
-                # Nilo's voice layers on top of (never replaces) a node-level
-                # system_prompt a person may have set — hers goes first, so
-                # a more specific instruction downstream still wins on
-                # conflict, the same precedence order config assembly
-                # already uses elsewhere in this codebase. The workspace
-                # fact (if any) sits between the two: always true regardless
-                # of what a node overrides, but not part of her fixed voice
-                # (it changes per chat). Empty parts drop out, so this is
-                # exactly `_soul()` alone when there's no cwd and no node
-                # override — unchanged from before this fact existed.
-                system_prompt="\n\n".join(
-                    part
-                    for part in (_soul(), _workspace_context(cwd), resolved.config.system_prompt)
-                    if part
+                # Her voice, then the person's rules, then the fixed name,
+                # then facts (the folder), then a node prompt. Empty parts
+                # drop out inside nilo_system_prompt.
+                system_prompt=nilo_system_prompt(
+                    cwd, await memory_block_for(cwd), resolved.config.system_prompt
                 ),
                 temperature=resolved.config.temperature,
                 max_tokens=resolved.config.max_tokens,
