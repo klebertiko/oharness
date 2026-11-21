@@ -73,6 +73,9 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_DB_PATH.as_posix()}"
 os.environ["OH_SECRETS"] = "memory"
 os.environ["OH_SECRETS_DIR"] = str(_SECRETS_DIR)
 os.environ.setdefault("OH_SIDECAR_TOKEN", "test-fixed-sidecar-token")
+# The plugin host (Node) must not start for every `TestClient(app)`; test_cordis_* turn it on for themselves.
+os.environ["OH_CORDIS_DISABLE"] = "1"
+os.environ["OH_CORDIS_DATA_DIR"] = str(_ISOLATION_ROOT / "cordis-data")
 
 
 def pytest_configure(config) -> None:
