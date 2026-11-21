@@ -29,11 +29,21 @@ const types = {
   ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json",
 };
 
+function isAppPath(pathname) {
+  const path = pathname.replace(/\/index\.html$/, "").replace(/\/$/, "") || "/";
+  return path === "/" || /^\/(?:s(?:\/[^/]+)?|forja(?:\/item\/[^/]+)?|studio(?:\/[^/]+)?|plugins|providers|settings(?:\/[^/]+)?)\/?$/.test(path);
+}
+
 function resolveFile(pathname) {
   const target = resolve(out, "." + decodeURIComponent(pathname));
   if (target !== out && !target.startsWith(out + sep)) return null;
   for (const candidate of [target, target + ".html", join(target, "index.html")]) {
     if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  // One document serves every app address. /dev stays a real 404 in production.
+  if (isAppPath(pathname)) {
+    const index = join(out, "index.html");
+    if (existsSync(index)) return index;
   }
   return null;
 }

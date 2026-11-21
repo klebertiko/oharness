@@ -9,8 +9,8 @@ import { KeymapSheet } from "./KeymapSheet";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
 import { ActivityRail } from "./ActivityRail";
+import { shellNavCommands, type Command } from "./commands";
 import { useShellStore } from "./shellStore";
-import type { Command } from "./commands";
 
 afterEach(cleanup);
 
@@ -170,18 +170,16 @@ describe("TitleBar", () => {
 describe("ActivityRail", () => {
   it("marks only the current destination with aria-current=page", () => {
     useShellStore.setState({ section: "providers", hydrated: true });
-    render(<ActivityRail />);
+    render(<ActivityRail variant="open" />);
     const nav = screen.getByRole("navigation", { name: "Destinations" });
     expect(within(nav).getByRole("button", { name: "Providers" }).getAttribute("aria-current")).toBe("page");
     expect(within(nav).getByRole("button", { name: "Chats" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("toggles the theme through the theme module", async () => {
+  it("toggles the theme from the command registry", () => {
     document.documentElement.dataset.theme = "dark";
-    render(<ActivityRail />);
-    await userEvent.click(screen.getByRole("button", { name: "Use light theme" }));
+    shellNavCommands().find((command) => command.id === "theme:toggle")!.run();
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.style.colorScheme).toBe("light");
-    expect(screen.getByRole("button", { name: "Use dark theme" })).toBeTruthy();
   });
 });

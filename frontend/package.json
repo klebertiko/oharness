@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/strip-dev-routes.mjs",
     "start": "next start",
     "lint": "biome lint --error-on-warnings .",
     "typecheck": "tsc --noEmit",
