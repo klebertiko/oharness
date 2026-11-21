@@ -65,6 +65,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
   };
 
   const question = item && item.status === "awaiting_human" ? openQuestion(events) : null;
+  const source = item ? sourceKey(item) : null;
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()} title={item?.title ?? t("forja.loading")} showClose>
@@ -75,7 +76,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
           </Notice>
         </div>
       )}
-      {item && (
+      {item && source && (
         <div className="flex flex-col gap-4 p-4 text-body">
           {error && <Notice tone="warn">{error}</Notice>}
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -86,7 +87,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
               <Badge tone={statusTone(item.status)}>{t(`forja.status.${item.status}` as MessageKey)}</Badge>
             </dd>
             <dt className="text-ink-dim">{t("forja.item.source")}</dt>
-            <dd>{t(sourceKey(item).key, sourceKey(item).n ? { n: sourceKey(item).n } : undefined)}</dd>
+            <dd>{t(source.key, source.n ? { n: source.n } : undefined)}</dd>
             <dt className="text-ink-dim">{t("forja.item.cost")}</dt>
             <dd>{t("forja.item.tokens", { n: number(item.cost.tokens) })}</dd>
           </dl>
