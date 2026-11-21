@@ -73,6 +73,7 @@ export function NotificationSwitch({ enabled, onChange }: { enabled: boolean; on
       <input
         type="checkbox"
         role="switch"
+        aria-checked={enabled}
         checked={enabled}
         onChange={(event) => onChange(event.target.checked)}
         aria-label={tr("nilo.tasks.notifications")}
