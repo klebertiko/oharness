@@ -80,7 +80,7 @@ def test_reports_installed_signed_in_and_version_per_cli(client: TestClient) -> 
     clis = _by_id(r.json())
     assert set(clis) == {"claude", "codex", "cursor"}
     assert clis["claude"] == {
-        "id": "claude", "provider": "anthropic", "installed": True, "loggedIn": True,
+        "id": "claude", "provider": "anthropic", "installed": True, "loggedIn": True, "signed_in": True,
         "version": "2.1.4 (Claude Code)", "state": "ready", "detail": "Signed in.",
     }
     assert clis["codex"]["provider"] == "openai" and clis["codex"]["state"] == "ready"

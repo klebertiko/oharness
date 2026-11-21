@@ -16,6 +16,7 @@ import { tr } from "@/i18n/store";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { modelNotPulled } from "./modelPull";
 import { cleanResetAt } from "./usageLimit";
+import { cancelLoginRequest, loginCliId, requestLogin } from "./subscriptionLogin";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -488,6 +489,8 @@ interface ProviderState {
   loadState: "idle" | "loading" | "ready" | "offline";
   /** The subscription limit the last run reported, or null. `resetAt` is an ISO instant or null. */
   usageLimit: { connectionId: string; resetAt: string | null } | null;
+  /** A sign-in that is running outside the app. Nothing the CLI prints is stored here. */
+  loginWatch: { connectionId: string; cliId: string; sessionId: string; startedAt: number } | null;
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -509,6 +512,11 @@ interface ProviderState {
   noteUsageLimit: (id: string, resetAt: unknown) => void;
   /** The window has opened, or the person picked another way out. */
   clearUsageLimit: () => void;
+  /** Start the fixed sign-in command for a subscription connection. */
+  startLogin: (id: string) => Promise<void>;
+  cancelLogin: () => Promise<void>;
+  /** The poll saw a signed-in CLI. Clears the watch. */
+  finishLogin: () => void;
   attachSecret: (id: string, plaintext: string) => Promise<void>;
   /** Deletes the key from the sidecar's SecretsStore; false when it could not. */
   revokeSecret: (id: string) => Promise<boolean>;
@@ -540,6 +548,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   hydrated: false,
   loadState: "idle",
   usageLimit: null,
+  loginWatch: null,
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -685,6 +694,24 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       })),
     });
   },
+
+  startLogin: async (id) => {
+    const connection = get().connections.find((c) => c.id === id);
+    if (!connection) return;
+    const cliId = loginCliId(connection);
+    if (!cliId) return;
+    const started = await requestLogin(cliId);
+    if (!started) return;
+    set({ loginWatch: { connectionId: id, cliId, sessionId: started.id, startedAt: Date.now() } });
+  },
+
+  cancelLogin: async () => {
+    const watch = get().loginWatch;
+    set({ loginWatch: null });
+    if (watch) await cancelLoginRequest(watch.sessionId);
+  },
+
+  finishLogin: () => set({ loginWatch: null }),
 
   clearUsageLimit: () => {
     const current = get().usageLimit;

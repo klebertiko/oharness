@@ -31,13 +31,16 @@ export type NextStep = {
     | "checkEndpoint"
     | "copy"
     | "link"
-    | "limit";
+    | "limit"
+    | "login";
   label: string;
   hint: string;
   /** More specific status word than the generic one, when the failure class is known. */
   status?: string;
   /** `copy`: the command that goes to the clipboard. */
   copy?: string;
+  /** `login`: the fixed sign-in command. It is not copied. */
+  login?: string;
   /** `link`: where it opens (external). */
   href?: string;
   /** The action does not test by itself, so a "Test again" sits beside it. */
@@ -69,7 +72,7 @@ function faultStep(c: Connection): NextStep | null {
       return spec.billingUrl ? act("link", "openBilling", { href: spec.billingUrl, thenRetest: true }) : retest();
     case "cli-signin": {
       const login = spec.credential.login;
-      return login ? act("copy", "copyLogin", { copy: login, thenRetest: true }, { login }) : retest();
+      return login ? act("login", "signIn", { login }) : retest();
     }
     case "cli-missing": {
       const url = spec.credential.installUrl;
@@ -137,6 +140,7 @@ export function distanceToReady(c: Connection): number | null {
       // `ollama pull` for an unpulled default is one command away; a login or `ollama serve` is a failure to fix.
       return providerFault(c) ? 2 : 0;
     case "limit":
+    case "login":
       return 2;
     default:
       return 2;

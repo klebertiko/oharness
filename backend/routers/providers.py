@@ -11,6 +11,7 @@ import unicodedata
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,8 +33,10 @@ from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
 from database import get_db
 from providers import store as connection_store
 from providers.diagnostics import build_report
+from providers.login_session import cancel_login, start_login
 from providers.resolution import ADAPTER_BY_PROVIDER
-from runtime.cli_detect import detect_clis
+from providers.usage_windows import parse_usage_windows
+from runtime.cli_detect import DETECTED, detect_clis
 from secret_store.base import SecretsStore
 
 router = APIRouter(prefix="/providers", tags=["providers"])
@@ -194,7 +197,43 @@ async def detect_subscription_clis(request: Request):
     never a credential, so it spends no tokens. The runner is injectable through
     ``app.state.cli_runner`` for tests."""
     runner = getattr(request.app.state, "cli_runner", None) or run_cli
-    return {"clis": await detect_clis(runner)}
+    clis = await detect_clis(runner)
+    for row in clis:
+        row["signed_in"] = bool(row.get("loggedIn"))
+    return {"clis": clis}
+
+
+@router.post("/clis/{cli_id}/login")
+async def begin_cli_login(cli_id: str, request: Request):
+    """Start the fixed sign-in command. The body is ignored; nothing printed is stored."""
+    finder = getattr(request.app.state, "login_finder", None) or None
+    spawner = getattr(request.app.state, "login_spawner", None) or None
+    try:
+        result = start_login(cli_id, **{k: v for k, v in (("finder", finder), ("spawner", spawner)) if v})
+    except KeyError:
+        raise HTTPException(404, "Unknown subscription CLI.") from None
+    if not result["ok"]:
+        return JSONResponse(status_code=409, content={"ok": False, "reason": "not-installed"})
+    return result
+
+
+@router.delete("/clis/login/{session_id}")
+async def stop_cli_login(session_id: str):
+    if not cancel_login(session_id):
+        raise HTTPException(404, "No sign-in is running.")
+    return {"id": session_id, "running": False}
+
+
+@router.get("/usage-windows")
+async def usage_windows(request: Request):
+    """5-hour and weekly windows. Missing data is unavailable, never 0%."""
+    reader = getattr(request.app.state, "usage_window_reader", None)
+    rows = []
+    for cli, provider, _cls in DETECTED:
+        raw = reader(cli) if reader else ""
+        parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        rows.append({"cli": cli, "provider": provider, **parsed})
+    return {"windows": rows}
 
 
 @router.get("/diagnostics")

@@ -75,14 +75,15 @@ describe("subscription contract (R-PRV-00 frontend)", () => {
     });
   });
 
-  describe("next step — per-vendor login command is copied unchanged", () => {
+  describe("next step — per-vendor login command stays on the subscription", () => {
     it.each([
       ["anthropic", "claude CLI is installed but not logged in. Run `claude login`.", "claude login"],
       ["openai", "codex CLI is installed but not logged in. Run `codex login`.", "codex login"],
       ["cursor", "cursor-agent CLI is installed but not logged in. Run `cursor-agent login`.", "cursor-agent login"],
-    ] as const)("%s signed-out -> copy %s", (provider, detail, login) => {
+    ] as const)("%s signed-out -> sign in with %s", (provider, detail, login) => {
       const step = nextStep(conn({ provider, detail }));
-      expect(step).toMatchObject({ kind: "copy", copy: login, status: "Sign-in needed" });
+      expect(step).toMatchObject({ kind: "login", login, status: "Sign-in needed" });
+      expect(step?.copy).toBeUndefined();
     });
   });
 

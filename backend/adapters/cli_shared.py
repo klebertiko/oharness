@@ -349,6 +349,11 @@ def _clock_reset(hour: int, minute: int, second: int, ampm: str | None, now: dat
     return _iso(candidate)
 
 
+def line_reset_at(line: str, now: datetime | None = None) -> str | None:
+    """The reset instant on one line, rebuilt as ISO. No other characters leave the line."""
+    return _reset_from_line(line, _as_aware(now or datetime.now().astimezone()))
+
+
 def _reset_from_line(line: str, now: datetime) -> str | None:
     """The reset instant on this one line, rebuilt as ISO. No other characters leave."""
     absolute = _ISO_IN_LINE.search(line)
