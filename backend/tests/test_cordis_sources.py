@@ -206,15 +206,12 @@ def test_archive_with_too_many_files_is_refused(tmp_path):
 
 
 def test_download_over_the_limit_is_refused(tmp_path):
-    data = tar_gz(package())
-
     def huge(url: str, limit: int) -> bytes:
         return b'x' * (limit + 1)
 
     with pytest.raises(SourceError) as error:
         sources.fetch_npm('demo', '1.0.0', tmp_path, fetcher=huge)
     assert error.value.code == 'archive_too_large'
-    del data
 
 
 def test_nothing_is_executed_or_installed(tmp_path):

@@ -30,10 +30,14 @@ def test_same_name_replaces_and_keeps_the_id(tmp_path):
 def test_enable_disable_remove(tmp_path):
     registry = Registry(tmp_path / 'r.json')
     saved = registry.upsert(entry())
-    assert registry.set_enabled(saved['id'], False)['enabled'] is False
-    assert registry.remove(saved['id'])['name'] == 'demo'
+    disabled = registry.set_enabled(saved['id'], False)
+    assert disabled['enabled'] is False
+    removed = registry.remove(saved['id'])
+    assert removed['name'] == 'demo'
     assert registry.list() == [] and registry.get(saved['id']) is None
-    assert registry.remove('nope') is None and registry.set_enabled('nope', True) is None
+    missing_remove = registry.remove('nope')
+    missing_enable = registry.set_enabled('nope', True)
+    assert missing_remove is None and missing_enable is None
 
 
 def test_a_corrupt_file_is_set_aside_and_the_registry_starts_empty(tmp_path):

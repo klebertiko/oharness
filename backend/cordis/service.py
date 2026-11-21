@@ -7,6 +7,7 @@ the digest of that warning and those files.
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 import secrets
@@ -22,6 +23,8 @@ from cordis import sources
 from cordis.registry import Registry
 from cordis.sources import Fetcher, SourceError
 from cordis.supervisor import RUNNING, UNAVAILABLE, CordisSupervisor, CordisUnavailable, HostRequestError
+
+_log = logging.getLogger(__name__)
 
 FETCH_ID = re.compile(r'^[0-9a-f]{16}$')
 STALE_STAGE_S = 24 * 3600
@@ -101,7 +104,8 @@ class CordisService:
         try:
             self.supervisor.request('POST', '/v1/plugins/unload', {'name': name})
         except (HostRequestError, CordisUnavailable):
-            pass
+            # Not loaded, or no host running: either way nothing of this plugin runs, which is the goal.
+            _log.debug('plugin %s was not loaded in the host', name)
 
     def _reconcile(self, _supervisor: CordisSupervisor) -> None:
         """The host just came up: load every enabled plugin again with its stored digest."""

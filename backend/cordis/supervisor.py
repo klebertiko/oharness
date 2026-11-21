@@ -55,6 +55,14 @@ def default_host_dir() -> Path:
     return Path(__file__).resolve().parents[2] / 'cordis-host'
 
 
+def banner_problem(banner: Mapping[str, Any]) -> str | None:
+    """Why the host that printed this banner cannot be used, or None. The host reports its own Node version, so Node is never probed apart."""
+    version = parse_node_version(str(banner.get('node', '')))
+    if version is None or version < MIN_NODE:
+        return f'Node.js {".".join(map(str, MIN_NODE))} or newer is required.'
+    return None
+
+
 def start_arguments(host_dir: Path) -> list[str]:
     """Node arguments of the host's own `start` script, so there is one place that says how the host runs."""
     manifest = json.loads((host_dir / 'package.json').read_text(encoding='utf8'))
@@ -115,6 +123,7 @@ class CordisSupervisor:
         self._host_log: collections.deque[str] = collections.deque(maxlen=LOG_LINES)
         self._plugin_logs: dict[str, collections.deque[str]] = {}
         self.node_version: str | None = None
+        self._fatal = False
         self.host_pid: int | None = None
 
     # -- state ---------------------------------------------------------
@@ -151,16 +160,6 @@ class CordisSupervisor:
         if not (host_dir / 'node_modules' / 'cordis').is_dir():
             self._set(UNAVAILABLE, 'The plugin host dependencies are not installed.')
             return None
-        try:
-            out = subprocess.run([node, '--version'], capture_output=True, timeout=15, check=False, stdin=subprocess.DEVNULL).stdout
-        except (OSError, subprocess.SubprocessError):
-            self._set(UNAVAILABLE, 'Node.js could not be run.')
-            return None
-        version = parse_node_version(out.decode('utf8', 'replace'))
-        if version is None or version < MIN_NODE:
-            self._set(UNAVAILABLE, f'Node.js {".".join(map(str, MIN_NODE))} or newer is required.')
-            return None
-        self.node_version = '.'.join(map(str, version))
         return node, host_dir
 
     # -- lifecycle -----------------------------------------------------
@@ -184,7 +183,7 @@ class CordisSupervisor:
             while not self._stopping.is_set():
                 self._set(STARTING)
                 came_up = self._launch(node, host_dir)
-                if self._stopping.is_set():
+                if self._stopping.is_set() or self._fatal:
                     return
                 reason = 'The plugin host stopped and was restarted.' if came_up else (self._reason or 'The plugin host did not start.')
                 now = time.monotonic()
@@ -218,6 +217,7 @@ class CordisSupervisor:
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs,
             )
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            self._fatal = True  # Node itself cannot be run: trying again would fail the same way
             self._set(UNAVAILABLE, 'The plugin host could not be started.')
             return False
         with self._lock:
@@ -234,6 +234,13 @@ class CordisSupervisor:
             self._terminate(proc)
             self._set(UNAVAILABLE, 'The plugin host exited before it was ready.')
             return False
+        problem = banner_problem(banner)
+        if problem is not None:
+            self._terminate(proc)
+            self._fatal = True
+            self._set(UNAVAILABLE, problem)
+            return False
+        self.node_version = '.'.join(map(str, parse_node_version(str(banner['node'])) or ()))
         with self._lock:
             self._port, self._token = int(banner['port']), str(banner['token'])
         self._set(RUNNING)
@@ -262,7 +269,8 @@ class CordisSupervisor:
                     if isinstance(parsed, dict) and isinstance(parsed.get('port'), int) and isinstance(parsed.get('token'), str):
                         banner.update(parsed)
                 except ValueError:
-                    pass
+                    # The first line must be the JSON banner; without it the start fails as "no banner".
+                    _log.debug('the first plugin host stdout line was not the JSON banner')
                 ready.set()
         ready.set()  # stdout closed without a banner
 
@@ -291,7 +299,8 @@ class CordisSupervisor:
             if proc.stdin is not None:
                 proc.stdin.close()
         except OSError:
-            pass
+            # The pipe is already broken: the host is gone or going, which is what closing it asks for.
+            _log.debug('the plugin host stdin was already closed')
         try:
             proc.wait(timeout=STOP_GRACE_S)
             return
@@ -304,7 +313,8 @@ class CordisSupervisor:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
-                pass
+                # The group already exited (nothing left to kill) or is not ours to signal.
+                _log.debug('the plugin host process group was already gone')
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:

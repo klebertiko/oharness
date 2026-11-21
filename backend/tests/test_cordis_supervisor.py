@@ -191,3 +191,12 @@ def test_the_off_switch_leaves_the_host_unstarted(tmp_path, monkeypatch):
     with TestClient(app) as client:
         status = client.get('/cordis/status').json()
         assert status['state'] == UNAVAILABLE and 'turned off' in status['reason']
+
+
+def test_banner_node_version_gate():
+    """The host reports its own Node version in the banner; a too-old or missing one is refused without probing Node separately."""
+    from cordis.supervisor import banner_problem
+    assert banner_problem({'port': 1, 'token': 't', 'node': 'v22.20.0'}) is None
+    assert banner_problem({'port': 1, 'token': 't', 'node': 'v24.19.0'}) is None
+    assert 'or newer is required' in banner_problem({'port': 1, 'token': 't', 'node': 'v22.19.9'})
+    assert 'or newer is required' in banner_problem({'port': 1, 'token': 't'})

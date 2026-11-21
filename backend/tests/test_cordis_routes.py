@@ -149,12 +149,14 @@ def test_delete_unloads_and_removes_the_files(api):
     client, net, service = api
     view = install(client, fetch_npm(client, net)).json()
     package = service.registry.get(view['id'])['packageDir']
-    assert client.delete(f'/cordis/plugins/{view["id"]}', headers=HUMAN).status_code == 204
+    removed = client.delete(f'/cordis/plugins/{view["id"]}', headers=HUMAN)
+    assert removed.status_code == 204
     assert client.get('/cordis/plugins').json() == {'plugins': []}
     assert invoke(service)['ok'] is False
     import os
     assert not os.path.exists(package)
-    assert client.delete(f'/cordis/plugins/{view["id"]}', headers=HUMAN).status_code == 404
+    again = client.delete(f'/cordis/plugins/{view["id"]}', headers=HUMAN)
+    assert again.status_code == 404
 
 
 @needs_node

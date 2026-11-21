@@ -23,7 +23,7 @@ def node_problem() -> str | None:
     node = shutil.which('node')
     if node is None:
         return 'Node.js is not on PATH'
-    out = subprocess.run([node, '--version'], capture_output=True, check=False, stdin=subprocess.DEVNULL).stdout.decode()
+    out = subprocess.run(['node', '--version'], capture_output=True, check=False, stdin=subprocess.DEVNULL).stdout.decode()
     version = parse_node_version(out)
     if version is None or version < MIN_NODE:
         return f'Node.js {".".join(map(str, MIN_NODE))} or newer is required'

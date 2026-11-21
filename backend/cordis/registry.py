@@ -38,7 +38,7 @@ class Registry:
             try:
                 os.replace(self._path, self._path.with_name(self._path.name + '.bad'))
             except OSError:
-                pass
+                _log.warning('the unreadable plugin registry could not be set aside either')
             return []
 
     def _save(self) -> None:
