@@ -21,7 +21,8 @@ from factory import definition_rules as rules
 from sandbox.secrets import redact
 
 # The free-text string fields of the schema: a contract test compares this set with the schema, so a new text field cannot skip the check.
-FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks'})
+FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks', 'description', 'rubric', 'task',
+                             'successCriteria'})
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
@@ -416,6 +417,8 @@ def _semantic_issues(definition: dict) -> list[Issue]:
             add(f'{where}.permissions.mode', f'exceeds the Forja limit policy.maxPermissionMode ({policy["maxPermissionMode"]}); raising it is an explicit change')
         if agent.get('harness') and mode not in rules.HARNESS_SAFE_MODES:
             add(f'{where}.harness', 'a harness run gives the model no tools, so it only serves agents that cannot write (mode plan or read_only)')
+        if agent.get('engine') and mode not in rules.HARNESS_SAFE_MODES:
+            add(f'{where}.engine', 'a harness run gives the model no tools, so it only serves agents that cannot write (mode plan or read_only)')
         ceiling = agent.get('tokenCeiling')
         if run_cap and ceiling and ceiling > run_cap:
             add(f'{where}.tokenCeiling', 'cannot exceed ceilings.tokensPerRun')

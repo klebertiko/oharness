@@ -55,6 +55,12 @@ MAX_CONCURRENT_RUNS_CAP = 8
 MAX_REVIEW_RETURNS_CAP = 10
 POLICY_DEFAULTS = {'requireSpec': False, 'specApproval': 'required', 'maxReviewReturns': 3, 'reviewIndependence': 'require',
                    'maxPermissionMode': DEFAULT_MAX_MODE}
+# Checks a scorer can apply without calling a model. A judge-style scorer uses a rubric instead.
+DETERMINISTIC_CHECKS = ('ci_failed', 'qa_rejected', 'sec_found', 'gate_changes', 'pr_closed_unmerged', 'returns_over_cap',
+                        'human_intervention', 'cost_over_envelope')
+# A hostname or a literal IPv4 address. No scheme, port, wildcard or range: a policy either names a host or it does not.
+HOST_PATTERN = r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|(?:\d{1,3}\.){3}\d{1,3})$'
+POLICY_REF_PATTERN = r'^[a-z0-9][a-z0-9./@^-]{0,80}$'
 RUNNER_DEFAULTS = {'type': 'local', 'maxConcurrentRuns': 2, 'credentialStrategy': 'forja'}
 # The layout (ADR 0056). `reserved` folders belong to packages B (parsed by their own code) and C (not read yet).
 RESERVED_FOR_INTAKE = ('automations', 'webhooks')
@@ -85,12 +91,24 @@ def _ints(low: int, high: int) -> dict:
     return {'type': 'integer', 'minimum': low, 'maximum': high}
 
 
+def _network_policy() -> dict:
+    hosts = {'type': 'array', 'items': _pattern(HOST_PATTERN), 'uniqueItems': True, 'maxItems': 50}
+    return _object({
+        'allowedHosts': hosts,
+        'deniedHosts': hosts,
+        'extends': {'type': 'array', 'items': _pattern(POLICY_REF_PATTERN), 'uniqueItems': True, 'maxItems': 10},
+    })
+
+
 def build_schema() -> dict:
     ident, secret_ref, model = _pattern(ID_PATTERN), _pattern(SECRET_REF_PATTERN), _pattern(MODEL_PATTERN)
     agent = _object({
         'role': {'enum': list(ROLES)},
         'model': model,
+        # `harness` names a runtime. `engine` names a Studio harness, by id, used as this agent's engine.
+        # The id is enough: the definition never stores a file name.
         'harness': ident,
+        'engine': ident,
         'instructions': _text(INSTRUCTIONS_MAX_CHARS),
         'skills': {'type': 'array', 'items': ident, 'uniqueItems': True, 'maxItems': 50},
         'localSkills': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: _object({'text': _text(SKILL_MAX_CHARS, 1)}, ('text',))}},
@@ -99,9 +117,27 @@ def build_schema() -> dict:
         'tokenCeiling': _ints(1, MAX_TOKENS_CAP),
         'secrets': {'type': 'array', 'items': secret_ref, 'uniqueItems': True, 'maxItems': 50},
         'memory': _object({key: _ints(1, cap) for key, cap in MEMORY_LIMITS.items()}, tuple(MEMORY_LIMITS)),
+        'networkPolicy': _network_policy(),
         'enabled': {'type': 'boolean'},
         'trigger': ident,
     }, ('role', 'model', 'instructions', 'skills', 'localSkills', 'mcp', 'permissions', 'secrets', 'memory', 'enabled'))
+    label = _object({
+        'value': ident,
+        'score': {'type': 'number', 'minimum': 0, 'maximum': 1},
+        'description': _text(400),
+    }, ('value', 'score'))
+    scorer = _object({
+        'kind': {'enum': ['classification', 'deterministic']},
+        'enabled': {'type': 'boolean'},
+        'passingScore': {'type': 'number', 'minimum': 0, 'maximum': 1},
+        'samplingRate': {'type': 'number', 'minimum': 0, 'maximum': 100},
+        'model': model,
+        'agents': {'type': 'array', 'items': ident, 'uniqueItems': True, 'maxItems': 20},
+        'labels': {'type': 'array', 'items': label, 'maxItems': 20},
+        'rubric': _text(INSTRUCTIONS_MAX_CHARS),
+        'check': {'enum': list(DETERMINISTIC_CHECKS)},
+        'selfImprovement': {'type': 'boolean'},
+    }, ('kind', 'passingScore'))
     return {
         '$schema': 'https://json-schema.org/draft/2020-12/schema',
         '$id': SCHEMA_ID,
@@ -140,6 +176,22 @@ def build_schema() -> dict:
                              'headers': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {r'^[A-Za-z0-9-]{1,100}$': secret_ref}}},
                             ('url',)),
                 ]}}},
+            'networkPolicy': _network_policy(),
+            'scorers': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: scorer}},
+            'benchmarks': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: _object({
+                'agent': ident,
+                'repeats': _ints(1, 20),
+                'task': _text(4000, 1),
+                'successCriteria': _text(4000),
+            }, ('task',))}},
+            'selfImprovement': _object({
+                'analyst': ident,
+                'failureThreshold': _ints(1, 50),
+                'ageDays': _ints(1, 90),
+                'minSampleRuns': _ints(1, 500),
+                'sampleDays': _ints(1, 90),
+                'canaryPercent': _ints(1, 50),
+            }),
             'reserved': _object({
                 'automations': {'type': 'object', 'additionalProperties': {'type': 'string'}},
                 'webhooks': {'type': 'object', 'additionalProperties': {'type': 'string'}},

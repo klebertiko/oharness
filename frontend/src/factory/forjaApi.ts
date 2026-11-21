@@ -43,7 +43,7 @@ const json = (value: unknown): RequestInit => ({ body: JSON.stringify(value) });
 
 export interface InboxEntry {
   id: string;
-  type: "question" | "question_answered" | "spec_review" | "handoff_ready" | "blocked" | "failed";
+  type: "question" | "question_answered" | "spec_review" | "handoff_ready" | "blocked" | "failed" | "improvement";
   work_item_id: string;
   title: string;
   stage: string;
@@ -52,6 +52,8 @@ export interface InboxEntry {
   summary: string;
   actions: string[];
   resolved: boolean;
+  notice?: "pending" | "reverted";
+  factory_id?: string;
 }
 export interface VersionRow { hash: string; kind: string; mode: string; percent: number | null; label: string | null; previous_hash: string | null; activated_by: string; activated_at: string }
 export interface DefinitionState { stable: VersionRow | null; canary: VersionRow | null }
@@ -89,4 +91,25 @@ export const forjaApi = {
   addNote: (factory: string, agent: string, text: string) => call<MemoryNote>("/factory/memory", { method: "POST", ...json({ factory_id: factory, agent_id: agent, text }) }),
   editNote: (id: string, patch: { text?: string; pinned?: boolean; reviewed?: boolean }) => call<MemoryNote>(`/factory/memory/${id}`, { method: "PATCH", ...json(patch) }),
   deleteNote: (id: string) => call<void>(`/factory/memory/${id}`, { method: "DELETE" }),
+  improvements: (factory?: string) => call<Improvements>(`/factory/improvements${factory ? `?factory_id=${encodeURIComponent(factory)}` : ""}`),
+  runImprovement: (factoryId: string, force = false) => call<{ started: boolean; reason?: string | null; open?: number; proposal?: Proposal }>(`/factory/improvements/run`, { method: "POST", ...json({ factory_id: factoryId, force }) }),
+  decideProposal: (id: string, action: "approve" | "request_changes" | "reject", note?: string) =>
+    call<Proposal>(`/factory/improvements/${encodeURIComponent(id)}/decide`, { method: "POST", ...json({ action, note }) }),
+  scoreRun: (body: Record<string, unknown>) => call<{ id: string; passed: boolean; score: number }>(`/factory/improvements/score`, { method: "POST", ...json(body) }),
 };
+
+export interface Proposal {
+  id: string;
+  factory_id: string;
+  status: string;
+  justification: string;
+  target: "definition" | "code";
+  failure_ids: string[];
+  reasons: { code: string; path: string; message: string }[];
+  verdict: string | null;
+  estimated_tokens: number | null;
+  diff: { path: string; op: string }[];
+  created_at: string | null;
+}
+export interface FailureRow { id: string; agent_id: string | null; reason: string; run_id: string | null; at: string | null }
+export interface Improvements { proposals: Proposal[]; failures: FailureRow[]; events: { id: number; type: string; at: string | null; proposal_id: string }[] }
