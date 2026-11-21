@@ -73,7 +73,10 @@ def start_arguments(host_dir: Path) -> list[str]:
 
 
 def host_environment(source: Mapping[str, str], plugins_dir: Path) -> dict[str, str]:
-    env = {key: source[key] for key in _HOST_ENV_KEEP if key in source}
+    # Windows environment names are case-insensitive (a copied os.environ has SYSTEMROOT, not SystemRoot), and Node needs SystemRoot to start.
+    fold = str.upper if sys.platform == 'win32' else str
+    found = {fold(key): value for key, value in source.items()}
+    env = {key: found[fold(key)] for key in _HOST_ENV_KEEP if fold(key) in found}
     env['OH_CORDIS_PLUGINS_DIR'] = str(plugins_dir)
     return env
 
@@ -153,6 +156,9 @@ class CordisSupervisor:
         if not node:
             self._set(UNAVAILABLE, 'Node.js was not found; plugins are off.')
             return None
+        if not Path(node).is_absolute() or not Path(node).is_file():
+            self._set(UNAVAILABLE, 'Node.js must be given as an absolute path to a file; plugins are off.')
+            return None
         host_dir = Path(env.get('OH_CORDIS_HOST_DIR') or default_host_dir())
         if not (host_dir / 'src' / 'main.ts').is_file() or not (host_dir / 'package.json').is_file():
             self._set(UNAVAILABLE, 'The plugin host files were not found.')
@@ -169,6 +175,7 @@ class CordisSupervisor:
             if self._thread is not None and self._thread.is_alive():
                 return
             self._stopping.clear()
+            self._fatal = False
             self._set(STARTING)
             self._thread = threading.Thread(target=self._run, name='cordis-supervisor', daemon=True)
             self._thread.start()
@@ -216,8 +223,12 @@ class CordisSupervisor:
                 args, cwd=host_dir, env=host_environment(self._source_env, self.plugins_dir),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs,
             )
-        except (OSError, ValueError, KeyError, json.JSONDecodeError):
-            self._fatal = True  # Node itself cannot be run: trying again would fail the same way
+        except (FileNotFoundError, PermissionError, ValueError, KeyError, json.JSONDecodeError):
+            self._fatal = True  # Node or the host's start script cannot be used: trying again would fail the same way
+            self._set(UNAVAILABLE, 'The plugin host could not be started.')
+            return False
+        except OSError:
+            # Transient (too many open files, out of memory, disk full): the restart loop tries again with backoff.
             self._set(UNAVAILABLE, 'The plugin host could not be started.')
             return False
         with self._lock:
@@ -232,7 +243,12 @@ class CordisSupervisor:
                 break
         if not banner or proc.poll() is not None:
             self._terminate(proc)
-            self._set(UNAVAILABLE, 'The plugin host exited before it was ready.')
+            if self._refused_a_flag():
+                # A Node too old for the host's flags stops at once with "bad option": a version problem, not a crash to retry.
+                self._fatal = True
+                self._set(UNAVAILABLE, f'Node.js {".".join(map(str, MIN_NODE))} or newer is required.')
+            else:
+                self._set(UNAVAILABLE, 'The plugin host exited before it was ready.')
             return False
         problem = banner_problem(banner)
         if problem is not None:
@@ -273,6 +289,11 @@ class CordisSupervisor:
                     _log.debug('the first plugin host stdout line was not the JSON banner')
                 ready.set()
         ready.set()  # stdout closed without a banner
+
+    def _refused_a_flag(self) -> bool:
+        time.sleep(0.2)  # let the stderr reader take the last lines of a process that just exited
+        with self._lock:
+            return any('bad option' in line for line in list(self._host_log)[-20:])
 
     def _pump_stderr(self, proc: subprocess.Popen[bytes]) -> None:
         assert proc.stderr is not None

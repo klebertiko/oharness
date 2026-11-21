@@ -103,10 +103,12 @@ def delete_plugin(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
 
 @router.get('/plugins/{plugin_id}/logs')
 def plugin_logs(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID), tail: int = Query(200, ge=1, le=500)):
+    _human(request)  # plugin output can carry what the plugin read; only the person sees it
     return {'lines': _call(lambda: _service(request).logs(plugin_id, tail))}
 
 
 @router.get('/plugins/{plugin_id}/export')
 def export_plugin(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)  # the package may be a local folder of the person's; only they export it
     filename, data = _call(lambda: _service(request).export(plugin_id))
     return Response(content=data, media_type='application/gzip', headers={'content-disposition': f'attachment; filename="{filename}"'})
