@@ -8,7 +8,7 @@ import uuid
 
 import anyio
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -25,6 +25,7 @@ from adapters import get_adapter, AdapterConfig
 from adapters.cli_shared import reported_model
 from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
+from nilo.context import build_messages, is_cli, load_turns, prompt_with_history
 from nilo.voice import memory_block_for, nilo_system_prompt
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
@@ -58,6 +59,20 @@ class ExecuteRequest(BaseModel):
     flow: bool | None = None
 
 
+class ContextTurn(BaseModel):
+    """One earlier message. Tool output is not accepted on this field."""
+
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class DirectContext(BaseModel):
+    """Turns of this chat. A registered session reader replaces `turns`."""
+
+    thread_id: str
+    turns: list[ContextTurn] | None = None
+
+
 class DirectRequest(BaseModel):
     """One adapter turn — no harness graph. Same SSE vocabulary as /execute/."""
 
@@ -71,6 +86,8 @@ class DirectRequest(BaseModel):
     tools: Any = None
     # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
     max_tokens: Any = None
+    # Earlier turns of this chat. Omitted means this message stands alone.
+    context: DirectContext | None = None
 
 
 async def _load_hooks_now():
@@ -769,7 +786,24 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                         config,
                         system_prompt=nilo_system_prompt(cwd, await memory_block_for(cwd), config.system_prompt),
                     )
-                    stream = broker.stream(prompt, adapter, voiced) if broker else adapter.stream_events(prompt, voiced)
+                    carried = []
+                    if body.context is not None:
+                        carried = [{"role": turn.role, "content": turn.content} for turn in (body.context.turns or [])]
+                    prepared = build_messages(
+                        voiced.system_prompt,
+                        load_turns(body.context.thread_id if body.context else None, carried),
+                        prompt,
+                        max_tokens=run_budget.max_tokens,
+                    )
+                    # A CLI connection, or any adapter that only accepts one prompt, gets the
+                    # history as data inside that prompt. A tool-capable turn gets the message list.
+                    use_messages = broker is not None and hasattr(adapter, "stream_turn") and not is_cli(adapter_name)
+                    turn_prompt = prompt if use_messages else prompt_with_history(prepared)
+                    stream = (
+                        broker.stream(turn_prompt, adapter, voiced, messages=prepared if use_messages else None)
+                        if broker
+                        else adapter.stream_events(turn_prompt, voiced)
+                    )
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
                         if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):

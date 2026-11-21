@@ -182,7 +182,7 @@ class ToolBroker:
         return {'kind': 'tool_budget', 'calls_used': self.calls_used, 'calls_max': 8,
                 'reads_used': self.reads_used, 'reads_max': 20}
 
-    async def stream(self, prompt, adapter, config):
+    async def stream(self, prompt, adapter, config, messages=None):
         preset_result = None
         if self.options.preset:
             preset = self.options.preset
@@ -206,7 +206,14 @@ class ToolBroker:
             async for event in adapter.stream_events(prompt, config):
                 yield event
             return
-        messages = [{'role': 'system', 'content': config.system_prompt}, {'role': 'user', 'content': prompt}]
+        if messages is None:
+            messages = [{'role': 'system', 'content': config.system_prompt}, {'role': 'user', 'content': prompt}]
+        else:
+            messages = [dict(item) for item in messages]
+            if messages and messages[0].get('role') == 'system':
+                messages[0]['content'] = config.system_prompt
+            elif config.system_prompt:
+                messages.insert(0, {'role': 'system', 'content': config.system_prompt})
         if preset_result:
             messages.append({'role': 'user', 'content': preset_result})
         total_tokens, unsupported = 0, False
