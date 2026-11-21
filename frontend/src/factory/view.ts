@@ -83,6 +83,7 @@ const EVENT_KEYS: Record<string, MessageKey> = {
   parked: "forja.event.parked",
   resumed: "forja.event.resumed",
   cancelled: "forja.event.cancelled",
+  run_stopped: "forja.event.runStopped",
 };
 
 /** A translated phrase. The raw event name never reaches the screen. */

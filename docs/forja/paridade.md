@@ -7,7 +7,8 @@ Legenda:
 - **Já na base** — existe na `main` e este PR não refaz.
 - **Neste PR** — entra agora, com teste.
 - **Fatia 2** — próxima entrega da Forja, ainda neste pacote, sem depender do laço de execução.
-- **Fatia 3** — depende do laço de execução (o módulo que dispara os estágios), que este pacote não altera. Enquanto ele não estiver na `main`, a tela mostra que a execução automática está desligada.
+- **Feito** — coberto por teste. O laço de execução já dispara o estágio, com worktree, pool, parar e orientar.
+- **Fatia 3** — o que ainda falta do laço: rede na saída, MCP por agente, harness por worker, trials executados e o restante desta lista.
 - **Não se aplica** — o motivo está na linha.
 
 ## Núcleo
@@ -67,7 +68,7 @@ Legenda:
 
 | # | Capacidade | Situação |
 |---|---|---|
-| W39 | Worktree por run e teto de runs simultâneas | Já na base o mecanismo, desligado do laço. Fatia 3 liga |
+| W39 | Worktree por run e teto de runs simultâneas | Feito — `factory.loop.start` chama `dispatch.run_stage` em produção: um worktree por run e o pool de `maxConcurrentRuns` |
 | W40 | Precedência do runner: tarefa, automação, agente, padrão | Fatia 3 |
 | W41 | Comandos de setup na worktree antes do primeiro estágio | Fatia 3 |
 | W42 | Erro de setup diz qual comando falhou, com a saída redigida | Fatia 3 |
@@ -87,8 +88,8 @@ Legenda:
 | W51 | Tipos: pergunta, especificação, pronto para revisar, bloqueado, falhou | Já na base. Neste PR a melhoria entra como mais um tipo |
 | W52 | Resolver e desfazer; abrir não resolve | Já na base. Neste PR desfazer fica oferecido por alguns segundos |
 | W53 | Filtros Ativos, Concluídos, Bloqueados, Falhos; busca; Hoje, Semana, Tudo | Neste PR |
-| W54 | Runs com filhos, linha do tempo, custo e sessão | Fatia 3. Neste PR o banner diz que a execução automática está desligada |
-| W55 | Parar um run na hora e orientar o run ao vivo | Fatia 3 — "Parar run" encerra o processo e preserva a worktree; "Orientar" injeta uma mensagem no run ativo, coberto com um driver falso |
+| W54 | Runs com filhos, linha do tempo, custo e sessão | Feito — a tela Execuções lista a run, a run aninhada e quantas cabem no pool. O custo da run é o que o driver gastou. A divisão máquina/inferência continua em W58 |
+| W55 | Parar um run na hora e orientar o run ao vivo | Feito — parar devolve o item para a fila e preserva a worktree; orientar grava a mensagem no jornal, e um segredo nessa mensagem sai redigido |
 | W56 | Pontuar um run e virar tarefa de benchmark | Neste PR a pontuação sob demanda e a tarefa congelada a partir dos dados do run. A execução dos trials: Fatia 3 |
 | W57 | Métricas: autonomia, tempo de ciclo, custo, abertos e concluídos | Já na base os números. Neste PR, sem dados, só o estado vazio; com dados, a série diária. Autonomia pelos autores dos commits: Fatia 3 |
 | W58 | Custo decomposto em máquina e inferência | Fatia 3 |
@@ -146,4 +147,4 @@ Legenda:
 
 **Fatia 2** (telas e regras, sem o laço de execução): blueprint editável, rotas e gates condicionais, evento de mudança de estágio, "Dispararia?", editor de definição, agentes e memória por seletor, automações na tela, nova Forja e "Montar com o Nilo", catálogo de erros na tela, gráfico das três recomendações.
 
-**Fatia 3** (quando o laço de execução estiver ligado): runs ao vivo, parar e orientar, worktree e política de rede aplicadas, juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.
+**Fatia 3** (o laço já liga a run, o worktree e o pool; parar e orientar estão feitos): política de rede aplicada na saída, cliente MCP por agente, harness por worker, juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.
