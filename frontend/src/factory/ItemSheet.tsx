@@ -15,7 +15,7 @@ type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string
  * One work item: where it is, its spec (with the approval of the revision a person is looking at), what happened and what a person can
  * do. Text that came from outside is shown as data in its own block and is never an instruction. There is no merge action (ADR 0055).
  */
-export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string; live?: { run_id: string } | null; onClose: () => void; onChanged: () => void }) {
   const { t, number, locale } = useI18n();
   const explain = useExplain();
   const [item, setItem] = useState<Detail | null>(null);
@@ -25,6 +25,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
   const [answer, setAnswer] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [steer, setSteer] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -58,6 +59,34 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
       setAnswer("");
       setConfirming(false);
       await load();
+      onChanged();
+    } catch (e) {
+      setError(explain(e));
+    }
+  };
+
+  const startRun = async () => {
+    try {
+      const projects = await forjaApi.projects();
+      const list = Array.isArray(projects) ? projects : projects.projects;
+      const repo = list.find((project) => project.rootPath)?.rootPath;
+      if (!repo) {
+        setError(t("forja.runs.noProject"));
+        return;
+      }
+      await forjaApi.startRun(id, repo);
+      setError(null);
+      await load();
+      onChanged();
+    } catch (e) {
+      setError(explain(e));
+    }
+  };
+  const control = async (run: () => Promise<unknown>) => {
+    try {
+      await run();
+      setError(null);
+      setSteer("");
       onChanged();
     } catch (e) {
       setError(explain(e));
@@ -141,6 +170,21 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
                 </Button>
               </div>
             </section>
+          )}
+          {live && (
+            <section aria-labelledby="forja-live" className="flex flex-col gap-2">
+              <h3 id="forja-live" className="text-title">{t("forja.tab.runs")}</h3>
+              <Input label={t("forja.runs.steerHint")} value={steer} onChange={(e) => setSteer(e.target.value)} />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!steer.trim()} onClick={() => void control(() => forjaApi.steerRun(live.run_id, steer.trim()))}>{t("forja.runs.steer")}</Button>
+                <Button size="sm" variant="danger" onClick={() => void control(() => forjaApi.stopRun(live.run_id))}>{t("forja.runs.stop")}</Button>
+              </div>
+            </section>
+          )}
+          {item.stage === "implement" && item.status === "queued" && !live && (
+            <div>
+              <Button size="sm" variant="primary" onClick={() => void startRun()}>{t("forja.runs.start")}</Button>
+            </div>
           )}
           <div className="flex flex-col gap-2">
             <Input label={t("forja.item.noteLabel")} value={note} onChange={(e) => setNote(e.target.value)} />

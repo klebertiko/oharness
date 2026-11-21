@@ -102,7 +102,25 @@ export const forjaApi = {
     call<{ fires: boolean; failed: string[] }>("/factory/blueprint/would-fire", { method: "POST", ...json(body) }),
   niloWorkflow: (body: { recipe: string; name: string; request: string }) =>
     call<{ ok: boolean; errors: { message: string }[]; review_required: boolean }>("/factory/blueprint/nilo", { method: "POST", ...json(body) }),
+  runs: () => call<RunBoard>("/factory/runs"),
+  startRun: (id: string, repo: string) => call<{ run_id: string; status: string }>(`/factory/work-items/${encodeURIComponent(id)}/run`, { method: "POST", ...json({ repo }) }),
+  stopRun: (id: string) => call<void>(`/factory/runs/${encodeURIComponent(id)}/stop`, { method: "POST" }),
+  steerRun: (id: string, text: string) => call<{ accepted: boolean }>(`/factory/runs/${encodeURIComponent(id)}/steer`, { method: "POST", ...json({ text }) }),
 };
+
+export interface LiveChild { run_id: string; label: string; status: string }
+export interface LiveRun {
+  run_id: string;
+  item_id: string;
+  title: string;
+  stage: string;
+  agent_id: string | null;
+  status: string;
+  engine: string | null;
+  harness: string | null;
+  children: LiveChild[];
+}
+export interface RunBoard { limit: number; running: number; waiting: number; runs: LiveRun[] }
 
 export interface Proposal {
   id: string;
