@@ -80,15 +80,9 @@ def _checked_argv(argv: list[str]) -> list[str]:
 def default_spawner(argv: list[str]) -> int | None:
     """Run the login without reading its output. Prefer an external terminal."""
     command = _checked_argv(_external_terminal(argv) or argv)
-    # The executable name is one of a fixed set, and the last argument is the literal "login".
-    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    proc = subprocess.Popen(  # noqa: S603
-        command,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    # OpenGrep flags any non-literal subprocess argv. The executable name is one of a fixed set and the last argument is the literal "login".
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+    proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
     return proc.pid
 
 
