@@ -1,6 +1,6 @@
 import asyncio
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 import re
 import time
@@ -25,6 +25,7 @@ from adapters import get_adapter, AdapterConfig
 from adapters.cli_shared import reported_model
 from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
+from nilo.voice import memory_block_for, nilo_system_prompt
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
 from providers.resolution import ProviderResolutionError, resolve_node_provider
@@ -764,7 +765,11 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                 node_start = time.time()
 
                 try:
-                    stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
+                    voiced = replace(
+                        config,
+                        system_prompt=nilo_system_prompt(cwd, await memory_block_for(cwd), config.system_prompt),
+                    )
+                    stream = broker.stream(prompt, adapter, voiced) if broker else adapter.stream_events(prompt, voiced)
                     async for ev in control.stream_until_stopped(stream):
                         kind = ev.get("kind")
                         if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
