@@ -45,7 +45,7 @@ jobs:
       - run: npm test
       - name: Ruleset required checks match job names
         working-directory: .
-        run: node --test scripts/required-checks.test.mjs
+        run: node --test scripts/required-checks.test.mjs scripts/build-cordis-host.test.mjs
       - run: npm run build
 
   # Advisory like backend-windows (not in `required.needs`); see docs/process/windows-ci.md.

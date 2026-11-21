@@ -6,7 +6,7 @@
   "scripts": {
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "node scripts/build-cordis-host.mjs && tauri build",
     "brand:icons": "node scripts/brand-icons.mjs",
     "frontend:build": "npm run build --prefix frontend",
     "sidecar:dev": "cd backend && python -m uvicorn main:app --host 127.0.0.1 --port 8000",
