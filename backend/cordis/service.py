@@ -7,6 +7,7 @@ the digest of that warning and those files.
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import secrets
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from cordis import sources
+from cordis.creator import ActionBook, CreatorError, read_description, write_starter
+from cordis.index import build_index, load_index, parse_index
 from cordis.registry import Registry
 from cordis.sources import Fetcher, SourceError
 from cordis.supervisor import RUNNING, UNAVAILABLE, CordisSupervisor, CordisUnavailable, HostRequestError
@@ -43,17 +46,21 @@ def _host_error(error: HostRequestError) -> ServiceError:
 
 
 class CordisService:
-    def __init__(self, data_dir: Path, *, fetcher: Fetcher | None = None, supervisor_options: dict[str, Any] | None = None, enabled: bool = True):
+    def __init__(self, data_dir: Path, *, fetcher: Fetcher | None = None, index_fetcher: Fetcher | None = None, supervisor_options: dict[str, Any] | None = None, enabled: bool = True):
         self.data_dir = data_dir
         self.root = (data_dir / 'cordis-plugins').resolve()
         self.packages = self.root / 'pkg'
         self._enabled = enabled
         self._fetcher: Fetcher = fetcher or sources.default_fetcher
+        self._index_fetcher = index_fetcher
         self.registry = Registry(data_dir / 'cordis-plugins.json')
         self.supervisor = CordisSupervisor(self.root, on_running=self._reconcile, **(supervisor_options or {}))
+        self.actions = ActionBook()
         self._lock = threading.RLock()
+        self._log_lock = threading.Lock()
         self._staged: dict[str, dict[str, Any]] = {}
         self._states: dict[str, dict[str, Any]] = {}
+        self._fetch_logs: dict[str, list[str]] = {}
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
@@ -176,30 +183,70 @@ class CordisService:
         return entry
 
     # -- fetch + preview -------------------------------------------------
-    def fetch(self, kind: str, spec: str, *, version: str | None = None, commit: str | None = None, subdir: str | None = None) -> dict[str, Any]:
+    def _note(self, fetch_id: str, line: str) -> None:
+        with self._log_lock:
+            self._fetch_logs.setdefault(fetch_id, []).append(line)
+
+    def fetch_log(self, fetch_id: str) -> list[str]:
+        """Lines for one download. Does not take the install lock, so a poll can read them while install runs."""
+        with self._log_lock:
+            if fetch_id not in self._fetch_logs:
+                raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
+            return list(self._fetch_logs[fetch_id])
+
+    def discard(self, fetch_id: str) -> None:
+        """Drop a download that will not be installed. Unknown ids are ignored."""
+        with self._lock:
+            staged = self._staged.pop(fetch_id, None)
+            if staged and staged.get('stageDir'):
+                self._remove_stage(staged['stageDir'])
+        with self._log_lock:
+            self._fetch_logs.pop(fetch_id, None)
+
+    def fetch(self, kind: str, spec: str, *, version: str | None = None, commit: str | None = None, subdir: str | None = None, cancel: threading.Event | None = None) -> dict[str, Any]:
         self.supervisor.request('GET', '/v1/health')  # fail early, before anything is downloaded, when the host is not up
         with self._lock:
             self._gc_stages()
             stage_id = secrets.token_hex(8)
             stage = self.packages / stage_id
             stage.mkdir(parents=True)
+            self._note(stage_id, 'downloading')
+
+            def fetching(url: str, limit: int) -> bytes:
+                if cancel is not None and cancel.is_set():
+                    raise SourceError('cancelled', 'The download was cancelled.')
+                return self._fetcher(url, limit)
+
             try:
+                if cancel is not None and cancel.is_set():
+                    raise SourceError('cancelled', 'The download was cancelled.')
                 if kind == 'npm':
-                    package, source = sources.fetch_npm(spec, version or '', stage, fetcher=self._fetcher), {'kind': 'npm', 'spec': spec, 'version': version}
+                    package, source = sources.fetch_npm(spec, version or '', stage, fetcher=fetching), {'kind': 'npm', 'spec': spec, 'version': version}
                 elif kind == 'github':
-                    package = sources.fetch_github(spec, commit or '', subdir, stage, fetcher=self._fetcher)
+                    package = sources.fetch_github(spec, commit or '', subdir, stage, fetcher=fetching)
                     source = {'kind': 'github', 'spec': spec, 'commit': (commit or '').lower(), 'subdir': subdir or ''}
+                elif kind == 'tarball':
+                    package, source = sources.fetch_tarball(spec, stage, fetcher=fetching), {'kind': 'tarball', 'spec': spec}
                 elif kind == 'local':
                     package, source = sources.fetch_local(spec, stage), {'kind': 'local', 'spec': spec}
                 else:
                     raise SourceError('invalid_spec', 'Unknown source kind.')
+                if cancel is not None and cancel.is_set():
+                    raise SourceError('cancelled', 'The download was cancelled.')
+                self._note(stage_id, 'inspecting')
                 preview = self._preview(package)
             except SourceError as error:
                 shutil.rmtree(stage, ignore_errors=True)
-                raise ServiceError(422, error.code, error.message) from error
+                with self._log_lock:
+                    self._fetch_logs.pop(stage_id, None)
+                status = 499 if error.code == 'cancelled' else 422
+                raise ServiceError(status, error.code, error.message) from error
             except ServiceError:
                 shutil.rmtree(stage, ignore_errors=True)
+                with self._log_lock:
+                    self._fetch_logs.pop(stage_id, None)
                 raise
+            self._note(stage_id, 'ready')
             self._staged[stage_id] = {'packageDir': str(package.resolve()), 'stageDir': str(stage), 'source': source, 'preview': preview}
             return {'fetchId': stage_id, 'source': source, 'preview': preview}
 
@@ -218,10 +265,11 @@ class CordisService:
             view['warnings'] = [{'code': 'unmet-dependencies', 'dependencies': unmet}]
         else:
             view['warnings'] = []
+        view['packages'] = [{'name': view.get('name'), 'version': view.get('version'), 'scripts': list(view.get('scripts') or [])}]
         return view
 
     # -- install ---------------------------------------------------------
-    def install(self, fetch_id: str, *, accept: bool, digest: str, scripts: str | None) -> dict[str, Any]:
+    def install(self, fetch_id: str, *, accept: bool, digest: str, scripts: str | None, enable: bool = True) -> dict[str, Any]:
         if not FETCH_ID.match(fetch_id):
             raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
         with self._lock:
@@ -235,6 +283,21 @@ class CordisService:
             previous = self.registry.find_by_name(preview['name'])
             if previous is not None:
                 self._drop_from_host(previous['name'])
+            self._note(fetch_id, 'loading')
+            seen = {'n': 0}
+            stop = threading.Event()
+
+            def pump() -> None:
+                while not stop.wait(0.15):
+                    try:
+                        lines = self.supervisor.plugin_log(preview['name'], 200)
+                    except (CordisUnavailable, HostRequestError, OSError):
+                        continue
+                    for line in lines[seen['n']:]:
+                        self._note(fetch_id, line)
+                    seen['n'] = len(lines)
+
+            threading.Thread(target=pump, name='cordis-install-log', daemon=True).start()
             try:
                 result = self.supervisor.request('POST', '/v1/plugins/install', {'packageDir': staged['packageDir'], 'confirmation': confirmation})
             except HostRequestError as error:
@@ -249,14 +312,22 @@ class CordisService:
                 if previous is not None and previous.get('enabled'):
                     self._load_into_host(previous)
                 raise
+            finally:
+                stop.set()
+            for line in self.supervisor.plugin_log(preview['name'], 200)[seen['n']:]:
+                self._note(fetch_id, line)
             entry = self.registry.upsert({
                 'name': preview['name'], 'version': preview['version'], 'source': staged['source'],
                 'packageDir': staged['packageDir'], 'stageDir': staged['stageDir'], 'digest': digest,
-                'scripts': preview['scripts'] or [], 'enabled': True,
+                'scripts': preview['scripts'] or [], 'enabled': enable,
                 'runtime': preview['runtime'], 'capabilities': preview['capabilities'],
             })
             self._staged.pop(fetch_id, None)
-            self._record(entry['id'], result.get('status', 'failed'), result.get('message'))
+            if enable:
+                self._record(entry['id'], result.get('status', 'failed'), result.get('message'))
+            else:
+                self._drop_from_host(preview['name'])
+                self._states.pop(entry['id'], None)
             if previous is not None and previous.get('stageDir') and previous['stageDir'] != entry['stageDir']:
                 self._remove_stage(previous['stageDir'])
             return self._view(entry, self._live())
@@ -312,6 +383,76 @@ class CordisService:
                     tar.add(file, arcname=f'package/{file.relative_to(package).as_posix()}', recursive=False)
         safe = re.sub(r'[^A-Za-z0-9._-]+', '-', entry['name']).strip('-') or 'plugin'
         return f'{safe}-{entry["version"]}.tgz', buffer.getvalue()
+
+    def _index_rows(self) -> list[dict[str, Any]]:
+        rows = []
+        for entry in self.registry.list():
+            package = Path(entry.get('packageDir') or '')
+            description = read_description(package) if self._inside_packages(package) and package.is_dir() else ''
+            rows.append({**entry, 'description': description})
+        return rows
+
+    def marketplace(self) -> dict[str, Any]:
+        path = self.data_dir / 'cordis-marketplace.json'
+        if not path.is_file():
+            return {'version': 1, 'plugins': [], 'trust': 'unreviewed'}
+        try:
+            return parse_index(path.read_bytes())
+        except SourceError as error:
+            raise ServiceError(422, error.code, error.message) from error
+
+    def marketplace_from(self, url: str) -> dict[str, Any]:
+        try:
+            return load_index(url, fetcher=self._index_fetcher)
+        except SourceError as error:
+            status = 422 if error.code in ('bad_index', 'untrusted_host', 'archive_too_large') else 502
+            raise ServiceError(status, error.code, error.message) from error
+
+    def share(self, plugin_id: str, target: str) -> dict[str, Any]:
+        """Write the static index for one plugin. Reads package.json as data and does not run it."""
+        if target not in ('npm', 'git'):
+            raise ServiceError(422, 'invalid_target', 'Share to npm or git.')
+        self._entry(plugin_id)
+        index = build_index(self._index_rows())
+        path = self.data_dir / 'cordis-marketplace.json'
+        path.write_text(json.dumps(index, indent=2), encoding='utf-8')
+        filename, _data = self.export(plugin_id)
+        return {'target': target, 'filename': filename, 'index': index, 'scriptsExecuted': False}
+
+    def write_plugin_starter(self, folder: str, name: str, description: str) -> dict[str, Any]:
+        try:
+            return write_starter(folder, name, description)
+        except CreatorError as error:
+            raise ServiceError(422, error.code, error.message) from error
+
+    def propose_action(self, fetch_id: str, digest: str, summary: str, scripts: str | None) -> dict[str, Any]:
+        with self._lock:
+            staged = self._staged.get(fetch_id)
+            if staged is None:
+                raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
+            preview = staged['preview']
+            if preview.get('digest') != digest:
+                raise ServiceError(409, 'confirmation-mismatch', 'confirmation digest does not match this package')
+            if preview.get('scripts') and scripts != 'do-not-run':
+                raise ServiceError(409, 'lifecycle-scripts-not-run', 'lifecycle scripts are never run; confirm with scripts set to do-not-run')
+            return self.actions.propose(fetch_id=fetch_id, digest=digest, summary=summary, scripts=scripts)
+
+    def decide_action(self, action_id: str, decision: str, *, enable: bool = True) -> dict[str, Any]:
+        try:
+            action = self.actions.claim(action_id, decision)
+        except CreatorError as error:
+            status = 404 if error.code == 'action_not_found' else 409
+            raise ServiceError(status, error.code, error.message) from error
+        if decision == 'reject':
+            self.discard(action['fetchId'])
+            return {'id': action_id, 'status': 'rejected', 'applied': False}
+        try:
+            plugin = self.install(action['fetchId'], accept=True, digest=action['digest'], scripts=action.get('scripts'), enable=enable)
+        except Exception:
+            self.actions.finish(action_id, 'pending')
+            raise
+        self.actions.finish(action_id, 'approved')
+        return {'id': action_id, 'status': 'approved', 'applied': True, 'plugin': plugin}
 
 
 def disabled_by_environment(env: Mapping[str, str]) -> bool:

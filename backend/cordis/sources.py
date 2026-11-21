@@ -1,4 +1,4 @@
-"""Where a plugin package may come from (ADR 0071): npm, GitHub at a full commit, or a local folder.
+"""Where a plugin package may come from (ADR 0071): npm, GitHub at a full commit, a tar.gz archive, or a local folder.
 
 Nothing here runs package code, runs install scripts, or installs dependencies. Archives are unpacked by hand: only
 regular files and folders, names that stay inside the destination, at most `MAX_FILES` files and `MAX_BYTES` bytes.
@@ -273,3 +273,28 @@ def fetch_local(spec: str, dest: Path) -> Path:
         _clear(dest)
         raise SourceError('bad_archive', 'The folder could not be copied.') from error
     return _require_package(dest, dest)
+
+
+# -- tarball -----------------------------------------------------------------
+def fetch_tarball(spec: str, dest: Path, *, fetcher: Fetcher = default_fetcher) -> Path:
+    """A gzip tar the person already has, or an HTTPS archive on the npm or GitHub hosts. No script runs."""
+    if spec.startswith('https://'):
+        path = urlsplit(spec).path
+        if not (path.endswith('.tgz') or path.endswith('.tar.gz')):
+            raise SourceError('invalid_spec', 'The address must be a gzip tar archive.')
+        _check_url(spec)
+        data = _download(fetcher, spec, MAX_BYTES)
+    else:
+        source = Path(spec)
+        suffix = source.name.lower()
+        if not source.is_absolute() or not source.is_file() or _is_link(source) or not (suffix.endswith('.tgz') or suffix.endswith('.tar.gz')):
+            raise SourceError('invalid_spec', 'Give the absolute path of a tar.gz file, or an HTTPS address.')
+        try:
+            if source.stat().st_size > MAX_BYTES:
+                raise SourceError('archive_too_large', 'The archive is larger than the limit.')
+            data = source.read_bytes()
+        except SourceError:
+            raise
+        except OSError as error:
+            raise SourceError('bad_archive', 'The archive could not be read.') from error
+    return _require_package(_extract(data, dest), dest)

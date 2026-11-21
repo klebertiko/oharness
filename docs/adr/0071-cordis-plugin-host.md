@@ -72,6 +72,18 @@ O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671c
 
 **Não coberto.** O recurso do instalador e a resolução do `resource_dir` no Windows não foram exercitados num `tauri build` completo nesta fatia. O job `cordis host` e o pytest rodam em Linux; o Windows só roda o subconjunto do item "O que o CI não cobre no Windows".
 
+## Tela, índice e modo criador
+
+A tela de Plugins fica em `app/(app)/plugins` e fala com `/cordis/*`. Adicionar aceita npm, GitHub num commit, um tar.gz (arquivo local ou HTTPS nos hosts já permitidos) ou uma pasta local. O download pode ser cancelado enquanto não termina: se o cliente solta a ligação, a busca para e a pasta temporária sai. A prévia mostra nome, versão e fonte antes de qualquer instalação.
+
+Scripts de ciclo de vida continuam a não rodar. A confirmação é `scripts: "do-not-run"` e vale para aquele pacote. Não há um aceite que cubra um grupo. Recusar um pacote não instala esse pacote.
+
+O índice é JSON estático (`version: 1`, lista de nome, versão, descrição e fonte). Lê-lo só faz parse. O campo `trust` da resposta é sempre `unreviewed`, mesmo que o arquivo diga outra coisa. Entradas com código (`scripts`, `eval` e semelhantes) são recusadas. Compartilhar grava esse índice a partir do registro e do `package.json` lido como dado, e devolve o arquivo tar já produzido por `export`, com `scriptsExecuted: false`. Nada do pacote é executado.
+
+O modo criador não envia o rascunho. As APIs do host saem em `GET /cordis/creator/apis` só para leitura. Escrever os arquivos de partida cria a pasta e não a executa. Instalar por esse modo é uma ação: `propose` não instala, e `decide` aprova ou recusa só aquela ação. Aprovar uma deixa as outras pendentes.
+
+A tela mostra o runtime e cada capacidade (arquivos, rede, processos, credenciais), e se o limite está bloqueado, aceito ou só declarado. A rede continua só declarada, como no item 10.
+
 ## Consequências
 
 As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`: a prova 1 roda isolada (pid diferente do host), a prova 2 roda `in-process`, e a prova 3 roda o `tool-todo` do DSH isolado, com `session.append` atravessando o canal do fd 3. As recusas do item 10 estão em `cordis-host/test/isolation.test.ts`, uma por limite (inclusive a prova direta de que o Permission Model está ligado no filho: `process.permission.has('fs.write')` é `false`), as do canal em `test/channel.test.ts` e a do inspector em `test/lifecycle.test.ts`. Rodam no job `cordis host` do CI, em Linux.
@@ -82,7 +94,7 @@ As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`: a prova
 - o ambiente do filho completado pelo libuv (HOMEPATH, USERPROFILE, TEMP, PATH e outras). O teste de `credentials` só prova a ausência de uma variável própria do host;
 - `--disable-sigusr1` num sistema sem SIGUSR1. O teste do inspector no Windows só chama `_debugProcess`, e o teste de SIGTERM faz `skip` lá.
 
-O que os testes desta fatia não fecham, em nenhum sistema: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e a rede no runtime isolado. A tela "Cordis Plugins" e o creator-mode ficam fora.
+O que os testes desta fatia não fecham, em nenhum sistema: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e a rede no runtime isolado. A tela, o índice e o modo criador estão na seção "Tela, índice e modo criador".
 
 ## Alternativas rejeitadas
 
