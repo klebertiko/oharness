@@ -8,7 +8,7 @@ Legenda:
 - **Neste PR** — entra agora, com teste.
 - **Fatia 2** — próxima entrega da Forja, ainda neste pacote, sem depender do laço de execução.
 - **Feito** — coberto por teste. O laço de execução já dispara o estágio, com worktree, pool, parar e orientar.
-- **Fatia 3** — o que ainda falta do laço: rede na saída, MCP por agente, harness por worker, trials executados e o restante desta lista.
+- **Fatia 3** — o que ainda falta: trials executados, branch de código no repositório, forge genérico, conectores e o restante desta lista.
 - **Não se aplica** — o motivo está na linha.
 
 ## Núcleo
@@ -22,7 +22,7 @@ Legenda:
 | W5 | Skills embutidas, globais e do próprio agente | Já na base |
 | W6 | Modelo, harness e instruções por agente | Neste PR o campo opcional `engine` (id de um harness do Studio) no agente, validado pelo schema e recusado em agente que escreve. A tela não mostra o formato do arquivo. O editor que grava uma versão em teste: Fatia 2 |
 | W7 | Agente novo pela tela ou pela definição | Fatia 2 — "Novo agente", atribuir a um estágio, aparecer no blueprint |
-| W8 | Override de runner e de perfil de setup por tarefa | Fatia 3 |
+| W8 | Override de runner e de perfil de setup por tarefa | Feito — a tarefa nomeia o runner; os comandos de setup desse runner rodam antes do estágio |
 | W9 | Quem pode disparar cada agente | Fatia 2 — o validador recusa um disparo de papel não autorizado |
 | W10 | O mesmo agente em dois estágios | Fatia 2 |
 
@@ -69,14 +69,14 @@ Legenda:
 | # | Capacidade | Situação |
 |---|---|---|
 | W39 | Worktree por run e teto de runs simultâneas | Feito — `factory.loop.start` chama `dispatch.run_stage` em produção: um worktree por run e o pool de `maxConcurrentRuns` |
-| W40 | Precedência do runner: tarefa, automação, agente, padrão | Fatia 3 |
-| W41 | Comandos de setup na worktree antes do primeiro estágio | Fatia 3 |
-| W42 | Erro de setup diz qual comando falhou, com a saída redigida | Fatia 3 |
+| W40 | Precedência do runner: tarefa, automação, agente, padrão | Feito — a tarefa vence, depois a automação, o agente e o primeiro runner |
+| W41 | Comandos de setup na worktree antes do primeiro estágio | Feito — cada comando do runner roda na worktree antes da nota do estágio |
+| W42 | Erro de setup diz qual comando falhou, com a saída redigida | Feito — a mensagem cita o comando e o valor do segredo não aparece |
 | W43 | Segredos por nome, sem mostrar o valor | Já na base. Rotação que mantém o nome: Fatia 2 |
-| W44 | Política de rede por agente | Neste PR o campo no schema e a proposta não pode ampliá-la. Aplicar a política na saída: Fatia 3 |
-| W45 | MCP por agente, com cliente de verdade | Fatia 3 |
-| W46 | Cada agente escolhe o harness | Neste PR o id opcional `engine`. Escolher entre conexões prontas: Fatia 3, junto do pacote de providers |
-| W47 | Um item usa um harness na especificação e outro na implementação | Fatia 3 |
+| W44 | Política de rede por agente | Feito — um host negado não chega a executar; a negação vence uma permissão do mesmo host |
+| W45 | MCP por agente, com cliente de verdade | Feito — o cliente fala JSON-RPC com um processo e com um servidor no mesmo processo: initialize e depois a lista de ferramentas |
+| W46 | Cada agente escolhe o harness | Feito — o `engine` tem de ser um harness que já existe no Studio. A escolha de conexão de provider fica no pacote de providers |
+| W47 | Um item usa um harness na especificação e outro na implementação | Feito — cada agente resolve o seu id; a run usa o do agente daquele estágio |
 | W48 | Hospedagem gerenciada, orquestrador externo, cluster | Não se aplica — a Forja já é local |
 | W49 | Política de retenção do provider na linha da conexão | Não se aplica neste pacote — fica no pacote de providers |
 
@@ -140,4 +140,4 @@ Legenda:
 
 **Fatia 2** (telas e regras, sem o laço de execução): blueprint editável, rotas e gates condicionais, evento de mudança de estágio, "Dispararia?", editor de definição, agentes e memória por seletor, automações na tela, nova Forja e "Montar com o Nilo", catálogo de erros na tela, gráfico das três recomendações.
 
-**Fatia 3** (o laço já liga a run, o worktree e o pool; parar e orientar estão feitos): política de rede aplicada na saída, cliente MCP por agente, harness por worker, juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.
+**Fatia 3** (o laço, a rede, o MCP e o harness por agente estão feitos): juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.

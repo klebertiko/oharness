@@ -12,6 +12,7 @@ from database import SessionLocal
 from factory import dispatch, runner, service
 from factory.definition_rules import RUNNER_DEFAULTS
 from factory.driver import production_driver
+from factory.harness_bind import engine_id
 
 
 @dataclass
@@ -41,9 +42,10 @@ class LiveBoard:
         self.runs.clear()
         self.pools.clear()
 
-    def pool_for(self, definition: dict) -> runner.RunnerPool:
-        limit = int(runner.runner_config(definition)['maxConcurrentRuns'])
-        key = (str(definition.get('name') or ''), limit)
+    def pool_for(self, definition: dict, runner_id: str | None = None) -> runner.RunnerPool:
+        chosen = runner_id if runner_id is not None else runner.select_runner(definition)
+        limit = int(runner.runner_config(definition, chosen)['maxConcurrentRuns'])
+        key = (str(definition.get('name') or ''), str(chosen or ''), limit)
         if key not in self.pools:
             self.pools[key] = runner.RunnerPool(limit)
         return self.pools[key]
@@ -106,7 +108,7 @@ def agent_for(definition: dict, stage: str, preferred: str | None) -> str:
     raise dispatch.DispatchError(f'no agent has the {stage} role')
 
 
-async def start(item_id: str, definition: dict, repo, store, driver=None) -> str:
+async def start(item_id: str, definition: dict, repo, store, driver=None, runner_id: str | None = None) -> str:
     """Runs the item's current stage to completion (or until it is stopped) and returns the run id."""
     driver = driver or production_driver
     async with SessionLocal() as db:
@@ -116,12 +118,14 @@ async def start(item_id: str, definition: dict, repo, store, driver=None) -> str
         agent = definition['agents'][agent_id]
         ceiling = int((definition.get('ceilings') or {}).get('tokensPerRun') or 0)
         assignment = {'agent': agent_id, 'model': agent.get('model'), 'harness': agent.get('harness'), 'maxTokens': ceiling}
+        chosen = runner.select_runner(definition, task=runner_id, agent=agent.get('runner'))
+        bound = await engine_id(db, agent)
         run_id = str(uuid.uuid4())
         row = BOARD.open(LiveRun(
             run_id=run_id, item_id=item.id, title=item.title, stage=stage, agent_id=agent_id, status='starting',
-            engine=agent.get('engine'), harness=agent.get('harness'), cancel=asyncio.Event(), steering=[],
+            engine=bound, harness=agent.get('harness'), cancel=asyncio.Event(), steering=[],
         ))
-        pool = BOARD.pool_for(definition)
+        pool = BOARD.pool_for(definition, chosen)
         outcome: dict = {'status': 'error'}
 
         def on_child(child_id: str, label: str) -> None:
@@ -134,7 +138,8 @@ async def start(item_id: str, definition: dict, repo, store, driver=None) -> str
 
         try:
             await dispatch.run_stage(db, item, definition, stage, assignment, wrapped, store, pool, repo,
-                                     run_id=run_id, cancel=row.cancel, steering=row.steering, on_child=on_child, outcome=outcome)
+                                     run_id=run_id, cancel=row.cancel, steering=row.steering, on_child=on_child, outcome=outcome,
+                                     engine=bound, runner_id=chosen)
         except dispatch.DispatchError:
             row.status = 'error'
             raise

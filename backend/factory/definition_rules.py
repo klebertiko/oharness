@@ -109,6 +109,7 @@ def build_schema() -> dict:
         # The id is enough: the definition never stores a file name.
         'harness': ident,
         'engine': ident,
+        'runner': ident,
         'instructions': _text(INSTRUCTIONS_MAX_CHARS),
         'skills': {'type': 'array', 'items': ident, 'uniqueItems': True, 'maxItems': 50},
         'localSkills': {'type': 'object', 'additionalProperties': False, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: _object({'text': _text(SKILL_MAX_CHARS, 1)}, ('text',))}},
@@ -164,6 +165,9 @@ def build_schema() -> dict:
             'runners': {'type': 'object', 'additionalProperties': False, 'maxProperties': 10, 'patternProperties': {ID_PATTERN: _object({
                 'type': {'enum': list(RUNNER_KINDS)}, 'maxConcurrentRuns': _ints(1, MAX_CONCURRENT_RUNS_CAP),
                 'credentialStrategy': {'enum': list(CREDENTIAL_STRATEGIES)}, 'pushSecretRef': secret_ref,
+                'setup': {'type': 'array', 'maxItems': 20, 'items': _object({
+                    'argv': {'type': 'array', 'minItems': 1, 'maxItems': 20, 'items': _text(500, 1)},
+                }, ('argv',))},
             }, ('type', 'maxConcurrentRuns', 'credentialStrategy'))}},
             'agents': {'type': 'object', 'additionalProperties': False, 'minProperties': 1, 'maxProperties': 50, 'patternProperties': {ID_PATTERN: agent}},
             'skills': {'type': 'object', 'additionalProperties': False, 'maxProperties': 100, 'patternProperties': {ID_PATTERN: _object({'text': _text(SKILL_MAX_CHARS, 1)}, ('text',))}},

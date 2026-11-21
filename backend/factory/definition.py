@@ -21,7 +21,7 @@ from factory import definition_rules as rules
 from sandbox.secrets import redact
 
 # The free-text string fields of the schema: a contract test compares this set with the schema, so a new text field cannot skip the check.
-FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks', 'description', 'rubric', 'task',
+FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'argv', 'automations', 'webhooks', 'description', 'rubric', 'task',
                              'successCriteria', 'when', 'prompt', 'reason'})
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
