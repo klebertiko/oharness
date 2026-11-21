@@ -4,14 +4,16 @@ import { useEffect, useState } from "react";
 import { Badge, Button, ConfirmInline, Notice, Panel, Skeleton } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
-import { pluginsApi } from "./pluginsApi";
+import { pluginsApi, PluginsError } from "./pluginsApi";
 import { STATE_BADGE, STATE_KEY, usePresent } from "./present";
 import type { PluginView } from "./types";
 
 /** One plugin: what it is, what it can do, its logs and errors, how to share it, and Remove. */
 export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginView; canChange: boolean; onClose: () => void }) {
   const { t } = useI18n();
-  const { capabilityLabel, capabilityGrant, source } = usePresent();
+  const { capabilityLabel, capabilityGrant, source, explain } = usePresent();
+  const shareReason = (error: unknown) =>
+    error instanceof PluginsError && error.code === "human_only" ? t("plugins.noCredential") : t("plugins.share.failed", { reason: error instanceof Error ? error.message : String(error) });
   const logs = usePluginsStore((s) => s.logs);
   const busy = usePluginsStore((s) => !!s.busy[plugin.id]);
   const loadLogs = usePluginsStore((s) => s.loadLogs);
@@ -38,7 +40,7 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setShareError(t("plugins.share.failed", { reason: error instanceof Error ? error.message : String(error) }));
+      setShareError(shareReason(error));
     }
   };
 
@@ -49,7 +51,7 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
       await navigator.clipboard.writeText(plugin.shareLink);
       setShareMessage(t("plugins.share.copied"));
     } catch (error) {
-      setShareError(t("plugins.share.failed", { reason: error instanceof Error ? error.message : String(error) }));
+      setShareError(shareReason(error));
     }
   };
 
@@ -103,7 +105,7 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
               {t("plugins.logs.refresh")}
             </Button>
           </div>
-          {mine && logs.error && <Notice tone="fault">{t("plugins.logs.failed", { reason: logs.error.message })}</Notice>}
+          {mine && logs.error && <Notice tone="fault">{logs.error.code === "human_only" ? explain(logs.error) : t("plugins.logs.failed", { reason: logs.error.message })}</Notice>}
           {!mine || (logs.loading && logs.lines.length === 0) ? (
             <Skeleton className="h-16 w-full" />
           ) : logs.lines.length === 0 && !logs.error ? (

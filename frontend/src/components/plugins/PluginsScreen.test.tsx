@@ -113,6 +113,19 @@ describe("PluginsScreen", () => {
     expect(await screen.findByText("[plugin notes-tool] error: x")).toBeTruthy();
   });
 
+  it("explains a 403 human_only on logs and on export with the credential sentence", async () => {
+    human();
+    serve();
+    routes.set(`GET /cordis/plugins/${id}/logs`, { status: 403, body: { detail: { code: "human_only", message: "no" } } });
+    routes.set(`GET /cordis/plugins/${id}/export`, { status: 403, body: { detail: { code: "human_only", message: "no" } } });
+    render(<PluginsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
+    const detail = screen.getByRole("region", { name: "notes-tool details" });
+    await waitFor(() => expect(within(detail).getAllByText(/needs the app's own credential/).length).toBeGreaterThan(0));
+    await userEvent.click(within(detail).getByRole("button", { name: "Download package" }));
+    await waitFor(() => expect(within(detail).getAllByText(/needs the app's own credential/).length).toBe(2));
+  });
+
   it("downloads the package and copies the GitHub link", async () => {
     human();
     const link = "https://github.com/o/r/tree/" + "a".repeat(40);

@@ -33,6 +33,15 @@ describe("pluginsApi", () => {
     expect(error).toMatchObject({ code: "cordis_unavailable", state: "unavailable", message: "Node.js was not found" });
   });
 
+  it("sends the human credential on logs and export too, which need it", async () => {
+    window.__OH_HUMAN__ = "h-token";
+    routes.set("GET /cordis/plugins/0123456789abcdef/logs", { body: { lines: [] } });
+    routes.set("GET /cordis/plugins/0123456789abcdef/export", { raw: "x" });
+    await pluginsApi.logs("0123456789abcdef");
+    await pluginsApi.exportPackage("0123456789abcdef");
+    expect(calls.map((c) => c.headers["x-oharness-human"])).toEqual(["h-token", "h-token"]);
+  });
+
   it("removes with DELETE and reads logs and the package export", async () => {
     routes.set("DELETE /cordis/plugins/0123456789abcdef", { status: 204 });
     routes.set("GET /cordis/plugins/0123456789abcdef/logs", { body: { lines: ["a", "b"] } });
