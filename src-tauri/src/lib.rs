@@ -262,6 +262,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {
             let token = generate_token().map_err(std::io::Error::other)?;
