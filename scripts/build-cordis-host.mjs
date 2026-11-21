@@ -89,7 +89,7 @@ async function main() {
     verifySha256(bytes, target.sha256);
     writeFileSync(join(work, target.file), bytes);
     // Relative names with cwd=work: GNU tar reads "C:\..." as host:path. On Windows use the system bsdtar, which also reads .zip.
-    const tar = platform() === "win32" ? join(process.env.SystemRoot ?? "C:\Windows", "System32", "tar.exe") : "tar";
+    const tar = platform() === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
     run(tar, ["-xf", target.file, target.member], { cwd: work });
 
     rmSync(out, { recursive: true, force: true });

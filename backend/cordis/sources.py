@@ -238,6 +238,8 @@ def _is_link(path: Path) -> bool:
 
 
 def fetch_local(spec: str, dest: Path) -> Path:
+    if spec.startswith(('\\\\', '//')):
+        raise SourceError('invalid_spec', 'A network path is not accepted; copy the folder to this computer first.')
     source = Path(spec)
     if not source.is_absolute() or not source.is_dir():
         raise SourceError('invalid_spec', 'Give the absolute path of a folder.')

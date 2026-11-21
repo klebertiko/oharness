@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import time
 
@@ -146,7 +147,9 @@ def test_without_node_the_state_is_unavailable_with_a_reason_and_nothing_raises(
 
 
 def test_a_missing_host_folder_is_unavailable(tmp_path):
-    supervisor = CordisSupervisor(tmp_path / 'plugins', env={'OH_CORDIS_NODE': 'node', 'OH_CORDIS_HOST_DIR': str(tmp_path / 'nothing')})
+    node = tmp_path / 'node.exe'
+    node.write_bytes(b'')
+    supervisor = CordisSupervisor(tmp_path / 'plugins', env={'OH_CORDIS_NODE': str(node), 'OH_CORDIS_HOST_DIR': str(tmp_path / 'nothing')})
     supervisor.start()
     assert wait_until(lambda: supervisor.state == UNAVAILABLE, 5)
     assert 'host files' in supervisor.reason
@@ -200,3 +203,119 @@ def test_banner_node_version_gate():
     assert banner_problem({'port': 1, 'token': 't', 'node': 'v24.19.0'}) is None
     assert 'or newer is required' in banner_problem({'port': 1, 'token': 't', 'node': 'v22.19.9'})
     assert 'or newer is required' in banner_problem({'port': 1, 'token': 't'})
+
+
+FAKE_MAIN = """
+import { readFileSync, writeSync } from 'node:fs'
+const node = readFileSync(new URL('./node-version.txt', import.meta.url), 'utf8').trim()
+writeSync(1, JSON.stringify({ host: '127.0.0.1', port: 1, token: 'fake', cordis: 'fake', runtime: 'isolated', node }) + String.fromCharCode(10))
+process.stdin.on('end', () => process.exit(0))
+process.stdin.resume()
+"""
+
+
+def fake_host(tmp_path, node_version: str, start: str = 'node src/main.ts'):
+    """A stand-in host that prints a banner with the given Node version and lives until its stdin closes."""
+    host = tmp_path / 'fake-host'
+    (host / 'src').mkdir(parents=True, exist_ok=True)
+    (host / 'node_modules' / 'cordis').mkdir(parents=True, exist_ok=True)
+    (host / 'src' / 'main.ts').write_text(FAKE_MAIN, encoding='utf8')
+    (host / 'src' / 'node-version.txt').write_text(node_version, encoding='utf8')
+    (host / 'package.json').write_text(json.dumps({'scripts': {'start': start}}), encoding='utf8')
+    return host
+
+
+def fake_supervisor(tmp_path, host, **options) -> CordisSupervisor:
+    env = {**os.environ, 'OH_CORDIS_NODE': shutil.which('node') or 'node', 'OH_CORDIS_HOST_DIR': str(host)}
+    return CordisSupervisor(tmp_path / 'plugins', env=env,
+                            backoff=(0,), **options)
+
+
+@needs_node
+def test_a_banner_with_a_too_old_node_is_unavailable_without_restarts(tmp_path):
+    supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v22.19.9'))
+    supervisor.start()
+    try:
+        assert wait_until(lambda: supervisor.state == UNAVAILABLE, 15)
+        time.sleep(0.5)  # a restart would have flipped the state back to starting by now
+        status = supervisor.status()
+        assert status['state'] == UNAVAILABLE and 'or newer is required' in status['reason']
+        assert status['restarts'] == 0
+        assert supervisor.host_pid is None or not alive(supervisor.host_pid)
+    finally:
+        supervisor.stop()
+
+
+@needs_node
+def test_start_again_after_a_refused_version_tries_again(tmp_path):
+    host = fake_host(tmp_path, 'v22.19.9')
+    supervisor = fake_supervisor(tmp_path, host)
+    supervisor.start()
+    try:
+        assert wait_until(lambda: supervisor.state == UNAVAILABLE, 15)
+        (host / 'src' / 'node-version.txt').write_text('v24.0.0', encoding='utf8')
+        supervisor.start()
+        assert wait_until(lambda: supervisor.state == RUNNING, 15)
+        assert supervisor.node_version == '24.0.0'
+    finally:
+        supervisor.stop()
+
+
+@needs_node
+def test_a_node_too_old_for_the_host_flags_is_a_clear_version_message(tmp_path):
+    # An old Node refuses the host's flags with "bad option" and exits before the banner.
+    supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v24.0.0', start='node --oharness-no-such-flag src/main.ts'))
+    supervisor.start()
+    try:
+        assert wait_until(lambda: supervisor.state == UNAVAILABLE, 15)
+        time.sleep(0.5)
+        status = supervisor.status()
+        assert 'or newer is required' in status['reason'] and status['restarts'] == 0
+    finally:
+        supervisor.stop()
+
+
+@pytest.mark.parametrize('error', [FileNotFoundError(2, 'missing'), PermissionError(13, 'denied')])
+def test_a_spawn_that_cannot_run_node_is_final(tmp_path, monkeypatch, error):
+    import cordis.supervisor as module
+
+    def refuse(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(module.subprocess, 'Popen', refuse)
+    supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v24.0.0'))
+    supervisor.start()
+    try:
+        assert wait_until(lambda: supervisor.state == UNAVAILABLE, 10)
+        time.sleep(0.3)
+        assert supervisor.status()['restarts'] == 0
+    finally:
+        supervisor.stop()
+
+
+def test_a_transient_spawn_error_is_retried_with_backoff(tmp_path, monkeypatch):
+    import errno
+
+    import cordis.supervisor as module
+
+    def busy(*args, **kwargs):
+        raise OSError(errno.EMFILE, 'too many open files')
+
+    monkeypatch.setattr(module.subprocess, 'Popen', busy)
+    supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v24.0.0'), max_restarts=2)
+    supervisor.start()
+    try:
+        assert wait_until(lambda: supervisor.state == FAILED, 10)
+        assert supervisor.status()['restarts'] > 2
+    finally:
+        supervisor.stop()
+
+
+def test_the_node_path_must_be_an_absolute_file(tmp_path):
+    host = fake_host(tmp_path, 'v24.0.0')
+    for node in ('node', str(tmp_path)):  # relative, then a folder
+        supervisor = CordisSupervisor(tmp_path / 'plugins', env={'OH_CORDIS_NODE': node, 'OH_CORDIS_HOST_DIR': str(host)})
+        supervisor.start()
+        assert wait_until(lambda: supervisor.state == UNAVAILABLE, 10)
+        assert 'Node.js' in supervisor.status()['reason']
+        supervisor.stop()

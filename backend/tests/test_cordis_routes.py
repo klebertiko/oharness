@@ -75,13 +75,13 @@ def test_mutations_without_the_human_credential_are_403(api):
 
 
 @needs_node
-def test_reads_work_without_the_human_credential(api):
+def test_status_and_list_work_without_the_human_credential(api):
     client, net, _ = api
     install(client, fetch_npm(client, net))
     assert client.get('/cordis/status').json()['state'] == 'running'
     rows = client.get('/cordis/plugins').json()['plugins']
     assert [row['name'] for row in rows] == ['backend-probe']
-    assert client.get(f'/cordis/plugins/{rows[0]["id"]}/logs').status_code == 200
+    assert client.get(f'/cordis/plugins/{rows[0]["id"]}/logs', headers=HUMAN).status_code == 200
 
 
 @needs_node
@@ -115,7 +115,7 @@ def test_an_isolated_plugin_runs_in_its_own_process_and_its_output_is_captured_b
     view = install(client, fetch_npm(client, net, say='hello from the probe')).json()
     pid = invoke(service)['value']['pid']
     assert pid != service.supervisor.host_pid and alive(pid)
-    assert wait_until(lambda: 'hello from the probe' in client.get(f'/cordis/plugins/{view["id"]}/logs').json()['lines'], 10)
+    assert wait_until(lambda: 'hello from the probe' in client.get(f'/cordis/plugins/{view["id"]}/logs', headers=HUMAN).json()['lines'], 10)
     assert not any('hello from the probe' in line for line in service.supervisor.status()['hostLog'])
 
 
@@ -198,7 +198,7 @@ def test_local_folder_source_and_export_as_a_tarball(api, tmp_path):
     assert fetched.status_code == 200, fetched.text
     view = install(client, fetched.json()).json()
     assert 'shareLink' not in view
-    exported = client.get(f'/cordis/plugins/{view["id"]}/export')
+    exported = client.get(f'/cordis/plugins/{view["id"]}/export', headers=HUMAN)
     assert exported.status_code == 200 and exported.headers['content-type'] == 'application/gzip'
     assert 'backend-probe-0.1.0.tgz' in exported.headers['content-disposition']
     with tarfile.open(fileobj=io.BytesIO(exported.content), mode='r:gz') as tar:
@@ -213,8 +213,8 @@ def test_the_host_token_never_appears_in_any_response(api):
     view = install(client, fetched).json()
     texts = [
         client.get('/cordis/status').text, client.get('/cordis/plugins').text,
-        client.get(f'/cordis/plugins/{view["id"]}/logs').text, str(fetched), str(view),
-        client.get(f'/cordis/plugins/{view["id"]}/export').content.decode('latin-1'),
+        client.get(f'/cordis/plugins/{view["id"]}/logs', headers=HUMAN).text, str(fetched), str(view),
+        client.get(f'/cordis/plugins/{view["id"]}/export', headers=HUMAN).content.decode('latin-1'),
     ]
     assert not any(token in text for text in texts)
 
@@ -244,3 +244,11 @@ def test_routes_answer_503_while_the_host_is_not_available(tmp_path, monkeypatch
         assert client.get('/cordis/status').json()['state'] == 'unavailable'
         blocked = client.post('/cordis/plugins/fetch', headers=HUMAN, json={'kind': 'npm', 'spec': 'backend-probe', 'version': '1.0.0'})
         assert blocked.status_code == 503 and blocked.json()['detail']['code'] == 'cordis_unavailable'
+
+
+@needs_node
+def test_logs_and_export_need_the_human_credential(api):
+    client, net, _ = api
+    view = install(client, fetch_npm(client, net)).json()
+    assert client.get(f'/cordis/plugins/{view["id"]}/logs').status_code == 403
+    assert client.get(f'/cordis/plugins/{view["id"]}/export').status_code == 403
