@@ -24,6 +24,7 @@ from factory.inbox_router import router as factory_inbox_router
 from factory.memory_router import router as factory_memory_router
 from factory.improvement.router import router as factory_improvement_router
 from factory.blueprint_router import router as factory_blueprint_router
+from factory.runs_router import router as factory_runs_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
 from secret_store.factory import build_secrets_store
@@ -141,6 +142,7 @@ app.include_router(factory_definition_router)
 app.include_router(factory_memory_router)
 app.include_router(factory_improvement_router)
 app.include_router(factory_blueprint_router)
+app.include_router(factory_runs_router)
 
 
 @app.get("/health")

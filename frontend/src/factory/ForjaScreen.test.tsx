@@ -222,6 +222,46 @@ describe("the blueprint", () => {
   });
 });
 
+describe("runs", () => {
+  const live = { run_id: "r1", item_id: "i1", title: "Fix login", stage: "implement", agent_id: "builder", status: "running", engine: null, harness: "local", children: [{ run_id: "c1", label: "lint", status: "running" }] };
+
+  it("lists a live run, hides the off notice, and stops or steers it", async () => {
+    window.__OH_HUMAN__ = "secret-human";
+    routes.set("GET /factory/work-items", { body: { items: [] } });
+    routes.set("GET /factory/runs", { body: { limit: 2, running: 1, waiting: 0, runs: [live] } });
+    routes.set("POST /factory/runs/r1/stop", { status: 204, body: null });
+    routes.set("POST /factory/runs/r1/steer", { body: { accepted: true } });
+    render(<ForjaScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "Runs" }));
+    expect(await screen.findByText("Running now: 1 of 2")).toBeTruthy();
+    expect(screen.queryByText("Automatic runs are off")).toBeNull();
+    expect(screen.getByText("Nested run: lint")).toBeTruthy();
+    expect(screen.getByText(/Engine: local/)).toBeTruthy();
+    await userEvent.type(screen.getByLabelText("Message for the live run"), "look left");
+    await userEvent.click(screen.getByRole("button", { name: "Steer" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stop run" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/factory/runs/r1/steer" && (c.body as { text: string }).text === "look left")).toBe(true));
+    expect(calls.some((c) => c.method === "POST" && c.path === "/factory/runs/r1/stop" && c.headers["x-oharness-human"] === "secret-human")).toBe(true);
+    expect(document.body.textContent ?? "").not.toMatch(/\.ohm|Bundle/);
+    expect(await axeViolations(document.body)).toEqual([]);
+  });
+
+  it("starts the stage from the work item", async () => {
+    window.__OH_HUMAN__ = "secret-human";
+    const ready = item({ stage: "implement", status: "queued", column: "implementing" });
+    routes.set("GET /factory/work-items", { body: { items: [ready] } });
+    routes.set("GET /factory/runs", { body: { limit: 2, running: 0, waiting: 0, runs: [] } });
+    routes.set("GET /factory/work-items/i1", { body: { ...ready, artifacts: [], runs: [] } });
+    routes.set("GET /factory/work-items/i1/events", { body: { events: [] } });
+    routes.set("GET /cowork/projects", { body: { projects: [{ id: "p", name: "App", rootPath: "/work/app" }] } });
+    routes.set("POST /factory/work-items/i1/run", { body: { run_id: "r9", status: "running" } });
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Run this stage" }));
+    await waitFor(() => expect(calls.some((c) => c.path === "/factory/work-items/i1/run" && (c.body as { repo?: string }).repo === "/work/app")).toBe(true));
+  });
+});
+
 describe("rendered text", () => {
   it("does not show raw event names or ISO stamps, in either theme", async () => {
     routes.set("GET /factory/work-items", { body: { items: [item()] } });
