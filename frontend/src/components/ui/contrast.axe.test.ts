@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 import { describe, expect, it } from "vitest";
 import { GROUNDS, LARGE, TEXT, readCss } from "./contrastPairs";
 
 const require = createRequire(import.meta.url);
 const axeSource = fs.readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
+
+type Row = { fg: string; bg: string; large: boolean };
 
 function block(css: string, marker: string): string {
   const at = css.indexOf(marker);
@@ -18,37 +20,66 @@ function block(css: string, marker: string): string {
   throw new Error(marker);
 }
 
-function pageHtml(css: string, theme: string, density: string): string {
-  const rules = [
+function styleRules(css: string): string {
+  return [
     block(css, ":root {"),
     block(css, '[data-theme="light"] {'),
     block(css, ':root[data-density="compact"] {'),
     block(css, "@media (prefers-color-scheme: light)"),
+    "body{margin:0}",
   ].join("\n");
-  const rows = [
-    ...TEXT.flatMap((fg) => GROUNDS.map((bg) => `<p style="color:var(--${fg});background:var(--${bg});font-size:16px">${fg} on ${bg}</p>`)),
-    ...LARGE.flatMap((fg) => GROUNDS.map((bg) => `<p style="color:var(--${fg});background:var(--${bg});font-size:24px;font-weight:600">${fg} on ${bg}</p>`)),
-  ].join("");
-  return `<!doctype html><html data-theme="${theme}" data-density="${density}"><head><style>${rules} body{margin:0}</style></head><body>${rows}</body></html>`;
+}
+
+function rows(): Row[] {
+  return [
+    ...TEXT.flatMap((fg) => GROUNDS.map((bg) => ({ fg, bg, large: false }))),
+    ...LARGE.flatMap((fg) => GROUNDS.map((bg) => ({ fg, bg, large: true }))),
+  ];
+}
+
+/** Paint token pairs with DOM calls. The names are our tokens, and text is set as text, not markup. */
+async function paint(page: Page, theme: string, density: string, rules: string, pairs: Row[]) {
+  await page.setContent("<!doctype html><html><head></head><body></body></html>");
+  await page.evaluate(
+    ({ theme, density, rules, pairs }) => {
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.density = density;
+      const style = document.createElement("style");
+      style.textContent = rules;
+      document.head.appendChild(style);
+      for (const pair of pairs) {
+        const node = document.createElement("p");
+        node.style.color = "var(--" + pair.fg + ")";
+        node.style.background = "var(--" + pair.bg + ")";
+        node.style.fontSize = pair.large ? "24px" : "16px";
+        if (pair.large) node.style.fontWeight = "600";
+        node.textContent = pair.fg + " on " + pair.bg;
+        document.body.appendChild(node);
+      }
+    },
+    { theme, density, rules, pairs },
+  );
 }
 
 describe("axe contrast", () => {
   it("passes in both themes and both densities", async () => {
     const css = readCss();
+    const rules = styleRules(css);
+    const pairs = rows();
     const browser = await chromium.launch({ channel: "chrome", headless: true });
     try {
       const failures: string[] = [];
       for (const theme of ["dark", "light"]) {
         for (const density of ["comfortable", "compact"]) {
           const page = await browser.newPage({ colorScheme: theme === "light" ? "light" : "dark" });
-          await page.setContent(pageHtml(css, theme, density));
+          await paint(page, theme, density, rules, pairs);
           await page.addScriptTag({ content: axeSource });
           const violations = await page.evaluate(async () => {
             const axe = (window as unknown as { axe: { run: (node: Document, options: object) => Promise<{ violations: { id: string; nodes: { failureSummary?: string }[] }[] }> } }).axe;
             const result = await axe.run(document, { runOnly: { type: "rule", values: ["color-contrast"] } });
             return result.violations.flatMap((violation) => violation.nodes.map((node) => node.failureSummary ?? violation.id));
           });
-          if (violations.length) failures.push(`${theme}/${density}: ${violations.slice(0, 4).join(" | ")}`);
+          if (violations.length) failures.push(theme + "/" + density + ": " + violations.slice(0, 4).join(" | "));
           await page.close();
         }
       }
