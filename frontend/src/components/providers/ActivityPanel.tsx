@@ -5,6 +5,8 @@ import type { ConnectionUsage } from "@/lib/usageApi";
 import { ProbeTrace } from "./atoms";
 import { Row, Rows } from "./rows";
 import { providerReadiness } from "@/components/agent/chatProvider";
+import { visibleFact } from "./accountFacts";
+import { testedAgo } from "./health";
 import { usageCostParts } from "./usageStore";
 import type { Connection } from "./providerStore";
 
@@ -19,27 +21,33 @@ export function ActivityPanel({ c, usage }: { c: Connection; usage: ConnectionUs
   const median = ok.length ? [...ok].sort((a, b) => a.ms - b.ms)[Math.floor(ok.length / 2)].ms : null;
   const used = usage && usage.tokensTotal > 0;
   const cost = used ? usageCostParts(usage, locale) : null;
-  const when = c.lastProbe ? new Date(c.lastProbe).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const ago = c.lastProbe ? testedAgo(c.lastProbe, Date.now()) : null;
+  const when = ago ? t(ago.unit === "min" ? "providers.health.minutes" : "providers.health.hours", { n: ago.n }) : "";
+  const recent = c.probes.slice(-10);
   return (
     <Panel title={t("activity.title")} titleId="oh-activity" level={3}>
       <Rows label={t("activity.title")}>
         <Row label={t("activity.reach")}>
           <p className="t-body flex flex-wrap items-center gap-2 text-ink">
-            <ProbeTrace probes={c.probes} tone={readiness.tone} />
+            <ProbeTrace probes={recent} tone={readiness.tone} />
             {median !== null ? <span>{t("activity.reach.value", { ms: median })}</span> : <span className="text-ink-mute">{t("activity.reach.never")}</span>}
           </p>
-          {c.probes.length > 0 && (
+          {recent.length > 0 && (
             <p className="t-body mt-0.5 text-ink-mute">
-              {t("activity.reach.note", { ok: ok.length, total: c.probes.length })}
+              {t("activity.reach.note", { ok: recent.filter((p) => p.ok).length, total: recent.length })}
               {when ? ` · ${t("activity.last", { when })}` : ""}
             </p>
           )}
         </Row>
-        {c.facts.map((f, i) => (
-          <Row key={`${f.k}-${i}`} label={f.k}>
-            <p className={`t-meta wrap-anywhere ${FACT_TEXT[f.tone ?? "dim"]}`}>{f.v}</p>
-          </Row>
-        ))}
+        {c.facts.map((f, i) => {
+          const value = visibleFact(f.k, f.v);
+          if (!value) return null;
+          return (
+            <Row key={`${f.k}-${i}`} label={f.k === "plan" ? t("providers.plan.label") : f.k}>
+              <p className={`t-meta wrap-anywhere ${FACT_TEXT[f.tone ?? "dim"]}`}>{value}</p>
+            </Row>
+          );
+        })}
         <Row label={t("activity.tokens")}>
           <p className="t-meta text-ink">{used ? usage.tokensTotal.toLocaleString(locale) : "—"}</p>
           {!used && <p className="t-body mt-0.5 text-ink-mute">{t("activity.none")}</p>}

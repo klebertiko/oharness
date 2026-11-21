@@ -28,6 +28,9 @@ export type ProviderId =
   | "ollama"
   | "openrouter"
   // Connections a person creates with their own id and endpoint (R-PRV-14, #402).
+  | "xai"
+  | "deepseek"
+  | "gemini"
   | "openai-compatible"
   | "anthropic-gateway";
 
@@ -204,6 +207,48 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
       "Prices and availability are set by the upstream vendor and move without notice.",
     docs: "https://openrouter.ai/docs",
     billingUrl: "https://openrouter.ai/credits",
+  },
+  xai: {
+    id: "xai",
+    vendor: "xAI",
+    monogram: "XA",
+    residence: "cloud",
+    capabilities: ["chat"],
+    billing: "metered",
+    catalogue: "hosted",
+    credential: { kind: "api-key", prefix: "xai-", where: "The key page for this account", env: "XAI_API_KEY" },
+    endpoint: { default: "https://api.x.ai/v1", editable: false },
+    summary: "Chat models behind one API key.",
+    caveat: "The key is stored once and never shown again.",
+    docs: "",
+  },
+  deepseek: {
+    id: "deepseek",
+    vendor: "DeepSeek",
+    monogram: "DS",
+    residence: "cloud",
+    capabilities: ["chat"],
+    billing: "metered",
+    catalogue: "hosted",
+    credential: { kind: "api-key", prefix: "sk-", where: "The key page for this account", env: "DEEPSEEK_API_KEY" },
+    endpoint: { default: "https://api.deepseek.com", editable: false },
+    summary: "Chat models behind one API key.",
+    caveat: "The key is stored once and never shown again.",
+    docs: "",
+  },
+  gemini: {
+    id: "gemini",
+    vendor: "Gemini",
+    monogram: "GE",
+    residence: "cloud",
+    capabilities: ["chat"],
+    billing: "metered",
+    catalogue: "hosted",
+    credential: { kind: "api-key", prefix: "AIza", where: "The key page for this account", env: "GEMINI_API_KEY" },
+    endpoint: { default: "https://generativelanguage.googleapis.com/v1beta/openai", editable: false },
+    summary: "Chat models behind one API key.",
+    caveat: "The key is stored once and never shown again.",
+    docs: "",
   },
   // Generic protocols, mirrored from backend/adapters/catalog.py. Metered keys,
   // never the subscription (I13); the endpoint is whatever the person typed.

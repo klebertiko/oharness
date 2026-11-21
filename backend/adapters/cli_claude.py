@@ -204,21 +204,19 @@ class ClaudeCliAdapter(AgentAdapter):
                 detail="claude CLI is installed but not logged in. Run `claude login`.",
             )
 
-        email = status.get("email", "")
-        plan = status.get("subscriptionType", "")
-        facts = [
-            f for f in [
-                ("account", email, "dim"),
-                ("plan", plan, "signal"),
-                ("cli", f"{CLI_NAME} · on PATH", "signal"),
-            ]
-            if f[1]
-        ]
+        from providers.plan import enumerated_plan
+
+        plan = enumerated_plan(status.get("subscriptionType"))
+        facts = [("cli", f"{CLI_NAME} · on PATH", "signal")]
+        if plan:
+            facts.insert(0, ("plan", plan, "signal"))
+        detail = f"Signed in ({plan} plan)." if plan else "Signed in."
         return ProbeResult(
             ok=True,
             health="live",
-            detail=f"Logged in as {email or 'unknown'} ({plan or 'unknown'} plan).",
+            detail=detail,
             facts=facts,
+            plan=plan or "",
         )
 
 

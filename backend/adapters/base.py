@@ -62,6 +62,8 @@ class ProbeResult:
     # Machine-readable reason when `ok` is False, so callers need not parse
     # `detail`: not_installed | not_logged_in | platform_unsupported | timeout | error.
     code: str = ""
+    # Enumerated subscription plan (Pro, Max, …). Empty when the CLI did not name one. Never an address.
+    plan: str = ""
 
 
 class AgentAdapter(ABC):

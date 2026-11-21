@@ -11,6 +11,7 @@ import { ModelsPanel } from "./ModelsPanel";
 import { providerKey, vendorName } from "./providerText";
 import { specOf, type Connection } from "./providerStore";
 import { WithCode } from "./rows";
+import { AdvancedPanel } from "./AdvancedPanel";
 import { LoginStatus } from "./LoginStatus";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
@@ -108,6 +109,7 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
               <ConnectionPanel c={c} actions={actions} />
               {agentOnly ? <AgentOnlyPanel /> : <ModelsPanel c={c} />}
               <ActivityPanel c={c} usage={usage} />
+              <AdvancedPanel c={c} />
             </>
           )}
 
