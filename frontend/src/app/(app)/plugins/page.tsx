@@ -1,9 +1,5 @@
-import { PluginsScreen } from "@/components/plugins/PluginsScreen";
+import { PluginsRoute } from "@/components/plugins/PluginsRoute";
 
 export default function PluginsPage() {
-  return (
-    <main className="h-dvh">
-      <PluginsScreen />
-    </main>
-  );
+  return <PluginsRoute />;
 }
