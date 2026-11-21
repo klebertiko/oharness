@@ -12,6 +12,7 @@ import os
 import sys
 import tarfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -313,7 +314,7 @@ def test_tarball_from_a_local_file_is_unpacked_without_running_it(tmp_path):
 
 def test_tarball_https_must_be_on_an_allowed_host(tmp_path):
     def fetcher(url: str, limit: int) -> bytes:
-        assert 'registry.npmjs.org' in url
+        assert urlsplit(url).hostname == sources.NPM_HOST and limit > 0
         return tar_gz({'package/package.json': b'{"name":"widget","version":"1.2.3"}'})
 
     root = sources.fetch_tarball('https://registry.npmjs.org/widget/-/widget-1.2.3.tgz', tmp_path / 'dest', fetcher=fetcher)
