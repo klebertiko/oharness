@@ -39,11 +39,18 @@ export function validate(kind: SourceKind, f: Fields): { request: FetchRequest |
 
 const EMPTY: Fields = { name: "", version: "", repo: "", commit: "", subdir: "", path: "" };
 
+/** The fields a request fills, so Descobrir can open this form with the source of an index entry. */
+export function fieldsOf(request: FetchRequest): Fields {
+  if (request.kind === "npm") return { ...EMPTY, name: request.spec, version: request.version ?? "" };
+  if (request.kind === "github") return { ...EMPTY, repo: request.spec, commit: request.commit ?? "", subdir: request.subdir ?? "" };
+  return { ...EMPTY, path: request.spec };
+}
+
 /** The first step of adding a plugin: where it comes from. Nothing is downloaded until Check package. */
-export function AddForm({ onSubmit, onCancel }: { onSubmit: (request: FetchRequest) => void; onCancel: () => void }) {
+export function AddForm({ onSubmit, onCancel, initial }: { onSubmit: (request: FetchRequest) => void; onCancel: () => void; initial?: FetchRequest | null }) {
   const { t } = useI18n();
-  const [kind, setKind] = useState<SourceKind>("npm");
-  const [fields, setFields] = useState<Fields>(EMPTY);
+  const [kind, setKind] = useState<SourceKind>(initial?.kind ?? "npm");
+  const [fields, setFields] = useState<Fields>(initial ? fieldsOf(initial) : EMPTY);
   const [errors, setErrors] = useState<Errors>({});
   const set = (key: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => setFields((f) => ({ ...f, [key]: e.target.value }));
   const err = (key: keyof Fields) => (errors[key] ? t(errors[key]) : undefined);
