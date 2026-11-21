@@ -23,7 +23,8 @@ export type ActionId =
   | "paste"
   | "turnOn"
   | "chooseModel"
-  | "copyPull";
+  | "copyPull"
+  | "useOther";
 
 /** The label (the dossier button, the combo and composer text) and the short hint (after the status in a list row). */
 export const ACTION_TEXT: Record<ActionId, { label: MessageKey; hint: MessageKey }> = {
@@ -39,6 +40,7 @@ export const ACTION_TEXT: Record<ActionId, { label: MessageKey; hint: MessageKey
   turnOn: { label: "step.turnOn", hint: "step.turnOn.hint" },
   chooseModel: { label: "step.chooseModel", hint: "step.chooseModel.hint" },
   copyPull: { label: "step.copyPull", hint: "step.copyPull.hint" },
+  useOther: { label: "providers.limit.other", hint: "providers.limit.otherHint" },
 };
 
 /** Failure classes: the status word and the action that fixes it. `nextStep` falls back to `testAgain`
@@ -52,6 +54,7 @@ export const STATE_TABLE: Record<ProviderFaultClass, { status: MessageKey; actio
   "cli-missing": { status: "fault.notInstalled", action: "openInstall" },
   "cli-timeout": { status: "fault.cliTimeout", action: "testAgain" },
   "cli-error": { status: "fault.cliError", action: "testAgain" },
+  usage_limit: { status: "providers.limit.short", action: "useOther" },
   unknown: { status: "fault.unknown", action: "testAgain" },
 };
 

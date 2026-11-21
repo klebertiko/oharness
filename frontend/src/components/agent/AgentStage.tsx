@@ -22,6 +22,7 @@ import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
 import { WorktreeToggle } from "@/components/agent/WorktreeToggle";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
+import { ComposerUsageLimit } from "@/components/providers/UsageLimitBanner";
 import { EMPTY_TABLE } from "@/components/providers/stateTable";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
@@ -337,6 +338,17 @@ export function AgentStage() {
     });
   };
 
+  const pendingSend = useRef<string | null>(null);
+  const sendHeld = useRef(send);
+  sendHeld.current = send;
+  const [releaseTick, setReleaseTick] = useState(0);
+  useEffect(() => {
+    if (!pendingSend.current || !provider || live) return;
+    const text = pendingSend.current;
+    pendingSend.current = null;
+    sendHeld.current(text);
+  }, [provider, live, releaseTick]);
+
   const [approveBlocked, setApproveBlocked] = useState(false);
   useEffect(() => { if (provider) setApproveBlocked(false); }, [provider]); // the reason is gone once a provider is connected
   const approvePlan = async () => {
@@ -567,6 +579,15 @@ export function AgentStage() {
           {queueNotice && <Notice tone="warn" className="mb-2">{queueNotice}</Notice>}
           <QueuedMessages items={queue} paused={queuePaused} restored={queueRestored} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
             onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
+          <ComposerUsageLimit
+            draft={instruction}
+            onHoldDraft={() => setInstruction("")}
+            onRelease={(text) => {
+              pendingSend.current = text;
+              useProviderStore.getState().clearUsageLimit();
+              setReleaseTick((n) => n + 1);
+            }}
+          />
           <ChatComposer
             key={activeThreadId ?? "no-thread"}
             inputRef={composerRef}

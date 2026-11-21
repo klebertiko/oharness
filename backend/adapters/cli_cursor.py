@@ -63,7 +63,7 @@ from .cli_shared import (
     CliFailure,
     CliMissing,
     CliRunResult,
-    classify_cli_failure,
+    failure_result,
     completed_result_events,
     reported_model,
     reported_tokens,
@@ -192,10 +192,10 @@ class CursorCliAdapter(AgentAdapter):
         if result.timed_out:
             return AdapterResult(content="", error=f"cursor-agent timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
-            return AdapterResult(
-                content="",
-                error=_last_line(result.stderr) or f"cursor-agent exited {result.returncode}",
-                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
+            return failure_result(
+                returncode=result.returncode,
+                text=result.stderr,
+                fallback_error=_last_line(result.stderr) or f"cursor-agent exited {result.returncode}",
             )
 
         return _parse_result(result.stdout, model=config.model)
@@ -207,7 +207,7 @@ class CursorCliAdapter(AgentAdapter):
         # chunk is a true and reasonable stream for now.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise CliFailure(result.failure)
+            raise CliFailure(result.failure, reset_at=result.reset_at or None)
         yield result.content
 
     async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
@@ -302,9 +302,7 @@ def _parse_result(stdout: str, *, model: str = "") -> AdapterResult:
     if isinstance(payload, dict):
         if payload.get("is_error") or payload.get("error"):
             reported = str(payload.get("error") or payload.get("result") or "cursor-agent reported an error")
-            return AdapterResult(
-                content="", error=reported, failure=classify_cli_failure(returncode=1, text=reported),
-            )
+            return failure_result(returncode=1, text=reported, fallback_error=reported)
         for key in ("result", "output", "text", "message", "response"):
             value = payload.get(key)
             if isinstance(value, str) and value:

@@ -15,6 +15,7 @@ import { apiUrl } from "@/lib/apiBase";
 import { tr } from "@/i18n/store";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { modelNotPulled } from "./modelPull";
+import { cleanResetAt } from "./usageLimit";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -70,6 +71,8 @@ export interface Connection {
   cliState?: CliState;
   /** The closed failure class the sidecar reported for the last failed run or probe, when it named one. */
   failure?: ProviderFaultClass;
+  /** ISO instant a subscription limit frees up. Absent when the class did not name one. */
+  resetAt?: string;
 }
 
 export const CLI_STATES = ["ready", "not-logged-in", "not-installed", "unavailable", "error"] as const;
@@ -483,6 +486,8 @@ interface ProviderState {
       "ready" once its rows were merged, "offline" when it could not be reached (rows are then the unverified
       catalogue, not a claim that nothing is connected). */
   loadState: "idle" | "loading" | "ready" | "offline";
+  /** The subscription limit the last run reported, or null. `resetAt` is an ISO instant or null. */
+  usageLimit: { connectionId: string; resetAt: string | null } | null;
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -500,6 +505,10 @@ interface ProviderState {
       `isProviderLevelFailure`'s doc comment for why no caller uses it yet)
       — never a bad prompt, an HITL rejection, or a Stop. */
   reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing" }) => void;
+  /** Record a usage limit. Only a validated reset instant is kept; the error text is ignored. */
+  noteUsageLimit: (id: string, resetAt: unknown) => void;
+  /** The window has opened, or the person picked another way out. */
+  clearUsageLimit: () => void;
   attachSecret: (id: string, plaintext: string) => Promise<void>;
   /** Deletes the key from the sidecar's SecretsStore; false when it could not. */
   revokeSecret: (id: string) => Promise<boolean>;
@@ -530,6 +539,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   query: "",
   hydrated: false,
   loadState: "idle",
+  usageLimit: null,
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -632,9 +642,12 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     dropDetection(id);
     if (outcome.ok) {
       set({
+        usageLimit: get().usageLimit?.connectionId === id ? null : get().usageLimit,
         connections: patch(get().connections, id, (x) => ({
           ...x,
           cliState: undefined,
+          failure: undefined,
+          resetAt: undefined,
           health: "live",
           detail: x.health === "live" ? x.detail : "Verified by a real run just now.",
         })),
@@ -653,6 +666,36 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
         connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),
       });
     }
+  },
+
+  noteUsageLimit: (id, resetAt) => {
+    const c = get().connections.find((x) => x.id === id);
+    if (!c || !c.enabled || c.health === "probing") return;
+    const clean = cleanResetAt(resetAt);
+    dropDetection(id);
+    set({
+      usageLimit: { connectionId: id, resetAt: clean },
+      connections: patch(get().connections, id, (x) => ({
+        ...x,
+        health: "fault",
+        failure: "usage_limit",
+        resetAt: clean ?? undefined,
+        detail: "",
+        cliState: undefined,
+      })),
+    });
+  },
+
+  clearUsageLimit: () => {
+    const current = get().usageLimit;
+    set({
+      usageLimit: null,
+      connections: get().connections.map((c) =>
+        c.failure === "usage_limit" && (!current || c.id === current.connectionId)
+          ? { ...c, health: c.enabled ? "live" : c.health, failure: undefined, resetAt: undefined }
+          : c,
+      ),
+    });
   },
 
   /** The plaintext lives inside this call and nowhere else. `saveSecret`
