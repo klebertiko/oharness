@@ -17,7 +17,7 @@ import stat
 import tarfile
 import urllib.request
 from collections.abc import Callable
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
 MAX_BYTES = 20 * 1024 * 1024
@@ -238,7 +238,8 @@ def _is_link(path: Path) -> bool:
 
 
 def fetch_local(spec: str, dest: Path) -> Path:
-    if spec.startswith(('\\\\', '//')):
+    # Windows reads any two leading slashes, mixed or not (`/\host`, `\\?\UNC\host`), as a network drive; check the parsed drive, not the text.
+    if spec.startswith(('\\\\', '//')) or PureWindowsPath(spec).drive.startswith(('\\\\', '//')):
         raise SourceError('invalid_spec', 'A network path is not accepted; copy the folder to this computer first.')
     source = Path(spec)
     if not source.is_absolute() or not source.is_dir():
