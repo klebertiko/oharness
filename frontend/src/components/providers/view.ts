@@ -2,7 +2,6 @@ import { isChatCapable, providerReadiness, type ChatProviderTone, type ProviderR
 import type { StatusTone } from "@/components/ui";
 import { tr } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
-import { BILLING_LABEL_KEY, CAPABILITY_LABEL_KEY } from "./labels";
 import { closestToReady, distanceToReady, nextStep, type NextStep } from "./nextStep";
 import { specOf, type Connection } from "./providerStore";
 
@@ -90,10 +89,15 @@ export function defaultConnectionId(connections: Connection[]): string {
   return (closestToReady(connections) ?? connections[0])?.id ?? "";
 }
 
-/** "Cloud · Chat · Pay per token": where it runs, what it answers, how it bills. */
+/** One plain word for the kind of account, instead of where it runs and how it is billed. */
+export function accountKind(c: Connection): MessageKey {
+  const kind = specOf(c).credential.kind;
+  if (kind === "cli") return "providers.account.subscription";
+  if (kind === "api-key") return "providers.account.apiKey";
+  if (c.residence === "local") return "providers.account.local";
+  return "providers.account.endpoint";
+}
+
 export function metaLine(c: Connection): string {
-  const spec = specOf(c);
-  const where = tr(c.residence === "local" ? "meta.local" : "meta.cloud");
-  const can = spec.capabilities.includes("chat") ? tr(CAPABILITY_LABEL_KEY.chat) : tr(CAPABILITY_LABEL_KEY.agent);
-  return [where, can, tr(BILLING_LABEL_KEY[spec.billing])].join(" · ");
+  return tr(accountKind(c));
 }

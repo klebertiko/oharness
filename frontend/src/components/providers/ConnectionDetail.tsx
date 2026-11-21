@@ -104,7 +104,7 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
           ) : (
             <>
               <ConnectionPanel c={c} actions={actions} />
-              {agentOnly ? <HandoffPanel /> : <ModelsPanel c={c} />}
+              {agentOnly ? <AgentOnlyPanel /> : <ModelsPanel c={c} />}
               <ActivityPanel c={c} usage={usage} />
             </>
           )}
@@ -128,19 +128,11 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
   );
 }
 
-function HandoffPanel() {
+function AgentOnlyPanel() {
   const t = useT();
   return (
-    <Panel title={t("handoff.title")} titleId="oh-handoff" level={3}>
-      <div className="grid gap-3 p-3 @md:grid-cols-2">
-        {(["cloud", "local"] as const).map((k) => (
-          <div key={k} className="rounded-control border border-line-soft bg-sub-200 p-3">
-            <p className="t-title text-ink">{t(`handoff.${k}.title`)}</p>
-            <p className="t-meta mt-1 break-all text-ink-mute">{t(`handoff.${k}.cmd`)}</p>
-            <p className="t-body mt-2 text-ink-dim">{t(`handoff.${k}.body`)}</p>
-          </div>
-        ))}
-      </div>
+    <Panel title={t("providers.agentOnly.title")} titleId="oh-agent-only" level={3}>
+      <p className="t-body p-3 text-ink-dim">{t("providers.agentOnly.body")}</p>
     </Panel>
   );
 }

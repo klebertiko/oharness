@@ -129,6 +129,9 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
               ok: false,
               detail: "Provider transport failed. Test the connection to check reachability.",
             });
+          } else if (pf === "usage_limit") {
+            // Only the reset instant. The error string is fixed text and is not stored.
+            useProviderStore.getState().noteUsageLimit(id, data.reset_at);
           } else if (pf === "cli-signin" || pf === "cli-missing" || pf === "cli-timeout" || pf === "cli-error") {
             // Closed set only; the text is ours (catalog), never the backend's or the CLI's.
             useProviderStore.getState().reportRunOutcome(id, {

@@ -82,7 +82,7 @@ from .cli_shared import (
     CliFailure,
     CliMissing,
     CliRunResult,
-    classify_cli_failure,
+    failure_result,
     completed_result_events,
     reported_tokens,
     cli_model_args,
@@ -202,10 +202,10 @@ class CodexCliAdapter(AgentAdapter):
         if result.timed_out:
             return AdapterResult(content="", error=f"codex CLI timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
-            return AdapterResult(
-                content="",
-                error=_last_line(result.stderr) or f"codex CLI exited {result.returncode}",
-                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
+            return failure_result(
+                returncode=result.returncode,
+                text=result.stderr,
+                fallback_error=_last_line(result.stderr) or f"codex CLI exited {result.returncode}",
             )
 
         return _parse_jsonl(result.stdout, model=config.model)
@@ -217,7 +217,7 @@ class CodexCliAdapter(AgentAdapter):
         # adapters make.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise CliFailure(result.failure)
+            raise CliFailure(result.failure, reset_at=result.reset_at or None)
         yield result.content
 
     async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:
@@ -312,9 +312,8 @@ def _parse_jsonl(stdout: str, *, model: str) -> AdapterResult:
             tokens = reported_tokens(event.get("usage"))
         elif kind in ("turn.failed", "error"):
             detail = event.get("error") or event.get("message") or "codex CLI reported an error"
-            return AdapterResult(
-                content="", error=str(detail), failure=classify_cli_failure(returncode=1, text=str(detail)),
-            )
+            reported = str(detail)
+            return failure_result(returncode=1, text=reported, fallback_error=reported)
 
     if texts:
         return AdapterResult(content="\n".join(texts), tokens_used=tokens, model=model or "")

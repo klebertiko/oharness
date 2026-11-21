@@ -21,8 +21,10 @@ class AdapterResult:
     tokens_used: int = 0
     model: str = ""
     error: str = ""
-    # Closed class of a CLI failure (cli-signin | cli-missing | cli-timeout | cli-error); "" otherwise.
+    # Closed class of a CLI failure (cli-signin | cli-missing | cli-timeout | usage_limit | cli-error); "" otherwise.
     failure: str = ""
+    # ISO reset instant for a usage limit. Empty for every other result.
+    reset_at: str = ""
 
 
 @dataclass

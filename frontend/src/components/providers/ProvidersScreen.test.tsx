@@ -240,7 +240,7 @@ describe("states", () => {
 
   it("an agent-only connection shows the handoff and no dead buttons", () => {
     show([conn({ id: "cursor", provider: "cursor", label: "Cursor", residence: "cloud", models: [], endpoint: "https://api.cursor.com" })]);
-    expect(screen.getByText("How the handoff works")).toBeTruthy();
+    expect(screen.getByText("Agents only")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delegate a task|launch in terminal/i })).toBeNull();
     expect(screen.queryByText("Models")).toBeNull();
   });
@@ -454,7 +454,7 @@ describe("language and accessibility", () => {
     show([conn({ health: "fault", detail: "Could not reach http://127.0.0.1:11434.", defaultModel: "gemma4:26b" })]);
     expect(screen.getAllByText("Inacessível").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Copiar `ollama serve`" })).toBeTruthy();
-    expect(screen.getByText("Precisa de ação")).toBeTruthy();
+    expect(screen.getByText("Precisa de você")).toBeTruthy();
     expect(screen.getByText("Conexão")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Endereço de Ollama local" })).toBeTruthy();
   });

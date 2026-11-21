@@ -94,6 +94,11 @@ export function useConnectionActions(c: Connection) {
       case "model":
         focusField(document.querySelector<HTMLElement>(`[${MODEL_PICKER_ATTR}] button`));
         break;
+      case "limit": {
+        const next = useProviderStore.getState().connections.find((x) => x.id !== c.id && x.enabled && x.health !== "fault");
+        if (next) useProviderStore.getState().select(next.id);
+        break;
+      }
       default:
         void test();
     }

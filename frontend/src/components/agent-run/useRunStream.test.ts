@@ -365,6 +365,33 @@ it("ignores an unknown cli-* class and never shows backend text for a known one"
   expect(conn.detail).not.toContain("CANARY");
 });
 
+it("a usage limit stores only the reset instant", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live", detail: "keep" })], usageLimit: null });
+  const { onEvent } = startAndCapture("an", true);
+  act(() => onEvent("node_error", {
+    node_id: "direct",
+    connection_id: "an",
+    provider_failure: "usage_limit",
+    reset_at: "2026-11-21T09:20:00+00:00",
+    error: "CANARY person@example.com",
+  }));
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.failure).toBe("usage_limit");
+  expect(conn.resetAt).toBe("2026-11-21T09:20:00+00:00");
+  expect(conn.detail).not.toContain("CANARY");
+  expect(JSON.stringify(useProviderStore.getState().usageLimit)).not.toContain("CANARY");
+  expect(JSON.stringify(useProviderStore.getState().usageLimit)).not.toContain("@");
+  act(() => onEvent("node_error", {
+    node_id: "direct",
+    connection_id: "an",
+    provider_failure: "usage_limit",
+    reset_at: "6:20am person@example.com",
+    error: "CANARY",
+  }));
+  expect(useProviderStore.getState().connections[0].resetAt).toBeUndefined();
+  expect(useProviderStore.getState().usageLimit?.resetAt).toBeNull();
+});
+
 it("ignores completion and close callbacks from a superseded stream", () => {
   useProviderStore.setState({ connections: [connection({})] });
   const { result, onEvent } = startAndCapture("an");
