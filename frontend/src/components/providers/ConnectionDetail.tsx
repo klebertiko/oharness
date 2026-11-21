@@ -11,6 +11,7 @@ import { ModelsPanel } from "./ModelsPanel";
 import { providerKey, vendorName } from "./providerText";
 import { specOf, type Connection } from "./providerStore";
 import { WithCode } from "./rows";
+import { LoginStatus } from "./LoginStatus";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
 import { metaLine, viewOf } from "./view";
@@ -93,6 +94,7 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             )}
           </header>
 
+          <LoginStatus connectionId={c.id} />
           {probing && !offline && (
             <p role="status" className="t-body text-ink-dim">
               {t("detail.testing")}

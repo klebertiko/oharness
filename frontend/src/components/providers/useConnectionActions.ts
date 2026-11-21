@@ -99,6 +99,9 @@ export function useConnectionActions(c: Connection) {
         if (next) useProviderStore.getState().select(next.id);
         break;
       }
+      case "login":
+        void useProviderStore.getState().startLogin(c.id);
+        break;
       default:
         void test();
     }

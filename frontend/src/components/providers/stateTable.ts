@@ -19,6 +19,7 @@ export type ActionId =
   | "testLater"
   | "openBilling"
   | "copyLogin"
+  | "signIn"
   | "openInstall"
   | "paste"
   | "turnOn"
@@ -35,6 +36,7 @@ export const ACTION_TEXT: Record<ActionId, { label: MessageKey; hint: MessageKey
   testLater: { label: "step.testLater", hint: "step.testLater.hint" },
   openBilling: { label: "step.openBilling", hint: "step.openBilling.hint" },
   copyLogin: { label: "step.copyLogin", hint: "step.copyLogin.hint" },
+  signIn: { label: "providers.login.enter", hint: "providers.login.hint" },
   openInstall: { label: "step.openInstall", hint: "step.openInstall.hint" },
   paste: { label: "step.paste", hint: "step.paste.hint" },
   turnOn: { label: "step.turnOn", hint: "step.turnOn.hint" },
@@ -50,7 +52,7 @@ export const STATE_TABLE: Record<ProviderFaultClass, { status: MessageKey; actio
   unreachable: { status: "fault.unreachable", action: "checkEndpoint" },
   "rate-limited": { status: "fault.rateLimited", action: "testLater" },
   "out-of-credits": { status: "fault.outOfCredits", action: "openBilling" },
-  "cli-signin": { status: "fault.signIn", action: "copyLogin" },
+  "cli-signin": { status: "fault.signIn", action: "signIn" },
   "cli-missing": { status: "fault.notInstalled", action: "openInstall" },
   "cli-timeout": { status: "fault.cliTimeout", action: "testAgain" },
   "cli-error": { status: "fault.cliError", action: "testAgain" },

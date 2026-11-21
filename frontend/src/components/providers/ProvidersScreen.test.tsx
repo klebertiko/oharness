@@ -76,7 +76,7 @@ describe("list", () => {
       router({ id: "b", label: "Key row", enabled: false, secret: null, health: "setup" }),
       conn({ id: "c", label: "Needs model", defaultModel: "", health: "setup" }),
     ]);
-    const headings = within(screen.getByRole("complementary")).getAllByRole("heading", { level: 3 }).map((h) => h.textContent).filter((h) => h !== "Spend");
+    const headings = within(screen.getByRole("complementary")).getAllByRole("heading", { level: 3 }).map((h) => h.textContent).filter((h) => h !== "Estimated spend");
     expect(headings).toEqual(["Needs action", "Ready"]);
     const rows = within(screen.getByRole("complementary")).getAllByRole("button").map((b) => b.textContent ?? "");
     expect(rows[0]).toContain("Needs model");
