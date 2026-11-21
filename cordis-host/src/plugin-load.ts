@@ -85,6 +85,8 @@ export interface LoadOutcome {
   readonly status: 'active' | 'pending' | 'failed'
   readonly unmet: readonly string[]
   readonly message?: string
+  /** The live fiber, so the host can dispose it on unload. */
+  readonly fiber?: Fiber
 }
 
 /** Load an evaluated plugin module into `context` and report the fiber's state. */
@@ -103,5 +105,6 @@ export async function loadPlugin(context: Context, plugin: unknown, config?: unk
     status,
     unmet: status === 'pending' ? unmetInjections(fiber) : [],
     ...(status === 'failed' ? { message: `plugin fiber is ${state}` } : {}),
+    fiber,
   }
 }

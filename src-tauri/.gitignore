@@ -10,3 +10,6 @@ WixTools/
 
 # Icons are committed so CI cargo/clippy can run without a brand-tooling
 # pre-step. Regenerate locally with `node scripts/brand-icons.mjs` when Nilo changes.
+
+# Staged by scripts/build-cordis-host.mjs: Node runtime + plugin host + production dependencies
+/resources/cordis-host/

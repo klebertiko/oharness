@@ -21,6 +21,8 @@ Scripts `preinstall`, `install`, `postinstall` e `prepare` não rodam. Se existi
 
 O pacote tem de estar dentro da pasta de plugins: `OH_CORDIS_PLUGINS_DIR` (absoluta) ou `~/.oharness/plugins`. O digest cobre o arquivo de entrada e o hash de todos os arquivos do pacote, então editar o pacote depois da prévia exige uma prévia nova. O token é da UI e do sidecar, nunca do agente.
 
+`POST /v1/plugins/unload {name}` para o plugin (`name` � o nome do pacote, como em `GET /v1/plugins`) e o esquece: um plugin isolado tem o processo parado, um `in-process` tem o fiber descartado, e a c�pia privada � apagada. Depois disso outra vers�o pode ser instalada sem reiniciar o host. Nome desconhecido responde 404 `plugin-not-found`.
+
 ## Isolamento
 
 Com `runtime: isolated`, sem capacidade, o processo do plugin só lê o snapshot do pacote e os módulos fixados do host. Ele não escreve em disco, não abre processo, não sinaliza o host nem abre o inspector dele, e não recebe as variáveis de ambiente do host (no Windows, o Node completa as variáveis padrão do usuário, como USERPROFILE, TEMP e PATH). A rede não é limitada: o plugin alcança a internet e os serviços de loopback, inclusive este host, que exige o token. Isso é um processo separado com limites, não isolamento completo. Cada capacidade tira um limite:
