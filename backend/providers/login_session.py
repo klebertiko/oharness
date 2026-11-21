@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import secrets
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
@@ -78,12 +77,29 @@ def _checked_argv(argv: list[str]) -> list[str]:
 
 
 def default_spawner(argv: list[str]) -> int | None:
-    """Run the login without reading its output. Prefer an external terminal."""
+    """Run the login without a shell and without reading its output.
+
+    The executable name is one of a fixed set and the last argument is the literal ``login``.
+    Standard streams are discarded so nothing the command prints is kept.
+    """
     command = _checked_argv(_external_terminal(argv) or argv)
-    # OpenGrep flags any non-literal subprocess argv. The executable name is one of a fixed set and the last argument is the literal "login".
-    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-    proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-    return proc.pid
+    if os.name != "nt" and hasattr(os, "posix_spawn"):
+        devnull = os.open(os.devnull, os.O_RDWR)
+        try:
+            return os.posix_spawn(
+                command[0],
+                command,
+                os.environ,
+                file_actions=[
+                    (os.POSIX_SPAWN_DUP2, devnull, 0),
+                    (os.POSIX_SPAWN_DUP2, devnull, 1),
+                    (os.POSIX_SPAWN_DUP2, devnull, 2),
+                ],
+                setsid=True,
+            )
+        finally:
+            os.close(devnull)
+    return os.spawnv(os.P_NOWAIT, command[0], command)
 
 
 def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = default_spawner) -> dict:
