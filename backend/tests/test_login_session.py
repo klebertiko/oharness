@@ -47,7 +47,8 @@ def test_start_uses_the_fixed_argv_and_returns_no_path_or_secret(client: TestCli
 
 
 def test_unknown_cli_and_a_missing_binary_do_not_spawn(client: TestClient) -> None:
-    assert client.post("/providers/clis/other/login").status_code == 404
+    unknown = client.post("/providers/clis/other/login")
+    assert unknown.status_code == 404
     app.state.login_finder = lambda name: None
     missing = client.post("/providers/clis/codex/login")
     assert missing.status_code == 409
@@ -61,9 +62,11 @@ def test_cancel_stops_the_session_without_reading_output(client: TestClient, mon
     monkeypatch.setattr("providers.login_session.os.kill", lambda pid, sig: killed.append(pid))
     started = client.post("/providers/clis/cursor/login").json()
     gone = client.delete(f"/providers/clis/login/{started['id']}")
-    assert gone.status_code == 200 and gone.json()["running"] is False
+    assert gone.status_code == 200
+    assert gone.json()["running"] is False
     assert killed == [4242]
-    assert client.delete("/providers/clis/login/missing").status_code == 404
+    missing = client.delete("/providers/clis/login/missing")
+    assert missing.status_code == 404
     assert app.state.secrets_store._data == {}
 
 

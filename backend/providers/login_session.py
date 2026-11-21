@@ -10,6 +10,7 @@ import os
 import secrets
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from shutil import which
 from typing import Callable
 
@@ -56,10 +57,32 @@ def _external_terminal(argv: list[str]) -> list[str] | None:
     return [term, "-e", *argv]
 
 
+_LOGIN_NAMES = {"claude", "codex", "cursor-agent", "claude.exe", "codex.exe", "cursor-agent.exe", "cursor-agent.cmd"}
+_TERMINAL_NAMES = {"wt.exe", "x-terminal-emulator", "xterm"}
+
+
+def _checked_argv(argv: list[str]) -> list[str]:
+    """Refuse anything that is not a known terminal plus one of the three login commands."""
+    if len(argv) < 2:
+        raise ValueError("refused")
+    name = Path(argv[0]).name.lower()
+    if name in _TERMINAL_NAMES:
+        # terminal, "-e" or the login binary, then the fixed login command
+        tail = argv[-2:]
+        if Path(tail[0]).name.lower() not in _LOGIN_NAMES or tail[1] != "login":
+            raise ValueError("refused")
+        return argv
+    if name not in _LOGIN_NAMES or argv[1:] != ["login"]:
+        raise ValueError("refused")
+    return argv
+
+
 def default_spawner(argv: list[str]) -> int | None:
     """Run the login without reading its output. Prefer an external terminal."""
-    command = _external_terminal(argv) or argv
-    proc = subprocess.Popen(  # noqa: S603 — argv is an allowlisted binary plus fixed args
+    command = _checked_argv(_external_terminal(argv) or argv)
+    # The executable name is one of a fixed set, and the last argument is the literal "login".
+    # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
+    proc = subprocess.Popen(  # noqa: S603
         command,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -91,7 +114,8 @@ def cancel_login(session_id: str) -> bool:
         try:
             os.kill(session.pid, 15)
         except OSError:
-            pass
+            # The process has already exited. Nothing it printed is read.
+            session.pid = None
     session.running = False
     session.pid = None
     return True
