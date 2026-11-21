@@ -34,6 +34,17 @@
           "options": {
             "reportUnnecessaryDependencies": false
           }
+        },
+        "noRestrictedElements": {
+          "level": "info",
+          "options": {
+            "elements": {
+              "button": "Use Button or IconButton from components/ui.",
+              "input": "Use Input, Checkbox or Select from components/ui.",
+              "select": "Use Select from components/ui.",
+              "textarea": "Use Textarea from components/ui."
+            }
+          }
         }
       },
       "style": {
@@ -67,5 +78,17 @@
   "plugins": [
     "./lint/no-unescaped-entities.grit",
     "./lint/no-anonymous-default-export.grit"
+  ],
+  "overrides": [
+    {
+      "includes": ["src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noRestrictedElements": "off"
+          }
+        }
+      }
+    }
   ]
 }

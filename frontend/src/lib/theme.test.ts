@@ -15,10 +15,10 @@ beforeEach(() => {
 afterEach(() => window.localStorage.clear());
 
 describe("theme-init.js (runs before first paint)", () => {
-  it("defaults to Graphite", () => {
+  it("defaults to the system theme", () => {
     runInit();
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBe("system");
+    expect(document.documentElement.style.colorScheme).toBe("light dark");
   });
 
   it("applies a saved Ivory choice and sets theme-color and color-scheme to match", () => {
@@ -29,10 +29,10 @@ describe("theme-init.js (runs before first paint)", () => {
     expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe(THEME_COLOR.light);
   });
 
-  it("falls back to Graphite for any other stored value", () => {
+  it("falls back to system for any other stored value", () => {
     window.localStorage.setItem(THEME_KEY, "purple");
     runInit();
-    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBe("system");
   });
 
   it("agrees with theme.ts on the storage key and both colours", () => {
@@ -70,7 +70,7 @@ describe("applyTheme", () => {
     Object.defineProperty(window, "localStorage", { get() { throw new Error("blocked"); }, configurable: true });
     try {
       expect(() => applyTheme("light")).not.toThrow();
-      expect(storedTheme()).toBe("dark");
+      expect(storedTheme()).toBe("system");
     } finally {
       Object.defineProperty(window, "localStorage", orig);
     }
