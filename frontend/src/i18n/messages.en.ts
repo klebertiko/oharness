@@ -978,6 +978,11 @@ export const en = {
   "nilo.tasks.failed": "Failed",
   "nilo.tasks.notifications": "System notifications",
   "nilo.tasks.notificationsHint": "Off until you turn them on. Only when the window is in the background, and only when work finishes, fails, or needs you.",
+
+  "nilo.drafts.edit": "Edit",
+  "nilo.drafts.send": "Send",
+  "nilo.drafts.discard": "Discard",
+  "nilo.drafts.pending": "Waiting for you to send",
 };
 
 export type MessageKey = keyof typeof en;

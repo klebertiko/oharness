@@ -980,4 +980,9 @@ export const ptBR: Record<MessageKey, string> = {
   "nilo.tasks.failed": "Falhou",
   "nilo.tasks.notifications": "Notificações do sistema",
   "nilo.tasks.notificationsHint": "Desligadas até você ligar. Só com a janela em segundo plano, e só quando o trabalho termina, falha ou precisa de você.",
+
+  "nilo.drafts.edit": "Editar",
+  "nilo.drafts.send": "Enviar",
+  "nilo.drafts.discard": "Descartar",
+  "nilo.drafts.pending": "Esperando você enviar",
 };

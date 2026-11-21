@@ -55,6 +55,24 @@ class NiloTask(Base):
     __table_args__ = (Index("ix_nilo_tasks_state", "state"),)
 
 
+class NiloDraft(Base):
+    """A message waiting for a person. Sending consumes one approval of this exact content."""
+
+    __tablename__ = "nilo_drafts"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    connector: Mapped[str] = mapped_column(String(64), nullable=False)
+    address: Mapped[str] = mapped_column(String(200), nullable=False)
+    subject: Mapped[str] = mapped_column(Text, default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    origin_json: Mapped[str] = mapped_column(Text, default="{}")
+    approval_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approval_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approval_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+
 class NiloPreference(Base):
     """Small local switches. Notifications stay off until a person turns them on."""
 
