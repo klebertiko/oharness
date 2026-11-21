@@ -240,7 +240,7 @@ describe("states", () => {
 
   it("an agent-only connection shows the handoff and no dead buttons", () => {
     show([conn({ id: "cursor", provider: "cursor", label: "Cursor", residence: "cloud", models: [], endpoint: "https://api.cursor.com" })]);
-    expect(screen.getByText("Agents only")).toBeTruthy();
+    expect(screen.getByText("Agent tasks")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delegate a task|launch in terminal/i })).toBeNull();
     expect(screen.queryByText("Models")).toBeNull();
   });

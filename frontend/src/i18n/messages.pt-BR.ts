@@ -959,7 +959,7 @@ export const ptBR: Record<MessageKey, string> = {
   "providers.account.apiKey": "Chave de API",
   "providers.account.local": "Neste computador",
   "providers.account.endpoint": "Endpoint próprio",
-  "providers.agentOnly.title": "Só agentes",
+  "providers.agentOnly.title": "Tarefas de agente",
   "providers.agentOnly.body": "Esta conta executa tarefas de agente. O chat usa outra conta.",
   "providers.error.authentication.what": "Esta conta recusou o acesso",
   "providers.error.authentication.why": "O login ou a chave não vale mais",

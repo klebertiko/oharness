@@ -957,7 +957,7 @@ export const en = {
   "providers.account.apiKey": "API key",
   "providers.account.local": "On this computer",
   "providers.account.endpoint": "Your endpoint",
-  "providers.agentOnly.title": "Agents only",
+  "providers.agentOnly.title": "Agent tasks",
   "providers.agentOnly.body": "This account runs agent tasks. Chat uses another account.",
   "providers.error.authentication.what": "This account refused the sign-in",
   "providers.error.authentication.why": "The login or the key is no longer accepted",

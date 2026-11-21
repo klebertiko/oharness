@@ -54,7 +54,7 @@ describe("providers copy in pt-BR", () => {
     expect(text).not.toMatch(FORBIDDEN);
     for (const leak of ENGLISH) expect(text, leak).not.toContain(leak);
     expect(text).toContain("Assinatura");
-    expect(text).toContain("Só agentes");
+    expect(text).toContain("Tarefas de agente");
     expect(text).toContain("Limite da assinatura atingido");
     expect(text).not.toContain(EMAIL_CANARY);
   });
