@@ -75,13 +75,25 @@ def nilo_system_prompt(
     return "\n\n".join(chunk for chunk in chunks if chunk)
 
 
-async def memory_block_for(cwd: str | None = None) -> str:
-    """User rules for this turn. Empty until a person has approved a memory.
+async def memory_block_for(cwd: str | None = None) -> str | MemoryBlock:
+    """Active memories for this turn. Empty until a person has approved one.
 
-    `cwd` selects workspace-scoped rules once memory exists. With nothing
-    stored, the block is empty for every folder, including when `cwd` is omitted.
+    `cwd` selects workspace-scoped items in addition to global ones. A missing
+    table, before the sidecar has prepared storage, is the same as nothing kept.
     """
-    return ""
+    try:
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from database import SessionLocal
+        from nilo.memory import block_for
+
+        async with SessionLocal() as db:
+            block = await block_for(db, cwd)
+    except SQLAlchemyError:
+        return ""
+    if not block.rules and not block.facts:
+        return ""
+    return block
 
 
 def lint_voice(text: str) -> list[str]:

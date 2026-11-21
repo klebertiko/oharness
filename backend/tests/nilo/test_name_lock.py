@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 
 import pytest
+from fastapi.testclient import TestClient
+
 from main import app
 from nilo.name_lock import FIXED_IDENTITY_LINE, FIXED_NAME_ERROR, rename_refusal
 from nilo.voice import nilo_system_prompt
@@ -93,3 +95,11 @@ def test_a_rename_instruction_is_refused(text: str) -> None:
 @pytest.mark.parametrize("text", _KEPT)
 def test_an_ordinary_rule_is_not_a_rename(text: str) -> None:
     assert rename_refusal(text) is None
+
+
+@pytest.mark.parametrize("text", _RENAMES)
+def test_post_memory_refuses_a_rename(text: str) -> None:
+    with TestClient(app) as client:
+        response = client.post("/nilo/memory", json={"kind": "rule", "scope": "global", "text": text})
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == FIXED_NAME_ERROR
