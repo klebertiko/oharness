@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
@@ -41,65 +42,154 @@ def reset_sessions() -> None:
     _sessions.clear()
 
 
-def _external_terminal(argv: list[str]) -> list[str] | None:
-    """A new terminal window for the login, when this machine has one. No shell string."""
+# Basename from the installed path -> the literal command that is actually started.
+# The path passed in is never executed, so a request cannot choose a binary.
+_LOGIN_NAMES = {
+    "claude": "claude",
+    "claude.exe": "claude",
+    "codex": "codex",
+    "codex.exe": "codex",
+    "cursor-agent": "cursor-agent",
+    "cursor-agent.exe": "cursor-agent",
+    "cursor-agent.cmd": "cursor-agent",
+}
+
+
+def _checked_login(argv: list[str]) -> str:
+    """One of the three login commands, or a refusal. Extra flags are refused."""
+    if len(argv) != 2 or argv[1] != "login":
+        raise ValueError("refused")
+    name = _LOGIN_NAMES.get(Path(argv[0]).name.lower())
+    if name is None:
+        raise ValueError("refused")
+    return name
+
+
+def _terminal_kind() -> str | None:
+    """Which installed terminal can show the login, if this machine has a display."""
     if os.name == "nt":
-        wt = which("wt.exe")
-        if wt:
-            return [wt, *argv]
-        return None
+        return "wt" if which("wt.exe") else None
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         return None
-    term = which("x-terminal-emulator") or which("xterm")
-    if not term:
-        return None
-    return [term, "-e", *argv]
+    if which("x-terminal-emulator"):
+        return "x-terminal-emulator"
+    if which("xterm"):
+        return "xterm"
+    return None
 
 
-_LOGIN_NAMES = {"claude", "codex", "cursor-agent", "claude.exe", "codex.exe", "cursor-agent.exe", "cursor-agent.cmd"}
-_TERMINAL_NAMES = {"wt.exe", "x-terminal-emulator", "xterm"}
+def _quiet(proc: subprocess.Popen[bytes]) -> int:
+    return proc.pid
 
 
-def _checked_argv(argv: list[str]) -> list[str]:
-    """Refuse anything that is not a known terminal plus one of the three login commands."""
-    if len(argv) < 2:
-        raise ValueError("refused")
-    name = Path(argv[0]).name.lower()
-    if name in _TERMINAL_NAMES:
-        # terminal, "-e" or the login binary, then the fixed login command
-        tail = argv[-2:]
-        if Path(tail[0]).name.lower() not in _LOGIN_NAMES or tail[1] != "login":
-            raise ValueError("refused")
-        return argv
-    if name not in _LOGIN_NAMES or argv[1:] != ["login"]:
-        raise ValueError("refused")
-    return argv
+def _spawn_direct(name: str) -> int:
+    """Each call lists its own argv. Nothing here is assembled from the request."""
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    raise ValueError("refused")
+
+
+def _spawn_wt(name: str) -> int:
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    raise ValueError("refused")
+
+
+def _spawn_emulator(name: str) -> int:
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["x-terminal-emulator", "-e", "claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["x-terminal-emulator", "-e", "codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["x-terminal-emulator", "-e", "cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    raise ValueError("refused")
+
+
+def _spawn_xterm(name: str) -> int:
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["xterm", "-e", "claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["xterm", "-e", "codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["xterm", "-e", "cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached,
+        ))
+    raise ValueError("refused")
 
 
 def default_spawner(argv: list[str]) -> int | None:
-    """Run the login without a shell and without reading its output.
+    """Run one fixed login command. Its output is discarded.
 
-    The executable name is one of a fixed set and the last argument is the literal ``login``.
-    Standard streams are discarded so nothing the command prints is kept.
+    When this machine has a terminal, that same command is shown there so the
+    person can finish signing in. The request's path is not the program that runs.
     """
-    command = _checked_argv(_external_terminal(argv) or argv)
-    if os.name != "nt" and hasattr(os, "posix_spawn"):
-        devnull = os.open(os.devnull, os.O_RDWR)
-        try:
-            return os.posix_spawn(
-                command[0],
-                command,
-                os.environ,
-                file_actions=[
-                    (os.POSIX_SPAWN_DUP2, devnull, 0),
-                    (os.POSIX_SPAWN_DUP2, devnull, 1),
-                    (os.POSIX_SPAWN_DUP2, devnull, 2),
-                ],
-                setsid=True,
-            )
-        finally:
-            os.close(devnull)
-    return os.spawnv(os.P_NOWAIT, command[0], command)
+    name = _checked_login(argv)
+    kind = _terminal_kind()
+    if kind == "wt":
+        return _spawn_wt(name)
+    if kind == "x-terminal-emulator":
+        return _spawn_emulator(name)
+    if kind == "xterm":
+        return _spawn_xterm(name)
+    return _spawn_direct(name)
 
 
 def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = default_spawner) -> dict:

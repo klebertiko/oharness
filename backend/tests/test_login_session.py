@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from providers.login_session import reset_sessions, start_login
+import subprocess
+
+from providers.login_session import default_spawner, reset_sessions, start_login
 from secret_store.memory import MemorySecrets
 
 CANARY = "CANARY-TOKEN-9af3"
@@ -73,3 +75,70 @@ def test_cancel_stops_the_session_without_reading_output(client: TestClient, mon
 def test_start_login_rejects_a_command_that_is_not_one_of_the_three() -> None:
     with pytest.raises(KeyError):
         start_login("sh")
+
+
+class _Proc:
+    pid = 77
+
+
+def _refuse_dynamic(*_args: object, **_kwargs: object) -> int:
+    raise AssertionError("dynamic spawn")
+
+
+def _record_popen(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list[str], dict]]:
+    calls: list[tuple[list[str], dict]] = []
+
+    def popen(argv: list[str], **kwargs: object) -> _Proc:
+        calls.append((list(argv), kwargs))
+        return _Proc()
+
+    monkeypatch.setattr("providers.login_session.subprocess.Popen", popen)
+    monkeypatch.setattr("providers.login_session.os.posix_spawn", _refuse_dynamic)
+    monkeypatch.setattr("providers.login_session.os.spawnv", _refuse_dynamic)
+    return calls
+
+
+def test_default_spawner_runs_the_literal_command_not_the_resolved_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    calls = _record_popen(monkeypatch)
+    assert default_spawner(["/usr/local/bin/claude", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["claude", "login"]
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["stdout"] is subprocess.DEVNULL
+    assert kwargs["stderr"] is subprocess.DEVNULL
+    assert "/usr/local/bin" not in " ".join(argv)
+
+
+def test_default_spawner_opens_a_terminal_with_the_same_fixed_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DISPLAY", ":1")
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setattr("providers.login_session.os.name", "posix")
+    monkeypatch.setattr(
+        "providers.login_session.which",
+        lambda name: "/usr/bin/xterm" if name == "xterm" else None,
+    )
+    calls = _record_popen(monkeypatch)
+    assert default_spawner(["/opt/tools/cursor-agent.cmd", "login"]) == 77
+    assert calls[0][0] == ["xterm", "-e", "cursor-agent", "login"]
+
+
+def test_default_spawner_prefers_the_windows_terminal_when_it_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("providers.login_session.os.name", "nt")
+    monkeypatch.setattr(
+        "providers.login_session.which",
+        lambda name: "C:\\Windows\\wt.exe" if name == "wt.exe" else None,
+    )
+    calls = _record_popen(monkeypatch)
+    assert default_spawner(["/opt/codex.exe", "login"]) == 77
+    assert calls[0][0] == ["wt.exe", "codex", "login"]
+    assert calls[0][1]["start_new_session"] is False
+
+
+def test_default_spawner_refuses_anything_outside_the_three_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record_popen(monkeypatch)
+    for argv in (["/tmp/sh", "-c"], ["claude", "login", "--extra"], ["xterm", "-e", "claude", "login"]):
+        with pytest.raises(ValueError):
+            default_spawner(argv)
+    assert calls == []
