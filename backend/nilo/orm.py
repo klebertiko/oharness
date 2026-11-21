@@ -30,3 +30,34 @@ class NiloMemory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
     __table_args__ = (Index("ix_nilo_memories_status", "status", "scope"),)
+
+
+class NiloTask(Base):
+    """Work that outlives the chat turn. A restart marks a running row interrupted."""
+
+    __tablename__ = "nilo_tasks"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    thread_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    stage: Mapped[str] = mapped_column(String(64), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    next_action: Mapped[str] = mapped_column(Text, default="")
+    artifacts_json: Mapped[str] = mapped_column(Text, default="[]")
+    events_json: Mapped[str] = mapped_column(Text, default="[]")
+    last_milestone_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (Index("ix_nilo_tasks_state", "state"),)
+
+
+class NiloPreference(Base):
+    """Small local switches. Notifications stay off until a person turns them on."""
+
+    __tablename__ = "nilo_preferences"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(16), nullable=False)
