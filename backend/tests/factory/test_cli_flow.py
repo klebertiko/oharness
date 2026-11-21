@@ -67,8 +67,11 @@ def test_cli_item_lands_in_intake_moves_on_advance_and_groups_in_the_inbox(clien
     assert len(groups) == 1 and groups[0]['title'] == 'From the command line'
     assert {entry['type'] for entry in groups[0]['entries']} == {'question'}
     entry_id = groups[0]['entries'][0]['id']
-    assert client.post(f'/factory/inbox/{entry_id}/resolve', headers=HUMAN).status_code == 204
-    assert all(entry['id'] != entry_id for entry in client.get('/factory/inbox').json()['entries'])
-    assert client.delete(f'/factory/inbox/{entry_id}/resolve', headers=HUMAN).status_code == 204
+    resolved = client.post(f'/factory/inbox/{entry_id}/resolve', headers=HUMAN)
+    assert resolved.status_code == 204
+    hidden = client.get('/factory/inbox').json()['entries']
+    assert all(entry['id'] != entry_id for entry in hidden)
+    undone = client.delete(f'/factory/inbox/{entry_id}/resolve', headers=HUMAN)
+    assert undone.status_code == 204
     restored = client.get('/factory/inbox').json()['entries']
     assert any(entry['id'] == entry_id and entry['resolved'] is False for entry in restored)

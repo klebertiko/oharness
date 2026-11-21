@@ -24,7 +24,6 @@ from factory.scorers.evaluate import evaluate
 from factory.service import FactoryError
 
 NOTE = 'Ask a person before repeating a step that already failed a recorded check.'
-_VERDICTS = ('improved', 'tied', 'worsened')
 _MERGE_LINE = re.compile(r'(?im)^\s*action\s*:\s*merge\s*$')
 DEFAULT_FAILURES = 25
 DEFAULT_AGE_DAYS = 7
