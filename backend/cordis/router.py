@@ -6,8 +6,10 @@ address and token never appear in a response or a log.
 """
 from __future__ import annotations
 
-from typing import Literal
+import threading
+from typing import Any, Literal
 
+import anyio
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 
@@ -21,7 +23,7 @@ PLUGIN_ID = r'^[0-9a-f]{16}$'
 
 
 class FetchBody(BaseModel):
-    kind: Literal['npm', 'github', 'local']
+    kind: Literal['npm', 'github', 'tarball', 'local']
     spec: str = Field(min_length=1, max_length=1024)
     version: str | None = Field(default=None, max_length=128)
     commit: str | None = Field(default=None, max_length=64)
@@ -33,6 +35,33 @@ class InstallBody(BaseModel):
     accept: bool
     digest: str = Field(max_length=128)
     scripts: Literal['do-not-run'] | None = None
+    enable: bool = True
+
+
+class ShareBody(BaseModel):
+    target: Literal['npm', 'git']
+
+
+class IndexBody(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+
+
+class ProposeBody(BaseModel):
+    fetch_id: str = Field(max_length=32)
+    digest: str = Field(max_length=128)
+    summary: str = Field(default='', max_length=400)
+    scripts: Literal['do-not-run'] | None = None
+
+
+class DecideBody(BaseModel):
+    decision: Literal['approve', 'reject']
+    enable: bool = True
+
+
+class WriteBody(BaseModel):
+    folder: str = Field(min_length=1, max_length=1024)
+    name: str = Field(min_length=1, max_length=64)
+    description: str = Field(default='', max_length=400)
 
 
 def _human(request: Request) -> None:
@@ -71,15 +100,60 @@ def list_plugins(request: Request):
 
 
 @router.post('/plugins/fetch')
-def fetch_plugin(request: Request, body: FetchBody):
+async def fetch_plugin(request: Request, body: FetchBody):
+    """Download and inspect. If the client goes away before the download finishes, the download is cancelled."""
     _human(request)
-    return _call(lambda: _service(request).fetch(body.kind, body.spec, version=body.version, commit=body.commit, subdir=body.subdir))
+    service = _service(request)
+    cancel = threading.Event()
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box['value'] = service.fetch(body.kind, body.spec, version=body.version, commit=body.commit, subdir=body.subdir, cancel=cancel)
+        except Exception as exc:  # carried back to this request; _call maps the known errors
+            box['error'] = exc
+
+    worker = threading.Thread(target=run, name='cordis-fetch')
+    worker.start()
+    try:
+        while worker.is_alive():
+            if await request.is_disconnected():
+                cancel.set()
+            await anyio.sleep(0.05)
+    finally:
+        worker.join()
+    if 'error' in box:
+        error = box['error']
+
+        def _raise() -> Any:
+            raise error
+
+        return _call(_raise)
+    value = box.get('value')
+    if not isinstance(value, dict) or await request.is_disconnected():
+        fetch_id = value.get('fetchId') if isinstance(value, dict) else None
+        if isinstance(fetch_id, str):
+            service.discard(fetch_id)
+        return Response(status_code=499)
+    return value
+
+
+@router.get('/plugins/fetch/{fetch_id}/log')
+def fetch_log(request: Request, fetch_id: str = Path(max_length=32)):
+    return {'lines': _call(lambda: _service(request).fetch_log(fetch_id))}
+
+
+@router.delete('/plugins/fetch/{fetch_id}', status_code=204)
+def discard_fetch(request: Request, fetch_id: str = Path(max_length=32)):
+    _human(request)
+    _call(lambda: _service(request).discard(fetch_id))
+    return Response(status_code=204)
 
 
 @router.post('/plugins/install')
 def install_plugin(request: Request, body: InstallBody):
     _human(request)
-    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts))
+    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts, enable=body.enable))
 
 
 @router.post('/plugins/{plugin_id}/enable')
@@ -110,3 +184,50 @@ def plugin_logs(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID), tail
 def export_plugin(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
     filename, data = _call(lambda: _service(request).export(plugin_id))
     return Response(content=data, media_type='application/gzip', headers={'content-disposition': f'attachment; filename="{filename}"'})
+
+
+@router.post('/plugins/{plugin_id}/share')
+def share_plugin(request: Request, body: ShareBody, plugin_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)
+    return _call(lambda: _service(request).share(plugin_id, body.target))
+
+
+@router.get('/marketplace')
+def marketplace(request: Request):
+    return _call(lambda: _service(request).marketplace())
+
+
+@router.post('/marketplace')
+def marketplace_from(request: Request, body: IndexBody):
+    _human(request)
+    return _call(lambda: _service(request).marketplace_from(body.url))
+
+
+@router.get('/creator/apis')
+def creator_apis(request: Request):
+    _service(request)
+    from cordis.creator import APIS
+    return {'apis': list(APIS)}
+
+
+@router.get('/creator/actions')
+def creator_actions(request: Request):
+    return {'actions': _call(lambda: _service(request).actions.list())}
+
+
+@router.post('/creator/actions')
+def propose_action(request: Request, body: ProposeBody):
+    _human(request)
+    return _call(lambda: _service(request).propose_action(body.fetch_id, body.digest, body.summary, body.scripts))
+
+
+@router.post('/creator/actions/{action_id}/decide')
+def decide_action(request: Request, body: DecideBody, action_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)
+    return _call(lambda: _service(request).decide_action(action_id, body.decision, enable=body.enable))
+
+
+@router.post('/creator/write')
+def write_starter(request: Request, body: WriteBody):
+    _human(request)
+    return _call(lambda: _service(request).write_plugin_starter(body.folder, body.name, body.description))

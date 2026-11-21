@@ -12,6 +12,7 @@ import os
 import sys
 import tarfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -302,3 +303,22 @@ def test_local_folder_too_large_is_refused(tmp_path):
     with pytest.raises(SourceError) as error:
         sources.fetch_local(str(src), tmp_path / 'dest')
     assert error.value.code == 'archive_too_large'
+
+
+def test_tarball_from_a_local_file_is_unpacked_without_running_it(tmp_path):
+    archive = tmp_path / 'widget.tgz'
+    archive.write_bytes(tar_gz({'package/package.json': b'{"name":"widget","version":"1.2.3"}', 'package/index.js': b'export {}\n'}))
+    root = sources.fetch_tarball(str(archive), tmp_path / 'dest')
+    assert json.loads((root / 'package.json').read_text(encoding='utf-8'))['name'] == 'widget'
+
+
+def test_tarball_https_must_be_on_an_allowed_host(tmp_path):
+    def fetcher(url: str, limit: int) -> bytes:
+        assert urlsplit(url).hostname == sources.NPM_HOST and limit > 0
+        return tar_gz({'package/package.json': b'{"name":"widget","version":"1.2.3"}'})
+
+    root = sources.fetch_tarball('https://registry.npmjs.org/widget/-/widget-1.2.3.tgz', tmp_path / 'dest', fetcher=fetcher)
+    assert (root / 'package.json').is_file()
+    with pytest.raises(SourceError) as error:
+        sources.fetch_tarball('https://example.com/widget.tgz', tmp_path / 'other', fetcher=fetcher)
+    assert error.value.code == 'untrusted_host'
