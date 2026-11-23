@@ -37,6 +37,11 @@
   --color-role-memory: var(--role-memory);
   --color-role-aggregator: var(--role-aggregator);
   --color-role-output: var(--role-output);
+  --color-role-agent: var(--role-agent);
+  --color-role-gate: var(--role-gate);
+  --color-role-skill: var(--role-skill);
+  --color-role-mcp: var(--role-mcp);
+  --color-role-decision: var(--role-decision);
 
   --color-bg-app: var(--bg-app);
   --color-bg-sidebar: var(--bg-sidebar);
@@ -250,7 +255,7 @@
   --role-hitl: oklch(0.560 0.105 30);
   --role-skill: oklch(0.520 0.075 255);
   --role-mcp: oklch(0.520 0.075 160);
-  --role-tool: oklch(0.500 0.035 235);
+  --role-tool: oklch(0.510 0.035 235);
   /* The @theme map named these two; they now exist, same family as the others. */
   --role-input: oklch(0.540 0.085 210);
   --role-llm: oklch(0.540 0.085 265);

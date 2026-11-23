@@ -5,6 +5,30 @@ import { GROUNDS, LARGE, MARK_GROUNDS, MARKS, TEXT, declarations, pairRatio, rea
 
 const UI = path.resolve(__dirname);
 
+/**
+ * :root colours that are deliberately not Tailwind utilities: they are read only
+ * through var() by CSS that needs them (scrollbars, shadows, focus ring...).
+ * Adding a colour here is a decision; a colour missing from both is a bug.
+ */
+const RAW_ONLY = new Set<string>([
+  // Palette steps: components use the semantic fg-* / ink that alias them, never the step itself.
+  "--ink-primary",
+  "--ink-secondary",
+  "--ink-tertiary",
+  // Nilo's pixel art: painted through var() by the brand grid, not a UI colour.
+  "--nilo-body",
+  "--nilo-eye",
+  "--nilo-pupil",
+  "--nilo-beak",
+  "--nilo-rim",
+  "--nilo-screen",
+  "--nilo-desk",
+  "--nilo-code",
+  // Read through var() inside a box-shadow and a scrim.
+  "--surface-highlight",
+  "--overlay-backdrop",
+]);
+
 function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -20,6 +44,24 @@ describe("design tokens", () => {
     const root = declarations(css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {"))));
     const missing = [...theme.matchAll(/var\(--([\w-]+)\)/g)].map((match) => match[1]).filter((name) => !( `--${name}` in root));
     expect([...new Set(missing)]).toEqual([]);
+  });
+
+  it("exposes every :root colour as a utility (the other direction)", () => {
+    const theme = css.slice(css.indexOf("@theme"), css.indexOf("}", css.indexOf("@theme")));
+    const root = declarations(css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {"))));
+    const isColour = (name: string, seen = new Set<string>()): boolean => {
+      const raw = root[name] ?? "";
+      if (/^(oklch|color-mix)\(/.test(raw)) return true;
+      const alias = /^var\((--[\w-]+)\)$/.exec(raw);
+      if (!alias || seen.has(alias[1])) return false;
+      seen.add(alias[1]);
+      return isColour(alias[1], seen);
+    };
+    const missing = Object.keys(root)
+      .filter((name) => isColour(name))
+      .filter((name) => !theme.includes(`--color-${name.slice(2)}: var(${name});`))
+      .filter((name) => !RAW_ONLY.has(name));
+    expect(missing).toEqual([]);
   });
 
   it("gives compact and comfortable their own control, pad, gap and icon steps", () => {
@@ -66,6 +108,9 @@ describe("design tokens", () => {
         const ratio = pairRatio(fg, bg, vars);
         if (ratio < 3) failures.push(`${theme} mark ${fg} on ${bg} ${ratio.toFixed(2)}`);
       }
+      // Tooltip paints the page ground as text on fg-1.
+      const tip = pairRatio("bg-app", "fg-1", vars);
+      if (tip < 4.5) failures.push(`${theme} tooltip bg-app on fg-1 ${tip.toFixed(2)}`);
       const edge = pairRatio("border-2", "bg-app", vars);
       if (edge < 3) failures.push(`${theme} border-2 on bg-app ${edge.toFixed(2)}`);
     }

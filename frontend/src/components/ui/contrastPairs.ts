@@ -98,6 +98,7 @@ export function pairRatio(fg: string, bg: string, vars: Record<string, string>):
 
 export const TEXT = ["fg-1", "fg-2", "fg-3", "signal-fg", "warn-fg", "fault-fg", "ok-fg"];
 export const LARGE = ["fg-4"];
-export const MARKS = ["ok", "diff-added", "diff-removed", "diff-modified", "diff-conflict", "role-input", "role-llm", "role-evaluator", "role-router", "role-memory", "role-aggregator", "role-output", "signal"];
-export const GROUNDS = ["bg-app", "bg-pane", "bg-hover", "bg-active"];
-export const MARK_GROUNDS = ["bg-app", "bg-pane"];
+export const MARKS = ["ok", "diff-added", "diff-removed", "diff-modified", "diff-conflict", "role-input", "role-llm", "role-evaluator", "role-router", "role-memory", "role-aggregator", "role-output", "role-agent", "role-tool", "role-hitl", "role-gate", "role-skill", "role-mcp", "role-decision", "signal"];
+/** bg-sidebar carries the rail and lists; bg-elevated carries Menu, Popover, Toast, Select and the sheets. */
+export const GROUNDS = ["bg-app", "bg-pane", "bg-sidebar", "bg-elevated", "bg-hover", "bg-active"];
+export const MARK_GROUNDS = ["bg-app", "bg-pane", "bg-sidebar", "bg-elevated"];
