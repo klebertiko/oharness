@@ -37,6 +37,9 @@ def service(tmp_path):
     creator.bind(None)
 
 
+THREAD = 'chat-1'
+
+
 def run(root, args, decision, *, mode='ask', options=None):
     requests = []
 
@@ -45,7 +48,8 @@ def run(root, args, decision, *, mode='ask', options=None):
         return sse(call_chunks(args)) if len(requests) == 1 else sse(DONE)
 
     control = RunControl('cordis-chat')
-    broker = ToolBroker(str(root) if root else None, 'ollama', control, options or ToolsRequest(), permission_mode=mode)
+    broker = ToolBroker(str(root) if root else None, 'ollama', control, options or ToolsRequest(thread_id=THREAD), permission_mode=mode,
+                        creator_thread=THREAD)
     adapter = OpenAICompatibleAdapter(transport=httpx.MockTransport(handler))
     config = AdapterConfig(adapter='ollama', model='test', endpoint='http://fake/v1')
 
@@ -67,7 +71,7 @@ def test_without_creator_mode_the_tool_is_not_offered(tmp_path, service):
 
 
 def test_with_creator_mode_each_action_waits_for_approval_and_returns_status_and_next_step(service):
-    service.set_creator(True)
+    service.set_creator(THREAD, True)
     events, requests = run(None, {'action': 'scaffold', 'name': 'from-chat', 'kind': 'tool'}, 'approve')
     assert [t['function']['name'] for t in requests[0]['tools']] == ['cordis_plugins']
     assert 'Cordis plugin development' in requests[0]['messages'][0]['content']
@@ -82,14 +86,14 @@ def test_with_creator_mode_each_action_waits_for_approval_and_returns_status_and
 
 
 def test_a_rejected_action_does_nothing(service):
-    service.set_creator(True)
+    service.set_creator(THREAD, True)
     events, _ = run(None, {'action': 'scaffold', 'name': 'not-this', 'kind': 'tool'}, 'reject')
     assert next(e for e in events if e['kind'] == 'tool_denied')['reason'] == 'rejected'
     assert not (service.dev.root / 'not-this').exists()
 
 
 def test_plan_mode_refuses_the_tool(service):
-    service.set_creator(True)
+    service.set_creator(THREAD, True)
     events, _ = run(None, {'action': 'scaffold', 'name': 'in-plan', 'kind': 'tool'}, 'approve', mode='plan')
     assert next(e for e in events if e['kind'] == 'tool_denied')['reason'] == 'policy'
     assert not any(e['kind'] == 'tool_approval_required' for e in events)
@@ -97,7 +101,7 @@ def test_plan_mode_refuses_the_tool(service):
 
 
 def test_bad_arguments_are_refused_before_approval(service):
-    service.set_creator(True)
+    service.set_creator(THREAD, True)
     events, _ = run(None, {'action': 'write_file', 'name': 'x', 'path': '../escape', 'content': ''}, 'approve')
     result = json.loads(next(e for e in events if e['kind'] == 'tool_result')['result'])
     assert result['status'] == 'failed' and result['error'] in ('invalid_path', 'not_found')
@@ -109,8 +113,8 @@ def test_a_chat_turn_without_tools_gets_the_broker_only_in_creator_mode(tmp_path
 
     from main import app
 
-    def capabilities_sent(client):
-        body = {'instruction': 'hello', 'mode': 'mock', 'cwd': str(tmp_path)}
+    def capabilities_sent(client, thread=THREAD):
+        body = {'instruction': 'hello', 'mode': 'mock', 'cwd': str(tmp_path), 'creator_thread_id': thread}
         text = client.post('/execute/direct', json=body).text
         return 'event: capabilities' in text
 
@@ -119,11 +123,14 @@ def test_a_chat_turn_without_tools_gets_the_broker_only_in_creator_mode(tmp_path
         service = app.state.cordis
         if service is None:
             pytest.skip('the sidecar started without the plugin manager')
-        before = service.creator_enabled()
+        before = service.creator_on(THREAD)
         try:
-            service.set_creator(False)
+            service.set_creator(THREAD, False)
             assert capabilities_sent(client) is False
-            service.set_creator(True)
+            service.set_creator(THREAD, True)
             assert capabilities_sent(client) is True
+            assert capabilities_sent(client, 'chat-2') is False  # another thread: no creator tool
+            plain = client.post('/execute/direct', json={'instruction': 'x', 'mode': 'mock', 'cwd': str(tmp_path)}).text
+            assert 'event: capabilities' not in plain
         finally:
-            service.set_creator(before)
+            service.set_creator(THREAD, before)

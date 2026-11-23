@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +38,7 @@ from sandbox.broker import ToolBroker
 from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
 from sandbox.plan_store import propose_plan
-from sandbox.schemas import ToolsRequest
+from sandbox.schemas import THREAD_ID_PATTERN, ToolsRequest
 from cordis import creator as cordis_creator
 
 router = APIRouter(prefix="/execute", tags=["execution"])
@@ -71,6 +71,8 @@ class DirectRequest(BaseModel):
     tools: Any = None
     # Per-run token ceiling (#164); the range lives in run_budget.RUN_BUDGET_RULES.
     max_tokens: Any = None
+    # Creator mode (ADR 0071): the thread the person turned it on for; the broker checks it against the sidecar's own record.
+    creator_thread_id: str | None = Field(default=None, pattern=THREAD_ID_PATTERN)
 
 
 async def _load_hooks_now():
@@ -639,8 +641,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         tool_options = ToolsRequest.model_validate(body.tools) if body.tools is not None else None
     except ValidationError:
         return JSONResponse({'error': 'invalid_argument'}, status_code=400)
-    if tool_options is None and cordis_creator.active_service() is not None:
-        tool_options = ToolsRequest()  # creator mode (ADR 0071): a broker that offers only the cordis_plugins tool
+    if tool_options is None and cordis_creator.active_service(body.creator_thread_id) is not None:
+        tool_options = ToolsRequest(thread_id=body.creator_thread_id)  # creator mode (ADR 0071): a broker that offers only cordis_plugins
     try:
         run_budget = parse_run_budget(body.max_tokens)
     except ValueError:
@@ -712,7 +714,7 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         permission_mode = effective_mode(stored, tool_options.permission_mode)
         workspace_trusted = await is_workspace_trusted(db, cwd)
     broker = ToolBroker(cwd, adapter_name, control, tool_options, permission_mode=permission_mode, workspace_trusted=workspace_trusted,
-                        run_budget=run_budget, hooks_loader=_load_hooks_now) if tool_options else None
+                        run_budget=run_budget, hooks_loader=_load_hooks_now, creator_thread=body.creator_thread_id) if tool_options else None
     node_view = {
         "node_id": node_id,
         "type": "llm",

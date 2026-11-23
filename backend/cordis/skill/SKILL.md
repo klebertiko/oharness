@@ -41,10 +41,10 @@ A package is an ES module with a `package.json` (`"type": "module"`, `"main": ".
 
 ## Flow
 
-1. `list` to see what exists, then `scaffold {name, kind: tool|command|service}`.
+1. `list` to see what exists, `api_catalog` to read the services, tools and commands of the live host (read only), and `starters` for the starting files of each kind; then `scaffold {name, kind: tool|command|service}`.
 2. `write_file` the code, then `read_file` to check it.
 3. `preview` to see what the host will show the person: runtime, capabilities, scripts, missing dependencies. Fix what it reports.
-4. `request_install`. The result is `pending-approval`: tell the person to open Cordis Plugins and approve the request from Nilo.
+4. `request_install`. Every action waits for the person's approval in chat, one at a time. The result is `pending-approval`: tell the person to open Cordis Plugins and approve the request from Nilo.
 5. After the approval, `logs` shows the plugin output. A change to the files after install needs a new `request_install`.
 
 ## Limits

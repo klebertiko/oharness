@@ -45,10 +45,11 @@ def test_creator_mode_switch_needs_the_human_credential(tmp_path, monkeypatch):
     app.include_router(router)
     app.state.cordis = service
     client = TestClient(app)
-    assert client.get('/cordis/creator').json() == {'enabled': False}
-    assert client.post('/cordis/creator', json={'enabled': True}).status_code == 403
-    assert client.post('/cordis/creator', headers=HUMAN, json={'enabled': True}).json() == {'enabled': True}
-    assert client.get('/cordis/creator').json() == {'enabled': True}
+    thread = {'thread_id': 'chat-1'}
+    assert client.get('/cordis/creator', params=thread).json() == {'threadId': 'chat-1', 'enabled': False}
+    assert client.post('/cordis/creator', json={**thread, 'enabled': True}).status_code == 403
+    assert client.post('/cordis/creator', headers=HUMAN, json={**thread, 'enabled': True}).json() == {'threadId': 'chat-1', 'enabled': True}
+    assert client.get('/cordis/creator', params=thread).json() == {'threadId': 'chat-1', 'enabled': True}
 
 
 @needs_node

@@ -17,17 +17,21 @@ from cordis.service import CordisService, ServiceError
 from cordis.sources import SourceError
 from cordis.supervisor import CordisUnavailable, HostRequestError
 from factory.auth import actor_for
+from sandbox.schemas import THREAD_ID_PATTERN
 
 router = APIRouter(prefix='/cordis', tags=['cordis'])
 PLUGIN_ID = r'^[0-9a-f]{16}$'
 
 
 class FetchBody(BaseModel):
-    kind: Literal['npm', 'github', 'local']
+    kind: Literal['npm', 'github', 'local', 'tarball']
     spec: str = Field(min_length=1, max_length=1024)
     version: str | None = Field(default=None, max_length=128)
     commit: str | None = Field(default=None, max_length=64)
     subdir: str | None = Field(default=None, max_length=512)
+    integrity: str | None = Field(default=None, max_length=256)  # tarball: sha512-/sha256- (base64) or hex; required for https
+    # True: answer at once with a fetch id; GET /plugins/fetch/{id} reports each step and DELETE cancels it.
+    live: bool = False
 
 
 class InstallBody(BaseModel):
@@ -35,6 +39,8 @@ class InstallBody(BaseModel):
     accept: bool
     digest: str = Field(max_length=128)
     scripts: Literal['do-not-run'] | None = None
+    # The person's decision for each lifecycle script of this package ("accept without running"); never reused for another fetch.
+    scripts_accepted: list[str] | None = Field(default=None, max_length=64)
     # The plugin's own configuration, as Cordis `apply(ctx, config)` gets it (DSH tool-todo needs one). Small and plain JSON.
     config: dict[str, Any] | None = None
 
@@ -84,13 +90,29 @@ def list_plugins(request: Request):
 @router.post('/plugins/fetch')
 def fetch_plugin(request: Request, body: FetchBody):
     _human(request)
-    return _call(lambda: _service(request).fetch(body.kind, body.spec, version=body.version, commit=body.commit, subdir=body.subdir))
+    options = {'version': body.version, 'commit': body.commit, 'subdir': body.subdir, 'integrity': body.integrity}
+    if body.live:
+        return _call(lambda: _service(request).start_fetch(body.kind, body.spec, **options))
+    return _call(lambda: _service(request).fetch(body.kind, body.spec, **options))
+
+
+@router.get('/plugins/fetch/{fetch_id}')
+def fetch_progress(request: Request, fetch_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)  # the log names what the person is installing
+    return _call(lambda: _service(request).fetch_status(fetch_id))
+
+
+@router.delete('/plugins/fetch/{fetch_id}')
+def cancel_fetch(request: Request, fetch_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)
+    return _call(lambda: _service(request).cancel_fetch(fetch_id))
 
 
 @router.post('/plugins/install')
 def install_plugin(request: Request, body: InstallBody):
     _human(request)
-    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts, config=body.config))
+    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts, config=body.config,
+                                                   scripts_accepted=body.scripts_accepted))
 
 
 @router.post('/plugins/{plugin_id}/enable')
@@ -125,7 +147,16 @@ def export_plugin(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
     return Response(content=data, media_type='application/gzip', headers={'content-disposition': f'attachment; filename="{filename}"'})
 
 
+@router.get('/plugins/{plugin_id}/export/index')
+def export_plugin_index(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)
+    built = _call(lambda: _service(request).export_index(plugin_id))
+    return Response(content=json.dumps(built, indent=2, ensure_ascii=False) + '\n', media_type='application/json',
+                    headers={'content-disposition': 'attachment; filename="index.json"'})
+
+
 class CreatorBody(BaseModel):
+    thread_id: str = Field(pattern=THREAD_ID_PATTERN)
     enabled: bool
 
 
@@ -143,14 +174,14 @@ class IndexBody(BaseModel):
 
 
 @router.get('/creator')
-def creator_mode(request: Request):
-    return {'enabled': _service(request).creator_enabled()}
+def creator_mode(request: Request, thread_id: str = Query(pattern=THREAD_ID_PATTERN)):
+    return {'threadId': thread_id, 'enabled': _service(request).creator_on(thread_id)}
 
 
 @router.post('/creator')
 def set_creator_mode(request: Request, body: CreatorBody):
-    _human(request)  # turning it on gives the chat agent the cordis_plugins tool
-    return _service(request).set_creator(body.enabled)
+    _human(request)  # turning it on gives the chat agent of THIS thread the cordis_plugins tool; the agent has no way to do it
+    return _call(lambda: _service(request).set_creator(body.thread_id, body.enabled))
 
 
 @router.get('/requests')

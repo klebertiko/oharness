@@ -107,27 +107,11 @@ def test_the_tool_validates_its_arguments_and_reports_status_and_next_step(tmp_p
     assert down['status'] == 'failed' and down['nextStep']
 
 
-def test_creator_mode_is_off_by_default_and_saved(tmp_path):
-    service = CordisService(tmp_path, enabled=False)
-    assert service.creator_enabled() is False
-    service.set_creator(True)
-    assert CordisService(tmp_path, enabled=False).creator_enabled() is True
-
-
-def test_the_tool_is_offered_only_while_creator_mode_is_on(tmp_path):
-    service = CordisService(tmp_path, enabled=False)
-    creator.bind(service)
-    try:
-        assert creator.active_service() is None
-        service.set_creator(True)
-        assert creator.active_service() is service
-    finally:
-        creator.bind(None)
-    assert creator.active_service() is None
+# Creator mode per thread: test_cordis_thread_creator.py.
 
 
 def test_the_skill_explains_the_host_api_and_the_flow():
     text = creator.skill_prompt()
-    for phrase in ('apply(ctx)', 'ctx.tools', 'ctx.commands', 'oharness.runtime', 'capabilities', 'request_install', 'never run'):
+    for phrase in ('apply(ctx)', 'ctx.tools', 'ctx.commands', 'oharness.runtime', 'capabilities', 'request_install', 'api_catalog', 'starters', 'never run'):
         assert phrase in text, phrase
     assert len(text) < 9000

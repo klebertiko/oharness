@@ -6,6 +6,9 @@ the digest of that warning and those files.
 """
 from __future__ import annotations
 
+import base64
+import gzip
+import hashlib
 import io
 import json
 import logging
@@ -30,6 +33,10 @@ _log = logging.getLogger(__name__)
 
 FETCH_ID = re.compile(r'^[0-9a-f]{16}$')
 STALE_STAGE_S = 24 * 3600
+MAX_JOBS = 20
+MAX_CREATOR_THREADS = 200
+CANCEL_WAIT_S = 15
+THREAD_ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$')  # sandbox.schemas.THREAD_ID_PATTERN
 # What the host already provides to a plugin. Anything else a package depends on is not installed, so the preview says so.
 HOST_PROVIDED = frozenset({'cordis', '@deepseek-ai/cordis', 'schemastery'})
 
@@ -64,6 +71,8 @@ class CordisService:
         self._creator_file = data_dir / 'cordis-creator.json'
         self.index_fetcher: index.Fetcher | None = None  # tests inject one; None is the https fetcher
         self.index_resolver: index.Resolver | None = None  # tests inject one; None is getaddrinfo
+        self.tarball_download: sources.TarballDownload | None = None  # tests inject one; None is the checked https download
+        self._jobs: dict[str, dict[str, Any]] = {}  # live fetches: their log of steps, and the event Cancel sets
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
@@ -134,7 +143,7 @@ class CordisService:
                 self._load_into_host(entry)
 
     def _gc_stages(self) -> None:
-        keep = {Path(p['stageDir']).name for p in self.registry.list() if p.get('stageDir')}
+        keep = {Path(p['stageDir']).name for p in self.registry.list() if p.get('stageDir')} | set(self._jobs)
         now = time.time()
         for child in self.packages.iterdir() if self.packages.is_dir() else ():
             try:
@@ -196,32 +205,132 @@ class CordisService:
         return entry
 
     # -- fetch + preview -------------------------------------------------
-    def fetch(self, kind: str, spec: str, *, version: str | None = None, commit: str | None = None, subdir: str | None = None) -> dict[str, Any]:
+    def _download_tarball(self, url: str, limit: int, cancel: threading.Event | None) -> bytes:
+        if self.tarball_download is not None:
+            return self.tarball_download(url, limit, cancel)
+        return index.download_https(url, limit, cancel, resolve=self.index_resolver)
+
+    def fetch(self, kind: str, spec: str, *, version: str | None = None, commit: str | None = None, subdir: str | None = None,
+              integrity: str | None = None, stage_id: str | None = None, cancel: threading.Event | None = None,
+              progress: sources.Progress | None = None) -> dict[str, Any]:
+        """Download (or copy) a package into its own stage folder and preview it in the host. The download runs outside the lock,
+        so a Cancel or a list never waits behind it."""
         self.supervisor.request('GET', '/v1/health')  # fail early, before anything is downloaded, when the host is not up
         with self._lock:
             self._gc_stages()
-            stage_id = secrets.token_hex(8)
+            stage_id = stage_id or secrets.token_hex(8)
             stage = self.packages / stage_id
             stage.mkdir(parents=True)
-            try:
-                if kind == 'npm':
-                    package, source = sources.fetch_npm(spec, version or '', stage, fetcher=self._fetcher), {'kind': 'npm', 'spec': spec, 'version': version}
-                elif kind == 'github':
-                    package = sources.fetch_github(spec, commit or '', subdir, stage, fetcher=self._fetcher)
-                    source = {'kind': 'github', 'spec': spec, 'commit': (commit or '').lower(), 'subdir': subdir or ''}
-                elif kind == 'local':
-                    package, source = sources.fetch_local(spec, stage), {'kind': 'local', 'spec': spec}
-                else:
-                    raise SourceError('invalid_spec', 'Unknown source kind.')
-                preview = self._preview(package)
-            except SourceError as error:
-                shutil.rmtree(stage, ignore_errors=True)
-                raise ServiceError(422, error.code, error.message) from error
-            except ServiceError:
-                shutil.rmtree(stage, ignore_errors=True)
-                raise
+        try:
+            if kind == 'npm':
+                package = sources.fetch_npm(spec, version or '', stage, fetcher=self._fetcher, cancel=cancel, progress=progress)
+                source: dict[str, Any] = {'kind': 'npm', 'spec': spec, 'version': version}
+            elif kind == 'github':
+                package = sources.fetch_github(spec, commit or '', subdir, stage, fetcher=self._fetcher, cancel=cancel, progress=progress)
+                source = {'kind': 'github', 'spec': spec, 'commit': (commit or '').lower(), 'subdir': subdir or ''}
+            elif kind == 'local':
+                package, source = sources.fetch_local(spec, stage, progress=progress), {'kind': 'local', 'spec': spec}
+            elif kind == 'tarball':
+                package = sources.fetch_tarball(spec, integrity, stage, download=self._download_tarball, cancel=cancel, progress=progress)
+                source = {'kind': 'tarball', 'spec': spec, 'integrity': (integrity or '').strip() or None}
+            else:
+                raise SourceError('invalid_spec', 'Unknown source kind.')
+            if cancel is not None and cancel.is_set():
+                raise SourceError('cancelled', 'The download was cancelled.')
+            preview = self._preview(package)
+        except SourceError as error:
+            shutil.rmtree(stage, ignore_errors=True)
+            raise ServiceError(422, error.code, error.message) from error
+        except BaseException:
+            shutil.rmtree(stage, ignore_errors=True)
+            raise
+        with self._lock:
             self._staged[stage_id] = {'packageDir': str(package.resolve()), 'stageDir': str(stage), 'source': source, 'preview': preview}
-            return {'fetchId': stage_id, 'source': source, 'preview': preview}
+        if progress is not None:
+            progress('preview-ready')
+        return {'fetchId': stage_id, 'source': source, 'preview': preview}
+
+    # -- live fetch: a log of steps the screen polls, and a real Cancel -----
+    def _event(self, job: dict[str, Any], step: str) -> None:
+        with self._lock:
+            job['events'].append({'step': step, 'at': time.time()})
+
+    def _job_view(self, job: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            view: dict[str, Any] = {'fetchId': job['id'], 'state': job['state'], 'events': [dict(e) for e in job['events']]}
+            if job.get('result') is not None:
+                view['result'] = job['result']
+            if job.get('error') is not None:
+                view['error'] = dict(job['error'])
+            return view
+
+    def start_fetch(self, kind: str, spec: str, **options: Any) -> dict[str, Any]:
+        """Start a fetch in the background and answer at once; `fetch_status` reports each step and `cancel_fetch` stops it."""
+        self.supervisor.request('GET', '/v1/health')
+        job: dict[str, Any] = {'id': secrets.token_hex(8), 'state': 'running', 'events': [], 'cancel': threading.Event(),
+                               'result': None, 'error': None, 'started': time.time()}
+        with self._lock:
+            self._jobs[job['id']] = job
+            for old in sorted(self._jobs.values(), key=lambda j: j['started'])[:-MAX_JOBS]:
+                if old['state'] != 'running':
+                    self._jobs.pop(old['id'], None)
+        job['thread'] = threading.Thread(target=self._run_job, args=(job, kind, spec, options), name=f'cordis-fetch-{job["id"]}', daemon=True)
+        job['thread'].start()
+        return self._job_view(job)
+
+    def _run_job(self, job: dict[str, Any], kind: str, spec: str, options: dict[str, Any]) -> None:
+        result, failure = None, None
+        try:
+            result = self.fetch(kind, spec, stage_id=job['id'], cancel=job['cancel'], progress=lambda step: self._event(job, step), **options)
+        except ServiceError as error:
+            failure = {'code': error.code, 'message': error.message}
+        except CordisUnavailable as error:
+            failure = {'code': 'cordis_unavailable', 'message': error.reason or 'The plugin host is not running.'}
+        except Exception:  # noqa: BLE001 - the screen gets a stable code; the stack stays in the sidecar log
+            _log.exception('plugin fetch failed')
+            failure = {'code': 'fetch_failed', 'message': 'The package could not be checked.'}
+        with self._lock:
+            if job['state'] != 'running':
+                return
+            if job['cancel'].is_set():
+                self._discard(job['id'])
+                job['state'] = 'cancelled'
+                job['events'].append({'step': 'cancelled', 'at': time.time()})
+            elif failure is not None:
+                job['state'], job['error'] = 'failed', failure
+                job['events'].append({'step': 'failed', 'at': time.time()})
+            else:
+                job['state'], job['result'] = 'ready', result
+
+    def fetch_status(self, fetch_id: str) -> dict[str, Any]:
+        job = self._jobs.get(fetch_id) if FETCH_ID.match(fetch_id) else None
+        if job is None:
+            raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
+        return self._job_view(job)
+
+    def cancel_fetch(self, fetch_id: str) -> dict[str, Any]:
+        """Cancel a running download, or drop a preview nobody installs ("Do not install"): its stage folder is removed either way."""
+        job = self._jobs.get(fetch_id) if FETCH_ID.match(fetch_id) else None
+        if job is None:
+            with self._lock:
+                if fetch_id not in self._staged:
+                    raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
+                self._discard(fetch_id)
+            return {'fetchId': fetch_id, 'state': 'cancelled', 'events': [{'step': 'cancelled', 'at': time.time()}]}
+        if job['state'] == 'installed':
+            raise ServiceError(409, 'already_installed', 'That package is installed; remove it from the list instead.')
+        job['cancel'].set()
+        thread = job.get('thread')
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(CANCEL_WAIT_S)  # the fetcher checks the event between chunks, so this is short
+        with self._lock:
+            self._discard(fetch_id)
+            shutil.rmtree(self.packages / fetch_id, ignore_errors=True)
+            job['result'] = None
+            if job['state'] in ('running', 'ready'):
+                job['state'] = 'cancelled'
+                job['events'].append({'step': 'cancelled', 'at': time.time()})
+        return self._job_view(job)
 
     def _preview(self, package: Path) -> dict[str, Any]:
         try:
@@ -242,7 +351,30 @@ class CordisService:
 
     # -- install ---------------------------------------------------------
     def install(self, fetch_id: str, *, accept: bool, digest: str, scripts: str | None, config: dict[str, Any] | None = None,
-                dev: dict[str, Any] | None = None) -> dict[str, Any]:
+                dev: dict[str, Any] | None = None, scripts_accepted: list[str] | None = None) -> dict[str, Any]:
+        """`scripts_accepted` is the person's decision for each lifecycle script of THIS fetch ("accept without running"). It is checked
+        against this preview and digest only and never kept for another package; the host still gets `scripts: do-not-run` and runs none."""
+        job = self._jobs.get(fetch_id) if FETCH_ID.match(fetch_id) else None
+        with self._lock:
+            staged = self._staged.get(fetch_id) if FETCH_ID.match(fetch_id) else None
+            declared = sorted((staged or {}).get('preview', {}).get('scripts') or [])
+            if staged is not None and declared and (digest != staged['preview'].get('digest') or sorted(scripts_accepted or []) != declared):
+                raise ServiceError(422, 'scripts_not_reviewed', 'Decide each lifecycle script of this package before installing it.', scripts=declared)
+            if job is not None and staged is not None:
+                job['events'].append({'step': 'installing', 'at': time.time()})
+            try:
+                plugin = self._install_staged(fetch_id, accept=accept, digest=digest, scripts=scripts, config=config, dev=dev)
+            except BaseException:
+                if job is not None and staged is not None:
+                    job['events'].append({'step': 'failed', 'at': time.time()})
+                raise
+            if job is not None:
+                job['state'] = 'installed'
+                job['events'].append({'step': 'done', 'at': time.time()})
+            return plugin
+
+    def _install_staged(self, fetch_id: str, *, accept: bool, digest: str, scripts: str | None, config: dict[str, Any] | None,
+                        dev: dict[str, Any] | None) -> dict[str, Any]:
         if not FETCH_ID.match(fetch_id):
             raise ServiceError(404, 'fetch_not_found', 'That download is not known; fetch the package again.')
         with self._lock:
@@ -323,33 +455,83 @@ class CordisService:
         package = Path(entry['packageDir'])
         if not self._inside_packages(package) or not package.is_dir():
             raise ServiceError(404, 'plugin_files_missing', 'The plugin files are missing.')
+        # Reproducible: sorted names, no times, owners or modes of this computer, and a gzip header without a date. The same files give
+        # the same bytes, so the hash written in the exported index matches the .tgz wherever it is put.
         buffer, total = io.BytesIO(), 0
-        with tarfile.open(fileobj=buffer, mode='w:gz') as tar:
+        with gzip.GzipFile(filename='', mode='wb', fileobj=buffer, mtime=0) as zipped, tarfile.open(fileobj=zipped, mode='w', format=tarfile.PAX_FORMAT) as tar:
             for here, dirnames, filenames in os.walk(package, followlinks=False):
                 dirnames.sort()
                 for name in sorted(filenames):
                     file = Path(here) / name
-                    if file.is_symlink():
+                    if file.is_symlink() or not file.is_file():
                         continue
-                    total += file.stat().st_size
+                    data = file.read_bytes()
+                    total += len(data)
                     if total > sources.MAX_BYTES:
                         raise ServiceError(413, 'archive_too_large', 'The plugin is larger than the sharing limit.')
-                    tar.add(file, arcname=f'package/{file.relative_to(package).as_posix()}', recursive=False)
+                    info = tarfile.TarInfo(f'package/{file.relative_to(package).as_posix()}')
+                    info.size, info.mode, info.mtime = len(data), 0o644, 0
+                    tar.addfile(info, io.BytesIO(data))
         safe = re.sub(r'[^A-Za-z0-9._-]+', '-', entry['name']).strip('-') or 'plugin'
         return f'{safe}-{entry["version"]}.tgz', buffer.getvalue()
 
+    def export_index(self, plugin_id: str) -> dict[str, Any]:
+        """A `format: 1` index with this one plugin, built from its package.json and its files only: nothing of the package runs."""
+        entry = self._entry(plugin_id)
+        manifest = sources._read_manifest(Path(entry['packageDir']))
+        source = entry.get('source') or {}
+        if source.get('kind') == 'npm':
+            described: dict[str, Any] = {'type': 'npm'}
+        elif source.get('kind') == 'github':
+            described = {'type': 'git', 'url': f'https://github.com/{source["spec"]}', 'commit': source['commit'], 'path': source.get('subdir') or ''}
+        elif source.get('kind') == 'tarball' and str(source.get('spec', '')).startswith('https://') and source.get('integrity'):
+            described = {'type': 'tarball', 'url': source['spec'], 'integrity': source['integrity']}
+        else:  # a local folder or file: the exported .tgz by its hash; the person puts it at an https address and edits `url`
+            filename, data = self.export(plugin_id)
+            described = {'type': 'tarball', 'url': f'./{filename}', 'integrity': 'sha512-' + base64.b64encode(hashlib.sha512(data).digest()).decode()}
+        author = manifest.get('author')
+        repo = manifest.get('repository')
+        repo = repo.get('url') if isinstance(repo, dict) else repo
+        if isinstance(repo, str):
+            repo = repo.removeprefix('git+')
+            repo = repo[:-4] if repo.endswith('.git') else repo
+        plugin = {'name': entry['name'], 'title': index._text(manifest.get('displayName'), 'title'),
+                  'description': index._text(manifest.get('description'), 'description'),
+                  'author': index._text(author.get('name') if isinstance(author, dict) else author, 'author'),
+                  'homepage': index._https(manifest.get('homepage')), 'repository': index._https(repo),
+                  'versions': [{'version': entry['version'], 'source': described}]}
+        return {'format': 1, 'title': plugin['title'] or entry['name'], 'plugins': [plugin]}
 
     # -- creator mode (the chat agent's `cordis_plugins` tool) -------------
-    def creator_enabled(self) -> bool:
+    def _creator_threads(self) -> list[str]:
         try:
-            return json.loads(self._creator_file.read_text(encoding='utf8')).get('enabled') is True
+            threads = json.loads(self._creator_file.read_text(encoding='utf8')).get('threads')
         except (OSError, ValueError, AttributeError):
-            return False
+            return []
+        return [t for t in threads if isinstance(t, str) and THREAD_ID.match(t)] if isinstance(threads, list) else []
 
-    def set_creator(self, enabled: bool) -> dict[str, Any]:
-        self._creator_file.parent.mkdir(parents=True, exist_ok=True)
-        self._creator_file.write_text(json.dumps({'enabled': bool(enabled)}), encoding='utf8')
-        return {'enabled': self.creator_enabled()}
+    def creator_on(self, thread_id: str | None) -> bool:
+        """Creator mode belongs to one chat thread; only the person turns it on (a human route), never the agent."""
+        return bool(thread_id) and thread_id in self._creator_threads()
+
+    def set_creator(self, thread_id: str, enabled: bool) -> dict[str, Any]:
+        if not isinstance(thread_id, str) or not THREAD_ID.match(thread_id):
+            raise ServiceError(422, 'invalid_thread', 'That is not a chat thread id.')
+        with self._lock:
+            threads = [t for t in self._creator_threads() if t != thread_id]
+            if enabled:
+                threads.append(thread_id)
+            self._creator_file.parent.mkdir(parents=True, exist_ok=True)
+            self._creator_file.write_text(json.dumps({'threads': threads[-MAX_CREATOR_THREADS:]}), encoding='utf8')
+        return {'threadId': thread_id, 'enabled': self.creator_on(thread_id)}
+
+    def api_catalog(self) -> dict[str, Any]:
+        """What the live host offers, read only and without code: services, tools, commands and the loaded plugins."""
+        services = self.supervisor.request('GET', '/v1/services')
+        plugins = self.supervisor.request('GET', '/v1/plugins').get('plugins', [])
+        keep = ('name', 'version', 'runtime', 'status')
+        return {'services': services.get('services', []), 'tools': sorted(services.get('tools', [])), 'commands': sorted(services.get('commands', [])),
+                'plugins': [{k: row.get(k) for k in keep} for row in plugins if isinstance(row, dict)]}
 
     def _dev_entry(self, dev_name: str) -> dict[str, Any] | None:
         return next((e for e in self.registry.list() if (e.get('dev') or {}).get('name') == dev_name), None)
@@ -440,7 +622,7 @@ class CordisService:
                 raise ServiceError(409, 'request_stale', 'The files changed after Nilo asked; ask Nilo for a new request.')
             preview = request['preview']
             plugin = self.install(request['fetchId'], accept=True, digest=preview['digest'], scripts='do-not-run' if preview['scripts'] else None,
-                                  dev={'name': request['devName'], 'digest': request['devDigest']})
+                                  dev={'name': request['devName'], 'digest': request['devDigest']}, scripts_accepted=list(preview['scripts'] or []))
             request['status'] = 'approved'
             return {'request': self._request_view(request), 'plugin': plugin}
 

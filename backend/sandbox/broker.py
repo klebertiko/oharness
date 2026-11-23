@@ -44,7 +44,7 @@ def redact_value(value):
 
 class ToolBroker:
     def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False,
-                 run_budget=None, compact_at=None, hooks=(), hooks_loader=None):
+                 run_budget=None, compact_at=None, hooks=(), hooks_loader=None, creator_thread=None):
         self.root = Path(root) if root else None
         # Already resolved by the caller (stored mode clamped by the request); unknown -> ask.
         self.permission_mode = effective_mode(permission_mode)
@@ -59,8 +59,10 @@ class ToolBroker:
         self.run_budget, self.compact_at = run_budget, compact_at
         self.capabilities = capabilities(root, adapter_name)
         self.mock = adapter_name == 'mock'
-        # Creator mode (ADR 0071): the cordis_plugins tool, only while the person has turned it on.
-        self.cordis = cordis_creator.active_service()
+        # Creator mode (ADR 0071): the cordis_plugins tool, only in the thread the person turned it on for (stored by the sidecar),
+        # and only when this run's tools belong to that same thread.
+        same_thread = creator_thread is not None and getattr(options, 'thread_id', None) in (None, creator_thread)
+        self.cordis = cordis_creator.active_service(creator_thread) if same_thread else None
         self.cordis_tool = False
         self.calls_used = self.reads_used = 0
         self.provider_called = False
@@ -181,7 +183,7 @@ class ToolBroker:
             yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': self.last_result, 'mode': self.permission_mode}
             return
         if self.cordis is None:
-            outcome = {'status': 'failed', 'error': 'creator_off', 'message': 'Creator mode is off.', 'nextStep': 'Ask the person to turn on creator mode in Cordis Plugins.'}
+            outcome = {'status': 'failed', 'error': 'creator_off', 'message': 'Creator mode is off in this chat.', 'nextStep': 'Ask the person to turn on creator mode for this chat in Cordis Plugins.'}
         else:
             outcome = cordis_creator.precheck(args)
         if outcome is None:
