@@ -247,7 +247,7 @@ async function onRequest(scope: RequestScope, req: IncomingMessage, res: ServerR
       return
     }
     if (method === 'GET' && url.pathname === '/v1/services') {
-      send(res, 200, { services: runtime.services() })
+      send(res, 200, { services: runtime.services(), ...runtime.catalog() })
       return
     }
     const body = method === 'GET' ? undefined : await readBody(req)

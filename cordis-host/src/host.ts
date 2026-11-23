@@ -222,6 +222,13 @@ export class CordisRuntime {
     return rows
   }
 
+  /** Tool and command names of the live host, isolated plugins included: what the creator mode reads, never code. */
+  catalog(): { tools: string[]; commands: string[] } {
+    const tools = new Set([...this.context.tools.names(), ...this.#isolated().flatMap((plugin) => plugin.tools)])
+    const commands = new Set([...this.context.commands.names(), ...this.#isolated().flatMap((plugin) => plugin.commands)])
+    return { tools: [...tools].sort(), commands: [...commands].sort() }
+  }
+
   #toolOwner(name: string): IsolatedPlugin | undefined {
     return this.#isolated().find((plugin) => plugin.tools.includes(name))
   }
