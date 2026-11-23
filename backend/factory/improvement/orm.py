@@ -15,6 +15,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
 
+class AppendOnlyError(RuntimeError):
+    """A score, a failure or a trail event was about to be changed or deleted."""
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 

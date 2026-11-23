@@ -88,7 +88,7 @@ def test_widening_the_network_or_adding_a_secret_is_rejected():
 def test_skipping_the_person_is_rejected():
     after = _definition()
     after['selfImprovement'] = {'reviewerType': 'none'}
-    assert 'skip_human' in _codes(after)
+    assert 'protected_field' in _codes(after)  # no such field: an unknown field in a protected section is refused
 
 
 def test_a_clearly_worse_pass_rate_is_worsened_and_a_better_one_is_improved():
@@ -133,3 +133,116 @@ def test_a_copied_definition_is_not_mutated_by_the_check():
     snapshot = copy.deepcopy(before)
     limits.check(before, _definition())
     assert before == snapshot
+
+
+# ------------------------------------------------------------------------------------------------- fail closed: nothing loosens by omission
+
+def test_removing_a_policy_key_is_refused_even_when_the_default_is_looser():
+    for key in ('maxPermissionMode', 'maxReviewReturns', 'reviewIndependence', 'specApproval', 'requireSpec'):
+        after = _definition()
+        del after['policy'][key]
+        assert 'remove_field' in _codes(after), key
+
+
+def test_a_looser_policy_compared_to_a_missing_one_uses_the_effective_default():
+    before = _definition()
+    del before['policy']['maxReviewReturns']  # the effective value is the default, 3
+    after = copy.deepcopy(before)
+    after['policy']['maxReviewReturns'] = 9
+    assert 'weaken_gate' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_a_value_of_the_wrong_type_is_refused():
+    after = _definition()
+    after['policy']['maxReviewReturns'] = '1'
+    assert 'invalid_type' in _codes(after)
+    after = _definition()
+    after['scorers']['qa']['passingScore'] = 'high'
+    assert 'invalid_type' in _codes(after)
+
+
+def test_removing_the_pass_line_is_refused():
+    after = _definition()
+    del after['scorers']['qa']['passingScore']
+    assert 'remove_field' in _codes(after)
+
+
+def test_a_new_agent_is_held_to_the_active_ceiling():
+    after = _definition()
+    after['agents']['helper'] = {'role': 'custom', 'enabled': True, 'permissions': {'mode': 'full'}, 'secrets': [], 'instructions': 'Help.'}
+    assert 'raise_permission' in _codes(after)
+    after = _definition()
+    after['agents']['helper'] = {'role': 'custom', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Help.',
+                                 'networkPolicy': {'allowedHosts': ['evil.example.net']}}
+    assert 'widen_network' in _codes(after)
+
+
+def test_an_agent_mode_left_implicit_is_the_default_not_a_pass():
+    before = _definition()
+    before['agents']['reviewer']['permissions'] = {}
+    after = copy.deepcopy(before)
+    after['agents']['reviewer']['permissions'] = {'mode': 'full'}
+    assert 'raise_permission' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_sampling_and_trial_settings_cannot_loosen():
+    cases = {
+        'samplingRate': lambda d: d['scorers']['qa'].update(samplingRate=0),
+        'canaryPercent': lambda d: d['selfImprovement'].update(canaryPercent=50),
+        'minSampleRuns': lambda d: d['selfImprovement'].update(minSampleRuns=1),
+        'failureThreshold': lambda d: d['selfImprovement'].update(failureThreshold=50),
+        'sampleDays': lambda d: d['selfImprovement'].update(sampleDays=1),
+        'ageDays': lambda d: d['selfImprovement'].update(ageDays=90),
+    }
+    for name, change in cases.items():
+        before = _definition()
+        before['selfImprovement'] = {'failureThreshold': 25, 'ageDays': 7, 'minSampleRuns': 20, 'sampleDays': 7, 'canaryPercent': 10}
+        after = copy.deepcopy(before)
+        change(after)
+        assert 'loosen_trial' in {reason['code'] for reason in limits.check(before, after)}, name
+    before = _definition()
+    after = copy.deepcopy(before)
+    after['selfImprovement'] = {'canaryPercent': 50}  # nothing declared before: the default (10) is the line
+    assert 'loosen_trial' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_tightening_trial_settings_is_allowed():
+    before = _definition()
+    after = copy.deepcopy(before)
+    after['selfImprovement'] = {'canaryPercent': 5, 'minSampleRuns': 40}
+    after['scorers']['qa']['passingScore'] = 0.9
+    assert limits.check(before, after) == []
+
+
+def test_fields_outside_the_safe_list_are_protected():
+    cases = {
+        'runners': lambda d: d.update(runners={'local': {'type': 'local', 'maxConcurrentRuns': 8, 'credentialStrategy': 'user'}}),
+        'repositories': lambda d: d.update(repositories=[{'id': 'app', 'path': '.', 'protectedBranches': ['release']}]),
+        'mcp': lambda d: d.update(mcp={'shell': {'command': 'bash'}}),
+        'reserved': lambda d: d.update(reserved={'automations': {'nightly': 'run'}, 'webhooks': {}}),
+        'analyst': lambda d: d.update(selfImprovement={'analyst': 'builder'}),
+        'agent_mcp': lambda d: d['agents']['builder'].update(mcp=['shell']),
+        'agent_trigger': lambda d: d['agents']['builder'].update(trigger='nightly'),
+        'labels': lambda d: d['scorers']['qa'].update(labels=[{'value': 'bad', 'score': 1}]),
+    }
+    for name, change in cases.items():
+        after = _definition()
+        change(after)
+        assert 'protected_field' in _codes(after), name
+
+
+def test_ceilings_cannot_go_up_or_away():
+    before = _definition()
+    before['ceilings'] = {'tokensPerWorkItem': 1000, 'tokensPerRun': 500}
+    for change in ({'tokensPerWorkItem': 2000, 'tokensPerRun': 500}, {'tokensPerRun': 500}):
+        after = copy.deepcopy(before)
+        after['ceilings'] = change
+        assert 'raise_ceiling' in {reason['code'] for reason in limits.check(before, after)}, change
+
+
+def test_every_configurable_stage_is_a_gate():
+    before = _definition()
+    before['stages']['monitor'] = {'enabled': True}
+    after = copy.deepcopy(before)
+    after['stages']['monitor'] = {'enabled': False}
+    assert 'weaken_gate' in {reason['code'] for reason in limits.check(before, after)}
