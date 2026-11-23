@@ -1,8 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
+
+/** How long "Copied" stays before the button reads "Copy diagnostic" again. */
+const COPIED_HOLD = 2000;
 
 /**
  * What failed, why, and what to do. The three actions are try again, open the
@@ -28,11 +31,15 @@ export function ErrorState({
 }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
   const [details, setDetails] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(diagnostic);
       setCopied(true);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopied(false), COPIED_HOLD);
     } catch {
       setDetails(true);
     }

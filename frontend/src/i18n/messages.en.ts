@@ -19,6 +19,8 @@ export const en = {
   "ui.copied": "Copied",
   "ui.on": "On",
   "ui.off": "Off",
+  "ui.notifications": "Notifications",
+  "ui.dismissNotification": "Dismiss notification",
   "ds.catalogue": "Design system",
   "ds.theme": "Theme",
   "ds.density": "Density",

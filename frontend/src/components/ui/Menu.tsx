@@ -26,11 +26,14 @@ function MenuList({
   items,
   labelledBy,
   onClose,
+  onTabOut,
   submenu,
 }: {
   items: MenuItem[];
   labelledBy?: string;
   onClose: () => void;
+  /** Tab leaves the menu: close everything and let focus move on. */
+  onTabOut?: () => void;
   submenu?: boolean;
 }) {
   const [index, setIndex] = useState(() => items.findIndex((item) => !item.disabled));
@@ -79,6 +82,9 @@ function MenuList({
     } else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (item) choose(item);
+    } else if (event.key === "Tab") {
+      // No preventDefault: focus goes back to the trigger, then Tab moves on from there.
+      (onTabOut ?? onClose)();
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -129,7 +135,7 @@ function MenuList({
           </button>
           {item.items?.length && openChild === item.id && (
             <div className="absolute top-0 left-full z-10 ps-(--pad-1)">
-              <MenuList items={item.items} submenu onClose={() => setOpenChild(null)} />
+              <MenuList items={item.items} submenu onClose={() => setOpenChild(null)} onTabOut={onTabOut ?? onClose} />
             </div>
           )}
         </div>
@@ -138,7 +144,11 @@ function MenuList({
   );
 }
 
-/** A menu with optional submenus. Arrows move, Right opens, Left and Escape close. */
+/**
+ * A menu with optional submenus. On the trigger, Down (or Enter/Space) opens it
+ * on the first item. Arrows move, Right opens a submenu, Left and Escape close,
+ * Tab closes and moves on.
+ */
 export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   const auto = useId();
   const [open, setOpen] = useState(false);
@@ -147,6 +157,11 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   const close = () => {
     setOpen(false);
     triggerRef.current?.focus();
+  };
+  const place = () => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setBox({ top: rect.bottom + 4, left: rect.left });
   };
 
   useEffect(() => {
@@ -170,11 +185,14 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => {
-          if (triggerRef.current) {
-            const rect = triggerRef.current.getBoundingClientRect();
-            setBox({ top: rect.bottom + 4, left: rect.left });
-          }
+          place();
           setOpen((value) => !value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" || open) return;
+          event.preventDefault();
+          place();
+          setOpen(true);
         }}
         className="inline-flex h-control-md items-center rounded-md border border-border-2 bg-bg-pane px-(--pad-3) t-ui text-fg-1 pointer-coarse:h-control-touch"
       >

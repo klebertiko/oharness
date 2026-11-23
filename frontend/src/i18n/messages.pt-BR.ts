@@ -21,6 +21,8 @@ export const ptBR: Record<MessageKey, string> = {
   "ui.copied": "Copiado",
   "ui.on": "Ligado",
   "ui.off": "Desligado",
+  "ui.notifications": "Notificações",
+  "ui.dismissNotification": "Dispensar notificação",
   "ds.catalogue": "Sistema de design",
   "ds.theme": "Tema",
   "ds.density": "Densidade",

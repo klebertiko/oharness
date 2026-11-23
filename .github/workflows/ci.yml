@@ -66,6 +66,9 @@ jobs:
       - uses: $/.github/actions/setup-safe-chain # nosemgrep: third-party-action-not-pinned-to-commit-sha (in-repo action, self-repository syntax)
       - run: npm ci --ignore-scripts
       - run: npm test
+      # The overlay primitives' keyboard contracts: every mutant (an Escape handler off, a no-op change...) must fail a test.
+      - name: UI primitives mutation check
+        run: npm run test:ui:mutation
 
   backend:
     name: pytest

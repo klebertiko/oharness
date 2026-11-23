@@ -1,11 +1,18 @@
 "use client";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import type React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { Button } from "./Button";
+import { IconButton } from "./IconButton";
 
 /**
  * A non-modal popup anchored to its trigger. Escape and a press outside close
  * it, and focus returns to the trigger.
+ *
+ * A trigger that is already a button (`Button`, `IconButton`, a `<button>`) is
+ * used as is and receives the popup attributes; anything else (text, an icon)
+ * is wrapped in a plain button. Either way there is exactly one button.
  */
 export function Popover({
   label,
@@ -62,19 +69,30 @@ export function Popover({
     };
   }, [isOpen]);
 
+  const triggerProps = {
+    "aria-expanded": isOpen,
+    "aria-controls": panelId,
+    "aria-haspopup": "dialog" as const,
+  };
+  const toggle = () => setOpen(!isOpen);
+  const ownButton = isButtonElement(trigger);
+
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-expanded={isOpen}
-        aria-controls={panelId}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(!isOpen)}
-        className="inline-flex"
-      >
-        {trigger}
-      </button>
+      {ownButton ? (
+        cloneElement(trigger, {
+          ...triggerProps,
+          ref: triggerRef,
+          onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+            trigger.props.onClick?.(event);
+            if (!event.defaultPrevented) toggle();
+          },
+        } as Partial<ButtonLikeProps> & { ref: Ref<HTMLButtonElement> })
+      ) : (
+        <button ref={triggerRef} type="button" {...triggerProps} onClick={toggle} className="inline-flex">
+          {trigger}
+        </button>
+      )}
       {isOpen && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -96,4 +114,11 @@ export function Popover({
         : null}
     </>
   );
+}
+
+type ButtonLikeProps = { onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void };
+
+/** A `<button>` or one of the button primitives: something that is already the control. */
+function isButtonElement(node: ReactNode): node is ReactElement<ButtonLikeProps> {
+  return isValidElement(node) && (node.type === "button" || node.type === Button || node.type === IconButton);
 }
