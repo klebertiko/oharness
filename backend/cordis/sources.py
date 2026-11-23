@@ -1,8 +1,10 @@
-"""Where a plugin package may come from (ADR 0071): npm, GitHub at a full commit, or a local folder.
+"""Where a plugin package may come from (ADR 0071): npm, GitHub at a full commit, a tarball with its hash, or a local folder.
 
 Nothing here runs package code, runs install scripts, or installs dependencies. Archives are unpacked by hand: only
 regular files and folders, names that stay inside the destination, at most `MAX_FILES` files and `MAX_BYTES` bytes.
-A download goes through an injected `Fetcher`, so tests never touch the network.
+A download goes through an injected `Fetcher`, so tests never touch the network. A fetcher marked `cancellable` gets the
+cancel event and checks it between chunks; every download is checked before and after either way. `progress(step)` reports
+each step to the live log of the screen.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import re
 import shutil
 import stat
 import tarfile
+import threading
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -22,6 +25,7 @@ from urllib.parse import urlsplit
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_FILES = 2000
+CHUNK = 64 * 1024
 METADATA_LIMIT = 2 * 1024 * 1024
 NPM_HOST = 'registry.npmjs.org'
 GITHUB_HOST = 'codeload.github.com'
@@ -32,8 +36,14 @@ _NPM_NAME = re.compile(r'^(?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$')
 _SEMVER = re.compile(r'^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$')
 _GH_REPO = re.compile(r'^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$')
 _COMMIT = re.compile(r'^[0-9a-fA-F]{40}$')
+_HEX = re.compile(r'^[0-9a-fA-F]+$')
+_SRI = re.compile(r'^(sha512|sha256)-([A-Za-z0-9+/]+={0,2})$')
+_DIGEST_SIZE = {'sha512': 64, 'sha256': 32}
 
 Fetcher = Callable[[str, int], bytes]
+Progress = Callable[[str], None]
+# Downloads the https address of a tarball: (url, limit, cancel) -> bytes. The sidecar checks every address the name resolves to.
+TarballDownload = Callable[[str, int, 'threading.Event | None'], bytes]
 
 
 class SourceError(Exception):
@@ -56,13 +66,33 @@ def _check_url(url: str) -> None:
         raise SourceError('untrusted_host', 'Packages are only downloaded over HTTPS from npm or GitHub.')
 
 
-def default_fetcher(url: str, limit: int) -> bytes:
+def _cancelled() -> SourceError:
+    return SourceError('cancelled', 'The download was cancelled.')
+
+
+def read_capped(stream, limit: int, cancel: threading.Event | None = None) -> bytes:
+    """Read at most `limit + 1` bytes (one past the ceiling, so the caller can refuse it), checking `cancel` between chunks."""
+    parts, total = [], 0
+    while total <= limit:
+        if cancel is not None and cancel.is_set():
+            raise _cancelled()
+        chunk = stream.read(min(CHUNK, limit + 1 - total))
+        if not chunk:
+            break
+        parts.append(chunk)
+        total += len(chunk)
+    if cancel is not None and cancel.is_set():
+        raise _cancelled()
+    return b''.join(parts)
+
+
+def default_fetcher(url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
     _check_url(url)
     opener = urllib.request.build_opener(_TrustedRedirects)
     request = urllib.request.Request(url, headers={'User-Agent': 'oharness-cordis'})
     try:
         with opener.open(request, timeout=30) as response:
-            data = response.read(limit + 1)
+            data = read_capped(response, limit, cancel)
     except SourceError:
         raise
     except OSError as error:
@@ -70,11 +100,23 @@ def default_fetcher(url: str, limit: int) -> bytes:
     return data
 
 
-def _download(fetcher: Fetcher, url: str, limit: int) -> bytes:
-    data = fetcher(url, limit)
+default_fetcher.cancellable = True  # type: ignore[attr-defined]
+
+
+def _download(fetcher: Fetcher, url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
+    if cancel is not None and cancel.is_set():
+        raise _cancelled()
+    data = fetcher(url, limit, cancel) if getattr(fetcher, 'cancellable', False) else fetcher(url, limit)  # type: ignore[call-arg]
+    if cancel is not None and cancel.is_set():
+        raise _cancelled()
     if len(data) > limit:
         raise SourceError('archive_too_large', 'The download is larger than the limit.')
     return data
+
+
+def _step(progress: Progress | None, step: str) -> None:
+    if progress is not None:
+        progress(step)
 
 
 # -- extraction ------------------------------------------------------------
@@ -173,13 +215,15 @@ def _sha512_matches(data: bytes, declared: object) -> bool:
     return any(token == f'sha512-{digest}' for token in declared.split())
 
 
-def fetch_npm(name: str, version: str, dest: Path, *, fetcher: Fetcher = default_fetcher) -> Path:
+def fetch_npm(name: str, version: str, dest: Path, *, fetcher: Fetcher = default_fetcher, cancel: threading.Event | None = None,
+              progress: Progress | None = None) -> Path:
     if len(name) > 214 or not _NPM_NAME.match(name):
         raise SourceError('invalid_spec', 'That is not a valid npm package name.')
     if not _SEMVER.match(version):
         raise SourceError('invalid_spec', 'Give an exact version, such as 1.2.3.')
+    _step(progress, 'downloading')
     try:
-        meta = json.loads(_download(fetcher, f'https://{NPM_HOST}/{name.replace("/", "%2F")}/{version}', METADATA_LIMIT) or b'null')
+        meta = json.loads(_download(fetcher, f'https://{NPM_HOST}/{name.replace("/", "%2F")}/{version}', METADATA_LIMIT, cancel) or b'null')
     except ValueError as error:
         raise SourceError('download_failed', 'The registry answer could not be read.') from error
     dist = meta.get('dist') if isinstance(meta, dict) else None
@@ -189,9 +233,11 @@ def fetch_npm(name: str, version: str, dest: Path, *, fetcher: Fetcher = default
     if not isinstance(declared, str) or not any(token.startswith('sha512-') for token in declared.split()):
         raise SourceError('integrity_missing', 'The registry gave no sha512 integrity for that version.')
     _check_url(dist['tarball'])
-    tarball = _download(fetcher, dist['tarball'], MAX_BYTES)
+    tarball = _download(fetcher, dist['tarball'], MAX_BYTES, cancel)
+    _step(progress, 'verifying')
     if not _sha512_matches(tarball, declared):
         raise SourceError('integrity_mismatch', 'The downloaded package does not match the registry integrity.')
+    _step(progress, 'extracting')
     root = _extract(tarball, dest)
     manifest = _read_manifest(root)
     if manifest.get('name') != name or manifest.get('version') != version:
@@ -212,13 +258,16 @@ def _subdir_parts(subdir: str | None) -> tuple[str, ...]:
     return parts
 
 
-def fetch_github(spec: str, commit: str, subdir: str | None, dest: Path, *, fetcher: Fetcher = default_fetcher) -> Path:
+def fetch_github(spec: str, commit: str, subdir: str | None, dest: Path, *, fetcher: Fetcher = default_fetcher,
+                 cancel: threading.Event | None = None, progress: Progress | None = None) -> Path:
     if not _GH_REPO.match(spec) or set(spec.split('/', 1)[1]) <= {'.'}:
         raise SourceError('invalid_spec', 'Use owner/repository.')
     if not _COMMIT.match(commit):
         raise SourceError('invalid_spec', 'GitHub packages need the full 40-character commit, not a branch or tag.')
     parts = _subdir_parts(subdir)
-    data = _download(fetcher, f'https://{GITHUB_HOST}/{spec}/tar.gz/{commit.lower()}', MAX_BYTES)
+    _step(progress, 'downloading')
+    data = _download(fetcher, f'https://{GITHUB_HOST}/{spec}/tar.gz/{commit.lower()}', MAX_BYTES, cancel)
+    _step(progress, 'extracting')
     root = _extract(data, dest)
     package = root.joinpath(*parts)
     if not package.resolve().is_relative_to(dest.resolve()) or not package.is_dir():
@@ -237,10 +286,15 @@ def _is_link(path: Path) -> bool:
         return True
 
 
-def fetch_local(spec: str, dest: Path) -> Path:
+def _refuse_network_path(spec: str, what: str) -> None:
     # Windows reads any two leading slashes, mixed or not (`/\host`, `\\?\UNC\host`), as a network drive; check the parsed drive, not the text.
     if spec.startswith(('\\\\', '//')) or PureWindowsPath(spec).drive.startswith(('\\\\', '//')):
-        raise SourceError('invalid_spec', 'A network path is not accepted; copy the folder to this computer first.')
+        raise SourceError('invalid_spec', f'A network path is not accepted; copy the {what} to this computer first.')
+
+
+def fetch_local(spec: str, dest: Path, *, progress: Progress | None = None) -> Path:
+    _refuse_network_path(spec, 'folder')
+    _step(progress, 'copying')
     source = Path(spec)
     if not source.is_absolute() or not source.is_dir():
         raise SourceError('invalid_spec', 'Give the absolute path of a folder.')
@@ -276,3 +330,79 @@ def fetch_local(spec: str, dest: Path) -> Path:
         _clear(dest)
         raise SourceError('bad_archive', 'The folder could not be copied.') from error
     return _require_package(dest, dest)
+
+
+# -- tarball -----------------------------------------------------------------
+def parse_integrity(text: object) -> tuple[str, bytes]:
+    """(algorithm, digest) from `sha512-<base64>`, `sha256-<base64>`, or the hex of a sha256 (64) or sha512 (128)."""
+    if not isinstance(text, str) or not text.strip():
+        raise SourceError('integrity_missing', 'Give the sha512 or sha256 of the tarball.')
+    value = text.strip()
+    match = _SRI.match(value)
+    try:
+        if match:
+            algo, digest = match[1], base64.b64decode(match[2], validate=True)
+        elif _HEX.match(value) and len(value) in (64, 128):
+            algo, digest = ('sha256' if len(value) == 64 else 'sha512'), bytes.fromhex(value)
+        else:
+            raise ValueError('not a hash')
+    except ValueError:
+        raise SourceError('invalid_spec', 'The hash must be sha512-... or sha256-... (base64), or the hex of a sha256 or sha512.') from None
+    if len(digest) != _DIGEST_SIZE[algo]:
+        raise SourceError('invalid_spec', 'The hash has the wrong length for its algorithm.')
+    return algo, digest
+
+
+def _tarball_name_ok(name: str) -> bool:
+    return name.lower().endswith(('.tgz', '.tar.gz'))
+
+
+def _read_local_tarball(spec: str, cancel: threading.Event | None) -> bytes:
+    _refuse_network_path(spec, 'file')
+    source = Path(spec)
+    if not source.is_absolute() or not _tarball_name_ok(source.name):
+        raise SourceError('invalid_spec', 'Give the absolute path of a .tgz file.')
+    if (source.is_symlink() or source.exists()) and _is_link(source):
+        raise SourceError('unsafe_archive', 'The file is a link.')
+    if not source.is_file():
+        raise SourceError('invalid_spec', 'Give the absolute path of a .tgz file.')
+    try:
+        if source.stat().st_size > MAX_BYTES:
+            raise SourceError('archive_too_large', 'The file is larger than the limit.')
+        with open(source, 'rb') as handle:
+            return read_capped(handle, MAX_BYTES, cancel)
+    except OSError as error:
+        raise SourceError('bad_archive', 'The file could not be read.') from error
+
+
+def fetch_tarball(spec: str, integrity: str | None, dest: Path, *, download: TarballDownload | None = None, cancel: threading.Event | None = None,
+                  progress: Progress | None = None) -> Path:
+    """An https `.tgz` (its sha512 or sha256 is required and checked) or a local `.tgz` by absolute path (a hash, when given, is checked).
+    Both are unpacked by the same `_extract` as npm and GitHub."""
+    if ':' in spec.split('/', 1)[0] and spec.split(':', 1)[0].lower() in ('https', 'http', 'ftp', 'file'):
+        parts = urlsplit(spec)
+        if parts.scheme != 'https' or not parts.hostname or parts.username is not None or parts.password is not None or not _tarball_name_ok(parts.path):
+            raise SourceError('invalid_spec', 'Give the https address of a .tgz file.')
+        expected: tuple[str, bytes] | None = parse_integrity(integrity)
+        if download is None:
+            raise SourceError('download_failed', 'Downloading a tarball is not available here.')
+        _step(progress, 'downloading')
+        if cancel is not None and cancel.is_set():
+            raise _cancelled()
+        data = download(spec, MAX_BYTES, cancel)
+        if cancel is not None and cancel.is_set():
+            raise _cancelled()
+    else:
+        expected = parse_integrity(integrity) if integrity else None
+        _step(progress, 'copying')
+        data = _read_local_tarball(spec, cancel)
+    if len(data) > MAX_BYTES:
+        raise SourceError('archive_too_large', 'The tarball is larger than the limit.')
+    if expected is not None:
+        _step(progress, 'verifying')
+        algo, digest = expected
+        if hashlib.new(algo, data).digest() != digest:
+            raise SourceError('integrity_mismatch', 'The tarball does not match the hash you gave.')
+    _step(progress, 'extracting')
+    root = _extract(data, dest)
+    return _require_package(root, dest)

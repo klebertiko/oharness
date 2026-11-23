@@ -122,9 +122,10 @@ def test_the_connection_goes_to_the_checked_address_with_the_name_for_tls_and_ho
 
     class FakeResponse:
         status = 200
+        left = [good()]
 
-        def read(self, n):
-            return good()
+        def read(self, n):  # a stream: the body once, then end of file (the reader now reads in chunks)
+            return self.left.pop() if self.left else b''
 
     class FakeConnection:
         def __init__(self, host, address, timeout):

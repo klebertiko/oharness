@@ -2,7 +2,7 @@
 
 The person gives an https address; the sidecar resolves it, refuses it when any address is not public, connects to the checked
 address (no redirect), with a timeout and a size ceiling, and keeps only plain text and sources it can install: npm with an
-exact version, or GitHub at a full commit. An index is a third party's list: nothing in it is trusted, rendered as HTML, or
+exact version, GitHub at a full commit, or an https tarball with its hash. An index is a third party's list: nothing in it is trusted, rendered as HTML, or
 installed without the usual preview and confirmation.
 """
 from __future__ import annotations
@@ -13,11 +13,12 @@ import json
 import re
 import socket
 import ssl
+import threading
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlsplit
 
-from cordis.sources import _NPM_NAME, _SEMVER, SourceError, _subdir_parts
+from cordis.sources import _NPM_NAME, _SEMVER, SourceError, _subdir_parts, _tarball_name_ok, parse_integrity, read_capped
 
 LIMIT_BYTES = 512 * 1024
 TIMEOUT_S = 10
@@ -91,10 +92,10 @@ class _PinnedConnection(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
-def _pinned_get(url: str, host: str, address: str, limit: int) -> bytes:
+def _pinned_get(url: str, host: str, address: str, limit: int, cancel: threading.Event | None = None, timeout: float = TIMEOUT_S) -> bytes:
     parts = urlsplit(url)
     path = (parts.path or '/') + (f'?{parts.query}' if parts.query else '')
-    connection = _PinnedConnection(host, address, TIMEOUT_S)
+    connection = _PinnedConnection(host, address, timeout)
     try:
         connection.request('GET', path, headers={'User-Agent': 'oharness-cordis', 'Accept': 'application/json'})
         response = connection.getresponse()
@@ -102,8 +103,8 @@ def _pinned_get(url: str, host: str, address: str, limit: int) -> bytes:
             raise IndexError_('redirect_refused', 'The index address redirects; give its final https address.')
         if response.status != 200:
             raise IndexError_('download_failed', 'The index could not be downloaded.')
-        return response.read(limit + 1)
-    except IndexError_:
+        return read_capped(response, limit, cancel)
+    except (IndexError_, SourceError):
         raise
     except (OSError, http.client.HTTPException) as error:
         raise IndexError_('download_failed', 'The index could not be downloaded.') from error
@@ -129,6 +130,13 @@ def _source(raw: Any) -> dict[str, Any] | None:
         return None
     if raw.get('type') == 'npm':
         return {'type': 'npm'}
+    if raw.get('type') == 'tarball':
+        url = _https(raw.get('url'))
+        try:
+            parse_integrity(raw.get('integrity'))
+        except SourceError:
+            return None
+        return {'type': 'tarball', 'url': url, 'integrity': raw['integrity'].strip()} if url and _tarball_name_ok(urlsplit(url).path) else None
     if raw.get('type') != 'git' or not isinstance(raw.get('url'), str) or not isinstance(raw.get('commit'), str):
         return None
     parts = urlsplit(raw['url'])
@@ -187,3 +195,17 @@ def fetch(url: str, *, fetcher: Fetcher | None = None, resolve: Resolver | None 
     if len(data) > LIMIT_BYTES:
         raise IndexError_('index_too_large', 'The index is larger than 512 KiB.')
     return parse(data)
+
+
+DOWNLOAD_TIMEOUT_S = 30
+
+
+def download_https(url: str, limit: int, cancel: threading.Event | None = None, *, resolve: Resolver | None = None) -> bytes:
+    """A package tarball from a public https address: the same checks as an index (every resolved address public, the connection
+    pinned to the checked one, no redirect), a ceiling, a timeout, and the cancel event checked between chunks."""
+    try:
+        host, address = check_url(url, resolve)
+        return _pinned_get(url, host, address, limit, cancel, DOWNLOAD_TIMEOUT_S)
+    except IndexError_ as error:
+        code = 'untrusted_host' if error.code == 'invalid_url' else 'download_failed'
+        raise SourceError(code, error.message.replace('index', 'tarball')) from None
