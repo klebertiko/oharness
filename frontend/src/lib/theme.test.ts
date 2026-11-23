@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { THEME_COLOR, THEME_KEY, appliedTheme, applyTheme, storedTheme } from "./theme";
+import { THEME_COLOR, THEME_KEY, appliedTheme, applyTheme, nextTheme, resolvedTheme, storedTheme } from "./theme";
 
 const script = fs.readFileSync(path.resolve(__dirname, "../../public/theme-init.js"), "utf8");
 const runInit = () => new Function(script)();
@@ -74,5 +74,25 @@ describe("applyTheme", () => {
     } finally {
       Object.defineProperty(window, "localStorage", orig);
     }
+  });
+});
+
+describe("nextTheme (what the rail button does)", () => {
+  it("resolves system against the OS and offers the other theme", () => {
+    expect(nextTheme("system", false)).toBe("light");
+    expect(nextTheme("system", true)).toBe("dark");
+  });
+  it("returns to system from a choice that differs from the OS", () => {
+    expect(nextTheme("light", false)).toBe("system");
+    expect(nextTheme("dark", true)).toBe("system");
+  });
+  it("flips a choice that matches the OS", () => {
+    expect(nextTheme("dark", false)).toBe("light");
+    expect(nextTheme("light", true)).toBe("dark");
+  });
+  it("resolvedTheme maps system to the OS theme", () => {
+    expect(resolvedTheme("system", true)).toBe("light");
+    expect(resolvedTheme("system", false)).toBe("dark");
+    expect(resolvedTheme("dark", true)).toBe("dark");
   });
 });

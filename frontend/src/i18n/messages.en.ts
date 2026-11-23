@@ -407,6 +407,7 @@ export const en = {
   "shell.rail.providers": "Providers",
   "shell.rail.useLight": "Use light theme",
   "shell.rail.useDark": "Use dark theme",
+  "shell.rail.useSystem": "Follow system theme",
   "shell.rail.keymap": "Keyboard map",
   "shell.rail.hidePanel": "Hide panel",
   "shell.rail.showPanel": "Show panel",

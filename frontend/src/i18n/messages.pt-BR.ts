@@ -409,6 +409,7 @@ export const ptBR: Record<MessageKey, string> = {
   "shell.rail.providers": "Providers",
   "shell.rail.useLight": "Usar tema claro",
   "shell.rail.useDark": "Usar tema escuro",
+  "shell.rail.useSystem": "Seguir o tema do sistema",
   "shell.rail.keymap": "Mapa de teclado",
   "shell.rail.hidePanel": "Ocultar painel",
   "shell.rail.showPanel": "Mostrar painel",

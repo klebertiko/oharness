@@ -56,3 +56,26 @@ export function applyTheme(theme: Theme): void {
     /* storage blocked: the choice lasts for this session */
   }
 }
+
+/** Whether the OS asks for a light theme right now. */
+export function osPrefersLight(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: light)").matches;
+}
+
+/** The theme actually on screen: `system` resolved against the OS. */
+export function resolvedTheme(theme: Theme, prefersLight: boolean): "dark" | "light" {
+  if (theme === "system") return prefersLight ? "light" : "dark";
+  return theme;
+}
+
+/**
+ * What one press of the theme button does. Every press changes what is on screen:
+ * from `system` it picks the other theme; from a choice that differs from the OS
+ * it goes back to `system`; from a choice equal to the OS it flips.
+ */
+export function nextTheme(theme: Theme, prefersLight: boolean): Theme {
+  const shown = resolvedTheme(theme, prefersLight);
+  const os = prefersLight ? "light" : "dark";
+  if (theme !== "system" && theme !== os) return "system";
+  return shown === "dark" ? "light" : "dark";
+}
