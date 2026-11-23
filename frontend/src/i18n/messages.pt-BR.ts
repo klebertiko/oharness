@@ -1032,6 +1032,7 @@ export const ptBR: Record<MessageKey, string> = {
   "forja.improve.status.changes_requested": "Mudanças pedidas",
   "forja.improve.status.rejected_by_human": "Rejeitada",
   "forja.improve.status.promoted": "Promovida",
+  "forja.improve.status.stale": "Desatualizada",
   "forja.improve.verdict.improved": "Melhorou",
   "forja.improve.verdict.tied": "Empatou",
   "forja.improve.verdict.worsened": "Piorou",

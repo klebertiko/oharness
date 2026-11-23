@@ -55,6 +55,9 @@ MAX_CONCURRENT_RUNS_CAP = 8
 MAX_REVIEW_RETURNS_CAP = 10
 POLICY_DEFAULTS = {'requireSpec': False, 'specApproval': 'required', 'maxReviewReturns': 3, 'reviewIndependence': 'require',
                    'maxPermissionMode': DEFAULT_MAX_MODE}
+# What an absent field means. The trial, the scorer and the validator read these, so a missing key never means something looser.
+SELF_IMPROVEMENT_DEFAULTS = {'failureThreshold': 25, 'ageDays': 7, 'minSampleRuns': 20, 'sampleDays': 7, 'canaryPercent': 10}
+SCORER_DEFAULTS = {'enabled': True, 'samplingRate': 100, 'selfImprovement': False}
 # Checks a scorer can apply without calling a model. A judge-style scorer uses a rubric instead.
 DETERMINISTIC_CHECKS = ('ci_failed', 'qa_rejected', 'sec_found', 'gate_changes', 'pr_closed_unmerged', 'returns_over_cap',
                         'human_intervention', 'cost_over_envelope')

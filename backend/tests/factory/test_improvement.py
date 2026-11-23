@@ -7,36 +7,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from database import SessionLocal
-from factory import versions
+from factory import auth, versions
 from factory.definition import hash_of
 from factory.improvement.orm import FactoryFailure, FactoryScore, ImprovementEvent, ImprovementProposal
 from main import app
 
-HUMAN = {'x-oharness-human': 'human-secret'}
-FACTORY = 'improve'
+from forja_improvement_defs import FACTORY, HUMAN, definition as _definition  # noqa: E402
 
-
-def _definition(instructions: str = 'Build the change.') -> dict:
-    return {
-        'name': FACTORY,
-        'policy': {
-            'requireSpec': True, 'specApproval': 'required', 'maxReviewReturns': 3,
-            'reviewIndependence': 'require', 'maxPermissionMode': 'workspace_write',
-        },
-        'stages': {
-            'review': {'enabled': True, 'required': True},
-            'verify': {'enabled': True, 'required': True},
-            'spec': {'enabled': True, 'required': True},
-        },
-        'agents': {
-            'foreman': {'role': 'foreman', 'enabled': True, 'model': 'openai/gpt-4o', 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Coordinate.'},
-            'builder': {'role': 'implement', 'enabled': True, 'model': 'openai/gpt-4o', 'permissions': {'mode': 'workspace_write'}, 'secrets': [], 'instructions': instructions},
-            'reviewer': {'role': 'review', 'enabled': True, 'model': 'anthropic/claude', 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Review.'},
-            'verifier': {'role': 'verify', 'enabled': True, 'model': 'openai/gpt-4o', 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Check.'},
-        },
-        'scorers': {'qa': {'kind': 'deterministic', 'enabled': True, 'passingScore': 1, 'selfImprovement': True, 'check': 'qa_rejected'}},
-        'selfImprovement': {'analyst': 'foreman', 'failureThreshold': 25, 'ageDays': 7, 'minSampleRuns': 20, 'sampleDays': 7, 'canaryPercent': 10},
-    }
+SCORER = {auth.SCORER_HEADER: auth.scorer_credential()}
 
 
 async def _reset():
@@ -109,15 +87,15 @@ def test_a_worse_trial_rolls_itself_back_and_every_decision_is_exportable(client
     assert approved.json()['status'] == 'canary'
     assert _state().canary is not None and _state().canary.hash == proposal['after_hash']
     for index in range(20):
-        base = client.post('/factory/improvements/score', json={'factory_id': FACTORY, 'version_hash': proposal['before_hash'], 'scorer_id': 'qa', 'run_id': f'base-{index}', 'passed': True})
+        base = client.post('/factory/improvements/score', headers=SCORER, json={'factory_id': FACTORY, 'version_hash': proposal['before_hash'], 'scorer_id': 'qa', 'run_id': f'base-{index}', 'passed': True})
         assert base.status_code == 200, base.text
     for index in range(20):
-        trial = client.post('/factory/improvements/score', json={
+        trial = client.post('/factory/improvements/score', headers=SCORER, json={
             'factory_id': FACTORY, 'version_hash': proposal['after_hash'], 'scorer_id': 'qa', 'run_id': f'trial-{index}',
-            'passed': index < 5, 'check': 'qa_rejected', 'evidence': {'qa': 'rejected' if index >= 5 else 'ok'},
+            'passed': index < 5, 'evidence': {'qa': 'rejected' if index >= 5 else 'ok'},
         })
         assert trial.status_code == 200, trial.text
-    measured = client.post(f"/factory/improvements/{proposal['id']}/measure")
+    measured = client.post(f"/factory/improvements/{proposal['id']}/measure", headers=HUMAN)
     assert measured.status_code == 200, measured.text
     assert measured.json()['verdict'] == 'worsened'
     assert _state().canary is None and _state().stable.hash == proposal['before_hash']
@@ -129,34 +107,34 @@ def test_a_worse_trial_rolls_itself_back_and_every_decision_is_exportable(client
     assert any(entry['type'] == 'improvement' and entry.get('notice') == 'reverted' for entry in inbox)
 
 
-def test_scoring_again_replaces_the_previous_result(client):
+def test_scoring_again_reads_the_latest_attempt_and_keeps_the_first(client):
     _activate(_definition())
     version = hash_of(_definition())
-    body = {'factory_id': FACTORY, 'version_hash': version, 'scorer_id': 'qa', 'run_id': 'run-1', 'agent_id': 'builder'}
-    first = client.post('/factory/improvements/score', json={**body, 'label': 'tests_skipped', 'passing_score': 1, 'labels': [{'value': 'tests_run', 'score': 1}, {'value': 'tests_skipped', 'score': 0}]})
+    body = {'factory_id': FACTORY, 'version_hash': version, 'scorer_id': 'tests', 'run_id': 'run-1', 'agent_id': 'builder'}
+    first = client.post('/factory/improvements/score', headers=SCORER, json={**body, 'label': 'tests-skipped'})
     assert first.status_code == 200 and first.json()['passed'] is False
-    second = client.post('/factory/improvements/score', json={**body, 'label': 'tests_run', 'passing_score': 1, 'labels': [{'value': 'tests_run', 'score': 1}, {'value': 'tests_skipped', 'score': 0}]})
+    second = client.post('/factory/improvements/score', headers=SCORER, json={**body, 'label': 'tests-run'})
     assert second.status_code == 200 and second.json()['passed'] is True and second.json()['id'] != first.json()['id']
     listed = client.get('/factory/improvements', params={'factory_id': FACTORY}).json()
-    assert listed['failures'] == []
+    assert [row['superseded'] for row in listed['failures']] == [True]
 
 
 def test_run_now_starts_from_one_failure_and_the_schedule_waits_for_twenty_five(client):
     _activate(_definition())
     version = hash_of(_definition())
     score = {'factory_id': FACTORY, 'version_hash': version, 'scorer_id': 'qa', 'passed': False, 'agent_id': 'builder'}
-    assert client.post('/factory/improvements/score', json={**score, 'run_id': 'only'}).status_code == 200
+    assert client.post('/factory/improvements/score', headers=SCORER, json={**score, 'run_id': 'only'}).status_code == 200
     waiting = client.post('/factory/improvements/run', json={'factory_id': FACTORY}, headers=HUMAN)
     assert waiting.status_code == 200 and waiting.json()['started'] is False and waiting.json()['open'] == 1
     forced = client.post('/factory/improvements/run', json={'factory_id': FACTORY, 'force': True}, headers=HUMAN)
     assert forced.status_code == 200 and forced.json()['started'] is True
     assert forced.json()['proposal']['failure_ids']
     for index in range(24):
-        assert client.post('/factory/improvements/score', json={**score, 'run_id': f'more-{index}'}).status_code == 200
+        assert client.post('/factory/improvements/score', headers=SCORER, json={**score, 'run_id': f'more-{index}'}).status_code == 200
     # The forced proposal already linked the first failure, so 24 new ones are still under the line.
     still = client.post('/factory/improvements/run', json={'factory_id': FACTORY}, headers=HUMAN)
     assert still.json()['started'] is False and still.json()['open'] == 24
-    assert client.post('/factory/improvements/score', json={**score, 'run_id': 'more-24'}).status_code == 200
+    assert client.post('/factory/improvements/score', headers=SCORER, json={**score, 'run_id': 'more-24'}).status_code == 200
     started = client.post('/factory/improvements/run', json={'factory_id': FACTORY}, headers=HUMAN)
     assert started.json()['started'] is True and len(started.json()['proposal']['failure_ids']) == 25
 
@@ -164,7 +142,7 @@ def test_run_now_starts_from_one_failure_and_the_schedule_waits_for_twenty_five(
 def test_a_code_fix_is_approved_by_a_person_and_does_not_start_a_trial(client):
     _activate(_definition())
     version = hash_of(_definition())
-    failed = client.post('/factory/improvements/score', json={'factory_id': FACTORY, 'version_hash': version, 'scorer_id': 'qa', 'run_id': 'code-1', 'passed': False, 'agent_id': 'builder'})
+    failed = client.post('/factory/improvements/score', headers=SCORER, json={'factory_id': FACTORY, 'version_hash': version, 'scorer_id': 'qa', 'run_id': 'code-1', 'passed': False, 'agent_id': 'builder'})
     assert failed.status_code == 200
     failure_id = client.get('/factory/improvements', params={'factory_id': FACTORY}).json()['failures'][0]['id']
     proposal = client.post('/factory/improvements/analyze', json={
@@ -201,7 +179,7 @@ def test_a_short_trial_is_not_rolled_back(client):
     after = _definition('Build, then pause.')
     proposal = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': after, 'justification': 'Pause.'}, headers=HUMAN).json()
     client.post(f"/factory/improvements/{proposal['id']}/decide", json={'action': 'approve'}, headers=HUMAN)
-    client.post('/factory/improvements/score', json={'factory_id': FACTORY, 'version_hash': proposal['after_hash'], 'scorer_id': 'qa', 'run_id': 'one', 'passed': False})
-    measured = client.post(f"/factory/improvements/{proposal['id']}/measure")
+    client.post('/factory/improvements/score', headers=SCORER, json={'factory_id': FACTORY, 'version_hash': proposal['after_hash'], 'scorer_id': 'qa', 'run_id': 'one', 'passed': False})
+    measured = client.post(f"/factory/improvements/{proposal['id']}/measure", headers=HUMAN)
     assert measured.json()['verdict'] is None and measured.json()['reason'] == 'sample'
     assert _state().canary is not None

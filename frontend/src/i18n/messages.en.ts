@@ -1030,6 +1030,7 @@ export const en = {
   "forja.improve.status.changes_requested": "Changes requested",
   "forja.improve.status.rejected_by_human": "Rejected",
   "forja.improve.status.promoted": "Promoted",
+  "forja.improve.status.stale": "Out of date",
   "forja.improve.verdict.improved": "Improved",
   "forja.improve.verdict.tied": "Unchanged",
   "forja.improve.verdict.worsened": "Worse",

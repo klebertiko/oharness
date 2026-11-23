@@ -1,6 +1,9 @@
 import hmac
+import math
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from database import SessionLocal, init_db
@@ -56,6 +59,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OHarness API", version=APP_VERSION, lifespan=lifespan)
+
+
+def _finite(node):
+    """A 422 echoes the input it refused. NaN and Infinity are not JSON, so they are echoed as text instead of failing the response."""
+    if isinstance(node, float) and not math.isfinite(node):
+        return str(node)
+    if isinstance(node, dict):
+        return {key: _finite(value) for key, value in node.items()}
+    if isinstance(node, (list, tuple)):
+        return [_finite(value) for value in node]
+    return node
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request: Request, exc: RequestValidationError):
+    return await request_validation_exception_handler(request, RequestValidationError(_finite(list(exc.errors()))))
 
 app.add_middleware(
     CORSMiddleware,

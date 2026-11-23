@@ -1,6 +1,6 @@
 """Tables for scores, the failure book, proposals and the append-only decision trail.
 
-A score or a failure is inserted and never rewritten. The proposal row is the current
+A score or a failure is inserted and never rewritten; the session refuses an update or a delete of one. The proposal row is the current
 state a screen reads; every decision is also an event, so the trail can be exported
 without trusting the status column.
 """
@@ -9,8 +9,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text, event
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from database import Base
 
@@ -38,9 +38,13 @@ class FactoryScore(Base):
     cost_tokens: Mapped[int] = mapped_column(Integer, default=0)
     interventions: Mapped[int] = mapped_column(Integer, default=0)
     reason: Mapped[str] = mapped_column(Text, default='')
+    # 1 for the first result of a run and a scorer, 2 for the next: the highest one is the current result, the rest stay.
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    origin: Mapped[str] = mapped_column(String(16), nullable=False, default='run_loop')  # run_loop or human
     at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
-    __table_args__ = (Index('ix_factory_scores_version', 'factory_id', 'version_hash'),)
+    __table_args__ = (Index('ix_factory_scores_version', 'factory_id', 'version_hash'),
+                      Index('ux_factory_scores_attempt', 'factory_id', 'scorer_id', 'run_id', 'attempt', unique=True))
 
 
 class FactoryFailure(Base):
@@ -58,6 +62,7 @@ class FactoryFailure(Base):
     passing_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     reason: Mapped[str] = mapped_column(Text, default='')
     evidence_json: Mapped[str] = mapped_column(Text, default='{}')
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # the score attempt this failure came from
     at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     __table_args__ = (Index('ix_factory_failures_factory', 'factory_id', 'at'),)
@@ -101,3 +106,17 @@ class ImprovementEvent(Base):
     at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     __table_args__ = (Index('ix_factory_improvement_events_proposal', 'proposal_id', 'id'),)
+
+
+_APPEND_ONLY = (FactoryScore, FactoryFailure, ImprovementEvent)
+
+
+@event.listens_for(Session, 'before_flush')
+def _refuse_rewrites(session: Session, _context, _instances) -> None:
+    """Scores, failures and trail events are inserted and never changed or deleted by the application."""
+    for row in session.deleted:
+        if isinstance(row, _APPEND_ONLY):
+            raise AppendOnlyError(f'{type(row).__name__} rows are append-only')
+    for row in session.dirty:
+        if isinstance(row, _APPEND_ONLY) and session.is_modified(row):
+            raise AppendOnlyError(f'{type(row).__name__} rows are append-only')

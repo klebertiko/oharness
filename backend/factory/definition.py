@@ -458,6 +458,18 @@ def _semantic_issues(definition: dict) -> list[Issue]:
 
 # ------------------------------------------------------------------------------------------------------------------------- loader
 
+def validate(definition: object) -> list[Issue]:
+    """The checks `load` runs on a merged definition that did not come from disk (a proposed change, for one). Errors and warnings."""
+    if not isinstance(definition, dict):
+        return [Issue('forja.yaml', '', 'must be a mapping')]
+    merged = _integral_floats(definition)
+    schema = _schema_issues(merged)
+    issues = schema + _secret_issues(merged) + _single_line_issues(merged)
+    if not schema:
+        issues += _semantic_issues(merged)
+    return sorted(set(issues), key=lambda i: (i.file, i.path, i.message))
+
+
 def load(directory: str | Path) -> Loaded:
     root = Path(directory)
     if not root.is_dir():
