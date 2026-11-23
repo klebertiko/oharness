@@ -158,10 +158,16 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
     setOpen(false);
     triggerRef.current?.focus();
   };
+  const [host, setHost] = useState<HTMLElement | null>(null);
   const place = () => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setBox({ top: rect.bottom + 4, left: rect.left });
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const container = portalHost(trigger);
+    const rect = trigger.getBoundingClientRect();
+    // A transformed host (a sheet mid-entrance) is the containing block of a fixed child.
+    const offset = getComputedStyle(container).transform !== "none" ? container.getBoundingClientRect() : { top: 0, left: 0 };
+    setHost(container);
+    setBox({ top: rect.bottom + 4 - offset.top, left: rect.left - offset.left });
   };
 
   useEffect(() => {
@@ -203,9 +209,22 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
             <div style={{ top: box.top, left: box.left }} className="fixed z-50">
               <MenuList items={items} labelledBy={auto} onClose={close} />
             </div>,
-            document.body,
+            host ?? document.body,
           )
         : null}
     </>
+  );
+}
+
+/**
+ * Where the open menu is mounted: the landmark or dialog around its trigger, so
+ * landmark navigation finds it and a modal dialog neither hides it nor traps
+ * focus away from it. The page body only when there is none.
+ */
+function portalHost(trigger: HTMLElement): HTMLElement {
+  return (
+    trigger.closest<HTMLElement>(
+      "[role='dialog'], [role='alertdialog'], dialog, main, [role='main'], nav, aside, header, footer, section[aria-label], section[aria-labelledby], [role='region']",
+    ) ?? document.body
   );
 }

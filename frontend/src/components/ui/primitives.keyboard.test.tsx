@@ -181,6 +181,16 @@ describe("Menu", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("mounts the open list inside the landmark around its trigger", async () => {
+    render(
+      <main>
+        <Menu label="Actions" items={items()} />
+      </main>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menu").closest("main")).toBeTruthy();
+  });
+
   it("closes when Tab moves focus out", async () => {
     render(<Menu label="Actions" items={items()} />);
     await userEvent.click(screen.getByRole("button", { name: "Actions" }));
