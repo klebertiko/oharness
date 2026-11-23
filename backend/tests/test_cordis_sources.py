@@ -301,7 +301,8 @@ def test_local_folder_too_large_is_refused(tmp_path):
     assert error.value.code == 'archive_too_large'
 
 
-@pytest.mark.parametrize('spec', [r'\\server\share\plugin', '//server/share/plugin'])
+@pytest.mark.parametrize('spec', [r'\\server\share\plugin', '//server/share/plugin', r'/\server\share\plugin', '\\/server/share/plugin',
+                                  r'\\?\UNC\server\share\plugin', r'//?/UNC/server/share/plugin'])
 def test_local_refuses_a_network_path(tmp_path, spec):
     # A UNC path would make the app reach a remote machine (and send the user's credentials to it) just to read a folder.
     with pytest.raises(SourceError) as error:

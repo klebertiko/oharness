@@ -6,11 +6,13 @@ address and token never appear in a response or a log.
 """
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from cordis import index
 from cordis.service import CordisService, ServiceError
 from cordis.sources import SourceError
 from cordis.supervisor import CordisUnavailable, HostRequestError
@@ -33,6 +35,15 @@ class InstallBody(BaseModel):
     accept: bool
     digest: str = Field(max_length=128)
     scripts: Literal['do-not-run'] | None = None
+    # The plugin's own configuration, as Cordis `apply(ctx, config)` gets it (DSH tool-todo needs one). Small and plain JSON.
+    config: dict[str, Any] | None = None
+
+    @field_validator('config')
+    @classmethod
+    def small_config(cls, value):
+        if value is not None and len(json.dumps(value)) > 16384:
+            raise ValueError('config is at most 16 KiB')
+        return value
 
 
 def _human(request: Request) -> None:
@@ -79,7 +90,7 @@ def fetch_plugin(request: Request, body: FetchBody):
 @router.post('/plugins/install')
 def install_plugin(request: Request, body: InstallBody):
     _human(request)
-    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts))
+    return _call(lambda: _service(request).install(body.fetch_id, accept=body.accept, digest=body.digest, scripts=body.scripts, config=body.config))
 
 
 @router.post('/plugins/{plugin_id}/enable')
@@ -112,3 +123,68 @@ def export_plugin(request: Request, plugin_id: str = Path(pattern=PLUGIN_ID)):
     _human(request)  # the package may be a local folder of the person's; only they export it
     filename, data = _call(lambda: _service(request).export(plugin_id))
     return Response(content=data, media_type='application/gzip', headers={'content-disposition': f'attachment; filename="{filename}"'})
+
+
+class CreatorBody(BaseModel):
+    enabled: bool
+
+
+class InvokeBody(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    args: Any = None
+
+
+class CommandBody(BaseModel):
+    line: str = Field(min_length=1, max_length=4096)
+
+
+class IndexBody(BaseModel):
+    url: str = Field(min_length=9, max_length=2048)
+
+
+@router.get('/creator')
+def creator_mode(request: Request):
+    return {'enabled': _service(request).creator_enabled()}
+
+
+@router.post('/creator')
+def set_creator_mode(request: Request, body: CreatorBody):
+    _human(request)  # turning it on gives the chat agent the cordis_plugins tool
+    return _service(request).set_creator(body.enabled)
+
+
+@router.get('/requests')
+def list_requests(request: Request):
+    return {'requests': _service(request).list_requests()}
+
+
+@router.post('/requests/{request_id}/approve')
+def approve_request(request: Request, request_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)  # the only way a package from Nilo is installed
+    return _call(lambda: _service(request).approve_request(request_id))
+
+
+@router.post('/requests/{request_id}/reject')
+def reject_request(request: Request, request_id: str = Path(pattern=PLUGIN_ID)):
+    _human(request)
+    return _call(lambda: _service(request).reject_request(request_id))
+
+
+@router.post('/tools/invoke')
+def invoke_tool(request: Request, body: InvokeBody):
+    return _call(lambda: _service(request).invoke_tool(body.name, body.args))
+
+
+@router.post('/commands/execute')
+def execute_command(request: Request, body: CommandBody):
+    return _call(lambda: _service(request).execute_command(body.line))
+
+
+@router.post('/index/fetch')
+def fetch_index(request: Request, body: IndexBody):
+    _human(request)  # the person names the index; the sidecar fetches it so the screen never talks to a third party
+    service = _service(request)
+    try:
+        return index.fetch(body.url, fetcher=service.index_fetcher, resolve=service.index_resolver)
+    except index.IndexError_ as error:
+        raise HTTPException(status_code=422, detail={'code': error.code, 'message': error.message}) from None

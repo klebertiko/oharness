@@ -73,3 +73,35 @@ export interface InstallRequest {
   digest: string;
   scripts?: "do-not-run";
 }
+
+export interface NiloRequest {
+  id: string;
+  /** The folder in the development area (`dev/<devName>`). */
+  devName: string;
+  name: string;
+  version: string;
+  createdAt: number;
+  status: "pending" | "approved" | "rejected" | "stale" | "superseded";
+  preview: PackagePreview;
+  /** The files changed after Nilo asked: approving is refused, Nilo has to ask again. */
+  changed: boolean;
+  /** An installed plugin of the same name that approving would replace. */
+  replaces: { version: string; madeByNilo: boolean; source: SourceKind | null } | null;
+}
+
+export type IndexSource = { type: "npm" } | { type: "git"; url: string; commit: string; path: string; repo: string };
+
+export interface IndexPlugin {
+  name: string;
+  title: string;
+  description: string;
+  author: string;
+  repository: string | null;
+  versions: { version: string; source: IndexSource }[];
+}
+
+export interface PluginIndex {
+  title: string;
+  plugins: IndexPlugin[];
+  skipped: number;
+}

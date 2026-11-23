@@ -2,7 +2,9 @@
  * The Cordis Plugins destination (ADR 0071), in a real browser against the static export with a stubbed sidecar: the list with state and
  * capabilities, the logs of a plugin, and the add flow (check, preview with the host warning, confirmation, install, Activate now), in both
  * themes at phone and desktop widths. Proves nothing scrolls sideways, Install stays off until the warning is confirmed, the install call carries
- * the digest and `do-not-run`, and axe finds nothing at every step. Screenshots go to .e2e-out/plugins (see e2e-evidence.mjs).
+ * the digest and `do-not-run`, and axe finds nothing at every step. Then the requests from Nilo (review, Approve only after the confirmation),
+ * "Let Nilo create a plugin" (creator mode on, a draft, nothing sent) and Descobrir (an index through the sidecar, text only, Install fills the
+ * add flow). Screenshots go to .e2e-out/plugins (see e2e-evidence.mjs); the creator-mode ones start with 7-.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -35,14 +37,40 @@ const fetched = {
   },
 };
 
+const request = {
+  id: "1111222233334444", devName: "hello-tool", name: "hello-tool", version: "0.1.0", createdAt: 1, status: "pending", changed: false, replaces: null,
+  preview: { ...fetched.preview, name: "hello-tool", version: "0.1.0", capabilities: [], scripts: [], isolation: { enforced: ["files", "processes", "credentials"], notEnforced: ["network"] } },
+};
+const index = {
+  title: "Community", skipped: 1,
+  plugins: [
+    { name: "notes-tool", title: "Notes", description: "<img src=x onerror=alert(1)> Keeps notes.", author: "Ana", repository: "https://github.com/ana/notes", versions: [{ version: "1.2.0", source: { type: "npm" } }] },
+    { name: "git-thing", title: "Git thing", description: "From GitHub at a commit.", author: "Bo", repository: null, versions: [{ version: "0.1.0", source: { type: "git", url: "https://github.com/bo/thing", commit: "c".repeat(40), path: "pkg", repo: "bo/thing" } }] },
+  ],
+};
+
 function sidecar() {
   const calls = [];
+  let requests = [request];
+  let creator = false;
   let plugins = [view(), view({ id: "aaaaaaaaaaaaaaaa", name: "broken-one", version: "0.1.0", state: "failed", message: "Cannot find module 'left-pad'", capabilities: [] })];
   const json = (body, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
   const handle = (method, path, body) => {
     calls.push({ method, path, body });
     if (method === "GET" && path === "/cordis/status") return json({ state: "running", reason: null, restarts: 0, node: "22.20.0", hostLog: [], plugins: plugins.length });
     if (method === "GET" && path === "/cordis/plugins") return json({ plugins });
+    if (method === "GET" && path === "/cordis/requests") return json({ requests });
+    if (method === "GET" && path === "/cordis/creator") return json({ enabled: creator });
+    if (method === "POST" && path === "/cordis/creator") {
+      creator = body.enabled;
+      return json({ enabled: creator });
+    }
+    if (method === "POST" && path === `/cordis/requests/${request.id}/approve`) {
+      requests = [];
+      plugins = [...plugins, view({ id: "cccccccccccccccc", name: "hello-tool", version: "0.1.0", capabilities: [], madeByNilo: true })];
+      return json({ request: { ...request, status: "approved" }, plugin: plugins.at(-1) });
+    }
+    if (method === "POST" && path === "/cordis/index/fetch") return json(index);
     if (method === "GET" && path.endsWith("/logs")) return json({ lines: [`[plugin notes-tool] started`, `[plugin notes-tool] error: left-pad missing`] });
     if (method === "POST" && path === "/cordis/plugins/fetch") return json(fetched);
     if (method === "POST" && path === "/cordis/plugins/install") {
@@ -136,6 +164,44 @@ try {
       await dialog.getByRole("button", { name: "Done" }).click();
       await page.getByRole("dialog").waitFor({ state: "detached" });
       await check(`after add ${where}`);
+
+      // Requests from Nilo: the same review, Approve only after the confirmation, then it is in the list.
+      const requests = page.getByRole("region", { name: "Requests from Nilo" });
+      await requests.getByText("Nilo asks to install hello-tool 0.1.0").scrollIntoViewIfNeeded();
+      assert.equal(await requests.getByRole("button", { name: "Approve" }).isDisabled(), true, `${where}: Approve is off before the confirmation`);
+      await check(`requests ${where}`);
+      await shot("7-requests");
+      await requests.getByRole("checkbox", { name: "I read the warning and trust this plugin" }).check();
+      await requests.getByRole("button", { name: "Approve" }).click();
+      await requests.getByText(/No request waiting/).waitFor();
+      assert.ok(stub.calls.some((c) => c.path === `/cordis/requests/${request.id}/approve`), `${where}: approve sent`);
+      await page.getByRole("button", { name: "Details of hello-tool" }).waitFor();
+
+      // Let Nilo create a plugin: creator mode on, a draft to copy, a link to the chat, nothing sent.
+      await page.getByRole("button", { name: "Let Nilo create a plugin" }).click();
+      await page.getByText(/Creator mode is on/).waitFor();
+      assert.equal(await page.getByLabel("Draft for the chat").evaluate((el) => el.readOnly), true, `${where}: the draft is read-only`);
+      assert.equal(stub.calls.some((c) => c.path.startsWith("/execute")), false, `${where}: nothing is sent to the chat`);
+      await page.getByText(/Creator mode is on/).scrollIntoViewIfNeeded();
+      await check(`creator ${where}`);
+      await shot("7-creator");
+
+      // Descobrir: the index comes through the sidecar, its text is never markup, Install fills the add flow.
+      await page.getByRole("radio", { name: "Discover" }).click();
+      await page.getByText("Indexes are third-party; check the source before installing.").waitFor();
+      await page.getByLabel("Index address (https)").fill("https://example.com/index.json");
+      await page.getByRole("button", { name: "Load index" }).click();
+      const listed = page.getByRole("list", { name: "Plugins in the index" });
+      await listed.getByText("<img src=x onerror=alert(1)> Keeps notes.").waitFor();
+      assert.equal(await page.locator("main img, [role=list] img").count(), 0, `${where}: index text is not markup`);
+      assert.deepEqual(stub.calls.find((c) => c.path === "/cordis/index/fetch").body, { url: "https://example.com/index.json" }, `${where}: index url`);
+      await check(`discover ${where}`);
+      await shot("7-discover");
+      await listed.getByRole("button", { name: "Install git-thing" }).click();
+      const prefilled = page.getByRole("dialog", { name: "Add a plugin" });
+      assert.equal(await prefilled.getByLabel("Repository (owner/repo)").inputValue(), "bo/thing", `${where}: prefilled repo`);
+      await check(`discover install ${where}`);
+      await shot("7-discover-add");
       await context.close();
     }
   }

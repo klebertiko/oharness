@@ -277,12 +277,10 @@ def test_a_node_too_old_for_the_host_flags_is_a_clear_version_message(tmp_path):
 
 @pytest.mark.parametrize('error', [FileNotFoundError(2, 'missing'), PermissionError(13, 'denied')])
 def test_a_spawn_that_cannot_run_node_is_final(tmp_path, monkeypatch, error):
-    import cordis.supervisor as module
-
     def refuse(*args, **kwargs):
         raise error
 
-    monkeypatch.setattr(module.subprocess, 'Popen', refuse)
+    monkeypatch.setattr('cordis.supervisor.subprocess.Popen', refuse)
     supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v24.0.0'))
     supervisor.start()
     try:
@@ -296,12 +294,10 @@ def test_a_spawn_that_cannot_run_node_is_final(tmp_path, monkeypatch, error):
 def test_a_transient_spawn_error_is_retried_with_backoff(tmp_path, monkeypatch):
     import errno
 
-    import cordis.supervisor as module
-
     def busy(*args, **kwargs):
         raise OSError(errno.EMFILE, 'too many open files')
 
-    monkeypatch.setattr(module.subprocess, 'Popen', busy)
+    monkeypatch.setattr('cordis.supervisor.subprocess.Popen', busy)
     supervisor = fake_supervisor(tmp_path, fake_host(tmp_path, 'v24.0.0'), max_restarts=2)
     supervisor.start()
     try:

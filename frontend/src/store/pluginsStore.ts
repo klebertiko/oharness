@@ -1,7 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { pluginsApi, PluginsError } from "@/components/plugins/pluginsApi";
-import type { FetchRequest, FetchResult, HostStatus, PluginView } from "@/components/plugins/types";
+import type { FetchRequest, FetchResult, HostStatus, NiloRequest, PluginIndex, PluginView } from "@/components/plugins/types";
 
 export interface Problem {
   code: string;
@@ -21,6 +21,12 @@ interface Logs {
   error: Problem | null;
 }
 
+interface Discover {
+  phase: "idle" | "loading" | "ready" | "error";
+  index: PluginIndex | null;
+  error: Problem | null;
+}
+
 interface PluginsState {
   /** `loading` only until the first answer; after that a failed refresh keeps the list and sets `refreshError`. */
   phase: "loading" | "ready" | "error";
@@ -33,7 +39,18 @@ interface PluginsState {
   selectedId: string | null;
   logs: Logs;
   add: AddFlow;
+  /** Install requests from Nilo still waiting for the person. */
+  requests: NiloRequest[];
+  /** Creator mode (Nilo gets the cordis_plugins tool); null until the sidecar answered. */
+  creator: boolean | null;
+  requestError: Problem | null;
+  discover: Discover;
   load: () => Promise<void>;
+  loadNilo: () => Promise<void>;
+  approve: (id: string) => Promise<void>;
+  reject: (id: string) => Promise<void>;
+  setCreator: (on: boolean) => Promise<void>;
+  loadIndex: (url: string) => Promise<void>;
   toggle: (id: string, on: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
   select: (id: string | null) => void;
@@ -50,8 +67,10 @@ const problem = (error: unknown): Problem =>
 
 const emptyAdd = (): AddFlow => ({ step: "form", fetched: null, installed: null, error: null });
 const emptyLogs = (): Logs => ({ id: null, lines: [], loading: false, error: null });
+const emptyDiscover = (): Discover => ({ phase: "idle", index: null, error: null });
 const initial = () => ({
   phase: "loading" as const, status: null, plugins: [], refreshError: null, actionError: null, busy: {}, selectedId: null, logs: emptyLogs(), add: emptyAdd(),
+  requests: [] as NiloRequest[], creator: null as boolean | null, requestError: null, discover: emptyDiscover(),
 });
 
 let addRun = 0;
@@ -148,6 +167,63 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
     addRun += 1;
     set({ add: emptyAdd() });
   },
+  async loadNilo() {
+    // An older sidecar without these routes is not an error of the screen: the section just stays empty.
+    const [requests, creator] = await Promise.allSettled([pluginsApi.requests(), pluginsApi.creator()]);
+    set({
+      requests: requests.status === "fulfilled" ? requests.value.requests.filter((r) => r.status === "pending") : [],
+      creator: creator.status === "fulfilled" ? creator.value.enabled : null,
+    });
+  },
+
+  async approve(id) {
+    set((s) => ({ busy: { ...s.busy, [id]: true }, requestError: null }));
+    try {
+      const { plugin } = await pluginsApi.approve(id);
+      set((s) => ({ plugins: [...s.plugins.filter((p) => p.id !== plugin.id && p.name !== plugin.name), plugin] }));
+    } catch (error) {
+      set({ requestError: problem(error) });
+    } finally {
+      set((s) => ({ busy: { ...s.busy, [id]: false } }));
+    }
+    if (!get().requestError) await get().loadNilo();
+  },
+
+  async reject(id) {
+    set((s) => ({ busy: { ...s.busy, [id]: true }, requestError: null }));
+    try {
+      await pluginsApi.reject(id);
+      await get().loadNilo();
+    } catch (error) {
+      set({ requestError: problem(error) });
+    } finally {
+      set((s) => ({ busy: { ...s.busy, [id]: false } }));
+    }
+  },
+
+  async setCreator(on) {
+    set({ requestError: null });
+    try {
+      set({ creator: (await pluginsApi.setCreator(on)).enabled });
+    } catch (error) {
+      set({ requestError: problem(error) });
+    }
+  },
+
+  async loadIndex(raw) {
+    const url = raw.trim();
+    if (!/^https:\/\/[^\s/]+/i.test(url)) {
+      set({ discover: { phase: "error", index: null, error: { code: "invalid_url", message: "https" } } });
+      return;
+    }
+    set({ discover: { phase: "loading", index: null, error: null } });
+    try {
+      set({ discover: { phase: "ready", index: await pluginsApi.fetchIndex(url), error: null } });
+    } catch (error) {
+      set({ discover: { phase: "error", index: null, error: problem(error) } });
+    }
+  },
+
   clearActionError: () => set({ actionError: null }),
   reset: () => set(initial()),
 }));

@@ -6,9 +6,10 @@ import { usePluginsStore } from "@/store/pluginsStore";
 import { AddForm } from "./AddForm";
 import { usePresent } from "./present";
 import { PreviewStep } from "./PreviewStep";
+import type { FetchRequest } from "./types";
 
 /** The add flow as one sheet: where from, then review and confirm, then installed. Closing it at any step drops what was downloaded for it. */
-export function AddPlugin({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddPlugin({ open, onClose, initial = null }: { open: boolean; onClose: () => void; initial?: FetchRequest | null }) {
   const { t } = useI18n();
   const { explain } = usePresent();
   const add = usePluginsStore((s) => s.add);
@@ -33,7 +34,7 @@ export function AddPlugin({ open, onClose }: { open: boolean; onClose: () => voi
                 {explain(add.error)}
               </Notice>
             )}
-            <AddForm onSubmit={(request) => void fetchPackage(request)} onCancel={close} />
+            <AddForm initial={initial} onSubmit={(request) => void fetchPackage(request)} onCancel={close} />
           </div>
         )}
         {add.step === "fetching" && (

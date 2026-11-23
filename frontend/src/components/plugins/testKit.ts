@@ -39,3 +39,18 @@ export function useSidecarStub() {
     delete (window as { __OH_HUMAN__?: string }).__OH_HUMAN__;
   });
 }
+
+export const niloRequest = (over: Record<string, unknown> = {}) => ({
+  id: "1111222233334444", devName: "hello-tool", name: "hello-tool", version: "0.1.0", createdAt: 1, status: "pending", changed: false, replaces: null,
+  preview: { ...preview().preview, name: "hello-tool", version: "0.1.0", capabilities: [], scripts: [], isolation: { enforced: ["files", "processes", "credentials"], notEnforced: ["network"] } },
+  ...over,
+});
+
+export const pluginIndex = {
+  title: "Community",
+  skipped: 1,
+  plugins: [
+    { name: "notes-tool", title: "Notes", description: "<b>Keeps</b> notes.", author: "Ana", repository: "https://github.com/ana/notes", versions: [{ version: "1.2.0", source: { type: "npm" } }] },
+    { name: "git-thing", title: "Git thing", description: "From GitHub.", author: "Bo", repository: null, versions: [{ version: "0.1.0", source: { type: "git", url: "https://github.com/bo/thing", commit: "c".repeat(40), path: "pkg", repo: "bo/thing" } }] },
+  ],
+};

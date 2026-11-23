@@ -39,6 +39,7 @@ from sandbox.permission import effective_mode
 from sandbox.permission_store import get_thread_mode, is_workspace_trusted
 from sandbox.plan_store import propose_plan
 from sandbox.schemas import ToolsRequest
+from cordis import creator as cordis_creator
 
 router = APIRouter(prefix="/execute", tags=["execution"])
 
@@ -638,6 +639,8 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         tool_options = ToolsRequest.model_validate(body.tools) if body.tools is not None else None
     except ValidationError:
         return JSONResponse({'error': 'invalid_argument'}, status_code=400)
+    if tool_options is None and cordis_creator.active_service() is not None:
+        tool_options = ToolsRequest()  # creator mode (ADR 0071): a broker that offers only the cordis_plugins tool
     try:
         run_budget = parse_run_budget(body.max_tokens)
     except ValueError:

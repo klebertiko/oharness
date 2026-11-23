@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Notice } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { Checkbox } from "./Checkbox";
@@ -10,15 +10,22 @@ import type { FetchResult } from "./types";
  * What the person confirms: name, version, source, runtime, what each capability grants, the scripts that will not run and the host's own
  * warning in the current language. Install stays off until the box is ticked; the digest of exactly this warning and these files goes with it.
  */
-export function PreviewStep({ fetched, installing, error, onBack, onInstall }: { fetched: FetchResult; installing: boolean; error: string | null; onBack: () => void; onInstall: () => void }) {
+export function PreviewStep({ fetched, installing, error, onBack, onInstall, confirmLabel, backLabel, heading, locked = false }: {
+  fetched: FetchResult; installing: boolean; error: string | null; onBack: () => void; onInstall: () => void;
+  /** A request from Nilo reuses this review with Approve/Reject and its own heading. */
+  confirmLabel?: string; backLabel?: string; heading?: string;
+  /** Both actions off (no human credential, or a request whose files changed). */
+  locked?: boolean;
+}) {
   const { t, locale } = useI18n();
   const { capabilityLabel, capabilityGrant, source } = usePresent();
   const [trusted, setTrusted] = useState(false);
+  const uid = useId();
   const p = fetched.preview;
   const limits = (list: string[]) => (list.length ? list.map(capabilityLabel).join(", ") : "–");
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="t-heading text-ink">{t("plugins.preview.title")}</h3>
+      <h3 className="t-heading text-ink">{heading ?? t("plugins.preview.title")}</h3>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-body">
         <dt className="text-ink-mute">{t("plugins.preview.name")}</dt>
         <dd className="font-mono text-code text-ink">
@@ -29,8 +36,8 @@ export function PreviewStep({ fetched, installing, error, onBack, onInstall }: {
         <dt className="text-ink-mute">{t("plugins.preview.runtime")}</dt>
         <dd className="text-ink">{p.runtime === "in-process" ? t("plugins.runtime.in-process") : t("plugins.runtime.isolated")}</dd>
       </dl>
-      <section aria-labelledby="plugins-preview-caps" className="flex flex-col gap-1">
-        <h4 id="plugins-preview-caps" className="text-body font-medium text-ink">
+      <section aria-labelledby={`${uid}-caps`} className="flex flex-col gap-1">
+        <h4 id={`${uid}-caps`} className="text-body font-medium text-ink">
           {t("plugins.preview.capabilities")}
         </h4>
         {p.capabilities.length === 0 ? (
@@ -48,8 +55,8 @@ export function PreviewStep({ fetched, installing, error, onBack, onInstall }: {
       </section>
       {p.scripts.length > 0 && <Notice tone="info">{t("plugins.preview.scripts", { list: p.scripts.join(", ") })}</Notice>}
       {p.unmetDependencies.length > 0 && <Notice tone="warn">{t("plugins.preview.unmet", { list: p.unmetDependencies.join(", ") })}</Notice>}
-      <section aria-labelledby="plugins-preview-warning" className="flex flex-col gap-1 rounded-control border border-warn p-3">
-        <h4 id="plugins-preview-warning" className="text-body font-medium text-warn-text">
+      <section aria-labelledby={`${uid}-warning`} className="flex flex-col gap-1 rounded-control border border-warn p-3">
+        <h4 id={`${uid}-warning`} className="text-body font-medium text-warn-text">
           {t("plugins.preview.hostWarning")}
         </h4>
         <p className="text-body text-ink-dim">{p.warning[locale] ?? p.warning.en}</p>
@@ -59,11 +66,11 @@ export function PreviewStep({ fetched, installing, error, onBack, onInstall }: {
       </Checkbox>
       {error && <Notice tone="fault" title={t("plugins.install.failed")}>{error}</Notice>}
       <div className="flex justify-end gap-2">
-        <Button onClick={onBack} disabled={installing}>
-          {t("plugins.back")}
+        <Button onClick={onBack} disabled={installing || locked}>
+          {backLabel ?? t("plugins.back")}
         </Button>
-        <Button variant="primary" disabled={!trusted} loading={installing} onClick={onInstall}>
-          {t("plugins.install")}
+        <Button variant="primary" disabled={!trusted || locked} loading={installing} onClick={onInstall}>
+          {confirmLabel ?? t("plugins.install")}
         </Button>
       </div>
     </div>
