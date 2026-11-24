@@ -24,6 +24,7 @@ from factory.inbox_router import router as factory_inbox_router
 from factory.memory_router import router as factory_memory_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
+from nilo.drafts_router import router as nilo_drafts_router
 from nilo.memory_router import router as nilo_memory_router
 from nilo.tasks_router import router as nilo_tasks_router
 from secret_store.factory import build_secrets_store
@@ -140,6 +141,7 @@ app.include_router(factory_router)
 app.include_router(factory_definition_router)
 app.include_router(factory_memory_router)
 app.include_router(nilo_memory_router)
+app.include_router(nilo_drafts_router)
 app.include_router(nilo_tasks_router)
 
 
