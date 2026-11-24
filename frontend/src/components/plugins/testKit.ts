@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, vi } from "vitest";
+import { fetchPolling } from "@/store/pluginsStore";
 import type { PluginView } from "./types";
 
 export type Reply = { status?: number; body?: unknown; raw?: BodyInit; headers?: Record<string, string> };
-export const calls: { method: string; path: string; body?: unknown; headers: Record<string, string> }[] = [];
+export const calls: { method: string; path: string; body?: unknown; headers: Record<string, string>; signal?: AbortSignal | null }[] = [];
 export const routes = new Map<string, Reply>();
 
 export const plugin = (over: Partial<PluginView> = {}): PluginView => ({
@@ -19,15 +20,29 @@ export const preview = (over: Record<string, unknown> = {}) => ({
   },
 });
 
+export const FETCH_ID = "fedcba9876543210";
+const STEPS = ["downloading", "verifying", "extracting", "preview-ready"].map((step, at) => ({ step, at }));
+/** The answer of `POST /cordis/plugins/fetch` with `live: true`, and of `GET /cordis/plugins/fetch/{id}` while it runs. */
+export const runningJob = (over: Record<string, unknown> = {}) => ({ fetchId: FETCH_ID, state: "running", events: [], ...over });
+/** The finished download: the preview is inside `result`. */
+export const readyJob = (previewOver: Record<string, unknown> = {}) => ({ fetchId: FETCH_ID, state: "ready", events: STEPS, result: preview(previewOver) });
+/** Serves the live fetch: the POST starts it, the first GET already finds it ready. */
+export function serveFetch(previewOver: Record<string, unknown> = {}) {
+  routes.set("POST /cordis/plugins/fetch", { body: runningJob() });
+  routes.set(`GET /cordis/plugins/fetch/${FETCH_ID}`, { body: readyJob(previewOver) });
+  routes.set(`DELETE /cordis/plugins/fetch/${FETCH_ID}`, { body: { fetchId: FETCH_ID, state: "cancelled", events: [] } });
+}
+
 /** Stubs `fetch` with a route table keyed `METHOD /path`; unknown routes answer 404. Call inside a describe body. */
 export function useSidecarStub() {
   beforeEach(() => {
     calls.length = 0;
     routes.clear();
+    fetchPolling.intervalMs = 5;
     vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
       const u = new URL(url);
       const key = `${init.method ?? "GET"} ${u.pathname}`;
-      calls.push({ method: init.method ?? "GET", path: u.pathname + u.search, body: init.body ? JSON.parse(String(init.body)) : undefined, headers: (init.headers ?? {}) as Record<string, string> });
+      calls.push({ method: init.method ?? "GET", path: u.pathname + u.search, body: init.body ? JSON.parse(String(init.body)) : undefined, headers: (init.headers ?? {}) as Record<string, string>, signal: init.signal });
       const reply = routes.get(key);
       if (!reply) return new Response("{}", { status: 404 });
       if (reply.raw !== undefined) return new Response(reply.raw, { status: reply.status ?? 200, headers: reply.headers });
@@ -46,11 +61,14 @@ export const niloRequest = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+export const tarballEntry = { name: "tar-thing", title: "Tar thing", description: "From a tarball.", author: "Cy", repository: null, versions: [{ version: "2.0.0", source: { type: "tarball", url: "https://example.com/tar-thing-2.0.0.tgz", integrity: "sha512-AAAA" } }] };
+
 export const pluginIndex = {
   title: "Community",
   skipped: 1,
   plugins: [
     { name: "notes-tool", title: "Notes", description: "<b>Keeps</b> notes.", author: "Ana", repository: "https://github.com/ana/notes", versions: [{ version: "1.2.0", source: { type: "npm" } }] },
     { name: "git-thing", title: "Git thing", description: "From GitHub.", author: "Bo", repository: null, versions: [{ version: "0.1.0", source: { type: "git", url: "https://github.com/bo/thing", commit: "c".repeat(40), path: "pkg", repo: "bo/thing" } }] },
+    tarballEntry,
   ],
 };

@@ -1,38 +1,48 @@
 "use client";
 import Link from "next/link";
-import { Check, Copy, MessageSquare, Sparkles } from "lucide-react";
-import { useId, useState } from "react";
+import { Check, MessageSquare, Sparkles } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
+import { NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
+import { NEW_DRAFT_KEY, useComposerDraftStore } from "@/store/composerDraftStore";
 import { usePluginsStore } from "@/store/pluginsStore";
+import { useThreadStore } from "@/store/threadStore";
 
 /**
- * "Let Nilo create a plugin": turns creator mode on (Nilo gets the cordis_plugins tool in chat) and hands the person a draft to paste in the
- * chat. Nothing is sent for them: the chat has no way to receive a draft from here, so the draft is copied and the chat is one link away.
+ * "Let Nilo create a plugin": turns creator mode on for the active chat thread (Nilo gets the cordis_plugins tool in that thread only).
+ * Nothing is sent and the composer's draft is not touched; with no chat open yet, one is created and selected, and the unsent draft of the
+ * new chat goes with it. The chat is one link away.
  */
 export function CreatorCard({ canChange }: { canChange: boolean }) {
   const { t } = useI18n();
   const titleId = useId();
-  const draftId = useId();
-  const creator = usePluginsStore((s) => s.creator);
+  const activeThreadId = useThreadStore((s) => s.activeThreadId);
+  const on = usePluginsStore((s) => (activeThreadId ? s.creatorByThread[activeThreadId] === true : false));
+  const loadCreator = usePluginsStore((s) => s.loadCreator);
   const setCreator = usePluginsStore((s) => s.setCreator);
-  const [copied, setCopied] = useState(false);
   const [working, setWorking] = useState(false);
-  const draft = t("plugins.creator.draftText");
 
-  if (creator === null) return null; // a sidecar without creator mode
-  const toggle = async (on: boolean) => {
+  useEffect(() => {
+    if (activeThreadId) void loadCreator(activeThreadId);
+  }, [activeThreadId, loadCreator]);
+
+  const start = async () => {
     setWorking(true);
-    await setCreator(on);
+    let threadId = useThreadStore.getState().activeThreadId;
+    if (!threadId) {
+      threadId = useThreadStore.getState().createThread(t("plugins.creator.threadTitle"));
+      useChatModelStore.getState().adopt(NEW_CHAT_KEY, threadId);
+      useComposerDraftStore.getState().moveDraft(NEW_DRAFT_KEY, threadId);
+    }
+    await setCreator(threadId, true);
     setWorking(false);
   };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(draft);
-      setCopied(true);
-    } catch {
-      setCopied(false); // the text stays selectable in the box
-    }
+  const stop = async () => {
+    if (!activeThreadId) return;
+    setWorking(true);
+    await setCreator(activeThreadId, false);
+    setWorking(false);
   };
 
   return (
@@ -42,9 +52,9 @@ export function CreatorCard({ canChange }: { canChange: boolean }) {
         {t("plugins.creator.title")}
       </h2>
       <p className="text-body text-ink-dim">{t("plugins.creator.body")}</p>
-      {!creator ? (
+      {!on ? (
         <div>
-          <Button variant="primary" disabled={!canChange} loading={working} onClick={() => void toggle(true)}>
+          <Button variant="primary" disabled={!canChange} loading={working} onClick={() => void start()}>
             {t("plugins.creator.start")}
           </Button>
         </div>
@@ -54,21 +64,14 @@ export function CreatorCard({ canChange }: { canChange: boolean }) {
             <Check size={14} aria-hidden />
             {t("plugins.creator.on")}
           </p>
-          <label htmlFor={draftId} className="text-body font-medium text-ink">
-            {t("plugins.creator.draft")}
-          </label>
-          <textarea id={draftId} readOnly rows={3} value={draft} className="w-full resize-none rounded-control border border-line-strong bg-sub-200 p-2 text-body text-ink" />
           <p className="text-meta text-ink-mute">{t("plugins.creator.hint")}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" icon={copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} onClick={() => void copy()}>
-              {copied ? t("plugins.creator.copied") : t("plugins.creator.copy")}
-            </Button>
             <Link href="/" className="inline-flex min-h-control-sm items-center gap-1 rounded-control px-2 text-body font-medium text-signal-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-(--signal)">
               <MessageSquare size={14} aria-hidden />
               {t("plugins.creator.openChat")}
             </Link>
             <span className="flex-1" />
-            <Button size="sm" variant="ghost" disabled={!canChange} loading={working} onClick={() => void toggle(false)}>
+            <Button size="sm" variant="ghost" disabled={!canChange} loading={working} onClick={() => void stop()}>
               {t("plugins.creator.stop")}
             </Button>
           </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pluginsApi, PluginsError } from "./pluginsApi";
-import { calls, plugin, preview, routes, useSidecarStub } from "./testKit";
+import { calls, plugin, routes, runningJob, useSidecarStub } from "./testKit";
 
 describe("pluginsApi", () => {
   useSidecarStub();
@@ -15,13 +15,36 @@ describe("pluginsApi", () => {
 
   it("sends the human credential on changes and the exact body on fetch and install", async () => {
     window.__OH_HUMAN__ = "h-token";
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    routes.set("POST /cordis/plugins/fetch", { body: runningJob() });
     routes.set("POST /cordis/plugins/install", { body: plugin() });
-    await pluginsApi.fetchPackage({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
-    await pluginsApi.install({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run" });
+    await pluginsApi.startFetch({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
+    await pluginsApi.install({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run", scripts_accepted: ["postinstall"] });
     expect(calls[0].headers["x-oharness-human"]).toBe("h-token");
-    expect(calls[0].body).toEqual({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
-    expect(calls[1].body).toEqual({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run" });
+    expect(calls[0].body).toEqual({ kind: "npm", spec: "notes-tool", version: "1.2.0", live: true });
+    expect(calls[1].body).toEqual({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run", scripts_accepted: ["postinstall"] });
+  });
+
+  it("reads, cancels and exports with the human credential: job, DELETE, index.json, creator by thread", async () => {
+    window.__OH_HUMAN__ = "h-token";
+    routes.set("GET /cordis/plugins/fetch/fedcba9876543210", { body: runningJob() });
+    routes.set("DELETE /cordis/plugins/fetch/fedcba9876543210", { body: runningJob({ state: "cancelled" }) });
+    routes.set("GET /cordis/plugins/0123456789abcdef/export/index", { raw: "{}", headers: { "content-disposition": 'attachment; filename="index.json"' } });
+    routes.set("GET /cordis/creator", { body: { threadId: "t-1", enabled: true } });
+    routes.set("POST /cordis/creator", { body: { threadId: "t-1", enabled: false } });
+    await pluginsApi.fetchStatus("fedcba9876543210");
+    expect((await pluginsApi.cancelFetch("fedcba9876543210")).state).toBe("cancelled");
+    expect((await pluginsApi.exportIndex("0123456789abcdef")).filename).toBe("index.json");
+    expect((await pluginsApi.creator("t-1")).enabled).toBe(true);
+    await pluginsApi.setCreator("t-1", false);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      "GET /cordis/plugins/fetch/fedcba9876543210",
+      "DELETE /cordis/plugins/fetch/fedcba9876543210",
+      "GET /cordis/plugins/0123456789abcdef/export/index",
+      "GET /cordis/creator?thread_id=t-1",
+      "POST /cordis/creator",
+    ]);
+    expect(calls.every((c) => c.headers["x-oharness-human"] === "h-token")).toBe(true);
+    expect(calls[4].body).toEqual({ thread_id: "t-1", enabled: false });
   });
 
   it("turns 403 human_only and 503 cordis_unavailable into typed errors", async () => {

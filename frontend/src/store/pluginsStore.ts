@@ -1,7 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { pluginsApi, PluginsError } from "@/components/plugins/pluginsApi";
-import type { FetchRequest, FetchResult, HostStatus, NiloRequest, PluginIndex, PluginView } from "@/components/plugins/types";
+import type { FetchEvent, FetchRequest, FetchResult, HostStatus, NiloRequest, PluginIndex, PluginView } from "@/components/plugins/types";
 
 export interface Problem {
   code: string;
@@ -10,10 +10,26 @@ export interface Problem {
 type AddStep = "form" | "fetching" | "preview" | "installing" | "done";
 interface AddFlow {
   step: AddStep;
+  /** The sidecar's job for this download; set as soon as it answers. */
+  fetchId: string | null;
+  /** The steps the sidecar reported, in order; they stay visible through the preview and the install. */
+  events: FetchEvent[];
   fetched: FetchResult | null;
   installed: PluginView | null;
   error: Problem | null;
+  /** Set when the person chose not to install: the form says that nothing was installed. */
+  notice: "declined" | null;
 }
+export type ScriptDecision = "accept" | "decline";
+/** What the person decided for each lifecycle script of ONE package: `key` is the fetch and the digest of that review. */
+interface ScriptDecisions {
+  key: string | null;
+  decisions: Record<string, ScriptDecision>;
+}
+/** How often a running download is read; the tests shorten it. */
+export const fetchPolling = { intervalMs: 400 };
+export const scriptKey = (fetchId: string, digest: string): string => `${fetchId}:${digest}`;
+
 interface Logs {
   id: string | null;
   lines: string[];
@@ -39,17 +55,20 @@ interface PluginsState {
   selectedId: string | null;
   logs: Logs;
   add: AddFlow;
+  scripts: ScriptDecisions;
   /** Install requests from Nilo still waiting for the person. */
   requests: NiloRequest[];
-  /** Creator mode (Nilo gets the cordis_plugins tool); null until the sidecar answered. */
-  creator: boolean | null;
+  /** Creator mode by chat thread: Nilo gets the cordis_plugins tool only in the threads where the person turned it on. */
+  creatorByThread: Record<string, boolean>;
   requestError: Problem | null;
   discover: Discover;
   load: () => Promise<void>;
   loadNilo: () => Promise<void>;
   approve: (id: string) => Promise<void>;
   reject: (id: string) => Promise<void>;
-  setCreator: (on: boolean) => Promise<void>;
+  loadCreator: (threadId: string) => Promise<void>;
+  setCreator: (threadId: string, on: boolean) => Promise<void>;
+  decideScript: (fetchId: string, digest: string, script: string, decision: ScriptDecision) => void;
   loadIndex: (url: string) => Promise<void>;
   toggle: (id: string, on: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -58,6 +77,7 @@ interface PluginsState {
   fetchPackage: (request: FetchRequest) => Promise<void>;
   install: (accepted: boolean) => Promise<void>;
   resetAdd: () => void;
+  declineAdd: () => Promise<void>;
   clearActionError: () => void;
   reset: () => void;
 }
@@ -65,16 +85,26 @@ interface PluginsState {
 const problem = (error: unknown): Problem =>
   error instanceof PluginsError ? { code: error.code, message: error.message } : { code: "unknown", message: error instanceof Error ? error.message : String(error) };
 
-const emptyAdd = (): AddFlow => ({ step: "form", fetched: null, installed: null, error: null });
+const emptyAdd = (): AddFlow => ({ step: "form", fetchId: null, events: [], fetched: null, installed: null, error: null, notice: null });
+const emptyScripts = (): ScriptDecisions => ({ key: null, decisions: {} });
 const emptyLogs = (): Logs => ({ id: null, lines: [], loading: false, error: null });
 const emptyDiscover = (): Discover => ({ phase: "idle", index: null, error: null });
 const initial = () => ({
   phase: "loading" as const, status: null, plugins: [], refreshError: null, actionError: null, busy: {}, selectedId: null, logs: emptyLogs(), add: emptyAdd(),
-  requests: [] as NiloRequest[], creator: null as boolean | null, requestError: null, discover: emptyDiscover(),
+  scripts: emptyScripts(), requests: [] as NiloRequest[], creatorByThread: {} as Record<string, boolean>, requestError: null, discover: emptyDiscover(),
 });
 
 let addRun = 0;
-const unavailable =(error: unknown): boolean => error instanceof PluginsError && error.code === "cordis_unavailable";
+let addAbort: AbortController | null = null;
+const unavailable = (error: unknown): boolean => error instanceof PluginsError && error.code === "cordis_unavailable";
+const nap = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** True when every lifecycle script of this review was accepted (a package without scripts has nothing to decide). */
+const scriptsAccepted = (scripts: ScriptDecisions, fetchId: string, digest: string, list: string[]): boolean =>
+  list.length === 0 || (scripts.key === scriptKey(fetchId, digest) && list.every((name) => scripts.decisions[name] === "accept"));
+/** Asks the sidecar to stop a download and delete what it staged; the person has already left, so a failure here changes nothing. */
+const discardFetch = (fetchId: string) => {
+  void pluginsApi.cancelFetch(fetchId).catch(() => undefined);
+};
 
 export const usePluginsStore = create<PluginsState>((set, get) => ({
   ...initial(),
@@ -134,49 +164,100 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
 
   async fetchPackage(request) {
     const mine = ++addRun;
-    set({ add: { ...emptyAdd(), step: "fetching" } });
+    addAbort?.abort();
+    const abort = new AbortController();
+    addAbort = abort;
+    set({ add: { ...emptyAdd(), step: "fetching" }, scripts: emptyScripts() });
+    const current = () => mine === addRun;
     try {
-      const fetched = await pluginsApi.fetchPackage(request);
-      if (mine === addRun) set({ add: { ...emptyAdd(), step: "preview", fetched } });
+      let job = await pluginsApi.startFetch(request);
+      // The person cancelled while the sidecar was answering: what it staged for this download goes with it.
+      if (!current()) {
+        discardFetch(job.fetchId);
+        return;
+      }
+      set((s) => ({ add: { ...s.add, fetchId: job.fetchId, events: job.events } }));
+      while (job.state === "running") {
+        await nap(fetchPolling.intervalMs);
+        if (!current()) return;
+        job = await pluginsApi.fetchStatus(job.fetchId, abort.signal);
+        if (!current()) return;
+        set((s) => ({ add: { ...s.add, events: job.events } }));
+      }
+      if (job.state === "ready" && job.result) {
+        const fetched = job.result;
+        set((s) => ({ add: { ...s.add, step: "preview", fetched } }));
+      } else if (job.state === "cancelled") set({ add: emptyAdd() });
+      else set({ add: { ...emptyAdd(), error: job.error ?? { code: "fetch_failed", message: "" } } });
     } catch (error) {
-      if (mine === addRun) set({ add: { ...emptyAdd(), error: problem(error) } });
+      if (current() && !abort.signal.aborted) set({ add: { ...emptyAdd(), error: problem(error) } });
     }
   },
 
+  decideScript(fetchId, digest, script, decision) {
+    const key = scriptKey(fetchId, digest);
+    // Decisions belong to one review: another fetch or another digest starts from nothing.
+    set((s) => ({ scripts: { key, decisions: { ...(s.scripts.key === key ? s.scripts.decisions : {}), [script]: decision } } }));
+  },
+
   async install(accepted) {
-    const { add } = get();
-    // Nothing is sent without the person's confirmation of the warning.
+    const { add, scripts } = get();
+    // Nothing is sent without the person's confirmation of the warning and a decision for each script.
     if (!accepted || add.step !== "preview" || !add.fetched) return;
     const { fetched } = add;
-    set({ add: { ...add, step: "installing", error: null } });
+    const list = fetched.preview.scripts;
+    if (!scriptsAccepted(scripts, fetched.fetchId, fetched.preview.digest, list)) return;
+    set({ add: { ...add, step: "installing", error: null, events: [...add.events, { step: "installing", at: Date.now() / 1000 }] } });
     try {
       const installed = await pluginsApi.install({
         fetch_id: fetched.fetchId,
         accept: true,
         digest: fetched.preview.digest,
-        ...(fetched.preview.scripts.length > 0 ? { scripts: "do-not-run" as const } : {}),
+        ...(list.length > 0 ? { scripts: "do-not-run" as const, scripts_accepted: list } : {}),
       });
-      set((s) => ({ add: { ...emptyAdd(), step: "done", fetched, installed }, plugins: [...s.plugins.filter((p) => p.id !== installed.id && p.name !== installed.name), installed] }));
+      // The log's last word comes from the sidecar (installing, done); if it cannot be read the log keeps what it has.
+      const last = await pluginsApi.fetchStatus(fetched.fetchId).catch(() => null);
+      set((s) => ({
+        add: { ...emptyAdd(), step: "done", fetchId: fetched.fetchId, events: last ? last.events : [...add.events, { step: "done", at: Date.now() / 1000 }], fetched, installed },
+        plugins: [...s.plugins.filter((p) => p.id !== installed.id && p.name !== installed.name), installed],
+      }));
     } catch (error) {
       set({ add: { ...add, step: "preview", error: problem(error) } });
     }
   },
 
-  // Cancelling while the download runs drops its answer: the staged files are collected by the sidecar and nothing is installed.
+  // Cancelling stops the polling and asks the sidecar to stop the download and delete what it staged (or to drop a preview nobody will install).
   resetAdd: () => {
+    const { add } = get();
     addRun += 1;
-    set({ add: emptyAdd() });
+    addAbort?.abort();
+    addAbort = null;
+    if (add.fetchId && (add.step === "fetching" || add.step === "preview")) discardFetch(add.fetchId);
+    set({ add: emptyAdd(), scripts: emptyScripts() });
   },
+
+  async declineAdd() {
+    const { add } = get();
+    addRun += 1;
+    addAbort?.abort();
+    addAbort = null;
+    set({ add: { ...emptyAdd(), notice: "declined" }, scripts: emptyScripts() });
+    if (add.fetchId) await pluginsApi.cancelFetch(add.fetchId).catch(() => undefined);
+  },
+
   async loadNilo() {
-    // An older sidecar without these routes is not an error of the screen: the section just stays empty.
-    const [requests, creator] = await Promise.allSettled([pluginsApi.requests(), pluginsApi.creator()]);
-    set({
-      requests: requests.status === "fulfilled" ? requests.value.requests.filter((r) => r.status === "pending") : [],
-      creator: creator.status === "fulfilled" ? creator.value.enabled : null,
-    });
+    // An older sidecar without this route is not an error of the screen: the section just stays empty.
+    const requests = await pluginsApi.requests().then(
+      (r) => r.requests.filter((request) => request.status === "pending"),
+      () => [] as NiloRequest[],
+    );
+    set({ requests });
   },
 
   async approve(id) {
+    // The approval has no body: the sidecar installs the request's own preview, so the lock on its scripts is held here.
+    const request = get().requests.find((r) => r.id === id);
+    if (request && !scriptsAccepted(get().scripts, request.id, request.preview.digest, request.preview.scripts)) return;
     set((s) => ({ busy: { ...s.busy, [id]: true }, requestError: null }));
     try {
       const { plugin } = await pluginsApi.approve(id);
@@ -201,10 +282,17 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
     }
   },
 
-  async setCreator(on) {
+  async loadCreator(threadId) {
+    // A sidecar without creator mode just leaves the thread off.
+    const answer = await pluginsApi.creator(threadId).catch(() => null);
+    if (answer) set((s) => ({ creatorByThread: { ...s.creatorByThread, [threadId]: answer.enabled } }));
+  },
+
+  async setCreator(threadId, on) {
     set({ requestError: null });
     try {
-      set({ creator: (await pluginsApi.setCreator(on)).enabled });
+      const answer = await pluginsApi.setCreator(threadId, on);
+      set((s) => ({ creatorByThread: { ...s.creatorByThread, [threadId]: answer.enabled } }));
     } catch (error) {
       set({ requestError: problem(error) });
     }
@@ -225,5 +313,10 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
   },
 
   clearActionError: () => set({ actionError: null }),
-  reset: () => set(initial()),
+  reset: () => {
+    addRun += 1;
+    addAbort?.abort();
+    addAbort = null;
+    set(initial());
+  },
 }));

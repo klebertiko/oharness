@@ -46,9 +46,11 @@ export function PluginsScreen() {
     setPrefill(null);
     setAdding(true);
   };
-  const installFromIndex = (request: FetchRequest) => {
+  // Inspect opens the add sheet and starts the fetch with the entry's source: the form is skipped, the review and its confirmation are not.
+  const inspectFromIndex = (request: FetchRequest) => {
     setPrefill(request);
     setAdding(true);
+    void usePluginsStore.getState().fetchPackage(request);
   };
 
   return (
@@ -81,7 +83,7 @@ export function PluginsScreen() {
               { value: "discover", label: t("plugins.view.discover") },
             ]}
           />
-          {view === "discover" && <DiscoverTab canChange={canChange} onInstall={installFromIndex} />}
+          {view === "discover" && <DiscoverTab canChange={canChange} onInspect={inspectFromIndex} />}
           {view === "installed" && (
             <>
               <CreatorCard canChange={canChange} />

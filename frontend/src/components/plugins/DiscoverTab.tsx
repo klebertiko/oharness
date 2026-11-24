@@ -1,5 +1,5 @@
 "use client";
-import { Download, ExternalLink } from "lucide-react";
+import { ExternalLink, Search } from "lucide-react";
 import { useState } from "react";
 import { Button, EmptyState, Input, Notice, SkeletonRows } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
@@ -7,18 +7,20 @@ import { usePluginsStore } from "@/store/pluginsStore";
 import { usePresent } from "./present";
 import type { FetchRequest, IndexPlugin } from "./types";
 
-/** The add-flow request for the newest version of an index entry: npm by exact version, or GitHub at the full commit. */
+/** The add-flow request for the newest version of an index entry: npm by exact version, a tarball with its hash, or GitHub at the full commit. */
 export function sourceOf(plugin: IndexPlugin): FetchRequest {
   const { version, source } = plugin.versions[0];
   if (source.type === "npm") return { kind: "npm", spec: plugin.name, version };
+  if (source.type === "tarball") return { kind: "tarball", spec: source.url, integrity: source.integrity };
   return { kind: "github", spec: source.repo, commit: source.commit, ...(source.path ? { subdir: source.path } : {}) };
 }
 
 /**
  * Descobrir: a static plugin index (format 1) from an https address the person gives. The sidecar fetches and checks it; this only shows its
- * text (never as HTML) under a fixed trust notice, and Install fills the usual add flow, so the review and the confirmation still come first.
+ * text (never as HTML) under a fixed trust notice that stays at the top and cannot be collapsed. Inspect starts the usual add flow with the entry's
+ * source, so the same review and the same confirmation come first; nothing is installed from here.
  */
-export function DiscoverTab({ canChange, onInstall }: { canChange: boolean; onInstall: (request: FetchRequest) => void }) {
+export function DiscoverTab({ canChange, onInspect }: { canChange: boolean; onInspect: (request: FetchRequest) => void }) {
   const { t } = useI18n();
   const { explain } = usePresent();
   const discover = usePluginsStore((s) => s.discover);
@@ -32,7 +34,9 @@ export function DiscoverTab({ canChange, onInstall }: { canChange: boolean; onIn
   const invalid = discover.error?.code === "invalid_url";
   return (
     <div className="flex flex-col gap-3">
-      <Notice tone="warn">{t("plugins.discover.trust")}</Notice>
+      <div data-discover-notice className="sticky top-0 z-10 -mx-1 bg-sub-000 px-1 pb-1">
+        <Notice tone="warn">{t("plugins.discover.trust")}</Notice>
+      </div>
       <p className="text-body text-ink-dim">{t("plugins.discover.intro")}</p>
       <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-2">
         <div className="min-w-0 flex-1 basis-64">
@@ -63,8 +67,8 @@ export function DiscoverTab({ canChange, onInstall }: { canChange: boolean; onIn
                       {plugin.name} {plugin.versions[0].version}
                     </span>
                     <span className="flex-1" />
-                    <Button size="sm" variant="primary" icon={<Download size={14} aria-hidden />} disabled={!canChange} aria-label={t("plugins.discover.installNamed", { name: plugin.name })} onClick={() => onInstall(sourceOf(plugin))}>
-                      {t("plugins.discover.install")}
+                    <Button size="sm" variant="primary" icon={<Search size={14} aria-hidden />} disabled={!canChange} aria-label={t("plugins.discover.inspectNamed", { name: plugin.name })} onClick={() => onInspect(sourceOf(plugin))}>
+                      {t("plugins.discover.inspect")}
                     </Button>
                   </div>
                   {plugin.description && <p className="break-words text-body text-ink-dim">{plugin.description}</p>}

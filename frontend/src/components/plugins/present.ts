@@ -28,6 +28,32 @@ export const HOST_MARK: Record<HostState, StatusTone> = { starting: "busy", runn
 export const CAPABILITIES = ["files", "network", "processes", "credentials"] as const;
 const isCapability = (value: string): value is (typeof CAPABILITIES)[number] => (CAPABILITIES as readonly string[]).includes(value);
 
+export type EffectStatus = "blocked" | "accepted" | "asked" | "declaredOnly" | "unlimited";
+export interface CapabilityEffect {
+  cap: (typeof CAPABILITIES)[number];
+  status: EffectStatus;
+  /** What the person said the plugin needs; the effect below does not depend on it for the network or for in-process. */
+  declared: boolean;
+  textKey: MessageKey;
+}
+
+/**
+ * What each of the four capabilities does to this plugin, always all four (ADR 0071). Isolated: without the capability the process cannot
+ * read outside its own copy, write files, start programs or read the environment; with it, once confirmed, it is accepted and the grant is
+ * said. The network is only a declaration: it is not limited either way. In-process has no boundary at all. `confirmed: false` is the review
+ * before the person has ticked the box: a declared capability is then only asked for.
+ */
+export function capabilityEffects(runtime: string, capabilities: string[], options: { confirmed?: boolean } = {}): CapabilityEffect[] {
+  const confirmed = options.confirmed ?? true;
+  return CAPABILITIES.map((cap): CapabilityEffect => {
+    const declared = capabilities.includes(cap);
+    if (runtime === "in-process") return { cap, declared, status: "unlimited", textKey: "plugins.effect.unlimited.text" };
+    if (cap === "network") return { cap, declared, status: "declaredOnly", textKey: "plugins.effect.network.open" };
+    if (declared) return { cap, declared, status: confirmed ? "accepted" : "asked", textKey: `plugins.capability.${cap}.grant` };
+    return { cap, declared, status: "blocked", textKey: `plugins.effect.${cap}.blocked` };
+  });
+}
+
 /** Machine data (spec, version, commit) is shown as is; only the kind of source is a word. */
 export function sourceText(source: PluginSource, kind: string): string {
   if (source.kind === "npm") return `${kind} ${source.spec}${source.version ? `@${source.version}` : ""}`;

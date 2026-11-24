@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
 import { AddForm } from "./AddForm";
 import { usePresent } from "./present";
+import { FetchLog } from "./FetchLog";
 import { PreviewStep } from "./PreviewStep";
 import type { FetchRequest } from "./types";
 
@@ -16,6 +17,7 @@ export function AddPlugin({ open, onClose, initial = null }: { open: boolean; on
   const fetchPackage = usePluginsStore((s) => s.fetchPackage);
   const install = usePluginsStore((s) => s.install);
   const resetAdd = usePluginsStore((s) => s.resetAdd);
+  const declineAdd = usePluginsStore((s) => s.declineAdd);
   const toggle = usePluginsStore((s) => s.toggle);
   const busy = usePluginsStore((s) => (s.add.installed ? !!s.busy[s.add.installed.id] : false));
 
@@ -29,6 +31,7 @@ export function AddPlugin({ open, onClose, initial = null }: { open: boolean; on
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {add.step === "form" && (
           <div className="flex flex-col gap-2">
+            {add.notice === "declined" && <Notice tone="info">{t("plugins.add.declined")}</Notice>}
             {add.error && (
               <Notice tone="fault" title={t("plugins.add.failed")}>
                 {explain(add.error)}
@@ -40,19 +43,24 @@ export function AddPlugin({ open, onClose, initial = null }: { open: boolean; on
         {add.step === "fetching" && (
           <div className="flex flex-col gap-3">
             <Notice tone="info">{t("plugins.add.fetching")}</Notice>
+            <FetchLog events={add.events} />
             <div className="flex justify-end">
               <Button onClick={resetAdd}>{t("plugins.add.cancel")}</Button>
             </div>
           </div>
         )}
         {(add.step === "preview" || add.step === "installing") && add.fetched && (
-          <PreviewStep
-            fetched={add.fetched}
-            installing={add.step === "installing"}
-            error={add.error ? explain(add.error) : null}
-            onBack={resetAdd}
-            onInstall={() => void install(true)}
-          />
+          <div className="flex flex-col gap-3">
+            <FetchLog events={add.events} />
+            <PreviewStep
+              fetched={add.fetched}
+              installing={add.step === "installing"}
+              error={add.error ? explain(add.error) : null}
+              onBack={resetAdd}
+              onDecline={() => void declineAdd()}
+              onInstall={() => void install(true)}
+            />
+          </div>
         )}
         {add.step === "done" && installed && (
           <div className="flex flex-col gap-3">
@@ -61,6 +69,7 @@ export function AddPlugin({ open, onClose, initial = null }: { open: boolean; on
               {t("plugins.done.title", { name: installed.name, version: installed.version })}
             </p>
             <p className="text-body text-ink-dim">{t("plugins.done.body")}</p>
+            <FetchLog events={add.events} />
             <div className="flex justify-end gap-2">
               {(!installed.enabled || installed.state === "disabled") && (
                 <Button variant="primary" loading={busy} onClick={() => void toggle(installed.id, true)}>

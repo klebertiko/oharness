@@ -5,7 +5,7 @@ import { useLocaleStore } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
 import { axeViolations } from "@/test/axe";
 import { PluginsScreen } from "./PluginsScreen";
-import { calls, plugin, preview, routes, useSidecarStub } from "./testKit";
+import { calls, plugin, routes, serveFetch, useSidecarStub } from "./testKit";
 
 const id = "0123456789abcdef";
 const running = { state: "running", reason: null, restarts: 0, node: "22.20.0", hostLog: [], plugins: 1 };
@@ -122,8 +122,62 @@ describe("PluginsScreen", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
     const detail = screen.getByRole("region", { name: "notes-tool details" });
     await waitFor(() => expect(within(detail).getAllByText(/needs the app's own credential/).length).toBeGreaterThan(0));
-    await userEvent.click(within(detail).getByRole("button", { name: "Download package" }));
+    await userEvent.click(within(detail).getByRole("button", { name: "Download package (.tgz)" }));
     await waitFor(() => expect(within(detail).getAllByText(/needs the app's own credential/).length).toBe(2));
+  });
+
+  it("Export has the package, the index and the GitHub link, and nothing says Share or Publish", async () => {
+    human();
+    const link = `https://github.com/o/r/tree/${"a".repeat(40)}`;
+    serve([plugin({ source: { kind: "github", spec: "o/r", commit: "a".repeat(40), subdir: "" }, shareLink: link })]);
+    routes.set(`GET /cordis/plugins/${id}/logs`, { body: { lines: [] } });
+    routes.set(`GET /cordis/plugins/${id}/export/index`, { raw: '{"format":1}', headers: { "content-disposition": 'attachment; filename="index.json"' } });
+    const created = vi.fn(() => "blob:x");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const { container } = render(<PluginsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
+    const section = screen.getByRole("region", { name: "Export" });
+    expect(within(section).getByText(/without running any code/)).toBeTruthy();
+    expect(within(section).getByText(/must be replaced by the https address/)).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "Download package (.tgz)" })).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "Copy GitHub link" })).toBeTruthy();
+    expect(screen.queryByText(/^Share$/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /publish/i })).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
+    await userEvent.click(within(section).getByRole("button", { name: "Download index (index.json)" }));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(calls.some((c) => c.path === `/cordis/plugins/${id}/export/index` && c.headers["x-oharness-human"] === "h-token")).toBe(true);
+    expect(created).toHaveBeenCalled();
+    click.mockRestore();
+  });
+
+  it("shows the four capabilities with their effect in the review and in the details", async () => {
+    human();
+    serve([plugin({ capabilities: ["files"] })]);
+    serveFetch();
+    routes.set(`GET /cordis/plugins/${id}/logs`, { body: { lines: [] } });
+    render(<PluginsScreen />);
+    await userEvent.click((await screen.findAllByRole("button", { name: "Add plugin" }))[0]);
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Package name"), "notes-tool");
+    await userEvent.type(within(dialog).getByLabelText("Exact version"), "1.2.0");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Check package" }));
+    const review = await within(dialog).findByRole("list", { name: "What each capability does" });
+    expect(within(review).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(review).getAllByText("Asked for")).toHaveLength(1);
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "I read the warning and trust this plugin" }));
+    expect(within(review).getAllByText("Accepted")).toHaveLength(1);
+    expect(within(review).getByText("Declared only")).toBeTruthy();
+    expect(await axeViolations(dialog)).toEqual([]);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
+    const detail = screen.getByRole("region", { name: "notes-tool details" });
+    const rows = within(within(detail).getByRole("list", { name: "What each capability does" })).getAllByRole("listitem");
+    expect(rows).toHaveLength(4);
+    expect(within(rows[0]).getByText("Accepted")).toBeTruthy();
+    expect(within(rows[3]).getByText("Blocked")).toBeTruthy();
   });
 
   it("downloads the package and copies the GitHub link", async () => {
@@ -139,7 +193,7 @@ describe("PluginsScreen", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     render(<PluginsScreen />);
     await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
-    await userEvent.click(screen.getByRole("button", { name: "Download package" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download package (.tgz)" }));
     await waitFor(() => expect(click).toHaveBeenCalled());
     expect(created).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Copy GitHub link" }));
@@ -151,7 +205,7 @@ describe("PluginsScreen", () => {
   it("adds a plugin: validates, previews, gates install on the confirmation, installs, then offers Activate now", async () => {
     human();
     serve([]);
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    serveFetch();
     routes.set("POST /cordis/plugins/install", { body: plugin({ enabled: false, state: "disabled" }) });
     render(<PluginsScreen />);
     await userEvent.click((await screen.findAllByRole("button", { name: "Add plugin" }))[0]);
@@ -164,15 +218,17 @@ describe("PluginsScreen", () => {
     expect(await within(dialog).findByText("Review before installing")).toBeTruthy();
     expect(within(dialog).getByText("Host warning in English.")).toBeTruthy();
     expect(within(dialog).getByText(/Reads and writes any file you can reach/)).toBeTruthy();
-    expect(within(dialog).getByText(/Reaches the internet/)).toBeTruthy();
-    expect(within(dialog).getByText(/These scripts will not run: postinstall/)).toBeTruthy();
+    expect(within(dialog).getAllByText(/the network is not limited/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("radiogroup", { name: "Decision for script postinstall" })).toBeTruthy();
     const install = within(dialog).getByRole("button", { name: "Install" }) as HTMLButtonElement;
     expect(install.disabled).toBe(true);
     await userEvent.click(within(dialog).getByRole("checkbox", { name: "I read the warning and trust this plugin" }));
+    expect(install.disabled).toBe(true);
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Accept without running" }));
     expect(install.disabled).toBe(false);
     await userEvent.click(install);
     expect(await within(dialog).findByText("notes-tool 1.2.0 installed")).toBeTruthy();
-    expect(calls.find((c) => c.path.endsWith("/install"))?.body).toMatchObject({ accept: true, digest: "d".repeat(64), scripts: "do-not-run" });
+    expect(calls.find((c) => c.path.endsWith("/install"))?.body).toMatchObject({ accept: true, digest: "d".repeat(64), scripts: "do-not-run", scripts_accepted: ["postinstall"] });
     routes.set(`POST /cordis/plugins/${id}/enable`, { body: plugin() });
     await userEvent.click(within(dialog).getByRole("button", { name: "Activate now" }));
     await waitFor(() => expect(calls.some((c) => c.path.endsWith("/enable"))).toBe(true));
@@ -181,7 +237,7 @@ describe("PluginsScreen", () => {
   it("builds the GitHub request with the 40-hex commit and the optional folder", async () => {
     human();
     serve([]);
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    serveFetch();
     render(<PluginsScreen />);
     await userEvent.click((await screen.findAllByRole("button", { name: "Add plugin" }))[0]);
     const dialog = await screen.findByRole("dialog");
@@ -195,13 +251,13 @@ describe("PluginsScreen", () => {
     await userEvent.type(within(dialog).getByLabelText("Folder inside the repository (optional)"), "packages/x");
     await userEvent.click(within(dialog).getByRole("button", { name: "Check package" }));
     await within(dialog).findByText("Review before installing");
-    expect(calls.find((c) => c.path.endsWith("/fetch"))?.body).toEqual({ kind: "github", spec: "o/r", commit: "b".repeat(40), subdir: "packages/x" });
+    expect(calls.find((c) => c.path.endsWith("/fetch"))?.body).toEqual({ kind: "github", spec: "o/r", commit: "b".repeat(40), subdir: "packages/x", live: true });
   });
 
   it("explains a 403 human_only on install and keeps the preview", async () => {
     human();
     serve([]);
-    routes.set("POST /cordis/plugins/fetch", { body: preview({ scripts: [] }) });
+    serveFetch({ scripts: [] });
     routes.set("POST /cordis/plugins/install", { status: 403, body: { detail: { code: "human_only", message: "no" } } });
     render(<PluginsScreen />);
     await userEvent.click((await screen.findAllByRole("button", { name: "Add plugin" }))[0]);
@@ -220,7 +276,7 @@ describe("PluginsScreen", () => {
     human();
     useLocaleStore.setState({ locale: "pt-BR" });
     serve([]);
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    serveFetch();
     render(<PluginsScreen />);
     expect(await screen.findByText("Nenhum plugin ainda")).toBeTruthy();
     expect(screen.getAllByText(/Instale só o que você confia/).length).toBeGreaterThan(0);

@@ -1,9 +1,10 @@
 "use client";
-import { Copy, Download, RefreshCw, X } from "lucide-react";
+import { Copy, Download, FileJson, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge, Button, ConfirmInline, Notice, Panel, Skeleton } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
+import { CapabilityEffects } from "./CapabilityEffects";
 import { pluginsApi, PluginsError } from "./pluginsApi";
 import { STATE_BADGE, STATE_KEY, usePresent } from "./present";
 import type { PluginView } from "./types";
@@ -11,9 +12,9 @@ import type { PluginView } from "./types";
 /** One plugin: what it is, what it can do, its logs and errors, how to share it, and Remove. */
 export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginView; canChange: boolean; onClose: () => void }) {
   const { t } = useI18n();
-  const { capabilityLabel, capabilityGrant, source, explain } = usePresent();
+  const { source, explain } = usePresent();
   const shareReason = (error: unknown) =>
-    error instanceof PluginsError && error.code === "human_only" ? t("plugins.noCredential") : t("plugins.share.failed", { reason: error instanceof Error ? error.message : String(error) });
+    error instanceof PluginsError && error.code === "human_only" ? t("plugins.noCredential") : t("plugins.export.failed", { reason: error instanceof Error ? error.message : String(error) });
   const logs = usePluginsStore((s) => s.logs);
   const busy = usePluginsStore((s) => !!s.busy[plugin.id]);
   const loadLogs = usePluginsStore((s) => s.loadLogs);
@@ -29,10 +30,10 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
     setShareError(null);
   }, [plugin.id, loadLogs]);
 
-  const download = async () => {
+  const download = async (kind: "package" | "index") => {
     setShareError(null);
     try {
-      const { filename, blob } = await pluginsApi.exportPackage(plugin.id);
+      const { filename, blob } = await (kind === "package" ? pluginsApi.exportPackage(plugin.id) : pluginsApi.exportIndex(plugin.id));
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -49,7 +50,7 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
     setShareError(null);
     try {
       await navigator.clipboard.writeText(plugin.shareLink);
-      setShareMessage(t("plugins.share.copied"));
+      setShareMessage(t("plugins.export.copied"));
     } catch (error) {
       setShareError(shareReason(error));
     }
@@ -82,17 +83,7 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
           <h3 id="plugins-caps" className="t-heading text-ink">
             {t("plugins.detail.capabilities")}
           </h3>
-          {plugin.capabilities.length === 0 ? (
-            <p className="text-body text-ink-mute">{t("plugins.capability.none")}</p>
-          ) : (
-            <ul className="flex flex-col gap-1 text-body text-ink-dim">
-              {plugin.capabilities.map((c) => (
-                <li key={c}>
-                  <span className="font-medium text-ink">{capabilityLabel(c)}.</span> {capabilityGrant(c)}
-                </li>
-              ))}
-            </ul>
-          )}
+          <CapabilityEffects runtime={plugin.runtime} capabilities={plugin.capabilities} />
           {plugin.scripts.length > 0 && <p className="text-body text-ink-mute">{t("plugins.detail.scripts", { list: plugin.scripts.join(", ") })}</p>}
         </section>
 
@@ -122,18 +113,21 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
           )}
         </section>
 
-        <section aria-labelledby="plugins-share" className="flex flex-col gap-2">
-          <h3 id="plugins-share" className="t-heading text-ink">
-            {t("plugins.share.title")}
+        <section aria-labelledby="plugins-export" className="flex flex-col gap-2">
+          <h3 id="plugins-export" className="t-heading text-ink">
+            {t("plugins.export.title")}
           </h3>
-          <p className="text-body text-ink-mute">{t("plugins.share.help")}</p>
+          <p className="text-body text-ink-mute">{t("plugins.export.help")}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" icon={<Download size={14} aria-hidden />} onClick={() => void download()}>
-              {t("plugins.share.download")}
+            <Button size="sm" icon={<Download size={14} aria-hidden />} onClick={() => void download("package")}>
+              {t("plugins.export.package")}
+            </Button>
+            <Button size="sm" icon={<FileJson size={14} aria-hidden />} onClick={() => void download("index")}>
+              {t("plugins.export.index")}
             </Button>
             {plugin.shareLink && (
               <Button size="sm" icon={<Copy size={14} aria-hidden />} onClick={() => void copy()}>
-                {t("plugins.share.copy")}
+                {t("plugins.export.copy")}
               </Button>
             )}
           </div>

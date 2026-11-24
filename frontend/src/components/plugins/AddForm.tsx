@@ -8,6 +8,9 @@ import type { FetchRequest, SourceKind } from "./types";
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const COMMIT = /^[0-9a-fA-F]{40}$/;
+const TARBALL_NAME = /\.(?:tgz|tar\.gz)$/i;
+const INTEGRITY = /^(?:(?:sha512|sha256)-[A-Za-z0-9+/]+={0,2}|[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/;
+const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
 
 interface Fields {
   name: string;
@@ -16,8 +19,34 @@ interface Fields {
   commit: string;
   subdir: string;
   path: string;
+  /** Tarball: an https address of a .tgz, or the absolute path of one on this computer. */
+  tarball: string;
+  /** Tarball: sha512-/sha256- (base64) or hex. */
+  integrity: string;
 }
 type Errors = Partial<Record<keyof Fields, MessageKey>>;
+
+/** An https address of a .tgz needs its hash; a file on this computer may skip it. Network paths (UNC) are refused here as the sidecar does. */
+function validateTarball(f: Fields): { request: FetchRequest | null; errors: Errors } {
+  const errors: Errors = {};
+  const spec = f.tarball.trim();
+  const integrity = f.integrity.trim();
+  let remote = false;
+  if (spec.startsWith("\\\\") || spec.startsWith("//")) errors.tarball = "plugins.add.err.tarballUnc";
+  else if (/^https:\/\//i.test(spec)) {
+    remote = true;
+    let url: URL | null = null;
+    try {
+      url = new URL(spec);
+    } catch {
+      url = null;
+    }
+    if (!url || !url.hostname || !TARBALL_NAME.test(url.pathname)) errors.tarball = "plugins.add.err.tarball";
+  } else if (!((WINDOWS_ABSOLUTE.test(spec) || spec.startsWith("/")) && TARBALL_NAME.test(spec))) errors.tarball = "plugins.add.err.tarball";
+  if (remote && !errors.tarball && !integrity) errors.integrity = "plugins.add.err.integrityRequired";
+  else if (integrity && !INTEGRITY.test(integrity)) errors.integrity = "plugins.add.err.integrity";
+  return { errors, request: Object.keys(errors).length ? null : { kind: "tarball", spec, ...(integrity ? { integrity } : {}) } };
+}
 
 /** Checks the fields of the chosen source. The sidecar checks again; this only spares a round trip. */
 export function validate(kind: SourceKind, f: Fields): { request: FetchRequest | null; errors: Errors } {
@@ -33,16 +62,18 @@ export function validate(kind: SourceKind, f: Fields): { request: FetchRequest |
     const subdir = f.subdir.trim();
     return { errors, request: Object.keys(errors).length ? null : { kind, spec: f.repo.trim(), commit: f.commit.trim().toLowerCase(), ...(subdir ? { subdir } : {}) } };
   }
+  if (kind === "tarball") return validateTarball(f);
   if (!f.path.trim()) errors.path = "plugins.add.err.path";
   return { errors, request: Object.keys(errors).length ? null : { kind, spec: f.path.trim() } };
 }
 
-const EMPTY: Fields = { name: "", version: "", repo: "", commit: "", subdir: "", path: "" };
+const EMPTY: Fields = { name: "", version: "", repo: "", commit: "", subdir: "", path: "", tarball: "", integrity: "" };
 
 /** The fields a request fills, so Descobrir can open this form with the source of an index entry. */
 export function fieldsOf(request: FetchRequest): Fields {
   if (request.kind === "npm") return { ...EMPTY, name: request.spec, version: request.version ?? "" };
   if (request.kind === "github") return { ...EMPTY, repo: request.spec, commit: request.commit ?? "", subdir: request.subdir ?? "" };
+  if (request.kind === "tarball") return { ...EMPTY, tarball: request.spec, integrity: request.integrity ?? "" };
   return { ...EMPTY, path: request.spec };
 }
 
@@ -74,6 +105,7 @@ export function AddForm({ onSubmit, onCancel, initial }: { onSubmit: (request: F
         options={[
           { value: "npm", label: t("plugins.add.tab.npm") },
           { value: "github", label: t("plugins.add.tab.github") },
+          { value: "tarball", label: t("plugins.add.tab.tarball") },
           { value: "local", label: t("plugins.add.tab.local") },
         ]}
       />
@@ -88,6 +120,12 @@ export function AddForm({ onSubmit, onCancel, initial }: { onSubmit: (request: F
           <Input mono label={t("plugins.add.github.repo")} value={fields.repo} onChange={set("repo")} error={err("repo")} autoComplete="off" spellCheck={false} />
           <Input mono label={t("plugins.add.github.commit")} hint={t("plugins.add.github.commitHint")} value={fields.commit} onChange={set("commit")} error={err("commit")} autoComplete="off" spellCheck={false} />
           <Input mono label={t("plugins.add.github.subdir")} value={fields.subdir} onChange={set("subdir")} autoComplete="off" spellCheck={false} />
+        </>
+      )}
+      {kind === "tarball" && (
+        <>
+          <Input mono label={t("plugins.add.tarball.url")} hint={t("plugins.add.tarball.urlHint")} value={fields.tarball} onChange={set("tarball")} error={err("tarball")} autoComplete="off" spellCheck={false} />
+          <Input mono label={t("plugins.add.tarball.integrity")} hint={t("plugins.add.tarball.integrityHint")} value={fields.integrity} onChange={set("integrity")} error={err("integrity")} autoComplete="off" spellCheck={false} />
         </>
       )}
       {kind === "local" && <Input mono label={t("plugins.add.local.path")} hint={t("plugins.add.local.pathHint")} value={fields.path} onChange={set("path")} error={err("path")} autoComplete="off" spellCheck={false} />}

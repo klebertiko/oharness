@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { calls, plugin, preview, routes, useSidecarStub } from "@/components/plugins/testKit";
+import { calls, plugin, routes, serveFetch, useSidecarStub } from "@/components/plugins/testKit";
 import { usePluginsStore } from "./pluginsStore";
 
 const running = { state: "running", reason: null, restarts: 0, node: "22.20.0", hostLog: [], plugins: 1 };
@@ -72,20 +72,21 @@ describe("pluginsStore", () => {
   it("walks add: fetch to preview, install only with the confirmation, then done", async () => {
     routes.set("GET /cordis/status", { body: running });
     routes.set("GET /cordis/plugins", { body: { plugins: [] } });
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    serveFetch();
     routes.set("POST /cordis/plugins/install", { body: plugin({ state: "active" }) });
     await usePluginsStore.getState().fetchPackage({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
     expect(usePluginsStore.getState().add.step).toBe("preview");
     await usePluginsStore.getState().install(false);
     expect(calls.filter((c) => c.path.endsWith("/install"))).toHaveLength(0);
+    usePluginsStore.getState().decideScript("fedcba9876543210", "d".repeat(64), "postinstall", "accept");
     await usePluginsStore.getState().install(true);
     expect(usePluginsStore.getState().add.step).toBe("done");
-    expect(calls.find((c) => c.path.endsWith("/install"))?.body).toEqual({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run" });
+    expect(calls.find((c) => c.path.endsWith("/install"))?.body).toEqual({ fetch_id: "fedcba9876543210", accept: true, digest: "d".repeat(64), scripts: "do-not-run", scripts_accepted: ["postinstall"] });
     expect(usePluginsStore.getState().plugins.some((p) => p.name === "notes-tool")).toBe(true);
   });
 
   it("drops the answer of a download the person cancelled", async () => {
-    routes.set("POST /cordis/plugins/fetch", { body: preview() });
+    serveFetch();
     const pending = usePluginsStore.getState().fetchPackage({ kind: "npm", spec: "notes-tool", version: "1.2.0" });
     usePluginsStore.getState().resetAdd();
     await pending;

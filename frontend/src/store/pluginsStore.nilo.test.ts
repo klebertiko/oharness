@@ -8,13 +8,29 @@ describe("pluginsStore: Nilo requests, creator mode and Descobrir", () => {
 
   it("loads the pending requests and the creator switch, and ignores a sidecar without them", async () => {
     await usePluginsStore.getState().loadNilo();
-    expect([usePluginsStore.getState().requests, usePluginsStore.getState().creator]).toEqual([[], null]);
+    expect(usePluginsStore.getState().requests).toEqual([]);
     routes.set("GET /cordis/requests", { body: { requests: [niloRequest(), niloRequest({ id: "9999888877776666", status: "rejected" })] } });
-    routes.set("GET /cordis/creator", { body: { enabled: true } });
     await usePluginsStore.getState().loadNilo();
-    const s = usePluginsStore.getState();
-    expect(s.creator).toBe(true);
-    expect(s.requests.map((r) => r.status)).toEqual(["pending"]);
+    expect(usePluginsStore.getState().requests.map((r) => r.status)).toEqual(["pending"]);
+  });
+
+  it("creator mode is per thread: loads and sets it with the thread id, never globally", async () => {
+    await usePluginsStore.getState().loadCreator("t-a");
+    expect(usePluginsStore.getState().creatorByThread).toEqual({});
+    routes.set("GET /cordis/creator", { body: { threadId: "t-a", enabled: true } });
+    await usePluginsStore.getState().loadCreator("t-a");
+    expect(calls.at(-1)?.path).toBe("/cordis/creator?thread_id=t-a");
+    expect(usePluginsStore.getState().creatorByThread).toEqual({ "t-a": true });
+    routes.set("POST /cordis/creator", { body: { threadId: "t-b", enabled: true } });
+    await usePluginsStore.getState().setCreator("t-b", true);
+    expect(calls.at(-1)?.body).toEqual({ thread_id: "t-b", enabled: true });
+    routes.set("POST /cordis/creator", { body: { threadId: "t-a", enabled: false } });
+    await usePluginsStore.getState().setCreator("t-a", false);
+    expect(usePluginsStore.getState().creatorByThread).toEqual({ "t-a": false, "t-b": true });
+    routes.set("POST /cordis/creator", { status: 403, body: { detail: { code: "human_only", message: "no" } } });
+    await usePluginsStore.getState().setCreator("t-c", true);
+    expect(usePluginsStore.getState().requestError?.code).toBe("human_only");
+    expect(usePluginsStore.getState().creatorByThread["t-c"]).toBeUndefined();
   });
 
   it("approves with the human credential and puts the plugin in the list", async () => {
@@ -38,17 +54,13 @@ describe("pluginsStore: Nilo requests, creator mode and Descobrir", () => {
     expect(usePluginsStore.getState().requestError).toEqual({ code: "request_stale", message: "The files changed." });
   });
 
-  it("rejects and turns creator mode on", async () => {
+  it("rejects a request", async () => {
     routes.set("GET /cordis/requests", { body: { requests: [niloRequest()] } });
     await usePluginsStore.getState().loadNilo();
     routes.set("POST /cordis/requests/1111222233334444/reject", { body: { request: niloRequest({ status: "rejected" }) } });
     routes.set("GET /cordis/requests", { body: { requests: [] } });
     await usePluginsStore.getState().reject("1111222233334444");
     expect(usePluginsStore.getState().requests).toEqual([]);
-    routes.set("POST /cordis/creator", { body: { enabled: true } });
-    await usePluginsStore.getState().setCreator(true);
-    expect(calls.at(-1)?.body).toEqual({ enabled: true });
-    expect(usePluginsStore.getState().creator).toBe(true);
   });
 
   it("loads an index through the sidecar and refuses a non-https address before asking", async () => {
@@ -58,6 +70,6 @@ describe("pluginsStore: Nilo requests, creator mode and Descobrir", () => {
     routes.set("POST /cordis/index/fetch", { body: pluginIndex });
     await usePluginsStore.getState().loadIndex(" https://example.com/i.json ");
     expect(calls[0].body).toEqual({ url: "https://example.com/i.json" });
-    expect(usePluginsStore.getState().discover.index?.plugins).toHaveLength(2);
+    expect(usePluginsStore.getState().discover.index?.plugins).toHaveLength(3);
   });
 });

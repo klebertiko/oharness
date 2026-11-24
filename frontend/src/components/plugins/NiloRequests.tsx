@@ -57,10 +57,12 @@ function RequestCard({ request, canChange, busy, onApprove, onReject }: { reques
         installing={busy}
         error={null}
         onBack={onReject}
+        onDecline={onReject}
         onInstall={onApprove}
         locked={!canChange}
         confirmLabel={t("plugins.nilo.approve")}
         backLabel={t("plugins.nilo.reject")}
+        declineLabel={t("plugins.nilo.reject")}
       />
     </div>
   );

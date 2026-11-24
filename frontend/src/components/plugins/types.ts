@@ -3,7 +3,7 @@
 export type HostState = "starting" | "running" | "unavailable" | "failed";
 export type PluginState = "active" | "pending" | "failed" | "disabled" | "changed" | "unavailable";
 export type Capability = "files" | "network" | "processes" | "credentials";
-export type SourceKind = "npm" | "github" | "local";
+export type SourceKind = "npm" | "github" | "local" | "tarball";
 
 export interface HostStatus {
   state: HostState;
@@ -43,6 +43,23 @@ export interface FetchRequest {
   version?: string;
   commit?: string;
   subdir?: string;
+  /** Tarball: sha512-/sha256- (base64) or hex. Required for an https address, optional for a local file. */
+  integrity?: string;
+}
+
+export type FetchStep = "downloading" | "copying" | "verifying" | "extracting" | "preview-ready" | "installing" | "done" | "failed" | "cancelled";
+export interface FetchEvent {
+  step: string;
+  at: number;
+}
+export type FetchJobState = "running" | "ready" | "failed" | "cancelled" | "installed";
+/** `POST /cordis/plugins/fetch` with `live: true` and `GET /cordis/plugins/fetch/{id}`. */
+export interface FetchJob {
+  fetchId: string;
+  state: FetchJobState;
+  events: FetchEvent[];
+  result?: FetchResult;
+  error?: { code: string; message: string };
 }
 
 export interface PackagePreview {
@@ -72,6 +89,8 @@ export interface InstallRequest {
   accept: boolean;
   digest: string;
   scripts?: "do-not-run";
+  /** The lifecycle scripts the person accepted without running; the sidecar compares them with the preview. */
+  scripts_accepted?: string[];
 }
 
 export interface NiloRequest {
@@ -89,7 +108,7 @@ export interface NiloRequest {
   replaces: { version: string; madeByNilo: boolean; source: SourceKind | null } | null;
 }
 
-export type IndexSource = { type: "npm" } | { type: "git"; url: string; commit: string; path: string; repo: string };
+export type IndexSource = { type: "npm" } | { type: "git"; url: string; commit: string; path: string; repo: string } | { type: "tarball"; url: string; integrity: string };
 
 export interface IndexPlugin {
   name: string;
