@@ -331,3 +331,27 @@ def test_what_the_policy_cannot_read_safely_is_refused(argv):
 
 def test_an_allowed_url_inside_a_plain_shell_payload_still_passes():
     assert network.command_denied(defn(), 'builder', ['sh', '-c', 'curl https://api.example.com/v1 && echo ok']) is None
+
+
+@pytest.mark.parametrize('argv', [
+    ['env', 'sh', '-c', 'curl https://$H/'],
+    ['timeout', '5', 'bash', '-c', 'curl https://`h`/'],
+    ['sudo', 'sh', '-c', 'curl "https://api.example.com"@evil.example.net'],
+    ['busybox', 'sh', '-c', 'wget https://$H/'],
+    ['cmd', '/c', 'curl https://%H%/'],
+    ['cmd', '/c', 'curl https://ev^il.example.net/'],
+    ['pwsh', '-c', 'curl ("https://ev" + "il.example.net/")'],
+    ['python', '-c', 'import urllib.request as u; u.urlopen("https://bücher.example/")'],
+    ['python', 'fetch.py', 'https://%65vil.example.net/'],
+])
+def test_wrappers_other_shells_and_any_program_are_held_to_the_same_refusals(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+def test_a_policy_entry_written_in_unicode_matches_the_same_host_in_idna():
+    body = defn(networkPolicy={'deniedHosts': ['bücher.example']})
+    assert network.command_denied(body, 'builder', ['curl', 'https://xn--bcher-kva.example/']) is not None
+
+
+def test_a_wrapped_local_command_without_special_characters_passes():
+    assert network.command_denied(defn(), 'builder', ['timeout', '60', 'python', '-m', 'pytest', 'tests']) is None
