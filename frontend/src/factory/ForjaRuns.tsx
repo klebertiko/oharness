@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button, Input, Notice } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
-import type { MessageKey } from "@/i18n/translate";
+import { label } from "./view";
 import { forjaApi, type LiveRun, type RunBoard } from "./forjaApi";
 import { useExplain } from "./useForja";
 
@@ -51,7 +51,7 @@ function RunRow({ run, onStop, onSteer }: { run: LiveRun; onStop: () => void; on
     <li className="rounded-control border border-line-soft p-3">
       <p className="text-body">{run.title}</p>
       <p className="text-ink-dim">
-        {t(`forja.stage.${run.stage}` as MessageKey)} · {t(`forja.runStatus.${run.status}` as MessageKey)}
+        {label(t, `forja.stage.${run.stage}`, run.stage)} · {label(t, `forja.runStatus.${run.status}`, run.status)}
         {engine ? ` · ${t("forja.runs.engine")}: ${engine}` : ""}
       </p>
       {run.children.length > 0 && (
