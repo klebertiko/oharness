@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 import { ShortcutsModal } from "./ShortcutsModal";
 import { shellNavCommands } from "./commands";
@@ -112,6 +112,22 @@ it("opens a drawer below 768px and Escape closes it", () => {
   expect(screen.getByRole("dialog", { name: "Sidebar" })).toBeTruthy();
   fireEvent.keyDown(window, { key: "Escape" });
   expect(useShellStore.getState().drawerOpen).toBe(false);
+});
+
+it("gives focus back to what opened the drawer when it closes", async () => {
+  setWidth(700);
+  useShellStore.setState({ drawerOpen: false, sidebar: "open" });
+  renderShell();
+  const opener = document.createElement("button");
+  opener.textContent = "Open drawer";
+  document.body.appendChild(opener);
+  opener.focus();
+  act(() => useShellStore.setState({ drawerOpen: true }));
+  expect(document.getElementById("oh-sidebar")?.contains(document.activeElement)).toBe(true);
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(useShellStore.getState().drawerOpen).toBe(false);
+  expect(document.activeElement).toBe(opener);
+  opener.remove();
 });
 
 it("finds a command in the shortcut modal by the key that was pressed", () => {

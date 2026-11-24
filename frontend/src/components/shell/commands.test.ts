@@ -34,6 +34,11 @@ describe("shellNavCommands", () => {
     ]);
   });
 
+  it("never shows two commands with the same name (the modal and palette list them by label)", () => {
+    const labels = shellNavCommands().map((command) => command.label);
+    expect(labels.filter((label, index) => labels.indexOf(label) !== index)).toEqual([]);
+  });
+
   it("keeps the shortcut list equal to the registry chords", () => {
     const commands = shellNavCommands();
     expect(chordsIn(commands)).toEqual(commands.flatMap((command) => (command.chord ? [command.chord] : [])));

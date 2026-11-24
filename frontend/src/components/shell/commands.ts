@@ -128,7 +128,7 @@ export function shellNavCommands(): Command[] {
     },
     {
       id: "dock:toggle-alt",
-      label: tr("shell.cmd.toggleDock"),
+      label: tr("shell.cmd.toggleDockAlt"),
       group: tr("shell.cmd.group.view"),
       icon: PanelRight,
       chord: bind("dock:toggle-alt", "Mod+Alt+B"),

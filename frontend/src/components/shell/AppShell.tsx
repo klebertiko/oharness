@@ -138,6 +138,8 @@ export function AppShell({
 
   useEffect(() => {
     if (!drawerOpen) return;
+    // What had focus when the drawer opened gets it back when it closes (a modal drawer must not drop focus to <body>).
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const root = document.getElementById("oh-sidebar");
     const items = () =>
       [...(root?.querySelectorAll<HTMLElement>("button, [href], input, select, textarea") ?? [])].filter((el) => !el.hasAttribute("disabled"));
@@ -157,7 +159,11 @@ export function AppShell({
       }
     };
     root?.addEventListener("keydown", onKey);
-    return () => root?.removeEventListener("keydown", onKey);
+    return () => {
+      root?.removeEventListener("keydown", onKey);
+      const lost = !document.activeElement || document.activeElement === document.body || root?.contains(document.activeElement);
+      if (opener?.isConnected && opener !== document.body && lost) opener.focus();
+    };
   }, [drawerOpen]);
 
   const onKeyDown = useCallback(
