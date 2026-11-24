@@ -141,7 +141,7 @@ try {
     await axe(page, at("select open"), "[role=listbox]");
     await shot(page, `${theme}-select`);
     await page.getByRole("option", { name: "Charlie" }).click();
-    assert.match(await page.getByRole("combobox", { name: "Model" }).innerText(), /Charlie/, at("select changes value"));
+    assert.match(await page.getByRole("combobox", { name: "Model" }).textContent(), /Charlie/, at("select changes value"));
     states += 1;
 
     // Toasts: info, warn and fault at once.

@@ -6,13 +6,14 @@
  *   node scripts/mutate-ui-primitives.mjs
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sandbox = mkdtempSync(join(tmpdir(), "oharness-ui-mutation-"));
+// The real path: a short (8.3) temp name on Windows would not match the ids vite resolves.
+const sandbox = realpathSync.native(mkdtempSync(join(tmpdir(), "oharness-ui-mutation-")));
 cpSync(join(frontend, "src"), join(sandbox, "src"), { recursive: true });
 for (const file of ["package.json", "tsconfig.json", "vitest.config.ts"]) cpSync(join(frontend, file), join(sandbox, file));
 symlinkSync(join(frontend, "node_modules"), join(sandbox, "node_modules"), process.platform === "win32" ? "junction" : "dir");
