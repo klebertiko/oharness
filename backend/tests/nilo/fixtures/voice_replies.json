@@ -1,0 +1,12 @@
+[
+  {
+    "id": "greeting",
+    "user": "olá",
+    "reply": "Oi. O que você quer fazer?"
+  },
+  {
+    "id": "wrong-name",
+    "user": "você é outro assistente?",
+    "reply": "Sou o Nilo. O que você quer fazer?"
+  }
+]

@@ -9,6 +9,7 @@ See GLOSSARY in CONTEXT.md.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -98,3 +99,52 @@ MODE_STRINGS = [
 def test_permission_mode_strings_use_no_forbidden_term(field, text):
     """Refusal notes and hints are read in the chat: the UI calls these "modes"."""
     assert not FORBIDDEN.search(text), f"{field}: {text!r}"
+
+
+# sha256 of lowercase third-party app names. The plaintext stays out of the source.
+_APP_NAME_HASHES = {
+    "60965168ce762e949600281ba6d01fee136e5b6e8257b1f216f9025ed324474c",
+    "5d72436256ada53828b51895a94bb8489e9f1ac4fe937a8024ef1594e7045ff6",
+    "9058f79c893a1d7e20b13009b95b9cf3211478a91a47e2ad65bdfedad6fc98f4",
+    "45d780f82c9247fc1142f8b60c12b6c6cd3d9f23dd836cfa6e84c498d2f83292",
+    "6db7636b5922f26c1eb855fda18da3c40913d6237e21a90fb155b85868b9bfde",
+    "81ed341348bed14c507f31afb5d1afed2262e97378012e59f5e9e03e4e6ecd38",
+    "7764735c5d4d88ae3ef1c0d6c0a5769e4187c341895db19a82ba7d4e17b8c914",
+    "0e3ef6d103af163dcdffe26b76485f38af7f1d697ce05034c107de73eff16afb",
+}
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def _cited_app(text: str) -> str | None:
+    for token in _TOKEN.findall(text.lower()):
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        if digest in _APP_NAME_HASHES:
+            return digest
+    return None
+
+
+def _nilo_copy() -> list[str]:
+    texts: list[str] = []
+    nilo = BACKEND_DIR / "nilo"
+    if nilo.is_dir():
+        for path in sorted(nilo.rglob("*")):
+            if path.suffix == ".py" and path.is_file():
+                texts.append(path.read_text(encoding="utf-8"))
+    frontend = BACKEND_DIR.parent / "frontend" / "src"
+    ui = frontend / "nilo"
+    if ui.is_dir():
+        for path in sorted(ui.rglob("*")):
+            if path.suffix in {".ts", ".tsx"} and path.is_file():
+                texts.append(path.read_text(encoding="utf-8"))
+    for catalog in (frontend / "i18n").glob("messages*.ts"):
+        for line in catalog.read_text(encoding="utf-8").splitlines():
+            if '"nilo.' in line:
+                texts.append(line)
+    return texts
+
+
+def test_nilo_copy_cites_no_other_app_and_uses_none_of_the_retired_words():
+    for text in _nilo_copy():
+        visible = CITATION.sub("", text)
+        assert FORBIDDEN.search(visible) is None
+        assert _cited_app(text) is None
