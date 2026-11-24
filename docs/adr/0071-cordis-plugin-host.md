@@ -64,9 +64,17 @@ O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671c
 
 **Registro.** `<data_dir>/cordis-plugins.json` guarda, por plugin, nome, versão, fonte, pasta, o digest confirmado, os scripts que não rodam, as capacidades confirmadas e `enabled`. Quando o host sobe, o sidecar reinstala os `enabled` com o digest guardado, sem nova confirmação. Se os bytes mudaram, o host recusa (`confirmation-mismatch`) e o item fica `changed`, pedindo confirmação nova.
 
-**Fontes** (`backend/cordis/sources.py`). npm: nome e versão exata, metadados em `registry.npmjs.org`, tarball do mesmo host, `dist.integrity` sha512 conferida (sem ela, ou diferente, recusa). GitHub: `owner/repo` e commit de 40 hex (branch e tag são recusados), baixado de `codeload.github.com`, com subpasta opcional. Local: cópia de uma pasta absoluta; qualquer link ou junção recusa, e `node_modules` e `.git` não entram. A extração é manual: só arquivos e pastas regulares, nomes que ficam dentro do destino, no máximo 2000 arquivos e 20 MiB, e nada é escrito antes de todo o arquivo ser verificado. Nenhum script roda e nenhuma dependência é instalada; dependências fora de `cordis`, `@deepseek-ai/cordis` e `schemastery` viram o aviso `unmet-dependencies` na prévia.
+**Fontes** (`backend/cordis/sources.py`). npm: nome e versão exata, metadados em `registry.npmjs.org`, tarball do mesmo host, `dist.integrity` sha512 conferida (sem ela, ou diferente, recusa). GitHub: `owner/repo` e commit de 40 hex (branch e tag são recusados), baixado de `codeload.github.com`, com subpasta opcional. Local: cópia de uma pasta absoluta; qualquer link ou junção recusa, e `node_modules` e `.git` não entram. Tarball: URL https de um `.tgz` com sha512 ou sha256 obrigatório (SRI ou hex), baixada com as mesmas checagens do índice do Descobrir (todo IP resolvido global, conexão no IP checado, sem redirect, timeout de 30 s, teto de 20 MiB), ou `.tgz` local por caminho absoluto (UNC e link recusados; hash informado é conferido). Toda fonte passa pela mesma extração. A extração é manual: só arquivos e pastas regulares, nomes que ficam dentro do destino, no máximo 2000 arquivos e 20 MiB, e nada é escrito antes de todo o arquivo ser verificado. Nenhum script roda e nenhuma dependência é instalada; dependências fora de `cordis`, `@deepseek-ai/cordis` e `schemastery` viram o aviso `unmet-dependencies` na prévia.
 
 **Rotas.** O sidecar expõe `/cordis/*`. Ler `status` e `plugins` vale com o token do sidecar. Ver logs e exportar, buscar, instalar, ligar, desligar e remover exigem a credencial humana, como `/factory/secrets` (403 `human_only`). Instalar só carrega depois de `accept: true` e do digest da prévia (item 5).
+
+**Log ao vivo e Cancelar.** `POST /cordis/plugins/fetch {live: true}` responde na hora com o id; `GET /cordis/plugins/fetch/{id}` devolve os passos (`downloading`, `copying`, `verifying`, `extracting`, `preview-ready`, `installing`, `done`, `failed`, `cancelled`) e `DELETE` (só humano) liga o evento de cancelamento, que o download confere entre pedaços de 64 KiB, espera a thread e apaga a pasta de staging. O mesmo `DELETE` descarta uma prévia pronta ("Não instalar").
+
+**Scripts por pacote.** Para cada script de lifecycle da prévia a pessoa escolhe "Aceitar sem executar" ou "Não instalar". `install` exige `scripts_accepted` igual aos scripts daquela prévia e o digest dela; a decisão não é guardada para outro pacote nem outro digest. O host continua recebendo `scripts: "do-not-run"`: nenhum script roda.
+
+**Exportar.** `GET /cordis/plugins/{id}/export` gera um `.tgz` reproduzível (nomes ordenados, sem data, dono nem modo da máquina, gzip sem data) e `GET /cordis/plugins/{id}/export/index` um índice `format: 1` com o plugin, montado só do `package.json` e dos arquivos: fonte npm, git com commit, ou tarball com o sha512 do `.tgz` exportado (para pasta local, `url` relativo que a pessoa troca pelo endereço https). Nada é publicado; a tela diz "Exportar".
+
+**Capacidades na tela.** A prévia e o detalhe mostram sempre as quatro: `isolated` sem a capacidade mostra "bloqueada" (o processo não alcança); declarada e confirmada, "aceita" com o que concede; `network`, "só declarada: a rede não é limitada"; `in-process`, "sem limites".
 
 **Descarregar.** `POST /v1/plugins/unload {name}` no host: o plugin isolado tem o processo parado, o `in-process` tem o fiber descartado, a entrada sai do mapa e a cópia privada é apagada. Assim outra versão se instala sem reiniciar o host, e é o que o sidecar faz ao trocar de versão, desligar ou remover.
 
@@ -74,7 +82,7 @@ O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671c
 
 ## Modo criador, Descobrir e rotas de proxy
 
-**Modo criador: o agente nunca instala.** A pessoa liga o modo na tela (`POST /cordis/creator`, só humano; fica em `<data_dir>/cordis-creator.json`). Só então o `ToolBroker` do chat oferece a ferramenta `cordis_plugins` e acrescenta ao prompt de sistema a skill `backend/cordis/skill/SKILL.md`. Com o modo ligado, `/execute/direct` cria o broker mesmo quando o pedido não traz `tools`, e o composer não muda. As ações são `list`, `scaffold {name, kind: tool|command|service}`, `write_file`, `read_file`, `preview`, `request_install` e `logs`:
+**Modo criador: o agente nunca instala.** O modo é da thread de chat. A pessoa o liga para a conversa atual (`POST /cordis/creator {thread_id, enabled}`, só humano; fica em `<data_dir>/cordis-creator.json`, no máximo 200 threads), sem enviar mensagem e sem mexer no rascunho; o composer mostra "Modo criador", que se desliga com um clique. O pedido `/execute/direct` manda `creator_thread_id`, e o `ToolBroker` só oferece `cordis_plugins` (e a skill `backend/cordis/skill/SKILL.md` no prompt de sistema) se o sidecar tem o modo ligado para essa thread e as `tools` do pedido são da mesma thread. Assim o modelo não liga o modo sozinho. Nesse caso `/execute/direct` cria o broker mesmo quando o pedido não traz `tools`. As ações são `list`, `scaffold {name, kind: tool|command|service}`, `write_file`, `read_file`, `preview`, `request_install`, `logs`, `api_catalog` (serviços, tools e comandos do host vivo por `GET /v1/services` e `/v1/plugins`, só nomes, sem código) e `starters` (os arquivos de partida). O cartão de aprovação do chat descreve a ação ("Escrever arquivo do plugin x", "Pedir instalação de x"):
 - todas passam pelo `tool_approval` das outras ferramentas, uma aprovação por ação;
 - o modo Plan recusa a ferramenta;
 - argumento que nunca seria válido falha antes de pedir aprovação;
@@ -88,9 +96,9 @@ A ferramenta só escreve em `<plugins>/dev/<nome>`. O caminho é relativo, com `
 - o host da URL é normalizado e resolvido, e qualquer endereço que não seja global recusa;
 - a conexão vai ao IP checado, com SNI e Host do nome, o que fecha o rebinding de DNS, e redirect é recusado;
 - timeout de 10 s e teto de 512 KiB;
-- só passam texto limpo (sem controles C0/C1 nem bidi, com teto por campo) e fontes instaláveis: npm com versão exata ou GitHub com commit de 40 hex;
-- a tela mostra o texto sem HTML, sob o aviso fixo "índices são de terceiros; confira a fonte antes de instalar";
-- "Instalar" só preenche o fluxo de adicionar, com prévia e confirmação.
+- só passam texto limpo (sem controles C0/C1 nem bidi, com teto por campo) e fontes instaláveis: npm com versão exata, GitHub com commit de 40 hex ou tarball https com hash;
+- a tela mostra o texto sem HTML, sob o aviso fixo no topo, nunca recolhível, "Lista não revisada: os índices são de terceiros; confira a fonte antes de instalar";
+- "Inspecionar" leva à mesma prévia e à mesma confirmação do fluxo de adicionar.
 
 **Rotas de proxy.** `POST /cordis/tools/invoke {name, args}` e `POST /cordis/commands/execute {line}` repassam ao host com o token do sidecar. São o caminho do agente até as tools e os comandos dos plugins, sem receber o token do host. `POST /cordis/plugins/install` aceita `config` (JSON até 16 KiB), guardado no registro e repassado ao `apply(ctx, config)`; o `tool-todo` do DSH exige um.
 
