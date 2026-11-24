@@ -3,7 +3,7 @@ import { Children, cloneElement, isValidElement, useId } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import styles from "@/components/canvas/canvas.module.css";
 import { useCanvasStore } from "@/store/canvasStore";
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import { chordCaps, useIsMac } from "@/components/shell/keys";
 import { ROLE_CODE, ROLE_ICON, ROLE_VAR } from "@/lib/roles";
 import { PORTS } from "@/lib/ports";
@@ -267,7 +267,7 @@ export function PropertiesPanel() {
 
   if (!node) {
     return (
-      <Panel title={t("sidebar.props.title")} className="h-full">
+      <Panel variant="dock" title={t("sidebar.props.title")} className="h-full">
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6">
           <p className="text-center text-title font-semibold text-ink-dim">{t("sidebar.props.selectBlock")}</p>
           <p className="max-w-[190px] text-center text-body leading-5 text-ink-mute">
@@ -310,6 +310,7 @@ export function PropertiesPanel() {
 
   return (
     <Panel
+      variant="dock"
       title={t("sidebar.props.title")}
       meta={ROLE_CODE[type]}
       className="h-full"
