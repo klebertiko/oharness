@@ -432,6 +432,8 @@ def _semantic_issues(definition: dict) -> list[Issue]:
             add(f'{where}.permissions.maxTokens', 'cannot exceed ceilings.tokensPerRun')
         if agent.get('trigger') and agent['trigger'] not in definition['reserved']['automations']:
             add(f'{where}.trigger', 'names an automation that does not exist (automations/<id>/automation.md)')
+        if agent.get('runner') and agent['runner'] not in definition['runners']:
+            add(f'{where}.runner', 'names a runner that does not exist (runners/<id>.yaml); it would silently fall back to another one')
     for i, repo in enumerate(definition['repositories']):
         for key in ('path', 'subdir'):
             if any(_reserved_segment(seg) for seg in repo.get(key, '.').split('/')):
