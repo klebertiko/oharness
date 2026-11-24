@@ -348,10 +348,34 @@ def test_wrappers_other_shells_and_any_program_are_held_to_the_same_refusals(arg
     assert network.command_denied(defn(), 'builder', argv) is not None, argv
 
 
-def test_a_policy_entry_written_in_unicode_matches_the_same_host_in_idna():
+def test_a_policy_entry_written_in_unicode_closes_a_deny_list_too():
     body = defn(networkPolicy={'deniedHosts': ['bücher.example']})
     assert network.command_denied(body, 'builder', ['curl', 'https://xn--bcher-kva.example/']) is not None
 
 
 def test_a_wrapped_local_command_without_special_characters_passes():
     assert network.command_denied(defn(), 'builder', ['timeout', '60', 'python', '-m', 'pytest', 'tests']) is None
+
+
+@pytest.mark.parametrize('argv', [
+    ['curl', 'https://api.example.com,evil.example.net/'],
+    ['curl', 'https://{api.example.com,evil.example.net}/'],
+    ['curl', 'https://[api.example.com]/'],
+    ['sh', '-c', 'curl https://ev?l.example.net/'],
+    ['python', 'fetch.py', 'https://$H/'],
+    ['python', 'fetch.py', 'deploy@`h`'],
+    ['pwsh', '-c', 'Invoke-WebRequest https://api.example.com/'],
+])
+def test_a_host_outside_the_strict_grammar_or_a_powershell_payload_is_refused(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+def test_a_policy_entry_that_is_not_ascii_closes_the_policy():
+    body = defn(networkPolicy={'allowedHosts': ['bücher.example']})
+    assert network.command_denied(body, 'builder', ['curl', 'https://xn--bcher-kva.example/']) is not None
+
+
+def test_a_plain_allowed_url_with_a_port_and_an_ipv6_literal_still_parse():
+    body = defn(networkPolicy={'allowedHosts': ['api.example.com', '2001:db8::1']})
+    assert network.command_denied(body, 'builder', ['curl', 'https://api.example.com:8443/v1']) is None
+    assert network.command_denied(body, 'builder', ['curl', 'https://[2001:db8::1]:443/']) is None
