@@ -33,6 +33,8 @@ _PATH_SEP = re.compile(r'[\\/]')
 NETWORK_PROGRAMS = frozenset({'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc', 'ncat', 'netcat', 'telnet', 'ftp', 'ping', 'http',
                               'https', 'git', 'nslookup', 'dig', 'host', 'socat'})
 # Options that send the traffic somewhere other than the host the command names.
+# Short flags whose value sends the traffic elsewhere: curl -x (proxy), ssh -J (jump host), rsync -e (remote shell).
+_SHORT_REDIRECTS = frozenset({"x", "J", "e"})
 _REDIRECT_OPTIONS = frozenset({'--proxy', '-x', '--preproxy', '--socks4', '--socks4a', '--socks5', '--socks5-hostname', '--proxy1.0',
                                '--resolve', '--connect-to', '--doh-url', '-j', '--dns-servers', '-e'})
 SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash', 'csh', 'tcsh', 'fish', 'busybox', 'cmd', 'powershell', 'pwsh'})
@@ -172,6 +174,10 @@ def redirects(argv: list[str]) -> bool:
             return True
         if lowered.startswith('-o') and 'proxy' in lowered:
             return True
+        # A short option carries its value attached (`-xhost:3128`, `-Jjump`) or sits in a bundle (`-sx`): any redirect letter
+        # among the short flags counts. Letters compare case-sensitively (`-J` is a jump host, `-j` is not).
+        if word.startswith('-') and not word.startswith('--') and any(letter in _SHORT_REDIRECTS for letter in word[1:].split('=', 1)[0]):
+            return True
     return False
 
 
@@ -187,7 +193,9 @@ def unreadable(argv: list[str]) -> str | None:
     if programs & {'powershell', 'pwsh'}:
         return 'The network policy cannot judge a PowerShell command; run the program directly.'
     if programs & (SHELLS | WRAPPERS | NETWORK_PROGRAMS):
-        if any(mark in _without_ipv6(str(part)) for part in argv[1:] for mark in _SHELL_SPECIAL):
+        # The brackets of an IPv6 literal are the address only when the argument goes straight to the program; a shell could glob them.
+        direct = not programs & (SHELLS | WRAPPERS)
+        if any(mark in (_without_ipv6(str(part)) if direct else str(part)) for part in argv[1:] for mark in _SHELL_SPECIAL):
             return 'The network policy cannot judge a command whose words a shell would expand or unquote; run it directly, without those characters.'
     for part in argv[1:]:
         text = str(part)
