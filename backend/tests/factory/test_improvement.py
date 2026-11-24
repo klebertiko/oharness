@@ -95,9 +95,9 @@ def test_a_worse_trial_rolls_itself_back_and_every_decision_is_exportable(client
             'passed': index < 5, 'evidence': {'qa': 'rejected' if index >= 5 else 'ok'},
         })
         assert trial.status_code == 200, trial.text
-    measured = client.post(f"/factory/improvements/{proposal['id']}/measure", headers=HUMAN)
-    assert measured.status_code == 200, measured.text
-    assert measured.json()['verdict'] == 'worsened'
+    # The scores alone measured the trial and rolled it back; asking again finds no running trial.
+    late = client.post(f"/factory/improvements/{proposal['id']}/measure", headers=HUMAN)
+    assert late.status_code == 409 and late.json()['detail']['code'] == 'not_canary'
     assert _state().canary is None and _state().stable.hash == proposal['before_hash']
     first = client.get('/factory/improvements/export', params={'factory_id': FACTORY}).json()['events']
     again = client.get('/factory/improvements/export', params={'factory_id': FACTORY}).json()['events']

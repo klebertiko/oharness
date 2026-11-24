@@ -114,13 +114,13 @@ Legenda:
 | W73 | Revisor que pode ser "ninguém" | Não se aplica — toda proposta espera uma pessoa. O schema não tem esse valor, e o validador recusa se ele aparecer |
 | W74 | "Regressões tratadas" com os ids das falhas | Neste PR |
 | W75 | Lista de propostas e um cartão no painel | Neste PR a tela Melhorias. Os três cartões no painel de métricas: Fatia 2 |
-| W76 | Baseline, comparação e monitoramento, com reversão se piorar | Neste PR — a pessoa pede a medição; se piorou, o canário é revertido; se melhorou, a pessoa promove, e só enquanto aquele canário ainda roda |
+| W76 | Baseline, comparação e monitoramento, com reversão se piorar | Neste PR — cada score do laço mede o canário em curso: se piorou, ele é revertido sozinho; se melhorou, a pessoa promove, e só enquanto aquele canário ainda roda. A pessoa também pode medir na hora. O mesmo veredito é gravado uma vez só. Na tela: medir, promover, reverter, diff, custo estimado, trilha e exportação |
 | W77 | Uma proposta pode alterar uma skill versionada, pelo mesmo canário | Neste PR — skill é um diff da definição e passa pelos mesmos limites |
 
 ### O que protege o teste de uma proposta
 
 - **Quem pontua.** Só o laço de execução, com uma credencial criada no próprio processo e guardada só na memória, ou a pessoa. O token comum que um agente usa não pontua. O score precisa citar a versão ativa ou o canário que está rodando, e o item de trabalho, quando citado, precisa ter rodado naquela versão. A linha de corte, os rótulos, a checagem e os tetos dela vêm da definição, nunca de quem chama.
-- **Quem decide.** Aprovar, medir, reverter e promover pedem a credencial da pessoa. Ao aprovar, a proposta precisa partir da versão ativa de agora. Se a versão mudou, ela fica desatualizada e é preciso pedir outra. Os limites rodam de novo nesse momento.
+- **Quem decide.** Aprovar, medir, reverter e promover pedem a credencial da pessoa. A única ação sem a pessoa é o rollback de um teste que piorou, disparado pelos próprios scores. Ao aprovar, a proposta precisa partir da versão ativa de agora. Se a versão mudou, ela fica desatualizada e é preciso pedir outra. Os limites rodam de novo nesse momento.
 - **O que uma proposta pode mudar.** O validador falha fechado. Os dois lados são lidos com os valores padrão efetivos, então uma chave omitida nunca vale como algo mais solto. Uma chave removida ou com outro tipo é recusada. Mudam livremente só instruções, modelos e skills. Portões, modos, tetos, rede, segredos, scorers, amostragem e configurações do teste só podem ficar iguais ou mais rígidos. Qualquer outro campo é protegido e só a pessoa muda, editando a definição. O `after` também passa pela validação completa da definição e precisa ter o nome do próprio factory. Um valor que parece credencial é recusado sem ser guardado.
 - **O trilho.** Scores, falhas e eventos só são inseridos. A sessão recusa alterar ou apagar uma dessas linhas, e a exportação vem em páginas.
 

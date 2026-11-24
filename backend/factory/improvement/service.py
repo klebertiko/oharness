@@ -310,12 +310,33 @@ async def _trial(db: AsyncSession, proposal: ImprovementProposal) -> None:
         raise FactoryError('not_canary', 409, 'Only a trial that is still running can be measured.')
 
 
+SYSTEM = ('system', 'run_loop')
+
+
 async def measure(db: AsyncSession, proposal_id: str, actor: tuple[str, str | None], *, now: datetime | None = None) -> dict:
+    """A person asks for the verdict now. The scores already ask on their own; this only reads the same numbers."""
     _human_only(actor, 'Measuring a trial')
     proposal = await db.get(ImprovementProposal, proposal_id)
     if proposal is None:
         raise FactoryError('not_found', 404)
     await _trial(db, proposal)
+    return await _evaluate(db, proposal, actor, now=now)
+
+
+async def _measure_running_trial(db: AsyncSession, factory_id: str) -> None:
+    """After each score: if a trial of this factory is running, read its verdict. A worse one is rolled back here, with no
+    person needed; a better one only waits for a person to promote it."""
+    current = await versions.state(db, factory_id)
+    if current.canary is None:
+        return
+    proposal = await db.scalar(select(ImprovementProposal).where(
+        ImprovementProposal.factory_id == factory_id, ImprovementProposal.status == 'canary',
+        ImprovementProposal.after_hash == current.canary.hash))
+    if proposal is not None:
+        await _evaluate(db, proposal, SYSTEM)
+
+
+async def _evaluate(db: AsyncSession, proposal: ImprovementProposal, actor: tuple[str, str | None], *, now: datetime | None = None) -> dict:
     settings = _settings(json.loads(proposal.after_json))
     minimum = int(settings['minSampleRuns'])
     days = int(settings['sampleDays'])
@@ -331,6 +352,8 @@ async def measure(db: AsyncSession, proposal_id: str, actor: tuple[str, str | No
     trial_low, trial_high = wilson(sum(trial), len(trial))
     summary = {'verdict': result, 'baseline': {'n': len(baseline), 'low': base_low, 'high': base_high},
                'trial': {'n': len(trial), 'low': trial_low, 'high': trial_high}}
+    if result == proposal.verdict:  # the same verdict is written once, however often it is read
+        return summary
     await _event(db, proposal, 'measured', actor, summary)
     proposal.verdict = result
     if result == 'worsened':
@@ -442,6 +465,7 @@ async def record_score(db: AsyncSession, *, factory_id: str, version_hash: str, 
                               reason=reason or 'below the pass line',
                               evidence_json=json.dumps(evidence, sort_keys=True)[:EVIDENCE_MAX_BYTES]))
     await db.commit()
+    await _measure_running_trial(db, factory_id)
     return row
 
 

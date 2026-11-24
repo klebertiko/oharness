@@ -18,10 +18,11 @@ _SPEC = {'optional': 0, 'required': 1}
 _MERGE_KEYS = frozenset({'merge', 'automerge', 'mergeaction'})
 # A merge spelled as a step, a command or a setting. Shared with the code fixes and the notes.
 MERGE_TEXT = re.compile(
-    r"""["']?\baction["']?\s*[:=]\s*["']?merge\b"""
-    r'|\bgh\s+pr\s+merge\b|\bgit\s+(?:-\S+\s+)*merge\b|\bauto[-_ ]?merge\b|\benable[-_]?auto[-_]?merge\b'
-    r'|\bmerge[-_]?pull[-_]?request\b|\bmergePullRequest\b|\bpulls/\S+/merge\b',
+    r"""\baction["']?[ \t]*[:=][ \t]*["']?merge\b"""
+    r'|\bgh[ \t]+pr[ \t]+merge\b|\bgit[ \t]+merge\b|\bauto[-_ ]?merge\b|\benable[-_]?auto[-_]?merge\b'
+    r'|\bmerge[-_]?pull[-_]?request\b|\bmergePullRequest\b|\bpulls/[0-9]+/merge\b',
     re.IGNORECASE)
+TEXT_SCAN_MAX = 100_000  # text past this is refused rather than scanned
 # Higher is looser for the first group, lower is looser for the second (ADR 0056: the trial must stay at least as careful).
 _LOOSER_IF_HIGHER = ('failureThreshold', 'ageDays', 'canaryPercent')
 _LOOSER_IF_LOWER = ('minSampleRuns', 'sampleDays')
@@ -82,15 +83,22 @@ def _effective_policy(defn: dict) -> dict:
     return {**rules.POLICY_DEFAULTS, **_dict(defn.get('policy'))}
 
 
-def _flags(defn: dict) -> dict[str, tuple[bool, bool]]:
-    """`{stage: (required, enabled)}` with the effective policy. Falls back to the declared stages for a partial definition."""
+def _flags(defn: dict) -> dict[str, tuple[bool, bool, bool]]:
+    """`{stage: (required, enabled, runs)}` with the effective policy. A stage runs when it is on and an enabled agent of its role exists:
+    an explicit `enabled: true` with the only reviewer gone is a gate that no longer runs. Falls back to the declared stages for a
+    partial definition."""
     try:
         whole = {**defn, 'policy': _effective_policy(defn), 'stages': _dict(defn.get('stages'))}
-        return {stage: (bool(flag['required']), bool(flag['enabled'])) for stage, flag in stage_flags(whole).items()}
+        return {stage: (bool(flag['required']), bool(flag['enabled']), bool(flag['enabled']) and bool(flag['available']))
+                for stage, flag in stage_flags(whole).items()}
     except (KeyError, TypeError, AttributeError):
         stages = _dict(defn.get('stages'))
-        return {stage: (bool(_dict(stages.get(stage)).get('required')), bool(_dict(stages.get(stage)).get('enabled', True)))
-                for stage in rules.CONFIGURABLE_STAGES}
+        out = {}
+        for stage in rules.CONFIGURABLE_STAGES:
+            explicit = _dict(stages.get(stage))
+            enabled = bool(explicit.get('enabled', True))
+            out[stage] = (bool(explicit.get('required')), enabled, enabled)
+        return out
 
 
 def _secrets(defn: dict) -> set[str]:
@@ -150,13 +158,13 @@ def _merge_added(before, after, path: str) -> list[dict]:
             reasons.extend(_merge_added(previous, value, f'{path}[{index}]'))
     elif isinstance(after, str):
         previous = before if isinstance(before, str) else ''
-        if MERGE_TEXT.search(after) and not MERGE_TEXT.search(previous):
+        if text_merges(after) and not text_merges(previous):
             reasons.append(_reason('add_merge', path, 'The proposal adds a merge action. The Forja never merges.'))
     return reasons
 
 
 def text_merges(text: str) -> bool:
-    return bool(MERGE_TEXT.search(text))
+    return len(text) > TEXT_SCAN_MAX or bool(MERGE_TEXT.search(text))
 
 
 def _fields(before: dict, after: dict) -> list[dict]:
@@ -209,10 +217,10 @@ def _policy_rules(before: dict, after: dict) -> list[dict]:
         reasons.append(_reason('raise_permission', 'policy.maxPermissionMode', 'The highest permission mode would go up.'))
     old_flags, new_flags = _flags(before), _flags(after)
     for stage in rules.CONFIGURABLE_STAGES:
-        (old_required, old_enabled), (new_required, new_enabled) = old_flags[stage], new_flags[stage]
+        (old_required, old_enabled, old_runs), (new_required, new_enabled, new_runs) = old_flags[stage], new_flags[stage]
         if old_required and not new_required:
             reasons.append(_reason('weaken_gate', f'stages.{stage}', f'The {stage} gate would no longer be required.'))
-        if old_enabled and not new_enabled:
+        if (old_enabled and not new_enabled) or (old_runs and not new_runs):
             reasons.append(_reason('weaken_gate', f'stages.{stage}', f'The {stage} gate would be turned off.'))
     return reasons
 

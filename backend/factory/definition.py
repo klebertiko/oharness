@@ -28,7 +28,13 @@ MAX_FILES = 2000
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
                            r'|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|gsk_[A-Za-z0-9]{30,}'
                            r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]+:[^\s/@]{3,}@')
-_CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|pass|passwd|password|credential|auth)[A-Za-z0-9-]*$', re.IGNORECASE)
+_FLAG_SHAPE = re.compile(r'--?[A-Za-z0-9-]+')
+_CREDENTIAL_WORDS = ('key', 'token', 'secret', 'pass', 'credential', 'auth')
+
+
+def _credential_flag(arg: str) -> bool:
+    """`--api-key`, `-token`, `--password`...: a flag shape (linear match) whose name holds a credential word."""
+    return bool(_FLAG_SHAPE.fullmatch(arg)) and any(word in arg.lower() for word in _CREDENTIAL_WORDS)
 _PLAIN_NAME = re.compile(r'^[A-Za-z0-9_./-]{1,80}$')
 _LONG_TOKEN = re.compile(r'[A-Za-z0-9_+/=.~-]{20,}')
 _ID = re.compile(rules.ID_PATTERN)
@@ -432,7 +438,7 @@ def _semantic_issues(definition: dict) -> list[Issue]:
                 add(f'repositories[{i}].{key}', 'a segment is a name Windows cannot create (con, nul, a trailing dot...)')
     for name, server in definition['mcp'].items():
         args = server.get('args', [])
-        if any(_CREDENTIAL_FLAG.match(a) and k + 1 < len(args) and not args[k + 1].startswith('-') for k, a in enumerate(args)):
+        if any(_credential_flag(a) and k + 1 < len(args) and not args[k + 1].startswith('-') for k, a in enumerate(args)):
             add(f'mcp.{name}.args', 'a credential flag followed by a value; pass credentials through env with a secretRef')
     ids = [r['id'] for r in definition['repositories']]
     if len(set(ids)) != len(ids):

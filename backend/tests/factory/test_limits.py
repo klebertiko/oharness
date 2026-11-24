@@ -246,3 +246,37 @@ def test_every_configurable_stage_is_a_gate():
     after = copy.deepcopy(before)
     after['stages']['monitor'] = {'enabled': False}
     assert 'weaken_gate' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_requiring_and_turning_on_are_judged_one_at_a_time():
+    unrequired = _definition()
+    unrequired['stages']['review'] = {'enabled': True, 'required': False}
+    assert 'weaken_gate' in _codes(unrequired)
+    off = _definition()
+    off['stages']['verify'] = {'enabled': False, 'required': True}
+    assert 'weaken_gate' in _codes(off)
+
+
+def test_removing_or_turning_off_the_reviewer_weakens_the_gate_even_with_explicit_stages():
+    removed = _definition()
+    del removed['agents']['reviewer']
+    assert 'weaken_gate' in _codes(removed)
+    disabled = _definition()
+    disabled['agents']['reviewer']['enabled'] = False
+    assert 'weaken_gate' in _codes(disabled)
+
+
+def test_an_engine_is_a_protected_field_of_an_agent():
+    changed = _definition()
+    changed['agents']['reviewer']['engine'] = 'review-flow'
+    assert 'protected_field' in _codes(changed)
+    added = _definition()
+    added['agents']['helper'] = {'role': 'custom', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Help.',
+                                 'engine': 'helper-flow'}
+    assert 'protected_field' in _codes(added)
+
+
+def test_a_string_where_a_flag_belongs_is_refused():
+    after = _definition()
+    after['scorers']['qa']['enabled'] = 'false'
+    assert 'invalid_type' in _codes(after)

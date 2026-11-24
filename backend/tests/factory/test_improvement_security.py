@@ -295,8 +295,9 @@ def test_the_trail_rows_cannot_be_changed_or_deleted(client):
             return 'changed'
 
     for model, field, value in ((ImprovementEvent, 'type', 'approved'), (FactoryScore, 'passed', True), (FactoryFailure, 'reason', 'none')):
-        assert anyio.run(tamper, model, lambda db, row, f=field, v=value: setattr(row, f, v)) == 'refused', model
-        assert anyio.run(tamper, model, lambda db, row: db.sync_session.delete(row)) == 'refused', model
+        updated = anyio.run(tamper, model, lambda db, row, f=field, v=value: setattr(row, f, v))
+        deleted = anyio.run(tamper, model, lambda db, row: db.sync_session.delete(row))
+        assert (updated, deleted) == ('refused', 'refused'), model
 
 
 def test_the_export_is_paginated(client):
@@ -308,3 +309,50 @@ def test_the_export_is_paginated(client):
     assert rest['next'] is None
     assert client.get('/factory/improvements/export', params={'limit': 5000}).status_code == 422
     assert proposal['id']
+
+
+# ---------------------------------------------------------------------------------------------------------- the trial measures itself
+
+def test_a_worse_trial_rolls_back_from_the_scores_alone(client):
+    proposal = _canary(client)
+    for index in range(20):
+        assert _score(client, proposal['before_hash'], f'base-{index}', True).status_code == 200
+    for index in range(20):
+        assert _score(client, proposal['after_hash'], f'trial-{index}', False).status_code == 200
+    assert _state().canary is None and _state().stable.hash == proposal['before_hash']
+    listed = {row['id']: row for row in client.get('/factory/improvements', params={'factory_id': FACTORY}).json()['proposals']}
+    assert listed[proposal['id']]['status'] == 'rolled_back' and listed[proposal['id']]['verdict'] == 'worsened'
+    events = client.get('/factory/improvements/export', params={'factory_id': FACTORY}).json()['events']
+    measured = [event for event in events if event['type'] == 'measured']
+    assert len(measured) == 1 and measured[0]['actor']['kind'] == 'system'
+
+
+def test_an_improved_trial_waits_for_a_person_to_promote(client):
+    proposal = _canary(client)
+    for index in range(20):
+        _score(client, proposal['before_hash'], f'base-{index}', False)
+        _score(client, proposal['after_hash'], f'trial-{index}', True)
+    assert _state().canary is not None and _state().canary.hash == proposal['after_hash']
+    listed = {row['id']: row for row in client.get('/factory/improvements', params={'factory_id': FACTORY}).json()['proposals']}
+    assert listed[proposal['id']]['status'] == 'canary' and listed[proposal['id']]['verdict'] == 'improved'
+    events = client.get('/factory/improvements/export', params={'factory_id': FACTORY}).json()['events']
+    assert [event['type'] for event in events].count('measured') == 1  # the same verdict is written once, not on every score
+
+
+def test_the_service_itself_refuses_a_decision_without_the_person(client):
+    _activate(definition())
+    proposal = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': definition('Build, then ask.'),
+                                                                  'justification': 'x'}, headers=HUMAN).json()
+    from factory.improvement import service
+    from factory.service import FactoryError
+
+    async def go():
+        async with SessionLocal() as db:
+            for call in (lambda: service.decide(db, proposal['id'], 'approve', ('agent', None)),
+                         lambda: service.measure(db, proposal['id'], ('agent', None)),
+                         lambda: service.revert(db, proposal['id'], ('agent', None)),
+                         lambda: service.mark_promoted(db, proposal['id'], ('agent', None))):
+                with pytest.raises(FactoryError) as caught:
+                    await call()
+                assert caught.value.code == 'human_only'
+    anyio.run(go)
