@@ -218,3 +218,50 @@ def test_editing_the_blueprint_starts_a_trial_and_cannot_drop_the_review_gate(cl
     assert refused.status_code == 200
     assert refused.json()['status'] == 'rejected'
     assert any(reason['code'] == 'weaken_gate' for reason in refused.json()['reasons'])
+
+
+# ------------------------------------------------------------------------------------------------ a route never skips a required gate
+
+def test_a_blueprint_that_skips_a_required_stage_is_refused(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    for blueprint in ({'entry': [{'when': 'has label docs', 'to': 'implement'}]},
+                      {'routes': [{'from': 'review', 'to': 'handoff', 'when': 'always'}]}):
+        resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': blueprint}, headers=HUMAN)
+        assert resp.status_code == 200 and resp.json()['status'] == 'rejected', blueprint
+        assert 'skip_required' in {reason['code'] for reason in resp.json()['reasons']}
+    assert _state().canary is None
+
+
+def test_an_entry_that_would_skip_a_required_stage_leaves_the_item_at_intake(client):
+    # Written straight to the version log, as if the check above were bypassed: the run time refuses too.
+    _activate(_definition({'entry': [{'when': 'has label docs', 'to': 'implement'}]}))
+    item = client.post('/factory/work-items', json={'factory_id': FACTORY, 'title': 'Docs', 'labels': ['docs'],
+                                                     'source': {'kind': 'manual', 'ref': 'skip-1'}}).json()
+    assert item['stage'] == 'intake'
+
+
+def test_a_blueprint_that_is_not_valid_is_refused(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': {'entry': [{'to': 'intake', 'mergeOnGreen': True}]}}, headers=HUMAN)
+    assert resp.status_code == 200 and resp.json()['status'] == 'rejected'
+    assert 'invalid_definition' in {reason['code'] for reason in resp.json()['reasons']}
+
+
+def test_the_agent_token_cannot_change_the_blueprint(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': {'entry': [{'to': 'intake'}]}})
+    assert resp.status_code == 403
+
+
+def test_would_it_fire_has_a_size_limit(client):
+    big = {'provider': 'github', 'event': 'issues.opened', 'filter': {}, 'fields': {'x': 'y' * 70000}}
+    assert client.post('/factory/blueprint/would-fire', json=big).status_code == 422
+    odd = {'provider': 'git hub\n', 'event': 'issues.opened', 'filter': {}, 'fields': {}}
+    assert client.post('/factory/blueprint/would-fire', json=odd).status_code == 422
+
+
+def test_nilo_drops_a_request_that_holds_a_credential():
+    files = compose('issue-pr', 'docs', 'use ghp_' + 'a' * 36 + ' to push')
+    assert 'ghp_' not in files['agents/foreman/agent.md']
+    kept = compose('issue-pr', 'docs', 'reset the password page copy')
+    assert 'password page' in kept['agents/foreman/agent.md']
