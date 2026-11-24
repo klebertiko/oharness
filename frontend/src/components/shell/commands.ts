@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { tr } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
-import { applyTheme, appliedTheme } from "@/lib/theme";
+import { applyTheme, appliedTheme, nextTheme, osPrefersLight, type Theme } from "@/lib/theme";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 import { useThreadStore } from "@/store/threadStore";
 import { cycleRegion } from "./regions";
@@ -168,11 +168,11 @@ export function shellNavCommands(): Command[] {
     },
     {
       id: "theme:toggle",
-      label: tr((typeof document === "undefined" ? "dark" : appliedTheme()) === "dark" ? "shell.rail.useLight" : "shell.rail.useDark"),
+      label: tr(THEME_LABEL[themeTarget()]),
       group: tr("shell.cmd.group.view"),
       icon: SunMoon,
-      keywords: "dark light appearance",
-      run: () => applyTheme(appliedTheme() === "dark" ? "light" : "dark"),
+      keywords: "dark light system appearance",
+      run: () => applyTheme(themeTarget()),
     },
   ];
 
@@ -265,3 +265,15 @@ export function matchCommands(commands: Command[], query: string): Match[] {
 
   return out.sort((a, b) => b.score - a.score);
 }
+
+/** What `theme:toggle` does now: `system` resolved against the OS, never the theme already shown (see nextTheme). */
+function themeTarget(): Theme {
+  if (typeof document === "undefined") return "light";
+  return nextTheme(appliedTheme(), osPrefersLight());
+}
+
+const THEME_LABEL = {
+  system: "shell.rail.useSystem",
+  light: "shell.rail.useLight",
+  dark: "shell.rail.useDark",
+} as const satisfies Record<Theme, MessageKey>;

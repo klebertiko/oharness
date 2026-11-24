@@ -176,10 +176,24 @@ describe("ActivityRail", () => {
     expect(within(nav).getByRole("button", { name: "Chats" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("toggles the theme from the command registry", () => {
-    document.documentElement.dataset.theme = "dark";
-    shellNavCommands().find((command) => command.id === "theme:toggle")!.run();
+  it("toggles the theme from the command registry like the rail did: system, the other theme, back", () => {
+    // A dark OS. The command's label names what running it does.
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: !query.includes("light"), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    const toggle = () => shellNavCommands().find((command) => command.id === "theme:toggle")!;
+    document.documentElement.dataset.theme = "system";
+    expect(toggle().label).toBe("Use light theme");
+    toggle().run();
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.style.colorScheme).toBe("light");
+    expect(toggle().label).toBe("Follow system theme");
+    toggle().run();
+    expect(document.documentElement.dataset.theme).toBe("system");
+    // An explicit choice equal to the OS flips.
+    document.documentElement.dataset.theme = "dark";
+    expect(toggle().label).toBe("Use light theme");
+    toggle().run();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    window.matchMedia = original;
   });
 });

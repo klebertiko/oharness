@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // data-theme and color-scheme are set before hydration by theme-init.js.
-    <html lang="en" className={fontVariables} data-theme="dark" suppressHydrationWarning>
+    <html lang="en" className={fontVariables} data-theme="system" data-density="comfortable" suppressHydrationWarning>
       <head>
         {/* Blocking on purpose: the theme must be known before first paint. */}
         {/* biome-ignore lint/performance/noSyncScripts: same-origin theme bootstrap; async/defer would flash the wrong theme */}
