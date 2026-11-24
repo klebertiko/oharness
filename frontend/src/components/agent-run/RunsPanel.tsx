@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RotateCw } from "lucide-react";
 
 import { RunEvidence } from "./RunEvidence";
-import { Panel } from "@/components/shell/Panel";
-import { ListGroup, ListRow, StatusDot, type Tone } from "@/components/shell/ListRow";
+import { ListGroup, ListRow, Panel, StatusDot, type Tone } from "@/components/ui";
 import { runResultText, runsApi, type RunLog, type RunLogDetail, type RunStatus } from "@/lib/runsApi";
 
 /**
@@ -48,6 +47,7 @@ export function RunsPanel() {
 
   return (
     <Panel
+      variant="dock"
       title="Activity"
       className="h-full"
       actions={

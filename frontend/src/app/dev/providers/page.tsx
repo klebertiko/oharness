@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { Activity, KeyRound, Plug, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/shell/AppShell";
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import type { Command } from "@/components/shell/commands";
 import { ProvidersScreen } from "@/components/providers/ProvidersScreen";
 import { RunBinding } from "@/components/providers/RunBinding";
@@ -72,6 +72,7 @@ export default function ProvidersDevPage() {
       stage={<ProvidersScreen />}
       right={
         <Panel
+          variant="dock"
           title="Run binding"
           meta={name}
           actions={
