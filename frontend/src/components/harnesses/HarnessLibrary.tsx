@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Trash2, Upload, Workflow } from "lucide-react";
 
-import { Panel } from "@/components/shell/Panel";
-import { ListGroup, ListRow, RowAction } from "@/components/shell/ListRow";
+import { ListGroup, ListRow, Panel, RowAction } from "@/components/ui";
 import { isOHarnessBundle, validateBundle } from "@/lib/bundlesApi";
 import { useHarnessLibraryStore } from "@/store/harnessLibraryStore";
 import { useHarnessSessionStore, type HarnessBundle } from "@/store/harnessSessionStore";
@@ -66,6 +65,7 @@ export function HarnessLibrary({ onPicked }: { onPicked?: (bundle: HarnessBundle
 
   return (
     <Panel
+      variant="dock"
       title="Harnesses"
       className="h-full"
       actions={

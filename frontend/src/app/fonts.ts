@@ -1,9 +1,9 @@
 import localFont from "next/font/local";
 
 /**
- * Self-hosted, no CDN at runtime. Sora carries the interface (400, 500, 600),
- * IBM Plex Mono carries machine data (400, 500); both SIL OFL 1.1, licences
- * beside the files.
+ * Self-hosted, no CDN at runtime. Sora carries display, titles and the mark
+ * (400, 500, 600). Interface text uses the system face. IBM Plex Mono carries
+ * code (400, 500). Both shipped faces are SIL OFL 1.1; licences sit beside the files.
  *
  * Only the `latin` subset ships (Latin-1: English, Portuguese, Spanish, French,
  * German). next/font/local cannot express unicode-range, so a second latin-ext

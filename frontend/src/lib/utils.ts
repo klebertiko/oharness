@@ -11,7 +11,7 @@ const twMerge = extendTailwindMerge({
       radius: ["control", "panel", "float", "composer", "hero"],
     },
     classGroups: {
-      "font-size": [{ text: ["meta", "label", "body", "title", "reading", "code", "display"] }],
+      "font-size": [{ text: ["meta", "label", "caption", "body", "ui", "title", "heading", "reading", "transcript", "code", "display"] }],
     },
   },
 });

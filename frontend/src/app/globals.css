@@ -37,26 +37,71 @@
   --color-role-memory: var(--role-memory);
   --color-role-aggregator: var(--role-aggregator);
   --color-role-output: var(--role-output);
+  --color-role-agent: var(--role-agent);
+  --color-role-gate: var(--role-gate);
+  --color-role-skill: var(--role-skill);
+  --color-role-mcp: var(--role-mcp);
+  --color-role-decision: var(--role-decision);
 
+  --color-bg-app: var(--bg-app);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-pane: var(--bg-pane);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-active: var(--bg-active);
 
-  --text-meta: 11px;
-  --text-meta--line-height: 1.4;
-  --text-meta--letter-spacing: 0.02em;
-  --text-label: 10px;
-  --text-label--line-height: 1.4;
-  --text-label--letter-spacing: 0.1em;
-  --text-body: 12px;
-  --text-body--line-height: 1.5;
-  --text-title: 13px;
-  --text-title--line-height: 1.3;
-  --text-title--letter-spacing: -0.004em;
-  --text-reading: 14px;
-  --text-reading--line-height: 1.6;
-  --text-code: 12px;
-  --text-code--line-height: 1.55;
-  --text-display: 20px;
-  --text-display--line-height: 1.2;
-  --text-display--letter-spacing: -0.018em;
+  --color-fg-1: var(--fg-1);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+
+  --color-border-1: var(--border-1);
+  --color-border-2: var(--border-2);
+
+  --color-signal-bg: var(--signal-bg);
+  --color-signal-border: var(--signal-border);
+  --color-signal-fg: var(--signal-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-border: var(--warn-border);
+  --color-warn-fg: var(--warn-fg);
+  --color-fault-bg: var(--fault-bg);
+  --color-fault-border: var(--fault-border);
+  --color-fault-fg: var(--fault-fg);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-border: var(--ok-border);
+  --color-ok-fg: var(--ok-fg);
+
+  --color-diff-added: var(--diff-added);
+  --color-diff-removed: var(--diff-removed);
+  --color-diff-modified: var(--diff-modified);
+  --color-diff-conflict: var(--diff-conflict);
+
+  --text-display: 24px;
+  --text-display--line-height: 32px;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 17px;
+  --text-title--line-height: 24px;
+  --text-title--letter-spacing: -0.011em;
+  --text-heading: 15px;
+  --text-heading--line-height: 22px;
+  --text-heading--letter-spacing: -0.006em;
+  --text-body: 14px;
+  --text-body--line-height: 22px;
+  --text-ui: 13px;
+  --text-ui--line-height: 20px;
+  --text-meta: 12px;
+  --text-meta--line-height: 18px;
+  --text-label: 11px;
+  --text-label--line-height: 16px;
+  --text-caption: 11px;
+  --text-caption--line-height: 16px;
+  --text-reading: 15px;
+  --text-reading--line-height: 24px;
+  --text-transcript: var(--transcript-size);
+  --text-transcript--line-height: 24px;
+  --text-code: 13px;
+  --text-code--line-height: 20px;
 
   --spacing-titlebar: var(--h-titlebar);
   --spacing-statusbar: var(--h-statusbar);
@@ -66,12 +111,31 @@
   --spacing-control-md: var(--control-md);
   --spacing-control-lg: var(--control-lg);
   --spacing-control-touch: var(--control-touch);
+  --spacing-pad-1: var(--pad-1);
+  --spacing-pad-2: var(--pad-2);
+  --spacing-pad-3: var(--pad-3);
+  --spacing-pad-4: var(--pad-4);
+  --spacing-pad-5: var(--pad-5);
+  --spacing-pad-6: var(--pad-6);
+  --spacing-gap-1: var(--gap-1);
+  --spacing-gap-2: var(--gap-2);
+  --spacing-gap-3: var(--gap-3);
+  --spacing-gap-4: var(--gap-4);
+  --spacing-gap-5: var(--gap-5);
+  --spacing-icon: var(--icon);
 
   --radius-control: var(--r-control);
   --radius-panel: var(--r-panel);
   --radius-float: var(--r-float);
   --radius-composer: var(--r-composer);
   --radius-hero: var(--r-hero);
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-2xl);
+  --radius-full: var(--r-full);
 
   --shadow-selected: var(--edge-selected);
 
@@ -107,7 +171,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--border-1, currentcolor);
   }
 }
 
@@ -118,22 +182,26 @@
    designed-as-app
 
    PALETTE LOGIC — read this before adding a colour.
-   The substrate is strictly cold-neutral and carries NO chroma of its own
-   beyond a 0.010 blue cast that keeps it from going flat grey. Elevation is
-   expressed as value steps + hairlines, never as glow or drop shadow.
-   Chroma is reserved: it means *state*, never mood. Exactly one hue
-   (--signal) marks "this is live / this is focused / this is the primary
-   action". Two more encode warn and fault. Node roles get an identity hue,
-   but locked to one lightness and one chroma so nine roles read as a family
-   instead of a rainbow. If a colour is not carrying information, it is grey.
+   The substrate is warm graphite. Hue 72 is the family: surfaces, lines and
+   the mascot's desk all sit on it. The comment that used to call this a cold
+   blue cast was wrong; there is no blue in the substrate. Elevation is a
+   value step plus a hairline, never glow. Chroma means state, never mood.
+   --signal is the one hue for live, focus and the primary action. Warn and
+   fault are the other two. Node roles share one lightness and one chroma.
+   If a colour is not carrying information, it is graphite. Ink keeps the
+   audited ramp (hue 82 at a chroma under 0.012) so the contrast pairs stay
+   true; new layers are color-mix of the tokens above, not a second palette.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   color-scheme: dark;
   /* next/font/local (app/fonts.ts) defines --font-sora and --font-plex-mono on
      <html>; the quoted names are the fallback when a page renders without it. */
-  --font-ui: var(--font-sora, "Sora"), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Sora is display, title and the mark. Interface text is the system face. */
+  --font-display: var(--font-sora, "Sora"), ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-plex-mono, "IBM Plex Mono"), ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --oh-scale: 1;
 
   /* ── Warm graphite surfaces (default) ───────────────────────────────── */
   --sub-000: oklch(0.170 0.006 72);
@@ -187,7 +255,15 @@
   --role-hitl: oklch(0.560 0.105 30);
   --role-skill: oklch(0.520 0.075 255);
   --role-mcp: oklch(0.520 0.075 160);
-  --role-tool: oklch(0.500 0.035 235);
+  --role-tool: oklch(0.510 0.035 235);
+  /* The @theme map named these two; they now exist, same family as the others. */
+  --role-input: oklch(0.540 0.085 210);
+  --role-llm: oklch(0.540 0.085 265);
+  --role-evaluator: oklch(0.540 0.085 120);
+  --role-router: oklch(0.560 0.100 45);
+  --role-memory: oklch(0.540 0.085 330);
+  --role-aggregator: oklch(0.540 0.085 175);
+  --role-output: oklch(0.560 0.100 95);
   /* EXPERIMENTAL (ADR-0005, spike) — distinct hue so a "decision" node never
      reads as a Gate/HITL (both real gates); this one never is. */
   --role-decision: oklch(0.560 0.130 310);
@@ -217,25 +293,87 @@
   --h-statusbar: 24px;
   --h-panelhead: 32px;
   --w-rail: 220px;
-  /* Control heights: 24 dense, 28 default, 36 on touch layouts and composer. */
-  --control-sm: 24px;
-  --control-md: 28px;
+  /* Comfortable density is the default (no attribute). Compact restates these below. */
+  --control-sm: 28px;
+  --control-md: 32px;
   --control-lg: 36px;
   /* Minimum pointer target on touch (pointer: coarse), ADR 0033. */
   --control-touch: 44px;
+  --pad-1: 6px;
+  --pad-2: 8px;
+  --pad-3: 12px;
+  --pad-4: 16px;
+  --pad-5: 20px;
+  --pad-6: 24px;
+  --gap-1: 6px;
+  --gap-2: 10px;
+  --gap-3: 14px;
+  --gap-4: 20px;
+  --gap-5: 32px;
+  --icon: 18px;
 
   --r-control: 4px;
   --r-panel: 6px;
   --r-float: 8px;
   --r-composer: 14px;
   --r-hero: 18px;
+  /* Named radii. An inner corner is the outer radius minus the padding. */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
+  --r-full: 9999px;
 
-  /* ── Motion ────────────────────────────────────────────────────────────── */
-  --duration-fast: 110ms;
+  --sheet-max: 560px;
+  --sheet-inset: 24px;
+  --sheet-offset: 10px;
+  /* Transcript may be set anywhere from --transcript-min to --transcript-max. */
+  --transcript-size: 15px;
+  --transcript-min: 12px;
+  --transcript-max: 20px;
+
+  /* Layers are mixes of the substrate, so both themes and both densities share them. */
+  --bg-app: var(--sub-000);
+  --bg-sidebar: color-mix(in oklch, var(--sub-100) 88%, var(--sub-000));
+  --bg-pane: var(--sub-100);
+  --bg-elevated: color-mix(in oklch, var(--sub-100) 72%, var(--sub-200));
+  --bg-hover: var(--sub-200);
+  --bg-active: var(--sub-300);
+  /* Foreground steps. 60% and 45% miss Ivory, so fg-3 is 68% and fg-4 is 58%. */
+  --fg-1: var(--ink-primary);
+  --fg-2: color-mix(in oklch, var(--ink-primary) 74%, transparent);
+  --fg-3: color-mix(in oklch, var(--ink-primary) 68%, transparent);
+  --fg-4: color-mix(in oklch, var(--ink-primary) 58%, transparent);
+  --border-1: var(--line);
+  --border-2: var(--line-strong);
+  --signal-bg: color-mix(in oklch, var(--signal) 10%, transparent);
+  --signal-border: color-mix(in oklch, var(--signal) 30%, transparent);
+  --signal-fg: var(--signal-text);
+  --warn-bg: color-mix(in oklch, var(--warn) 10%, transparent);
+  --warn-border: color-mix(in oklch, var(--warn) 30%, transparent);
+  --warn-fg: var(--warn-text);
+  --fault-bg: color-mix(in oklch, var(--fault) 10%, transparent);
+  --fault-border: color-mix(in oklch, var(--fault) 30%, transparent);
+  --fault-fg: var(--fault-text);
+  --ok: oklch(0.560 0.100 155);
+  --ok-bg: color-mix(in oklch, var(--ok) 10%, transparent);
+  --ok-border: color-mix(in oklch, var(--ok) 30%, transparent);
+  --ok-fg: oklch(0.700 0.110 155);
+  --diff-added: oklch(0.560 0.100 155);
+  --diff-removed: oklch(0.560 0.105 28);
+  --diff-modified: oklch(0.610 0.120 80);
+  --diff-conflict: oklch(0.560 0.110 310);
+
+  /* ── Motion: 100 / 160 / 240. Reduced motion zeros these below. ─────────── */
+  --duration-fast: 100ms;
   --duration-base: 160ms;
-  --duration-enter: 420ms;
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-enter: 240ms;
+  --ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-standard: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-enter: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 [data-theme="light"] {
@@ -258,9 +396,61 @@
   --signal-text: oklch(0.480 0.100 190);
   --warn-text: oklch(0.500 0.110 80);
   --fault-text: oklch(0.515 0.160 28);
+  --ok-fg: oklch(0.450 0.110 155);
   --shadow-soft: 0 16px 44px oklch(0.25 0.01 75 / 0.09);
   --shadow-float: 0 22px 58px oklch(0.25 0.01 75 / 0.14);
   --surface-highlight: oklch(1 0 0 / 0.72);
+}
+
+/* Compact tightens the steps. Comfortable (the default) is the :root block. */
+:root[data-density="compact"] {
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --pad-1: 4px;
+  --pad-2: 6px;
+  --pad-3: 8px;
+  --pad-4: 12px;
+  --pad-5: 16px;
+  --pad-6: 20px;
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 24px;
+  --icon: 16px;
+}
+
+/* System follows the OS. The light values match [data-theme="light"] exactly. */
+:root[data-theme="system"] {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+    --sub-000: oklch(0.965 0.008 82);
+    --sub-100: oklch(0.985 0.005 82);
+    --sub-200: oklch(0.940 0.009 82);
+    --sub-300: oklch(0.905 0.010 82);
+    --sub-400: oklch(0.865 0.011 82);
+    --line: oklch(0.810 0.011 82);
+    --line-soft: oklch(0.885 0.009 82);
+    --line-strong: oklch(0.600 0.011 82);
+    --ink-primary: oklch(0.235 0.012 75);
+    --ink-dim: oklch(0.380 0.011 75);
+    --ink-mute: oklch(0.470 0.010 75);
+    --ink-faint: oklch(0.500 0.009 75);
+    --signal: oklch(0.520 0.105 190);
+    --signal-deep: oklch(0.440 0.095 190);
+    --signal-ink: oklch(0.985 0.005 82);
+    --signal-text: oklch(0.480 0.100 190);
+    --warn-text: oklch(0.500 0.110 80);
+    --fault-text: oklch(0.515 0.160 28);
+    --ok-fg: oklch(0.450 0.110 155);
+    --shadow-soft: 0 16px 44px oklch(0.25 0.01 75 / 0.09);
+    --shadow-float: 0 22px 58px oklch(0.25 0.01 75 / 0.14);
+    --surface-highlight: oklch(1 0 0 / 0.72);
+  }
 }
 
 * {
@@ -396,70 +586,89 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Type roles — five, locked. Never invent a sixth. ────────────────────── */
+/* ── Type roles. One scale; .t-* and the text-* utilities are aliases.
+   Nothing is smaller than 11px. Sora is display and title only. ──────────── */
 
-/* Display — one per view: the harness name in the title bar, palette header */
 .t-display {
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.018em;
-  line-height: 1.2;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 32px;
 }
 
-/* Title — panel headings, node names, command rows */
 .t-title {
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.004em;
-  line-height: 1.3;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  line-height: 24px;
 }
 
-/* Body — descriptions, field values, help copy */
+.t-heading {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  line-height: 22px;
+}
+
 .t-body {
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.5;
-}
-
-/* Label — section kickers. Uppercase sans, NOT mono: mono is for machines. */
-.t-label {
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  line-height: 1.4;
-}
-
-/* Meta — mono. Machine-readable strings only: ids, keys, counts, latencies,
-   adapter names, shortcuts. If a human wrote it, it is not Meta. */
-.t-meta {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
-}
-
-/* Reading — the conversation column and long prose, one column of 60 to 68ch. */
-.t-reading {
   font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 22px;
+}
+
+.t-ui {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.t-meta {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.t-label {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.t-caption {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.t-reading {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 24px;
   max-width: 68ch;
 }
 
-/* Code — blocks and the run trace. */
+.t-transcript {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--transcript-size);
+  font-weight: 400;
+  line-height: 24px;
+}
+
 .t-code {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
-  line-height: 1.55;
+  line-height: 20px;
 }
 
 /* ── Shell primitives ───────────────────────────────────────────────────── */
@@ -468,6 +677,9 @@
 .oh-panel {
   background: var(--sub-100);
   border-radius: var(--r-panel);
+  box-shadow: inset 0 1px 0 var(--surface-highlight);
+}
+.oh-inset-highlight {
   box-shadow: inset 0 1px 0 var(--surface-highlight);
 }
 
@@ -764,8 +976,8 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--sub-000);
     color: var(--ink);
     font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-    font-size: 13px;
-    line-height: 1.45;
+    font-size: 14px;
+    line-height: 22px;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
