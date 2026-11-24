@@ -9,11 +9,13 @@ The check happens before the command runs, so a refused host never starts. It fa
 * a proxy, a resolver override or a jump host (`--proxy`, `-x`, `--resolve`, `--connect-to`, `-J`, `ProxyCommand`...) is refused
   whenever a policy applies, because it changes where the traffic really goes;
 * hosts are compared in one canonical spelling: IPv4 in any numeric form (decimal, hex, octal, short) and IPv6 with a mapped IPv4;
-* what it cannot read safely is refused, not guessed: a shell payload with `$`, backticks, backslashes or quotes, a host with
-  percent-encoding or characters outside ASCII;
-* a policy that extends a named policy the definition does not have refuses every host.
+* what it cannot read safely is refused, not guessed: any PowerShell command; with a shell, a wrapper or a network program in the
+  command, an argument with a character a shell expands, unquotes or globs; with any program, a URL or `user@` argument built
+  with `$` or backticks; a URL host that is not a plain name, IPv4 or IPv6 literal; a host with percent-encoding or outside ASCII;
+* a policy that extends a named policy the definition does not have, or holds an entry outside ASCII, refuses every host.
 
-A command that names no host is local and is not judged here.
+A command that names no host is local and is not judged here. This is a check on the command line, not an egress firewall: a
+program that builds its host at run time (a script reading a URL from a file) is beyond it, and needs an OS or sandbox block.
 """
 from __future__ import annotations
 
@@ -38,8 +40,7 @@ SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash', 'csh', 't
 WRAPPERS = frozenset({'env', 'timeout', 'nice', 'nohup', 'xargs', 'sudo', 'doas', 'stdbuf', 'time', 'exec', 'command', 'start'})
 # Characters a shell expands or unquotes (POSIX shells and cmd). The policy does not run a shell to see what they become, so it
 # refuses them instead.
-_SHELL_SPECIAL = ('$', '`', '\\', '"', "'", '^', '%', '!')
-_POWERSHELL_SPECIAL = ('+',)
+_SHELL_SPECIAL = ('$', '`', '\\', '"', "'", '^', '%', '!', '{', '}', '[', ']', '*', '?', '~')
 _REDIRECT_WORDS = ('proxycommand', 'proxyjump', 'proxy=', 'http_proxy', 'https_proxy', 'all_proxy')
 
 
@@ -62,6 +63,8 @@ def policy_for(definition: dict, agent_id: str) -> dict:
             denied.extend(extra.get('deniedHosts') or [])
         allowed.extend(source.get('allowedHosts') or [])
         denied.extend(source.get('deniedHosts') or [])
+    # An entry the policy cannot read in one spelling (outside ASCII, percent-encoded) closes it: authors write the A-label.
+    missing += [f'the entry {h!r}' for h in [*allowed, *denied] if not _plain(str(h))]
     return {'allowedHosts': [canonical(h) for h in allowed], 'deniedHosts': [canonical(h) for h in denied], 'missing': missing}
 
 
@@ -100,14 +103,7 @@ def canonical(host: str) -> str:
         return str(address.ipv4_mapped) if address.ipv4_mapped else address.compressed
     if address is not None:
         return str(address)
-    if not text.isascii():
-        # A policy entry written in Unicode is compared in IDNA. A host in a command written that way never gets here: `unreadable`
-        # refuses it first.
-        try:
-            return text.encode('idna').decode('ascii')
-        except UnicodeError:
-            return text
-    return text
+    return text  # never converted: a policy entry outside ASCII closes the policy, a command host outside ASCII is refused
 
 
 def _is_hostname(text: str) -> bool:
@@ -188,27 +184,59 @@ def unreadable(argv: list[str]) -> str | None:
     if not argv:
         return None
     programs = {_program(str(argv[0]))} | {_program(word) for word in _words(argv)}
+    if programs & {'powershell', 'pwsh'}:
+        return 'The network policy cannot judge a PowerShell command; run the program directly.'
     if programs & (SHELLS | WRAPPERS | NETWORK_PROGRAMS):
-        marks = _SHELL_SPECIAL + (_POWERSHELL_SPECIAL if programs & {'powershell', 'pwsh'} else ())
-        if any(mark in str(part) for part in argv[1:] for mark in marks):
+        if any(mark in _without_ipv6(str(part)) for part in argv[1:] for mark in _SHELL_SPECIAL):
             return 'The network policy cannot judge a command whose words a shell would expand or unquote; run it directly, without those characters.'
     for part in argv[1:]:
-        for match in _URL.finditer(str(part)):
-            if not _plain(_authority_host(match.group(1))):
-                return 'The network policy cannot judge a host written with percent-encoding or non-ASCII characters.'
+        text = str(part)
+        if ('://' in text or '@' in text) and any(mark in text for mark in ('$', '`')):  # whatever the program: a host built by a shell
+            return 'The network policy cannot judge a host built by the shell.'
+        for match in _URL.finditer(text):
+            if not _strict_host(_authority_host(match.group(1))):
+                return 'The network policy cannot judge this host: it is not a plain name, IPv4 or IPv6 address.'
     if any(not _plain(host) for host in hosts_in(argv, raw=True)):
         return 'The network policy cannot judge a host written with percent-encoding or non-ASCII characters.'
     return None
+
+
+_BRACKETED = re.compile(r'\[([0-9A-Fa-f:.]{2,45})\]')
+
+
+def _without_ipv6(text: str) -> str:
+    """The text with each bracketed IPv6 literal taken out: those brackets are the address, not a shell glob."""
+    def keep(match):
+        try:
+            ipaddress.IPv6Address(match.group(1))
+        except ValueError:
+            return match.group(0)
+        return ''
+    return _BRACKETED.sub(keep, text)
 
 
 def _plain(host: str) -> bool:
     return host.isascii() and '%' not in host
 
 
+def _strict_host(host: str) -> bool:
+    """A URL host the policy can read: a host name, an IPv4 address in any numeric form, or an IPv6 literal. Nothing else."""
+    text = host.lower().rstrip('.')
+    if not text or not _plain(text):
+        return False
+    if _is_hostname(text) or _ipv4(text) is not None:
+        return True
+    try:
+        ipaddress.IPv6Address(text)
+    except ValueError:
+        return False
+    return True
+
+
 def verdict(policy: dict, host: str) -> str | None:
     host = canonical(host)
     if policy.get('missing'):
-        return f'The network policy extends {policy["missing"][0]}, which this definition does not have, so no host is allowed.'
+        return f'The network policy cannot be read ({policy["missing"][0]} is missing or not plain ASCII), so no host is allowed.'
     if host in policy['deniedHosts']:
         return f'The network policy denies {host}.'
     allowed = policy['allowedHosts']
