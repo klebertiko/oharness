@@ -9,6 +9,7 @@ or change a protected field is refused with a reason. The Forja never merges, an
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
 
 from factory import definition_rules as rules
@@ -29,17 +30,28 @@ _COMMAND_WINDOW = 8  # a `merge` subcommand this many words after `git` (options
 TEXT_SCAN_MAX = 100_000  # a new text past this is refused rather than scanned
 
 
+# The forge command lines and the word before their merge subcommand.
+_FORGE_CLIS = {'gh': 'pr', 'glab': 'mr', 'tea': 'pr', 'hub': 'pr'}
+
+
+def _visible(text: str) -> str:
+    """The text as it reads: NFKC folds look-alike forms (full width, ligatures), and format characters (zero width, soft
+    hyphen) are dropped, so a merge cannot hide between them."""
+    return ''.join(char for char in unicodedata.normalize('NFKC', text) if unicodedata.category(char) != 'Cf')
+
+
 def _merges(text: str) -> Counter:
     """Each merge the text spells, as a normalized signature. Linear in the text: one regex with no nested repetition, then a
     walk over the words. Comparing the signatures on both sides, not presence or a count, keeps a merge already mentioned
     before from hiding a new or a swapped one."""
+    text = _visible(text)
     found: Counter = Counter(' '.join(match.group(0).lower().split()) for match in MERGE_TEXT.finditer(text))
     words = [word.lower().strip('.,:!?') for word in _TOKEN.findall(text)]
     for index, word in enumerate(words):
         program = _PATH_SEP.split(word)[-1].removesuffix('.exe')
         following = words[index + 1:index + 1 + _COMMAND_WINDOW]
-        if program == 'gh' and 'pr' in following:
-            following = following[following.index('pr') + 1:]
+        if program in _FORGE_CLIS and _FORGE_CLIS[program] in following:
+            following = following[following.index(_FORGE_CLIS[program]) + 1:]
         elif program != 'git':
             continue
         if 'merge' in following:
