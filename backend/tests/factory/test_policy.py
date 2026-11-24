@@ -312,3 +312,22 @@ def test_a_local_test_command_is_still_local():
     assert network.command_denied(defn(), 'builder', ['sed', '-e', 's/a/b/', 'notes.md']) is None
     assert network.command_denied(defn(), 'builder', ['make', '-j', '4']) is None
     assert network.command_denied(defn(), 'builder', ['git', '-c', 'http.proxy=http://api.example.com:1', 'fetch']) is not None
+
+
+@pytest.mark.parametrize('argv', [
+    ['curl', 'https://api.example.com"@evil.example.net/'],
+    ['curl', "https://api.example.com'@evil.example.net/"],
+    ['sh', '-c', 'curl https://ev""il.example.net/'],
+    ['sh', '-c', 'curl https://$HOST/'],
+    ['sh', '-c', 'curl https://`echo evil.example.net`/'],
+    ['bash', '-c', 'curl https://ev\\il.example.net/'],
+    ['curl', 'https://%65vil.example.net/'],
+    ['curl', 'https://ａpi.example.com/'],
+    ['curl', 'https://bücher.example/'],
+])
+def test_what_the_policy_cannot_read_safely_is_refused(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+def test_an_allowed_url_inside_a_plain_shell_payload_still_passes():
+    assert network.command_denied(defn(), 'builder', ['sh', '-c', 'curl https://api.example.com/v1 && echo ok']) is None
