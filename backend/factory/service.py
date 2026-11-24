@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from factory.models import ORIGIN_LIMIT_BYTES, ActionBody, WorkItemCreate
 from factory.orm import WorkItem, WorkItemArtifact, WorkItemEvent, WorkItemRun
-from factory.blueprint import entry_stage, matching_gate, route_decision
+from factory.blueprint import entry_stage, matching_gate, route_decision, skipped
 from factory.stages import CLOSED_STATUSES, may_enter, pairs_for_column, column_of
 from run_store import redact_value
 
@@ -354,7 +354,12 @@ async def _apply_entry(db: AsyncSession, item: WorkItem, actor: tuple[str, str |
         item.closed_at = _now()
         await add_event(db, item, 'route_ended', actor, {'reason': 'The entry route ends the item.', 'stage': 'end'})
         return
-    if target != 'intake' and target in ('triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor') and may_enter('intake', target):
+    from factory.improvement.limits import required_stages
+
+    jumps = skipped(required_stages(definition), 'intake', target) if definition else []
+    if jumps:  # a blueprint never skips a required gate, even one that reached the log without the save check
+        await add_event(db, item, 'route_refused', actor, {'to': target, 'skipped': jumps})
+    elif target != 'intake' and target in ('triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor') and may_enter('intake', target):
         _move(item, target, 'queued')
         await add_event(db, item, 'stage_entered', actor, {'stage': target, 'status': 'queued', 'via': 'entry'})
     await _apply_blueprint(db, item, actor, item.stage)

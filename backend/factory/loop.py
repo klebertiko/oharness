@@ -10,9 +10,19 @@ from dataclasses import dataclass, field
 
 from database import SessionLocal
 from factory import dispatch, runner, service
+from factory.definition import looks_secret
 from factory.definition_rules import RUNNER_DEFAULTS
 from factory.driver import production_driver
 from factory.harness_bind import engine_id
+
+
+MAX_STEERING = 20  # messages waiting for the run to read them; past this the person waits for the run to catch up
+MAX_FINISHED = 100  # finished runs the board still lists; older ones are only in the journal
+_LIVE = ('starting', 'running')
+
+
+class SteeringFull(Exception):
+    """The run has not read the earlier messages yet."""
 
 
 @dataclass
@@ -52,6 +62,9 @@ class LiveBoard:
 
     def open(self, row: LiveRun) -> LiveRun:
         self.runs[row.run_id] = row
+        finished = [run_id for run_id, run in self.runs.items() if run.status not in _LIVE]
+        for run_id in finished[:max(0, len(finished) - MAX_FINISHED)]:
+            del self.runs[run_id]
         return row
 
     def running_for(self, definition: dict) -> int:
@@ -65,6 +78,10 @@ class LiveBoard:
 
     def steer(self, run_id: str, text: str) -> None:
         row = self._live(run_id)
+        if looks_secret(text):
+            raise ValueError('a message to a run never carries a credential')
+        if len(row.steering) >= MAX_STEERING:
+            raise SteeringFull(run_id)
         row.steering.append(text)
 
     def stop(self, run_id: str) -> None:
@@ -72,7 +89,7 @@ class LiveBoard:
 
     def _live(self, run_id: str) -> LiveRun:
         row = self.runs.get(run_id)
-        if row is None or row.status not in ('starting', 'running'):
+        if row is None or row.status not in _LIVE:
             raise KeyError(run_id)
         return row
 
@@ -121,6 +138,9 @@ async def start(item_id: str, definition: dict, repo, store, driver=None, runner
         chosen = runner.select_runner(definition, task=runner_id, agent=agent.get('runner'))
         bound = await engine_id(db, agent)
         run_id = str(uuid.uuid4())
+        # Checked and claimed with no await in between: one item never has two runs going at once.
+        if BOARD.active_for_item(item.id) is not None:
+            raise dispatch.DispatchError('this item already has a run going')
         row = BOARD.open(LiveRun(
             run_id=run_id, item_id=item.id, title=item.title, stage=stage, agent_id=agent_id, status='starting',
             engine=bound, harness=agent.get('harness'), cancel=asyncio.Event(), steering=[],

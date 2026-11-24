@@ -13,6 +13,11 @@ export function translate(locale: Locale, key: MessageKey, vars?: Vars): string 
   return vars ? text.replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m)) : text;
 }
 
+/** A key built from data the server sent, used only when the catalog has it. Callers show plain text otherwise. */
+export function knownKey(key: string): MessageKey | null {
+  return key in en ? (key as MessageKey) : null;
+}
+
 /** Keys written as `base.one` / `base.other` (and `base.few` etc. where a language needs them) form one plural message named `base`. */
 export type PluralKey = MessageKey extends infer K ? (K extends `${infer B}.other` ? B : never) : never;
 

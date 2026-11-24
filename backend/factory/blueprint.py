@@ -3,11 +3,14 @@
 A condition is a sentence. The clauses the Forja can judge are `has label <id>`,
 `stage is <name>`, `returns above <n>`, `answer is <word>` and `always`, joined by `and`.
 A sentence with none of those clauses does not hold. Quality, security and human gates
-stay in the definition policy; this module does not remove them.
+stay in the definition policy: an entry or a route may never jump over a stage the
+definition requires (`skipped`), checked when the blueprint is saved and again at run time.
 """
 from __future__ import annotations
 
 import re
+
+ORDER = ('intake', 'triage', 'spec', 'implement', 'review', 'verify', 'handoff', 'monitor')
 
 _LABEL = re.compile(r'has label ([a-z0-9-]+)', re.IGNORECASE)
 _STAGE = re.compile(r'stage is ([a-z_]+)', re.IGNORECASE)
@@ -89,3 +92,28 @@ def simulate(blueprint: dict | None, facts: dict) -> list[dict]:
             break
         stage = str(route.get('to') or '')
     return path
+
+
+def skipped(required: set[str], source: str, target: str) -> list[str]:
+    """Required stages a move from `source` forward to `target` would jump over. Ending the item and going back are not a jump."""
+    if target == 'end' or source not in ORDER or target not in ORDER:
+        return []
+    start, stop = ORDER.index(source), ORDER.index(target)
+    return [stage for stage in ORDER[start + 1:stop] if stage in required]
+
+
+def problems(definition: dict) -> list[dict]:
+    """Entries and routes that would skip a required stage, as validator reasons."""
+    from factory.improvement.limits import required_stages
+
+    required = required_stages(definition)
+    blueprint = definition.get('blueprint') or {}
+    found: list[dict] = []
+    moves = [(f'blueprint.entry[{i}]', 'intake', rule.get('to')) for i, rule in enumerate(blueprint.get('entry') or []) if isinstance(rule, dict)]
+    moves += [(f'blueprint.routes[{i}]', rule.get('from'), rule.get('to')) for i, rule in enumerate(blueprint.get('routes') or []) if isinstance(rule, dict)]
+    for path, source, target in moves:
+        jumped = skipped(required, str(source), str(target))
+        if jumped:
+            found.append({'code': 'skip_required', 'path': path,
+                          'message': f'This would skip a required stage ({", ".join(jumped)}).'})
+    return found

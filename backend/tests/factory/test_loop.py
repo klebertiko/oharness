@@ -200,9 +200,68 @@ def test_routes_list_runs_and_refuse_a_stranger(ready, monkeypatch):
         listed = client.get('/factory/runs')
         assert listed.status_code == 200
         assert listed.json()['running'] == 0 and listed.json()['limit'] >= 1 and listed.json()['runs'] == []
-        assert client.post('/factory/runs/missing/stop').status_code == 403
-        assert client.post('/factory/runs/missing/steer', json={'text': 'hi'}).status_code == 403
-        missing = client.post('/factory/runs/missing/stop', headers=HUMAN)
+        assert client.post('/factory/runs/00000000-0000-0000-0000-000000000000/stop').status_code == 403
+        assert client.post('/factory/runs/00000000-0000-0000-0000-000000000000/steer', json={'text': 'hi'}).status_code == 403
+        missing = client.post('/factory/runs/00000000-0000-0000-0000-000000000000/stop', headers=HUMAN)
         assert missing.status_code == 404
         unknown = client.post('/factory/work-items/nope/run', json={'repo': '/tmp/nope'}, headers=HUMAN)
         assert unknown.status_code == 404
+
+
+# ------------------------------------------------------------------------------------------------------- one run per item, bounded
+
+def test_an_item_that_is_already_running_cannot_start_a_second_run(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+    gate = asyncio.Event()
+
+    async def slow(run):
+        await gate.wait()
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db)).id
+        first = asyncio.create_task(loop.start(item_id, defn(), repo, store, driver=slow))
+        for _ in range(200):
+            if loop.BOARD.active_for_item(item_id):
+                break
+            await asyncio.sleep(0.01)
+        try:
+            with pytest.raises(loop.dispatch.DispatchError):
+                await asyncio.wait_for(loop.start(item_id, defn(), repo, store, driver=slow), timeout=10)
+        finally:
+            gate.set()
+            await asyncio.wait_for(first, timeout=30)
+
+    anyio.run(case)
+
+
+def test_steering_is_bounded_and_refuses_a_credential():
+    loop.BOARD.reset()
+    row = loop.BOARD.open(loop.LiveRun(run_id='r', item_id='i', title='t', stage='implement', agent_id='a', status='running',
+                                       engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
+    for index in range(loop.MAX_STEERING):
+        loop.steer('r', f'note {index}')
+    with pytest.raises(loop.SteeringFull):
+        loop.steer('r', 'one more')
+    row.steering.clear()
+    with pytest.raises(ValueError):
+        loop.steer('r', 'use ghp_' + 'a' * 36)
+    loop.BOARD.reset()
+
+
+def test_the_board_keeps_only_the_latest_finished_runs():
+    loop.BOARD.reset()
+    for index in range(loop.MAX_FINISHED + 20):
+        loop.BOARD.open(loop.LiveRun(run_id=f'r{index}', item_id=f'i{index}', title='t', stage='implement', agent_id='a',
+                                     status='complete', engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
+    assert len(loop.BOARD.runs) <= loop.MAX_FINISHED + 1
+    assert 'r0' not in loop.BOARD.runs and f'r{loop.MAX_FINISHED + 19}' in loop.BOARD.runs
+    loop.BOARD.reset()
+
+
+def test_run_and_item_ids_in_the_path_are_checked(ready, monkeypatch):
+    monkeypatch.setenv('OH_HUMAN_TOKEN', 'human-secret')
+    with TestClient(app) as client:
+        assert client.post('/factory/runs/not a run/stop', headers=HUMAN).status_code == 422
+        assert client.post('/factory/runs/x' * 3 + '/steer', json={'text': 'hi'}, headers=HUMAN).status_code in (404, 422)
+        assert client.post('/factory/runs/00000000-0000-0000-0000-000000000000/steer', json={'text': 'hi', 'extra': 1}, headers=HUMAN).status_code == 422

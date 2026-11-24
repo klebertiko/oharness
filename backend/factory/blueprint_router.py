@@ -6,13 +6,15 @@ from pathlib import Path
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from factory import blueprint as blueprint_rules
+from factory import definition_rules as rules
 from factory import versions
 from factory.auth import actor_for
-from factory.definition import hash_of, load
+from factory.definition import hash_of, load, validate
 from factory.improvement import limits
 from factory.nilo_setup import compose
 from factory.service import FactoryError
@@ -21,20 +23,40 @@ from factory_intake.automations import Event, Trigger, explain_trigger
 router = APIRouter(prefix='/factory/blueprint', tags=['factory'])
 
 
+BODY_MAX_BYTES = 64 * 1024
+NAME = r'^[a-z0-9][a-z0-9_.-]{0,63}$'
+
+
+def _bounded(value):
+    if value is not None and len(json.dumps(value)) > BODY_MAX_BYTES:
+        raise ValueError(f'at most {BODY_MAX_BYTES} bytes')
+    return value
+
+
 class SaveBody(BaseModel):
-    model_config = {'extra': 'ignore'}
-    factory_id: str = Field(pattern=r'^[a-z0-9][a-z0-9-]{0,62}$')
+    model_config = {'extra': 'forbid'}
+    factory_id: str = Field(pattern=rules.ID_PATTERN)
     blueprint: dict
     stages: dict | None = None
 
+    @field_validator('blueprint', 'stages')
+    @classmethod
+    def _small(cls, value):
+        return _bounded(value)
+
 
 class WouldFireBody(BaseModel):
-    model_config = {'extra': 'ignore'}
-    provider: str
-    event: str
+    model_config = {'extra': 'forbid'}
+    provider: str = Field(pattern=NAME)
+    event: str = Field(pattern=NAME)
     filter: dict = Field(default_factory=dict)
     fields: dict = Field(default_factory=dict)
     payload: dict | None = None
+
+    @field_validator('filter', 'fields', 'payload')
+    @classmethod
+    def _small(cls, value):
+        return _bounded(value)
 
 
 class NiloBody(BaseModel):
@@ -62,7 +84,12 @@ async def save(body: SaveBody, request: Request, db: AsyncSession = Depends(get_
     after['blueprint'] = body.blueprint
     if body.stages is not None:
         after['stages'] = body.stages
-    reasons = limits.check(before, after)
+    # A person edits the blueprint, so it is free here; every gate, mode and scorer rule still applies, and no route may jump a required stage.
+    reasons = limits.check(before, after, free=(r'blueprint\..+', r'blueprint'))
+    if after.get('name') != body.factory_id:
+        reasons.append({'code': 'wrong_factory', 'path': 'name', 'message': 'The active definition is for another factory.'})
+    reasons += [{'code': 'invalid_definition', 'path': issue.path, 'message': issue.message} for issue in validate(after) if issue.severity == 'error']
+    reasons += blueprint_rules.problems(after)
     if reasons:
         return {'status': 'rejected', 'reasons': reasons}
     try:
