@@ -1,4 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach } from "vitest";
+import { useLocaleStore } from "@/i18n/store";
 import { describe, expect, it } from "vitest";
 import Catalogue from "./page";
 
@@ -28,4 +30,19 @@ describe("design system catalogue", () => {
     expect(screen.getByRole("checkbox", { name: "Mixed" }).getAttribute("aria-checked")).toBe("mixed");
     expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
   });
+
+  it("speaks the app language: no fixed English copy in pt-BR", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    render(<Catalogue />);
+    expect(screen.getByRole("heading", { name: "Botão" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ações" })).toBeTruthy();
+    expect(screen.getByText("Conversa 15px")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  useLocaleStore.setState({ locale: "en" });
 });
