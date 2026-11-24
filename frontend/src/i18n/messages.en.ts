@@ -1107,6 +1107,15 @@ export const en = {
   "nilo.memory.error.empty": "Write something to keep.",
   "nilo.memory.error.confirm": "Type the confirmation to forget everything.",
   "nilo.memory.error.notFound": "That item is already gone.",
+
+  "nilo.tasks.working": "Working",
+  "nilo.tasks.cancel": "Cancel",
+  "nilo.tasks.continue": "Continue",
+  "nilo.tasks.interrupted": "Interrupted",
+  "nilo.tasks.done": "Done",
+  "nilo.tasks.failed": "Failed",
+  "nilo.tasks.notifications": "System notifications",
+  "nilo.tasks.notificationsHint": "Off until you turn them on. Only when the window is in the background, and only when work finishes, fails, or needs you.",
 };
 
 export type MessageKey = keyof typeof en;

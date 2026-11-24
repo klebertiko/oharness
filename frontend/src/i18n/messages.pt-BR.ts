@@ -1109,4 +1109,13 @@ export const ptBR: Record<MessageKey, string> = {
   "nilo.memory.error.empty": "Escreva algo para guardar.",
   "nilo.memory.error.confirm": "Digite a confirmação para esquecer tudo.",
   "nilo.memory.error.notFound": "Esse item já não está aqui.",
+
+  "nilo.tasks.working": "Trabalhando",
+  "nilo.tasks.cancel": "Cancelar",
+  "nilo.tasks.continue": "Continuar",
+  "nilo.tasks.interrupted": "Interrompida",
+  "nilo.tasks.done": "Concluída",
+  "nilo.tasks.failed": "Falhou",
+  "nilo.tasks.notifications": "Notificações do sistema",
+  "nilo.tasks.notificationsHint": "Desligadas até você ligar. Só com a janela em segundo plano, e só quando o trabalho termina, falha ou precisa de você.",
 };
