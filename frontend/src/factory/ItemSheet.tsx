@@ -2,11 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, ConfirmInline, Input, Notice, Sheet } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
-import type { MessageKey } from "@/i18n/translate";
 import { forjaApi } from "./forjaApi";
 import type { FactoryAction, WorkItem, WorkItemArtifact, WorkItemEvent } from "./types";
 import { useExplain } from "./useForja";
-import { actionsFor, ageParts, eventKey, openQuestion, sourceKey, statusTone } from "./view";
+import { actionsFor, ageParts, eventKey, label, openQuestion, sourceKey, statusTone } from "./view";
 import { formatDate } from "@/i18n/translate";
 
 type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string; stage: string; agent_id: string | null }[] };
@@ -110,10 +109,10 @@ export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string;
           {error && <Notice tone="warn">{error}</Notice>}
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="text-ink-dim">{t("forja.item.stage")}</dt>
-            <dd>{t(`forja.stage.${item.stage}` as MessageKey)}</dd>
+            <dd>{label(t, `forja.stage.${item.stage}`, item.stage)}</dd>
             <dt className="text-ink-dim">{t("forja.item.status")}</dt>
             <dd>
-              <Badge tone={statusTone(item.status)}>{t(`forja.status.${item.status}` as MessageKey)}</Badge>
+              <Badge tone={statusTone(item.status)}>{label(t, `forja.status.${item.status}`, item.status)}</Badge>
             </dd>
             <dt className="text-ink-dim">{t("forja.item.source")}</dt>
             <dd>{t(source.key, source.n ? { n: source.n } : undefined)}</dd>
@@ -143,7 +142,7 @@ export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string;
             <pre className="whitespace-pre-wrap rounded-control border border-line-soft bg-sub-200 p-2">{item.origin_context.text || "–"}</pre>
           </section>
           <List title={t("forja.item.artifacts")} id="forja-artifacts" empty={t("forja.item.none")} rows={item.artifacts.map((a) => `${a.kind}: ${a.ref}`)} />
-          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${t(`forja.stage.${r.stage}` as MessageKey)} · ${r.agent_id ?? t("forja.item.none")}`)} />
+          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${label(t, `forja.stage.${r.stage}`, r.stage)} · ${r.agent_id ?? t("forja.item.none")}`)} />
           <section aria-labelledby="forja-history">
             <h3 id="forja-history" className="mb-1 text-title">{t("forja.item.history")}</h3>
             {events.length === 0 ? <p className="text-ink-mute">{t("forja.item.none")}</p> : (
@@ -191,7 +190,7 @@ export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string;
             <div className="flex flex-wrap gap-2">
               {actionsFor(item).map((action) => (
                 <Button key={action} variant={action === "approve_spec" ? "primary" : action === "cancel" ? "danger" : "secondary"} size="sm" onClick={() => (action === "cancel" ? setConfirming(true) : void act(action))} disabled={action === "note" && !note.trim()}>
-                  {t(`forja.action.${action}` as MessageKey)}
+                  {label(t, `forja.action.${action}`, action)}
                 </Button>
               ))}
             </div>

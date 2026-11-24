@@ -1,5 +1,5 @@
 import type { BadgeTone } from "@/components/ui";
-import type { MessageKey } from "@/i18n/translate";
+import { knownKey, type MessageKey } from "@/i18n/translate";
 import type { FactoryAction, FactoryStatus, WorkItem, WorkItemEvent } from "./types";
 import type { InboxEntry } from "./forjaApi";
 
@@ -136,4 +136,11 @@ export function groupInbox(entries: InboxEntry[]): InboxGroup[] {
     groups.get(key)?.entries.push(entry);
   }
   return order.map((key) => groups.get(key)!);
+}
+
+
+/** The words for a key built from server data, or the raw value when the catalog has none (a new stage never breaks the screen). */
+export function label(t: (key: MessageKey) => string, key: string, fallback: string): string {
+  const known = knownKey(key);
+  return known ? t(known) : fallback;
 }

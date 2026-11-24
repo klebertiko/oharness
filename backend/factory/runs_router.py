@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,11 +17,17 @@ from factory.auth import actor_for
 router = APIRouter(prefix='/factory', tags=['factory'])
 
 
+RunId = Annotated[str, PathParam(pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]
+ItemId = Annotated[str, PathParam(pattern=r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$')]
+
+
 class StartBody(BaseModel):
+    model_config = {'extra': 'forbid'}
     repo: str = Field(min_length=1, max_length=4096)
 
 
 class SteerBody(BaseModel):
+    model_config = {'extra': 'forbid'}
     text: str = Field(min_length=1, max_length=2000)
 
 
@@ -34,7 +42,7 @@ async def list_runs():
 
 
 @router.post('/work-items/{item_id}/run')
-async def start_run(item_id: str, body: StartBody, request: Request, db: AsyncSession = Depends(get_db)):
+async def start_run(item_id: ItemId, body: StartBody, request: Request, db: AsyncSession = Depends(get_db)):
     from routers.execution import _validated_project_cwd
 
     _human(request)
@@ -57,7 +65,7 @@ async def start_run(item_id: str, body: StartBody, request: Request, db: AsyncSe
 
 
 @router.post('/runs/{run_id}/stop')
-async def stop_run(run_id: str, request: Request):
+async def stop_run(run_id: RunId, request: Request):
     _human(request)
     try:
         loop.stop(run_id)
@@ -67,10 +75,14 @@ async def stop_run(run_id: str, request: Request):
 
 
 @router.post('/runs/{run_id}/steer')
-async def steer_run(run_id: str, body: SteerBody, request: Request):
+async def steer_run(run_id: RunId, body: SteerBody, request: Request):
     _human(request)
     try:
         loop.steer(run_id, body.text)
     except KeyError:
         raise HTTPException(status_code=404, detail={'code': 'no_such_run', 'message': 'That run is not going.'})
+    except loop.SteeringFull:
+        raise HTTPException(status_code=429, detail={'code': 'steering_full', 'message': 'The run has not read the earlier messages yet.'})
+    except ValueError:
+        raise HTTPException(status_code=422, detail={'code': 'looks_secret', 'message': 'A message to a run never carries a credential.'})
     return {'accepted': True}
