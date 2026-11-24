@@ -5,7 +5,8 @@ function visible(id: string): HTMLElement | null {
   if (!el) return null;
   if (el.hasAttribute("hidden") || el.getAttribute("aria-hidden") === "true") return null;
   const box = el.getBoundingClientRect();
-  if (box.width < 1 && box.height < 1) return null;
+  // Collapsed in either direction is hidden: a sidebar folded to zero width keeps its full height.
+  if (box.width < 1 || box.height < 1) return null;
   return el;
 }
 

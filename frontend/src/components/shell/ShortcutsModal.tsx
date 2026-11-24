@@ -23,6 +23,10 @@ export function ShortcutsModal({
   const { t } = useI18n();
   const mac = useIsMac();
   const rebind = useShortcutStore((s) => s.rebind);
+  const reset = useShortcutStore((s) => s.reset);
+  const bindings = useShortcutStore((s) => s.bindings);
+  /** A chord that belongs to another command, waiting for the person to confirm the swap. */
+  const [pending, setPending] = useState<{ id: string; chord: string; other: Command } | null>(null);
   const [query, setQuery] = useState("");
   const [chord, setChord] = useState<string | null>(null);
   const [recording, setRecording] = useState<string | null>(null);
@@ -37,10 +41,11 @@ export function ShortcutsModal({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
-      if (recording) {
+      if (recording || pending) {
         e.preventDefault();
         e.stopPropagation();
         setRecording(null);
+        setPending(null);
       }
       return;
     }
@@ -49,9 +54,12 @@ export function ShortcutsModal({
     if (recording) {
       e.preventDefault();
       e.stopPropagation();
-      rebind(recording, pressed);
+      const other = conflict(pressed, recording);
       setRecording(null);
       setChord(null);
+      // Taking another command's chord takes it away from that command: ask first.
+      if (other) setPending({ id: recording, chord: pressed, other });
+      else rebind(recording, pressed);
       return;
     }
     // A modifier chord filters the list instead of typing into the field.
@@ -86,19 +94,61 @@ export function ShortcutsModal({
         {rows.length === 0 && <p className="px-2 py-4 text-center text-body text-ink-mute">{t("shell.shortcuts.empty")}</p>}
         <ul className="flex flex-col gap-1" aria-label={t("shell.shortcuts.title")}>
           {rows.map((command) => {
-            const other = command.chord ? conflict(command.chord, command.id) : undefined;
+            const overridden = Object.hasOwn(bindings, command.id);
             return (
-              <li key={command.id} className="flex items-center gap-2 rounded-control px-2 py-1">
+              <li key={command.id} className="flex flex-wrap items-center gap-2 rounded-control px-2 py-1">
                 <span className="t-body min-w-0 flex-1 truncate text-ink">{command.label}</span>
                 {command.chord && <KbdChord caps={chordCaps(command.chord, mac)} />}
                 <button
                   type="button"
                   className="oh-focus-inner h-control-sm rounded-control px-2 text-meta text-ink-dim hover:bg-sub-200"
-                  onClick={() => setRecording(command.id)}
+                  onClick={() => {
+                    setPending(null);
+                    setRecording(command.id);
+                  }}
                 >
-                  {recording === command.id ? t("shell.shortcuts.recording") : t("shell.shortcuts.rebind")}
+                  {recording === command.id ? t("shell.shortcuts.recording") : t("shell.shortcuts.record")}
                 </button>
-                {other && recording === command.id && <span className="text-meta text-warn-text">{t("shell.shortcuts.conflict", { label: other.label })}</span>}
+                {command.chord && (
+                  <button
+                    type="button"
+                    className="oh-focus-inner h-control-sm rounded-control px-2 text-meta text-ink-dim hover:bg-sub-200"
+                    onClick={() => rebind(command.id, null)}
+                  >
+                    {t("shell.shortcuts.clear")}
+                  </button>
+                )}
+                {overridden && command.defaultChord && (
+                  <button
+                    type="button"
+                    className="oh-focus-inner h-control-sm rounded-control px-2 text-meta text-ink-dim hover:bg-sub-200"
+                    onClick={() => reset(command.id)}
+                  >
+                    {t("shell.shortcuts.reset")}
+                  </button>
+                )}
+                {pending?.id === command.id && (
+                  <div role="alert" className="flex w-full items-center gap-2">
+                    <span className="min-w-0 flex-1 text-meta text-warn-text">{t("shell.shortcuts.conflict", { label: pending.other.label })}</span>
+                    <button
+                      type="button"
+                      className="oh-focus-inner h-control-sm rounded-control px-2 text-meta text-ink hover:bg-sub-200"
+                      onClick={() => {
+                        rebind(pending.id, pending.chord, [pending.other.id]);
+                        setPending(null);
+                      }}
+                    >
+                      {t("shell.shortcuts.replace")}
+                    </button>
+                    <button
+                      type="button"
+                      className="oh-focus-inner h-control-sm rounded-control px-2 text-meta text-ink-dim hover:bg-sub-200"
+                      onClick={() => setPending(null)}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}
