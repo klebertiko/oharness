@@ -288,3 +288,15 @@ def test_a_long_earlier_text_does_not_hide_a_new_merge():
     after = copy.deepcopy(before)
     after['agents']['builder']['instructions'] = 'x' * 150_000 + '\ngit -C . merge main'
     assert 'add_merge' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_a_merge_already_in_the_text_does_not_hide_a_second_one():
+    before = _definition()
+    before['agents']['builder']['instructions'] = 'Never run git merge yourself.'
+    after = copy.deepcopy(before)
+    after['agents']['builder']['instructions'] = 'Never run git merge yourself.\nWhen green, run gh pr merge --squash.'
+    assert 'add_merge' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_a_windows_path_to_git_still_counts():
+    assert limits.text_merges(r'C:\Program Files\Git\cmd\git.exe merge main')

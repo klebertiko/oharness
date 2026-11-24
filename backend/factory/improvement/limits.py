@@ -23,23 +23,24 @@ MERGE_TEXT = re.compile(
     r'|\bpulls/[^/\s]+/merge\b',
     re.IGNORECASE)
 _TOKEN = re.compile(r"""[^\s;&|()`'"]+""")
+_PATH_SEP = re.compile(r'[\\/]')  # a program named by a path, POSIX or Windows
 _COMMAND_WINDOW = 8  # a `merge` subcommand this many words after `git` (options and their values in between) counts
 TEXT_SCAN_MAX = 100_000  # a new text past this is refused rather than scanned
 
 
-def _mentions_merge(text: str) -> bool:
-    """Every check here is linear in the text: one regex with no nested repetition, then a walk over the words."""
-    if MERGE_TEXT.search(text):
-        return True
+def _merge_count(text: str) -> int:
+    """How many merges the text spells. Linear in the text: one regex with no nested repetition, then a walk over the words.
+    Comparing counts, not presence, keeps a merge already mentioned before from hiding a new one."""
+    count = sum(1 for _ in MERGE_TEXT.finditer(text))
     words = [word.lower().strip('.,:!?') for word in _TOKEN.findall(text)]
     for index, word in enumerate(words):
-        program = word.rsplit('/', 1)[-1].removesuffix('.exe')
+        program = _PATH_SEP.split(word)[-1].removesuffix('.exe')
         following = words[index + 1:index + 1 + _COMMAND_WINDOW]
         if program == 'git' and 'merge' in following:
-            return True
-        if program == 'gh' and 'pr' in following and 'merge' in following[following.index('pr') + 1:]:
-            return True
-    return False
+            count += 1
+        elif program == 'gh' and 'pr' in following and 'merge' in following[following.index('pr') + 1:]:
+            count += 1
+    return count
 # Higher is looser for the first group, lower is looser for the second (ADR 0056: the trial must stay at least as careful).
 _LOOSER_IF_HIGHER = ('failureThreshold', 'ageDays', 'canaryPercent')
 _LOOSER_IF_LOWER = ('minSampleRuns', 'sampleDays')
@@ -175,14 +176,14 @@ def _merge_added(before, after, path: str) -> list[dict]:
             reasons.extend(_merge_added(previous, value, f'{path}[{index}]'))
     elif isinstance(after, str):
         previous = before if isinstance(before, str) else ''
-        if text_merges(after) and not _mentions_merge(previous):  # the earlier side is read in full, never assumed
+        if len(after) > TEXT_SCAN_MAX or _merge_count(after) > _merge_count(previous):  # the earlier side is read in full
             reasons.append(_reason('add_merge', path, 'The proposal adds a merge action. The Forja never merges.'))
     return reasons
 
 
 def text_merges(text: str) -> bool:
     """A new text that merges. One too long to scan counts as merging (fail closed)."""
-    return len(text) > TEXT_SCAN_MAX or _mentions_merge(text)
+    return len(text) > TEXT_SCAN_MAX or _merge_count(text) > 0
 
 
 def _fields(before: dict, after: dict) -> list[dict]:
