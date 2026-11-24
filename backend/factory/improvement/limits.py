@@ -9,6 +9,7 @@ or change a protected field is refused with a reason. The Forja never merges, an
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from factory import definition_rules as rules
 from factory.definition import stage_flags
@@ -28,19 +29,27 @@ _COMMAND_WINDOW = 8  # a `merge` subcommand this many words after `git` (options
 TEXT_SCAN_MAX = 100_000  # a new text past this is refused rather than scanned
 
 
-def _merge_count(text: str) -> int:
-    """How many merges the text spells. Linear in the text: one regex with no nested repetition, then a walk over the words.
-    Comparing counts, not presence, keeps a merge already mentioned before from hiding a new one."""
-    count = sum(1 for _ in MERGE_TEXT.finditer(text))
+def _merges(text: str) -> Counter:
+    """Each merge the text spells, as a normalized signature. Linear in the text: one regex with no nested repetition, then a
+    walk over the words. Comparing the signatures on both sides, not presence or a count, keeps a merge already mentioned
+    before from hiding a new or a swapped one."""
+    found: Counter = Counter(' '.join(match.group(0).lower().split()) for match in MERGE_TEXT.finditer(text))
     words = [word.lower().strip('.,:!?') for word in _TOKEN.findall(text)]
     for index, word in enumerate(words):
         program = _PATH_SEP.split(word)[-1].removesuffix('.exe')
         following = words[index + 1:index + 1 + _COMMAND_WINDOW]
-        if program == 'git' and 'merge' in following:
-            count += 1
-        elif program == 'gh' and 'pr' in following and 'merge' in following[following.index('pr') + 1:]:
-            count += 1
-    return count
+        if program == 'gh' and 'pr' in following:
+            following = following[following.index('pr') + 1:]
+        elif program != 'git':
+            continue
+        if 'merge' in following:
+            at = following.index('merge')
+            found[' '.join([program, *following[:at + 2]])] += 1  # the program, its options, the subcommand and what it merges
+    return found
+
+
+def _new_merges(before: str, after: str) -> bool:
+    return bool(_merges(after) - _merges(before))
 # Higher is looser for the first group, lower is looser for the second (ADR 0056: the trial must stay at least as careful).
 _LOOSER_IF_HIGHER = ('failureThreshold', 'ageDays', 'canaryPercent')
 _LOOSER_IF_LOWER = ('minSampleRuns', 'sampleDays')
@@ -176,14 +185,14 @@ def _merge_added(before, after, path: str) -> list[dict]:
             reasons.extend(_merge_added(previous, value, f'{path}[{index}]'))
     elif isinstance(after, str):
         previous = before if isinstance(before, str) else ''
-        if len(after) > TEXT_SCAN_MAX or _merge_count(after) > _merge_count(previous):  # the earlier side is read in full
+        if len(after) > TEXT_SCAN_MAX or _new_merges(previous, after):  # the earlier side is read in full
             reasons.append(_reason('add_merge', path, 'The proposal adds a merge action. The Forja never merges.'))
     return reasons
 
 
 def text_merges(text: str) -> bool:
     """A new text that merges. One too long to scan counts as merging (fail closed)."""
-    return len(text) > TEXT_SCAN_MAX or _merge_count(text) > 0
+    return len(text) > TEXT_SCAN_MAX or bool(_merges(text))
 
 
 def _fields(before: dict, after: dict) -> list[dict]:

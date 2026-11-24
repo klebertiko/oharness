@@ -300,3 +300,19 @@ def test_a_merge_already_in_the_text_does_not_hide_a_second_one():
 
 def test_a_windows_path_to_git_still_counts():
     assert limits.text_merges(r'C:\Program Files\Git\cmd\git.exe merge main')
+
+
+def test_swapping_one_merge_for_another_is_refused():
+    before = _definition()
+    before['agents']['builder']['instructions'] = 'Never run git merge on a branch you did not open.'
+    after = copy.deepcopy(before)
+    after['agents']['builder']['instructions'] = 'Run gh pr merge --squash when CI is green.'
+    assert 'add_merge' in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_keeping_the_same_merge_sentence_while_editing_elsewhere_is_allowed():
+    before = _definition()
+    before['agents']['builder']['instructions'] = 'Never run git merge yourself.'
+    after = copy.deepcopy(before)
+    after['agents']['builder']['instructions'] = 'Write tests first.\nNever run git merge yourself.'
+    assert 'add_merge' not in {reason['code'] for reason in limits.check(before, after)}
