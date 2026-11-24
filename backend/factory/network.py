@@ -33,9 +33,13 @@ NETWORK_PROGRAMS = frozenset({'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc
 # Options that send the traffic somewhere other than the host the command names.
 _REDIRECT_OPTIONS = frozenset({'--proxy', '-x', '--preproxy', '--socks4', '--socks4a', '--socks5', '--socks5-hostname', '--proxy1.0',
                                '--resolve', '--connect-to', '--doh-url', '-j', '--dns-servers', '-e'})
-SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'cmd', 'powershell', 'pwsh'})
-# Characters a shell expands or unquotes. The policy does not run a shell to see what they become, so it refuses them instead.
-_SHELL_SPECIAL = ('$', '`', '\\', '"', "'")
+SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash', 'csh', 'tcsh', 'fish', 'busybox', 'cmd', 'powershell', 'pwsh'})
+# Programs that run another program: what follows them is judged as if it were the command.
+WRAPPERS = frozenset({'env', 'timeout', 'nice', 'nohup', 'xargs', 'sudo', 'doas', 'stdbuf', 'time', 'exec', 'command', 'start'})
+# Characters a shell expands or unquotes (POSIX shells and cmd). The policy does not run a shell to see what they become, so it
+# refuses them instead.
+_SHELL_SPECIAL = ('$', '`', '\\', '"', "'", '^', '%', '!')
+_POWERSHELL_SPECIAL = ('+',)
 _REDIRECT_WORDS = ('proxycommand', 'proxyjump', 'proxy=', 'http_proxy', 'https_proxy', 'all_proxy')
 
 
@@ -96,7 +100,14 @@ def canonical(host: str) -> str:
         return str(address.ipv4_mapped) if address.ipv4_mapped else address.compressed
     if address is not None:
         return str(address)
-    return text  # a name that is not plain ASCII is refused by `unreadable`, never converted
+    if not text.isascii():
+        # A policy entry written in Unicode is compared in IDNA. A host in a command written that way never gets here: `unreadable`
+        # refuses it first.
+        try:
+            return text.encode('idna').decode('ascii')
+        except UnicodeError:
+            return text
+    return text
 
 
 def _is_hostname(text: str) -> bool:
@@ -129,26 +140,28 @@ def _program(word: str) -> str:
     return _PATH_SEP.split(word)[-1].lower().removesuffix('.exe')
 
 
-def hosts_in(argv: list[str]) -> list[str]:
+def hosts_in(argv: list[str], *, raw: bool = False) -> list[str]:
+    """The hosts the command names, canonical. `raw` keeps them as written, for the readability check."""
     words = _words(argv)
     network_program = any(_program(word) in NETWORK_PROGRAMS for word in words)
+    spell = (lambda host: host) if raw else canonical
     found: list[str] = []
     for part in argv:
         for match in _URL.finditer(str(part)):
-            host = canonical(_authority_host(match.group(1)))
+            host = _authority_host(match.group(1))
             if host:
-                found.append(host)
+                found.append(spell(host))
     for word in words:
         if '://' in word or word.startswith('-'):
             continue
         if at := _USER_AT.match(word):
             host = re.split(r'[:/]', word[at.end():], maxsplit=1)[0]
             if host:
-                found.append(canonical(host))
+                found.append(spell(host))
         elif network_program:
             candidate = re.split(r'[:/]', word, maxsplit=1)[0]
             if _is_hostname(candidate.lower().rstrip('.')) or _ipv4(candidate.lower()) is not None or not candidate.isascii():
-                found.append(canonical(candidate))
+                found.append(spell(candidate))
     return found
 
 
@@ -167,21 +180,29 @@ def redirects(argv: list[str]) -> bool:
 
 
 def unreadable(argv: list[str]) -> str | None:
-    """Why the command cannot be judged safely, or None. Refused instead of guessed: a shell payload that expands or unquotes,
-    a URL host with percent-encoding or characters outside ASCII."""
-    if argv and _program(str(argv[0])) in SHELLS and any(mark in str(part) for part in argv[1:] for mark in _SHELL_SPECIAL):
-        return 'The network policy cannot judge a shell command that expands or quotes words; run the command directly.'
-    for part in argv[1:] if argv else []:
-        text = str(part)
-        for match in _URL.finditer(text):
-            host = _authority_host(match.group(1))
-            if '%' in host or not host.isascii():
+    """Why the command cannot be judged safely, or None. Refused instead of guessed.
+
+    When a shell, a wrapper or a network program appears anywhere in the command, no argument may hold a character any shell
+    expands or unquotes (PowerShell adds its own). Whatever the program, a host with percent-encoding or outside ASCII is refused.
+    """
+    if not argv:
+        return None
+    programs = {_program(str(argv[0]))} | {_program(word) for word in _words(argv)}
+    if programs & (SHELLS | WRAPPERS | NETWORK_PROGRAMS):
+        marks = _SHELL_SPECIAL + (_POWERSHELL_SPECIAL if programs & {'powershell', 'pwsh'} else ())
+        if any(mark in str(part) for part in argv[1:] for mark in marks):
+            return 'The network policy cannot judge a command whose words a shell would expand or unquote; run it directly, without those characters.'
+    for part in argv[1:]:
+        for match in _URL.finditer(str(part)):
+            if not _plain(_authority_host(match.group(1))):
                 return 'The network policy cannot judge a host written with percent-encoding or non-ASCII characters.'
-        if ('://' in text or '@' in text) and any(mark in text for mark in ('$', '`')):
-            return 'The network policy cannot judge a host built by the shell.'
-        if any(not word.isascii() for word in _WORD.findall(text)) and _program(str(argv[0])) in NETWORK_PROGRAMS:
-            return 'The network policy cannot judge a host written with non-ASCII characters.'
+    if any(not _plain(host) for host in hosts_in(argv, raw=True)):
+        return 'The network policy cannot judge a host written with percent-encoding or non-ASCII characters.'
     return None
+
+
+def _plain(host: str) -> bool:
+    return host.isascii() and '%' not in host
 
 
 def verdict(policy: dict, host: str) -> str | None:
