@@ -23,7 +23,9 @@ SCRIPT = (
     'import json,sys\n'
     'for line in sys.stdin:\n'
     '    msg = json.loads(line)\n'
-    '    result = {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}} if msg.get("method") == "initialize" else {"tools": [{"name": "docs"}]}\n'
+    '    if "id" not in msg:\n'
+    '        continue\n'
+    '    result ={"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}} if msg.get("method") == "initialize" else {"tools": [{"name": "docs"}]}\n'
     '    sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}) + "\\n")\n'
     '    sys.stdout.flush()\n'
 )
@@ -205,3 +207,75 @@ def test_a_failed_setup_names_the_command_and_hides_the_secret(ready, tmp_path, 
     blob = journal + ''.join(event.data_json for event in events)
     assert 'setup failed: python3' in blob
     assert VALUE not in blob
+
+
+# ------------------------------------------------------------------------------------------------ the policy fails closed
+
+@pytest.mark.parametrize('argv', [
+    ['curl', 'evil.example.net/x'],
+    ['git', 'clone', 'git@evil.example.net:o/r.git'],
+    ['ssh', 'deploy@evil.example.net'],
+    ['curl', 'http://user@evil.example.net/'],
+    ['curl', '203.0.113.7:8080'],
+    ['wget', 'ftp://evil.example.net/file'],
+    ['curl', 'https://EVIL.example.net./'],
+])
+def test_a_host_named_without_https_is_judged_too(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+def test_an_allowed_host_and_a_local_command_still_pass():
+    assert network.command_denied(defn(), 'builder', ['curl', 'https://api.example.com/v1']) is None
+    assert network.command_denied(defn(), 'builder', ['python', '-m', 'pytest', 'tests/test_app.py']) is None
+
+
+def test_extending_a_policy_that_does_not_exist_refuses_every_host():
+    body = defn(networkPolicy={'extends': ['corp-default']})
+    assert network.command_denied(body, 'builder', ['curl', 'https://api.example.com/v1']) is not None
+
+
+def test_an_mcp_server_starts_with_a_clean_environment_and_a_timeout(monkeypatch, tmp_path):
+    monkeypatch.setenv('OH_SIDECAR_TOKEN_FOR_TEST', 'should-not-leak')
+    leak = tmp_path / 'env.json'
+    script = ('import json,os,sys\n'
+              f'open({str(leak)!r},"w").write(json.dumps(dict(os.environ)))\n'
+              'for line in sys.stdin:\n'
+              '    msg=json.loads(line)\n'
+              '    if "id" not in msg: continue\n'
+              '    r={"protocolVersion":"2024-11-05","capabilities":{}} if msg["method"]=="initialize" else {"tools":[{"name":"docs"}]}\n'
+              '    sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":msg["id"],"result":r})+"\\n"); sys.stdout.flush()\n')
+    body = defn(mcp={'docs': {'command': sys.executable, 'args': ['-c', script]}})
+    body['agents']['builder']['mcp'] = ['docs']
+    assert anyio.run(agent_mcp.tools_for, body, 'builder') == ['docs']
+    assert 'OH_SIDECAR_TOKEN_FOR_TEST' not in json.loads(leak.read_text())
+
+    silent = defn(mcp={'quiet': {'command': sys.executable, 'args': ['-c', 'import time; time.sleep(60)']}})
+    silent['agents']['builder']['mcp'] = ['quiet']
+    monkeypatch.setattr(agent_mcp, 'REQUEST_TIMEOUT_S', 1)
+    with pytest.raises(runner.RunnerError):
+        anyio.run(agent_mcp.tools_for, silent, 'builder')
+
+
+def test_an_mcp_answer_for_another_request_or_with_odd_names_is_refused():
+    def handler(method, params):
+        if method == 'initialize':
+            return {'jsonrpc': '2.0', 'id': 1, 'result': {}}
+        return {'jsonrpc': '2.0', 'id': 99, 'result': {'tools': [{'name': 'docs'}]}}
+    with pytest.raises(runner.RunnerError):
+        anyio.run(agent_mcp.list_tools, agent_mcp.MemoryTransport(handler, check_ids=True))
+
+    def odd(method, params):
+        if method == 'initialize':
+            return {'jsonrpc': '2.0', 'result': {}}
+        return {'jsonrpc': '2.0', 'result': {'tools': [{'name': 'ok-tool'}, {'name': 'x' * 500}, {'name': 'bad\nname'}] + [{'name': f't{i}'} for i in range(300)]}}
+    names = anyio.run(agent_mcp.list_tools, agent_mcp.MemoryTransport(odd))
+    assert 'ok-tool' in names and all(len(name) <= 100 and '\n' not in name for name in names) and len(names) <= agent_mcp.MAX_TOOLS
+
+
+def test_an_agent_naming_a_runner_that_does_not_exist_is_invalid():
+    from factory.definition import _semantic_issues
+    body = defn()
+    body.update({'tiers': {}, 'defaults': {}, 'stages': {}, 'skills': {}, 'mcp': {}, 'reserved': {'automations': {}, 'webhooks': {}}})
+    body['agents']['builder']['runner'] = 'ghost'
+    body['agents']['builder']['localSkills'] = {}
+    assert any(issue.path == 'agents.builder.runner' for issue in _semantic_issues(body))
