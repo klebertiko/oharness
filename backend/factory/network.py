@@ -8,8 +8,9 @@ The check happens before the command runs, so a refused host never starts. It fa
   the network appears anywhere in the command;
 * a proxy, a resolver override or a jump host (`--proxy`, `-x`, `--resolve`, `--connect-to`, `-J`, `ProxyCommand`...) is refused
   whenever a policy applies, because it changes where the traffic really goes;
-* hosts are compared in one canonical spelling: IPv4 in any numeric form (decimal, hex, octal, short), IPv6 with a mapped IPv4,
-  and names in IDNA;
+* hosts are compared in one canonical spelling: IPv4 in any numeric form (decimal, hex, octal, short) and IPv6 with a mapped IPv4;
+* what it cannot read safely is refused, not guessed: a shell payload with `$`, backticks, backslashes or quotes, a host with
+  percent-encoding or characters outside ASCII;
 * a policy that extends a named policy the definition does not have refuses every host.
 
 A command that names no host is local and is not judged here.
@@ -22,7 +23,8 @@ import re
 _LABEL = re.compile(r'[a-z0-9-]{1,63}')
 _NUMERIC = re.compile(r'(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+)){0,3}')
 _USER_AT = re.compile(r'[A-Za-z0-9._~+-]{1,64}@')
-_URL = re.compile(r'''[A-Za-z][A-Za-z0-9+.-]{0,15}://([^\s/?#"'<>]*)''')
+# The authority runs to the first `/?#` (or a space), as curl reads it: a quote does not end it, and the host is after the last `@`.
+_URL = re.compile(r'[A-Za-z][A-Za-z0-9+.-]{0,15}://([^\s/?#]*)')
 _WORD = re.compile(r'''[^\s;&|()`'"<>]+''')
 _PATH_SEP = re.compile(r'[\\/]')
 # Programs whose bare arguments may be hosts. Without one of them only a URL or a user@host form counts.
@@ -31,6 +33,9 @@ NETWORK_PROGRAMS = frozenset({'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc
 # Options that send the traffic somewhere other than the host the command names.
 _REDIRECT_OPTIONS = frozenset({'--proxy', '-x', '--preproxy', '--socks4', '--socks4a', '--socks5', '--socks5-hostname', '--proxy1.0',
                                '--resolve', '--connect-to', '--doh-url', '-j', '--dns-servers', '-e'})
+SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'cmd', 'powershell', 'pwsh'})
+# Characters a shell expands or unquotes. The policy does not run a shell to see what they become, so it refuses them instead.
+_SHELL_SPECIAL = ('$', '`', '\\', '"', "'")
 _REDIRECT_WORDS = ('proxycommand', 'proxyjump', 'proxy=', 'http_proxy', 'https_proxy', 'all_proxy')
 
 
@@ -91,12 +96,7 @@ def canonical(host: str) -> str:
         return str(address.ipv4_mapped) if address.ipv4_mapped else address.compressed
     if address is not None:
         return str(address)
-    if not text.isascii():
-        try:
-            return text.encode('idna').decode('ascii')
-        except UnicodeError:
-            return text  # unreadable: kept as written, so an allowlist never matches it
-    return text
+    return text  # a name that is not plain ASCII is refused by `unreadable`, never converted
 
 
 def _is_hostname(text: str) -> bool:
@@ -166,6 +166,24 @@ def redirects(argv: list[str]) -> bool:
     return False
 
 
+def unreadable(argv: list[str]) -> str | None:
+    """Why the command cannot be judged safely, or None. Refused instead of guessed: a shell payload that expands or unquotes,
+    a URL host with percent-encoding or characters outside ASCII."""
+    if argv and _program(str(argv[0])) in SHELLS and any(mark in str(part) for part in argv[1:] for mark in _SHELL_SPECIAL):
+        return 'The network policy cannot judge a shell command that expands or quotes words; run the command directly.'
+    for part in argv[1:] if argv else []:
+        text = str(part)
+        for match in _URL.finditer(text):
+            host = _authority_host(match.group(1))
+            if '%' in host or not host.isascii():
+                return 'The network policy cannot judge a host written with percent-encoding or non-ASCII characters.'
+        if ('://' in text or '@' in text) and any(mark in text for mark in ('$', '`')):
+            return 'The network policy cannot judge a host built by the shell.'
+        if any(not word.isascii() for word in _WORD.findall(text)) and _program(str(argv[0])) in NETWORK_PROGRAMS:
+            return 'The network policy cannot judge a host written with non-ASCII characters.'
+    return None
+
+
 def verdict(policy: dict, host: str) -> str | None:
     host = canonical(host)
     if policy.get('missing'):
@@ -182,6 +200,8 @@ def command_denied(definition: dict, agent_id: str, argv: list[str]) -> str | No
     policy = policy_for(definition, agent_id)
     if not policy['allowedHosts'] and not policy['deniedHosts'] and not policy['missing']:
         return None
+    if reason := unreadable(argv):
+        return reason
     if redirects(argv):
         return 'The network policy does not allow a proxy, a resolver override or a jump host.'
     for host in hosts_in(argv):
