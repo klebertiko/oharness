@@ -114,6 +114,8 @@ export interface DirectRunPayload {
   cwd?: string;
   /** Per-run token ceiling; the run ends as `budget_exceeded` when it is reached. */
   max_tokens?: number;
+  /** The chat thread whose creator mode is on: only then does the broker offer Nilo the `cordis_plugins` tool. */
+  creator_thread_id?: string;
   /** Chat tools broker (contract v1.1 §2.4). Absent → the run behaves exactly as before. */
   tools?: {
     enabled?: boolean;

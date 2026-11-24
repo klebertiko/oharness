@@ -240,3 +240,27 @@ it("a command that ran under another preset names that preset, not the workspace
   render(<ToolCard call={auto} runId="r1" />);
   expect(screen.getByText("auto-approved: Full preset")).toBeTruthy();
 });
+
+// Creator mode: the plugin tool of Nilo has its own approval card, in plain words and never as a command.
+const cordisCall = (over: Partial<ToolCall> = {}): ToolCall => ({
+  callId: "c9", name: "cordis_plugins", args: '{"action":"write_file","name":"hello-tool","path":"index.js"}', path: "index.js",
+  approval: { reason: "cordis_plugins", risk: "normal", riskHints: [] }, ...over,
+});
+
+it("cordis_plugins card says what Nilo wants to do, that it never installs, and has no exec wording", () => {
+  render(<ToolCard call={cordisCall()} runId="r1" />);
+  expect(screen.getByText("Write a file of the plugin hello-tool")).toBeTruthy();
+  expect(screen.getByText("Nilo never installs. Installing waits for your click in Cordis Plugins.")).toBeTruthy();
+  expect(screen.queryByText("Run command")).toBeNull();
+  expect(screen.queryByText(/runs locally with your privileges/)).toBeNull();
+  expect(screen.queryByText(/^exec$/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  expect(sendControl).toHaveBeenCalledWith("r1", { action: "resume", decision: "approve", call_id: "c9", note: "" });
+});
+
+it("cordis_plugins card titles each action", () => {
+  const { rerender } = render(<ToolCard call={cordisCall({ args: '{"action":"request_install","name":"hello-tool"}', path: undefined })} runId="r1" />);
+  expect(screen.getByText("Ask to install hello-tool")).toBeTruthy();
+  rerender(<ToolCard call={cordisCall({ args: '{"action":"list"}', path: undefined })} runId="r1" />);
+  expect(screen.getByText("List the plugins in development")).toBeTruthy();
+});

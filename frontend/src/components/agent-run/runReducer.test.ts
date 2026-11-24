@@ -299,6 +299,15 @@ describe("runReducer · chat tools", () => {
     expect(tool(state)?.approval).toEqual({ reason: "exec", risk: "high", riskHints: ["npm publish"] });
   });
 
+  it("tool_approval_required keeps reason cordis_plugins for the plugin tool of creator mode", () => {
+    const args = { action: "write_file", name: "hello", path: "index.js" };
+    const cordis = runReducer(seeded, { type: "sse", event: "tool_call", data: { node_id: "direct", call_id: "c2", name: "cordis_plugins", args, origin: "model" } });
+    const state = runReducer(cordis, { type: "sse", event: "tool_approval_required", data: { node_id: "direct", call_id: "c2", name: "cordis_plugins", args, reason: "cordis_plugins", risk: "normal", risk_hints: [] } });
+    expect(state.status).toBe("gate");
+    const block = state.plan[0].blocks.find((b) => b.kind === "tool" && b.call.callId === "c2");
+    expect(block && block.kind === "tool" ? block.call.approval?.reason : null).toBe("cordis_plugins");
+  });
+
   it("tool_approval_decision resumes and records the decision", () => {
     const gated = runReducer(called, { type: "sse", event: "tool_approval_required", data: { node_id: "direct", call_id: "c1", reason: "exec", risk: "normal", risk_hints: [] } });
     const state = runReducer(gated, { type: "sse", event: "tool_approval_decision", data: { node_id: "direct", call_id: "c1", decision: "approve", note: "ok" } });

@@ -18,7 +18,7 @@ export interface RunController {
   live: boolean;
   /** Cancel any stream and return to a blank run (used by New chat). */
   reset: () => void;
-  start: (opts: { instruction: string; mode: string; step: boolean; cwd?: string; providerId?: string; model?: string; tools?: DirectRunPayload["tools"] }) => void;
+  start: (opts: { instruction: string; mode: string; step: boolean; cwd?: string; providerId?: string; model?: string; tools?: DirectRunPayload["tools"]; creatorThreadId?: string }) => void;
   stop: () => void;
   advance: () => void;
   resolveGate: (decision: "approve" | "reject", note: string) => void;
@@ -90,6 +90,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
       providerId,
       model,
       tools,
+      creatorThreadId,
     }: {
       instruction: string;
       mode: string;
@@ -98,6 +99,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
       providerId?: string;
       model?: string;
       tools?: DirectRunPayload["tools"];
+      creatorThreadId?: string;
     }) => {
       const generation = ++generationRef.current;
       abortRef.current?.();
@@ -165,7 +167,7 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
         );
       } else {
         abortRef.current = startDirectRun(
-          { instruction, mode, step, cwd, connection_id: providerId, ...(model ? { model } : {}), ...(tools ? { tools } : {}), ...maxTokensPayload() },
+          { instruction, mode, step, cwd, connection_id: providerId, ...(model ? { model } : {}), ...(tools ? { tools } : {}), ...(creatorThreadId ? { creator_thread_id: creatorThreadId } : {}), ...maxTokensPayload() },
           onEvent,
           onClose
         );

@@ -448,3 +448,16 @@ it("asks for the run's own worktree only for a harness run that has a folder and
   act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false, cwd: "D:/work" }));
   expect(startRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("worktree");
 });
+
+it("sends creator_thread_id on the direct path only", () => {
+  startDirectRunMock.mockClear();
+  startRunMock.mockClear();
+  const direct = renderHook(() => useRunStream({ graph: emptyGraph, harnessEnabled: false }));
+  act(() => direct.result.current.start({ instruction: "hi", mode: "live", step: false, providerId: "an", creatorThreadId: "t-1" }));
+  expect(startDirectRunMock.mock.calls.at(-1)?.[0]).toMatchObject({ creator_thread_id: "t-1" });
+  act(() => direct.result.current.start({ instruction: "hi", mode: "live", step: false, providerId: "an" }));
+  expect(startDirectRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("creator_thread_id");
+  const harness = renderHook(() => useRunStream({ graph: emptyGraph, harnessEnabled: true }));
+  act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false, providerId: "an", creatorThreadId: "t-1" }));
+  expect(startRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("creator_thread_id");
+});
