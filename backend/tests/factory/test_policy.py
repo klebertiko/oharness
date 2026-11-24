@@ -379,3 +379,23 @@ def test_a_plain_allowed_url_with_a_port_and_an_ipv6_literal_still_parse():
     body = defn(networkPolicy={'allowedHosts': ['api.example.com', '2001:db8::1']})
     assert network.command_denied(body, 'builder', ['curl', 'https://api.example.com:8443/v1']) is None
     assert network.command_denied(body, 'builder', ['curl', 'https://[2001:db8::1]:443/']) is None
+
+
+@pytest.mark.parametrize('argv', [
+    ['curl', '-xapi.example.com:3128', 'https://api.example.com/'],
+    ['curl', '-sx', 'api.example.com:3128', 'https://api.example.com/'],
+    ['ssh', '-Jjump.example.net', 'git@api.example.com'],
+    ['rsync', '-essh', 'src', 'git@api.example.com:dst'],
+])
+def test_a_redirect_option_with_an_attached_value_or_bundled_is_refused(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+def test_ordinary_short_options_of_a_network_program_still_pass():
+    assert network.command_denied(defn(), 'builder', ['curl', '-sSL', 'https://api.example.com/v1']) is None
+
+
+def test_an_ipv6_literal_inside_a_shell_payload_is_refused():
+    body = defn(networkPolicy={'allowedHosts': ['2001:db8::1']})
+    assert network.command_denied(body, 'builder', ['sh', '-c', 'curl https://[2001:db8::1]/']) is not None
+    assert network.command_denied(body, 'builder', ['curl', 'https://[2001:db8::1]/']) is None
