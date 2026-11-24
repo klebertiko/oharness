@@ -88,6 +88,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   bind: 500,
   'cordis-pin': 500,
   busy: 429,
+  'plugin-not-found': 404,
 }
 
 function rejectBuildApproval(body: Record<string, unknown>): void {
@@ -264,6 +265,12 @@ async function onRequest(scope: RequestScope, req: IncomingMessage, res: ServerR
       rejectBuildApproval(body)
       const result = await runtime.install(body.packageDir, body.confirmation, body.config)
       send(res, result.status === 'failed' ? 422 : 200, result)
+      return
+    }
+    if (method === 'POST' && url.pathname === '/v1/plugins/unload') {
+      if (!isRecord(body) || typeof body.name !== 'string' || body.name === '') throw new HostError('bad-request', 'name is required')
+      await runtime.unload(body.name)
+      send(res, 200, { ok: true, name: body.name })
       return
     }
     if (method === 'POST' && url.pathname === '/v1/tools/invoke') {
