@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { Dialog } from "./Dialog";
 import { ErrorState } from "./ErrorState";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
@@ -63,6 +64,32 @@ function SelectDemo({ onChange }: { onChange: (value: string) => void }) {
     />
   );
 }
+
+function DialogDemo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Open dialog
+      </button>
+      <Dialog title="Rename harness" open={open} onOpenChange={setOpen}>
+        <input aria-label="Name" />
+      </Dialog>
+    </>
+  );
+}
+
+describe("Dialog", () => {
+  it("gives focus back to whatever opened it, even without a trigger prop", async () => {
+    render(<DialogDemo />);
+    const opener = screen.getByRole("button", { name: "Open dialog" });
+    await userEvent.click(opener);
+    expect(screen.getByRole("dialog", { name: "Rename harness" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+});
 
 describe("Tabs", () => {
 
@@ -141,6 +168,18 @@ describe("Tooltip", () => {
     await waitFor(() => expect(tip()).toContain("Undo the last change"));
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(tip()).toBeNull());
+  });
+
+  it("mounts inside the landmark around its trigger", async () => {
+    render(
+      <main>
+        <Tooltip label="Undo the last change">
+          <IconButton label="Undo" icon={<svg aria-hidden />} />
+        </Tooltip>
+      </main>,
+    );
+    await userEvent.tab();
+    await waitFor(() => expect(document.querySelector("main [data-radix-popper-content-wrapper]")).toBeTruthy());
   });
 
   it("opens on hover", async () => {

@@ -28,6 +28,7 @@ const mutants = [
   ["Tabs forget the disabled tab", "Tabs.tsx", "disabled={tab.disabled}", "disabled={false}"],
   ["Tooltip ignores Escape", "Tooltip.tsx", "<TooltipPrimitive.Content", "<TooltipPrimitive.Content onEscapeKeyDown={(event) => event.preventDefault()}"],
   ["Toast leaves while focused", "Toast.tsx", "onFocus={() => hold(item.id)}", "onFocus={() => {}}"],
+  ["Dialog drops focus on close", "Dialog.tsx", "              el.focus();", "              void el;"],
   ["ErrorState keeps saying Copied", "ErrorState.tsx", "setTimeout(() => setCopied(false), COPIED_HOLD)", "setTimeout(() => {}, COPIED_HOLD)"],
 ];
 

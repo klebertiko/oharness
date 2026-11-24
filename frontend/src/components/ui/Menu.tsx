@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKey } fr
 import { createPortal } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { portalHost } from "./portalHost";
 
 export interface MenuItem {
   id: string;
@@ -162,7 +163,7 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   const place = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    const container = portalHost(trigger);
+    const container = portalHost(trigger) ?? document.body;
     const rect = trigger.getBoundingClientRect();
     // A transformed host (a sheet mid-entrance) is the containing block of a fixed child.
     const offset = getComputedStyle(container).transform !== "none" ? container.getBoundingClientRect() : { top: 0, left: 0 };
@@ -216,15 +217,3 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   );
 }
 
-/**
- * Where the open menu is mounted: the landmark or dialog around its trigger, so
- * landmark navigation finds it and a modal dialog neither hides it nor traps
- * focus away from it. The page body only when there is none.
- */
-function portalHost(trigger: HTMLElement): HTMLElement {
-  return (
-    trigger.closest<HTMLElement>(
-      "[role='dialog'], [role='alertdialog'], dialog, main, [role='main'], nav, aside, header, footer, section[aria-label], section[aria-labelledby], [role='region']",
-    ) ?? document.body
-  );
-}
