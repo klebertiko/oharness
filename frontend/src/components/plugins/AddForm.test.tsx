@@ -28,11 +28,11 @@ describe("validate: tarball", () => {
   });
 
   it("accepts an absolute Windows or POSIX path of a .tgz, with the hash optional but checked when given", () => {
-    expect(validate("tarball", fields({ tarball: "C:\\Users\\me\\pkg-1.0.0.tgz" })).request).toEqual({ kind: "tarball", spec: "C:\\Users\\me\\pkg-1.0.0.tgz" });
+    expect(validate("tarball", fields({ tarball: "D:\\plugins\\pkg-1.0.0.tgz" })).request).toEqual({ kind: "tarball", spec: "D:\\plugins\\pkg-1.0.0.tgz" });
     expect(validate("tarball", fields({ tarball: "D:/pkgs/a.tar.gz" })).request).not.toBeNull();
-    expect(validate("tarball", fields({ tarball: "/home/me/pkg.tgz", integrity: SHA })).request).toEqual({ kind: "tarball", spec: "/home/me/pkg.tgz", integrity: SHA });
-    expect(validate("tarball", fields({ tarball: "/home/me/pkg.tgz", integrity: "nope" })).errors).toEqual({ integrity: "plugins.add.err.integrity" });
-    expect(validate("tarball", fields({ tarball: "/home/me/pkg.zip" })).errors).toEqual({ tarball: "plugins.add.err.tarball" });
+    expect(validate("tarball", fields({ tarball: "/srv/plugins/pkg.tgz", integrity: SHA })).request).toEqual({ kind: "tarball", spec: "/srv/plugins/pkg.tgz", integrity: SHA });
+    expect(validate("tarball", fields({ tarball: "/srv/plugins/pkg.tgz", integrity: "nope" })).errors).toEqual({ integrity: "plugins.add.err.integrity" });
+    expect(validate("tarball", fields({ tarball: "/srv/plugins/pkg.zip" })).errors).toEqual({ tarball: "plugins.add.err.tarball" });
   });
 
   it("refuses a UNC path on the client too", () => {
