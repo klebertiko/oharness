@@ -231,7 +231,9 @@ def test_failure_ids_must_belong_to_the_factory(client):
     assert resp.status_code == 422 and resp.json()['detail']['code'] == 'unknown_failure'
 
 
-@pytest.mark.parametrize('patch', ['gh pr merge 12 --squash\n', 'git merge main\n', 'auto-merge: true\n', '{"action": "merge"}\n'])
+@pytest.mark.parametrize('patch', ['gh pr merge 12 --squash\n', 'git merge main\n', 'auto-merge: true\n', '{"action": "merge"}\n',
+                                   'git -C . merge main\n', 'git --no-pager -c x=y merge main\n', 'curl -X PUT $API/pulls/$PR/merge\n',
+                                   'gh pr\n  merge 3\n', 'action:\n  merge\n'])
 def test_a_code_fix_that_merges_is_refused(client, patch):
     _activate(definition())
     resp = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'code_patch': patch, 'justification': 'x'}, headers=HUMAN)

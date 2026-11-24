@@ -280,3 +280,11 @@ def test_a_string_where_a_flag_belongs_is_refused():
     after = _definition()
     after['scorers']['qa']['enabled'] = 'false'
     assert 'invalid_type' in _codes(after)
+
+
+def test_a_long_earlier_text_does_not_hide_a_new_merge():
+    before = _definition()
+    before['agents']['builder']['instructions'] = 'x' * 150_000
+    after = copy.deepcopy(before)
+    after['agents']['builder']['instructions'] = 'x' * 150_000 + '\ngit -C . merge main'
+    assert 'add_merge' in {reason['code'] for reason in limits.check(before, after)}
