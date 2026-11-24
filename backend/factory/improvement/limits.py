@@ -128,6 +128,11 @@ def _flags(defn: dict) -> dict[str, tuple[bool, bool, bool]]:
         return out
 
 
+def required_stages(defn: dict) -> set[str]:
+    """Stages the definition requires, with the effective policy (a required spec included)."""
+    return {stage for stage, (required, _enabled, _runs) in _flags(defn).items() if required}
+
+
 def _secrets(defn: dict) -> set[str]:
     found: set[str] = set()
     for name in defn.get('secrets') or []:
@@ -195,7 +200,7 @@ def text_merges(text: str) -> bool:
     return len(text) > TEXT_SCAN_MAX or bool(_merges(text))
 
 
-def _fields(before: dict, after: dict) -> list[dict]:
+def _fields(before: dict, after: dict, free: tuple = ()) -> list[dict]:
     """Removed keys, changed types and changes to fields no rule judges."""
     reasons: list[dict] = []
     old, new = _leaves(before), _leaves(after)
@@ -218,7 +223,7 @@ def _fields(before: dict, after: dict) -> list[dict]:
             continue  # a whole agent added or removed: the agent and stage rules judge it
         if parts[0] == 'scorers' and len(parts) > 2 and parts[1] not in old_scorers:
             continue  # a new scorer only scores more
-        if any(rule.fullmatch(path) for rule in _FREE + _JUDGED):
+        if any(rule.fullmatch(path) for rule in _FREE + _JUDGED + free):
             continue
         reasons.append(_reason('protected_field', path, 'This field is not one a proposal may change. A person edits it in the definition.'))
     return reasons
@@ -332,11 +337,14 @@ def _trial_rules(before: dict, after: dict) -> list[dict]:
     return reasons
 
 
-def check(before: dict, after: dict) -> list[dict]:
-    """Reasons the proposal cannot be shown to a person. Empty means it may be reviewed."""
+def check(before: dict, after: dict, *, free: tuple[str, ...] = ()) -> list[dict]:
+    """Reasons the proposal cannot be shown to a person. Empty means it may be reviewed.
+
+    `free` adds path patterns a caller may change on top of the short list: a person editing the blueprint passes `blueprint\\..+`.
+    Every gate, mode, ceiling and scorer rule still applies."""
     if not isinstance(before, dict) or not isinstance(after, dict):
         return [_reason('invalid_type', '$', 'A definition is a mapping.')]
-    reasons = _fields(before, after) + _policy_rules(before, after) + _agent_rules(before, after) + _scorer_rules(before, after)
+    reasons = _fields(before, after, tuple(re.compile(p) for p in free)) + _policy_rules(before, after) + _agent_rules(before, after) + _scorer_rules(before, after)
     reasons += _trial_rules(before, after)
     if _secrets(after) - _secrets(before):
         reasons.append(_reason('add_secret', 'secrets', 'The proposal grants a secret the active definition does not.'))

@@ -6,9 +6,8 @@ the folder before anything is saved.
 """
 from __future__ import annotations
 
-import re
-
 from factory.agents import starter_files
+from factory.definition import looks_secret
 
 RECIPES = {
     'issue-pr': ['triage', 'spec', 'implement', 'review', 'verify'],
@@ -19,7 +18,6 @@ RECIPES = {
 }
 _MODEL = 'openai/gpt-4o'
 _REVIEW_MODEL = 'anthropic/claude-opus'
-_SECRET = re.compile(r'sk-[A-Za-z0-9]|token|password', re.IGNORECASE)
 
 
 def compose(recipe: str, name: str, request: str) -> dict[str, str]:
@@ -37,6 +35,6 @@ def compose(recipe: str, name: str, request: str) -> dict[str, str]:
 
 def _note(request: str) -> str:
     line = ' '.join(request.split())
-    if not line or _SECRET.search(line):
+    if not line or looks_secret(line):
         return ''
     return line[:200]

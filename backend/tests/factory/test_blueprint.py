@@ -15,32 +15,28 @@ from factory.orm import WorkItem, WorkItemArtifact, WorkItemEvent, WorkItemRun
 from factory_intake.automations import Event, Trigger, explain_trigger, parse_automation
 from main import app
 
-HUMAN = {'x-oharness-human': 'human-secret'}
+from forja_improvement_defs import HUMAN, definition  # noqa: E402
 FACTORY = 'routes'
 
 
-def _definition(blueprint=None, stages=None) -> dict:
-    body = {
-        'name': FACTORY,
-        'policy': {
-            'requireSpec': True, 'specApproval': 'required', 'maxReviewReturns': 3,
-            'reviewIndependence': 'require', 'maxPermissionMode': 'workspace_write',
-        },
-        'stages': stages or {
-            'review': {'enabled': True, 'required': True},
-            'verify': {'enabled': True, 'required': True},
-            'spec': {'enabled': True, 'required': True},
-        },
-        'agents': {
-            'foreman': {'role': 'foreman', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Coordinate.'},
-            'builder': {'role': 'implement', 'enabled': True, 'permissions': {'mode': 'workspace_write'}, 'secrets': [], 'instructions': 'Build.'},
-            'reviewer': {'role': 'review', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Review.'},
-            'verifier': {'role': 'verify', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Check.'},
-        },
-    }
+def _definition(blueprint=None, stages=None, require_spec: bool = True) -> dict:
+    """A complete, valid definition: the blueprint is saved through the full validator."""
+    body = definition(name=FACTORY)
+    body['policy']['requireSpec'] = require_spec
+    if stages is not None:
+        body['stages'] = stages
+    elif not require_spec:
+        body['stages']['spec'] = {'enabled': True, 'required': False}
     if blueprint is not None:
         body['blueprint'] = blueprint
     return body
+
+
+def _state():
+    async def go():
+        async with SessionLocal() as db:
+            return await versions.state(db, FACTORY)
+    return anyio.run(go)
 
 
 async def _reset():
@@ -75,7 +71,7 @@ def test_a_labeled_item_enters_implement_and_a_plain_one_stays_at_intake(client)
     _activate(_definition({'entry': [
         {'when': 'has label docs', 'to': 'implement'},
         {'to': 'intake'},
-    ]}))
+    ]}, require_spec=False))
     labeled = client.post('/factory/work-items', json={
         'factory_id': FACTORY, 'title': 'Docs', 'labels': ['docs'], 'source': {'kind': 'manual', 'ref': 'docs-1'},
     })
@@ -199,7 +195,7 @@ def test_nilo_builds_a_workflow_the_validator_accepts_and_keeps_the_review_gate(
 
 
 def test_editing_the_blueprint_starts_a_trial_and_cannot_drop_the_review_gate(client):
-    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    _activate(_definition({'entry': [{'to': 'intake'}]}, require_spec=False))
     born = client.post('/factory/work-items', json={
         'factory_id': FACTORY, 'title': 'Old', 'source': {'kind': 'manual', 'ref': 'old-1'},
     }).json()
@@ -213,7 +209,7 @@ def test_editing_the_blueprint_starts_a_trial_and_cannot_drop_the_review_gate(cl
     refused = client.post('/factory/blueprint', json={
         'factory_id': FACTORY,
         'blueprint': {'entry': [{'to': 'intake'}]},
-        'stages': {'review': {'enabled': False, 'required': False}, 'verify': {'enabled': True, 'required': True}, 'spec': {'enabled': True, 'required': True}},
+        'stages': {'review': {'enabled': False, 'required': False}, 'verify': {'enabled': True, 'required': True}, 'spec': {'enabled': True, 'required': False}},
     }, headers=HUMAN)
     assert refused.status_code == 200
     assert refused.json()['status'] == 'rejected'
