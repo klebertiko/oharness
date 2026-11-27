@@ -21,6 +21,7 @@ import { join } from "node:path";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 import { settleForAxe } from "./axe-settle.mjs";
+import { clickDestination } from "./destination.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
@@ -105,7 +106,7 @@ for (const theme of ["dark", "light"]) {
       note((await page.evaluate(() => document.documentElement.style.colorScheme)) === theme, `${label}: color-scheme`);
       note((await page.evaluate(() => document.querySelector('meta[name="theme-color"]')?.getAttribute("content") ?? "")).startsWith("oklch("), `${label}: theme-color meta`);
 
-      await page.getByRole("button", { name: s.nav, exact: true }).first().click();
+      await clickDestination(page, s.nav);
       if (s.act) await s.act(page);
       await page.waitForTimeout(400);
 
@@ -162,7 +163,7 @@ for (const theme of ["dark", "light"]) {
     note(returned, `keyboard · ${theme} · ${vname}: focus returns to the opener`);
 
     const ring = await page.evaluate(() => {
-      const el = document.querySelector('nav[aria-label="Destinations"] button');
+      const el = document.querySelector("#oh-titlebar button");
       el.focus({ focusVisible: true });
       const cs = getComputedStyle(el);
       return { style: cs.outlineStyle, width: parseFloat(cs.outlineWidth) };

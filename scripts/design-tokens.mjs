@@ -125,12 +125,13 @@ function tailwindSize(text, key) {
 /** Typography tokens have no CSS variable, so they are checked against the `.t-*` rules in globals.css (weight, line height, tracking, family, size where declared) and the `--text-*` scale in the @theme block of globals.css. */
 export function checkTypography(tokens = loadTokens(), globalsText = fs.readFileSync(GLOBALS_FILE, "utf8"), tailwindText = fs.readFileSync(TAILWIND_FILE, "utf8")) {
   const problems = [];
-  const fontVar = { ui: "var(--font-ui)", mono: "var(--font-mono)" };
+  const fontVar = { ui: "var(--font-ui)", mono: "var(--font-mono)", display: "var(--font-display)" };
   const none = (v) => v === undefined || v === "0" || v === "normal";
   for (const tok of tokens.filter((t) => t.type === "typography")) {
     const key = tok.name.replace(/^t-/, "");
     const v = tok.value;
-    const family = String(v.fontFamily).includes("mono") ? "mono" : "ui";
+    const named = String(v.fontFamily);
+    const family = named.includes("mono") ? "mono" : named.includes("display") ? "display" : "ui";
     const css = rule(globalsText, `.t-${key}`);
     if (css) {
       const fam = css["font-family"]?.split(",")[0].trim();

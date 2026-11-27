@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FolderPlus, Trash2 } from "lucide-react";
 
 import { tr, useT } from "@/i18n/store";
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import { coworkApi, type CoworkProject } from "@/lib/coworkApi";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
 
@@ -90,7 +90,7 @@ export function CoworkPanel() {
   };
 
   return (
-    <Panel title={t("cowork.title")} meta={`${projects.length}`} className="h-full">
+    <Panel variant="dock" title={t("cowork.title")} meta={`${projects.length}`} className="h-full">
       <div className="border-b border-line-soft p-2.5">
         <p className="t-meta mb-2 text-ink-mute">
           {activeBundleId
