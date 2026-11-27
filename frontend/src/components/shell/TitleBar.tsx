@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { PanelLeft, Plus, Search } from "lucide-react";
 import { useT } from "@/i18n/store";
+import { Button, KbdChord } from "@/components/ui";
 import { Mark } from "./Mark";
 import { RAIL_COLLAPSED, useShellStore } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
-import { KbdChord } from "@/components/ui";
 
 /**
  * Window chrome.
@@ -31,6 +31,15 @@ interface Props {
   onOpenPalette: () => void;
   /** The rail under the bar is icon-only: the brand column takes its width, so the two line up (same state, not a second media query). */
   railCollapsed?: boolean;
+  /** Sidebar control, fixed at the left of the bar in every state. */
+  sidebarLabel?: string;
+  sidebarTooltip?: string;
+  onToggleSidebar?: () => void;
+  onNewSession?: () => void;
+  /** Matches the in-flow sidebar. `"auto"` leaves no empty column when the sidebar is hidden. */
+  clusterWidth?: number | "auto";
+  /** Project or session after the destination. */
+  breadcrumb?: string;
 }
 
 function useTauriWindow() {
@@ -78,34 +87,71 @@ export function TitleBar({
   nodeCount,
   editingHarness,
   onOpenPalette,
-  railCollapsed = false,
+  sidebarLabel,
+  sidebarTooltip,
+  onToggleSidebar,
+  onNewSession,
+  clusterWidth,
+  breadcrumb,
 }: Props) {
   const t = useT();
   const mac = useIsMac();
   const win = useTauriWindow();
-  const { paletteOpen, leftWidth, hydrated } = useShellStore();
+  const { paletteOpen } = useShellStore();
   const caps = chordCaps("Mod+K", mac);
 
   return (
     <header
+      id="oh-titlebar"
+      tabIndex={-1}
       data-tauri-drag-region
-      className="oh-header relative z-30 flex h-titlebar flex-none items-stretch border-b border-line-soft bg-sub-100 text-ink-dim"
+      className="oh-header oh-focus-inner relative z-30 flex h-titlebar flex-none items-stretch border-b border-line-soft bg-sub-100 text-ink-dim"
     >
       {mac && win && <div className="w-17 flex-none" aria-hidden />}
 
       <div
         data-tauri-drag-region
-        style={{ width: railCollapsed ? RAIL_COLLAPSED : hydrated ? leftWidth : undefined }}
-        className="oh-header-brand flex min-w-0 flex-none items-center gap-2.5 px-4"
+        style={{
+          width: clusterWidth === "auto" ? "auto" : typeof clusterWidth === "number" ? clusterWidth : "var(--oh-side-w, 280px)",
+        }}
+        className="oh-header-brand flex min-w-0 flex-none items-center gap-1 px-2"
       >
+        {onToggleSidebar && sidebarLabel && (
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={sidebarLabel}
+            title={sidebarTooltip ?? sidebarLabel}
+            onClick={onToggleSidebar}
+            icon={<PanelLeft size={16} aria-hidden />}
+          />
+        )}
         <Mark />
-        <span className="oh-wordmark t-title select-none text-ink">
+        <span className={`oh-wordmark t-title select-none text-ink ${clusterWidth === RAIL_COLLAPSED ? "sr-only" : ""}`}>
           OHarness
         </span>
       </div>
 
-      <div data-tauri-drag-region className="oh-header-context flex min-w-0 flex-1 items-center gap-3 px-4">
-        <span className="oh-header-mode t-body shrink-0 text-ink-mute">{destination ?? (mode === "Studio" ? t("shell.title.studio") : mode)}</span>
+      <div data-tauri-drag-region className="oh-header-context flex min-w-0 flex-1 items-center gap-3 px-3">
+        {onNewSession && (
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("shell.sessions.new")}
+            title={t("shell.sidebar.tooltip", { action: t("shell.sessions.new"), keys: chordCaps("Mod+N", mac).join("+") })}
+            onClick={onNewSession}
+            icon={<Plus size={16} aria-hidden />}
+          />
+        )}
+        <span className="oh-header-mode t-body min-w-0 shrink truncate text-ink-mute">{destination ?? (mode === "Studio" ? t("shell.title.studio") : mode)}</span>
+        {breadcrumb && (
+          <>
+            <span className="text-ink-mute" aria-hidden>/</span>
+            <span className="t-body min-w-0 truncate text-ink">{breadcrumb}</span>
+          </>
+        )}
         {/* Name a draft in the editor, including before its first node. */}
         {mode === "Studio" && (editingHarness ?? (nodeCount > 0)) && (
           <>
@@ -135,7 +181,7 @@ export function TitleBar({
         >
           <Search size={15} aria-hidden="true" />
           <span className="oh-header-search-label t-body">{t("shell.title.search")}</span>
-          <span aria-hidden="true" className="oh-header-shortcut pl-2">
+          <span aria-hidden="true" className="pl-2 max-md:sr-only">
             <KbdChord caps={caps} />
           </span>
         </button>
