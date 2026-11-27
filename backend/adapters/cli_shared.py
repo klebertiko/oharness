@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from shutil import which
 from typing import AsyncIterator
 
@@ -98,6 +98,25 @@ def default_cli_cwd() -> Path:
     d = base / "OHarness" / "cli-runs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+# What cmd.exe (and wt.exe, for `;`) would read as syntax instead of a file name.
+PROGRAM_PATH_SYNTAX = frozenset('&|^%!"<>;')
+
+
+def checked_program(path: str, names: frozenset[str], *, windows: bool) -> str:
+    """A program path found by a PATH lookup, or a refusal. It is never rewritten.
+
+    Absolute, with a basename from the caller's fixed table, and none of the
+    characters a command interpreter or a terminal would parse. A caller passes
+    it as ``executable=`` (or as one argument after a literal program), so no
+    PATH or current-directory search decides what runs.
+    """
+    pure = PureWindowsPath(path) if windows else PurePosixPath(path)
+    if not pure.is_absolute() or pure.name.lower() not in names:
+        raise ValueError("refused")
+    if any(ch in PROGRAM_PATH_SYNTAX or ord(ch) < 32 for ch in path):
+        raise ValueError("refused")
+    return path
 
 
 def inert_cwd(*, windows: bool | None = None) -> str:

@@ -194,6 +194,31 @@ class FakeServer(NamedTuple):
     dump: Path
 
 
+FOUND_CODEX = r"C:\Users\me\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe" if os.name == "nt" else "/usr/local/bin/codex"
+
+
+@pytest.mark.parametrize("found", [
+    "codex", "bin/codex", "C:\\a&b\\codex.exe", "C:\\npm\\codex.cmd", "/opt/a;b/codex", "/opt/tools/evil",
+])
+def test_a_found_codex_that_is_not_a_checked_absolute_path_is_never_started(
+    monkeypatch: pytest.MonkeyPatch, found: str,
+) -> None:
+    import providers.usage_windows as uw
+
+    started: list[tuple[str, ...]] = []
+
+    async def refuse(*argv: str, **_kwargs: object) -> None:
+        started.append(argv)
+        raise AssertionError("started")
+
+    windows = "\\" in found
+    monkeypatch.setattr(uw, "is_windows", lambda: windows)
+    monkeypatch.setattr(uw, "find_cli", lambda name: found)
+    monkeypatch.setattr(uw.asyncio, "create_subprocess_exec", refuse)
+    assert asyncio.run(uw.read_codex_rate_limits(timeout=1)) is None
+    assert started == []
+
+
 def _fake_server(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, before: list[str] | None = None, silent: bool = False,
 ) -> FakeServer:
@@ -211,11 +236,13 @@ def _fake_server(
             # The process-tree kill (`taskkill` on Windows) runs for real.
             return await real_exec(*argv, **kwargs)
         calls.append((argv, dict(kwargs)))
+        # The production call names the found program as `executable`; the fake takes its place.
+        kwargs.pop("executable", None)
         proc = await real_exec(sys.executable, str(script), *argv[1:], **kwargs)
         procs.append(proc)
         return proc
 
-    monkeypatch.setattr(uw, "find_cli", lambda name: f"/fake/bin/{name}")
+    monkeypatch.setattr(uw, "find_cli", lambda name: FOUND_CODEX)
     monkeypatch.setattr(uw.asyncio, "create_subprocess_exec", spy)
     monkeypatch.setenv(ENV_CANARY, CANARY)
     return FakeServer(calls, procs, dump)
@@ -233,6 +260,8 @@ def test_the_reader_runs_the_literal_app_server_with_the_cli_environment(tmp_pat
     assert asyncio.run(read_codex_rate_limits(timeout=20)) == REPLY["result"]
     argv, kwargs = server.calls[0]
     assert argv == ("codex", "app-server")
+    # The program is the checked path the lookup found, so no folder search decides what runs.
+    assert kwargs["executable"] == FOUND_CODEX
     seen = _seen(server)
     assert seen["argv"] == ["app-server"]
     assert ENV_CANARY not in seen["env"] and ENV_CANARY.upper() not in seen["env"]

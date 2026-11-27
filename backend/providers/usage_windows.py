@@ -6,7 +6,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from adapters.cli_shared import _kill, find_cli, inert_cwd, line_reset_at, scrub_env
+from adapters.cli_shared import _kill, checked_program, find_cli, inert_cwd, is_windows, line_reset_at, scrub_env
 
 _PCT = re.compile(
     r"(?P<label>5[\s-]*hour|five[\s-]*hour|weekly|week)\s+usage:\s*(?P<pct>\d{1,3})%\s*(?P<left>left)?",
@@ -93,6 +93,8 @@ def parse_usage_windows(text: str, *, now: datetime | None = None) -> dict:
 # the percent and the reset instant leave this module; the account id, plan and
 # credits in the same reply are dropped here.
 _WINDOW_BY_MINUTES = {300: "fiveHour", 10080: "weekly"}
+_CODEX_NAMES = frozenset({"codex"})
+_CODEX_NAMES_WINDOWS = frozenset({"codex.exe"})
 CODEX_READ_TIMEOUT_S = 15.0
 _MAX_LINE = 256 * 1024
 _HANDSHAKE = (
@@ -147,16 +149,23 @@ async def _reply_to_read(stdout: asyncio.StreamReader) -> dict | None:
 async def read_codex_rate_limits(*, timeout: float = CODEX_READ_TIMEOUT_S) -> dict | None:
     """Ask the installed codex app-server for the rate limits. None when it is absent or silent.
 
-    The program and its one argument are literals, the environment is the CLI
+    The argv is literal and the program is the checked path the lookup found, so
+    neither PATH order nor the sidecar's folder picks it. The environment is the CLI
     allowlist, and stderr is discarded. The working directory is one no run can
     write to, so a planted project config is never read. The app-server exits on end of input
     before it answers, so stdin stays open until the reply arrives.
     """
-    if not find_cli("codex"):
+    found = find_cli("codex")
+    if not found:
+        return None
+    try:
+        # An npm `.cmd` shim is not a program CreateProcess can start, so only the real binary is read.
+        program = checked_program(found, _CODEX_NAMES_WINDOWS if is_windows() else _CODEX_NAMES, windows=is_windows())
+    except ValueError:
         return None
     try:
         proc = await asyncio.create_subprocess_exec(
-            "codex", "app-server",
+            "codex", "app-server", executable=program,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             env=scrub_env(), limit=_MAX_LINE, cwd=inert_cwd(),
         )
