@@ -254,6 +254,12 @@ def test_a_display_session_keeps_only_what_a_terminal_needs(monkeypatch: pytest.
 
 
 SHIM_LINE = "cmd.exe /d /v:off /s /c %OH_LOGIN_COMMAND%"
+
+
+def _command_line(argv: list[str]) -> str:
+    """The line CreateProcess gets. No element needs quoting, so it is a plain join."""
+    assert all(part and not any(ch.isspace() or ch == '"' for ch in part) for part in argv)
+    return " ".join(argv)
 CREATE_NEW_CONSOLE = 0x00000010
 
 
@@ -271,7 +277,7 @@ def test_a_windows_npm_shim_reaches_cmd_with_exactly_two_quotes(monkeypatch: pyt
     assert default_spawner([shim, "login"]) == 77
     argv, kwargs = calls[0]
     # Every argv element is a literal; this is the exact line CreateProcess receives.
-    assert subprocess.list2cmdline(argv) == SHIM_LINE
+    assert _command_line(argv) == SHIM_LINE
     # cmd.exe expands the variable before it reads quotes, so the shim is one quoted word.
     assert kwargs["env"]["OH_LOGIN_COMMAND"] == f'"{shim}" login'
     assert kwargs["executable"] == SYSTEM_CMD
@@ -292,7 +298,7 @@ def test_a_windows_npm_shim_never_goes_through_the_windows_terminal(monkeypatch:
     calls = _record_popen(monkeypatch)
     assert default_spawner([r"C:\npm\codex.cmd", "login"]) == 77
     argv, kwargs = calls[0]
-    assert subprocess.list2cmdline(argv) == SHIM_LINE
+    assert _command_line(argv) == SHIM_LINE
     assert kwargs["executable"] == SYSTEM_CMD
 
 
