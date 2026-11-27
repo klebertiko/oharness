@@ -26,6 +26,16 @@ describe("usage windows", () => {
     expect(document.querySelector("meter")).toBeNull();
   });
 
+  it("says why a provider is not measured, instead of a generic failure", () => {
+    const { rerender } = render(<UsageWindowLine row={{ ...unavailable, reason: "not-exposed" }} name="Anthropic" />);
+    expect(screen.getByText("Not available for this provider: its command-line tool does not share usage with other apps")).toBeTruthy();
+    rerender(<UsageWindowLine row={{ cli: "codex", provider: "openai", available: false, reason: "not-installed" }} name="ChatGPT" />);
+    expect(screen.getByText("Not available: the command-line tool is not on this computer")).toBeTruthy();
+    rerender(<UsageWindowLine row={{ cli: "codex", provider: "openai", available: false, reason: "unreadable" }} name="ChatGPT" />);
+    expect(screen.getByText("Not available right now: the tool did not report usage (it needs a subscription sign-in)")).toBeTruthy();
+    expect(document.querySelector("meter")).toBeNull();
+  });
+
   it("shows the 5-hour and weekly windows with the reset time", () => {
     render(
       <UsageWindowLine

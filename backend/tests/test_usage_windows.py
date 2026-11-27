@@ -49,6 +49,11 @@ def test_no_data_is_unavailable_and_not_zero() -> None:
 
 def test_route_reports_unavailable_until_a_reader_has_a_window() -> None:
     app.state.usage_window_reader = None
+
+    async def silent() -> None:
+        return None
+
+    app.state.codex_rate_reader = silent
     with TestClient(app) as client:
         empty = client.get("/providers/usage-windows")
         assert empty.status_code == 200
@@ -66,3 +71,51 @@ def test_route_reports_unavailable_until_a_reader_has_a_window() -> None:
         assert claude["available"] is True and claude["fiveHour"]["usedPct"] == 62
         assert EMAIL not in str(body) and CANARY not in str(body)
     app.state.usage_window_reader = None
+    app.state.codex_rate_reader = None
+
+
+RATE_LIMITS = {
+    "accountId": EMAIL,
+    "rateLimits": {
+        "limitId": "codex",
+        "planType": "plus",
+        "primary": {"usedPercent": 25, "windowDurationMins": 300, "resetsAt": 1795000000},
+        "secondary": {"usedPercent": 61, "windowDurationMins": 10080, "resetsAt": 1795400000},
+        "credits": {"note": CANARY},
+    },
+}
+
+
+def test_codex_rate_limits_become_the_two_windows_and_nothing_else() -> None:
+    from providers.usage_windows import windows_from_rate_limits
+
+    parsed = windows_from_rate_limits(RATE_LIMITS)
+    assert parsed["available"] is True
+    assert parsed["fiveHour"] == {"usedPct": 25, "resetsAt": "2026-11-18T11:06:40+00:00"}
+    assert parsed["weekly"]["usedPct"] == 61
+    assert EMAIL not in str(parsed) and CANARY not in str(parsed) and "plus" not in str(parsed)
+
+
+def test_codex_without_windows_is_unavailable_with_a_reason() -> None:
+    from providers.usage_windows import windows_from_rate_limits
+
+    for result in (None, {}, {"rateLimits": {"primary": {"usedPercent": "x", "windowDurationMins": 300}}}):
+        assert windows_from_rate_limits(result) == {"available": False, "reason": "unreadable"}
+
+
+def test_route_reads_codex_and_says_why_the_others_are_not_measured() -> None:
+    app.state.usage_window_reader = None
+
+    async def codex_reader() -> dict:
+        return RATE_LIMITS
+
+    app.state.codex_rate_reader = codex_reader
+    try:
+        with TestClient(app) as client:
+            rows = {row["cli"]: row for row in client.get("/providers/usage-windows").json()["windows"]}
+    finally:
+        app.state.codex_rate_reader = None
+    assert rows["codex"]["available"] is True and rows["codex"]["weekly"]["usedPct"] == 61
+    assert rows["claude"] == {"cli": "claude", "provider": "anthropic", "available": False, "reason": "not-exposed"}
+    assert rows["cursor"]["reason"] == "not-exposed"
+    assert EMAIL not in str(rows)

@@ -11,6 +11,8 @@ export type UsageWindowsRow = {
   cli: string;
   provider: string;
   available: boolean;
+  /** Why there are no windows: the tool keeps usage to itself, is absent, or did not answer. */
+  reason?: "not-exposed" | "not-installed" | "unreadable";
   fiveHour?: UsageWindow;
   weekly?: UsageWindow;
 };
@@ -29,7 +31,12 @@ export function UsageWindowLine({ row, name }: { row: UsageWindowsRow; name: str
   const t = useT();
   const locale = useLocaleStore((s) => s.locale);
   if (!row.available || (row.fiveHour == null && row.weekly == null)) {
-    return <p><span className="font-medium">{name}</span> {t("providers.usage.unavailable")}</p>;
+    const why =
+      row.reason === "not-exposed" ? t("providers.usage.notExposed")
+      : row.reason === "not-installed" ? t("providers.usage.notInstalled")
+      : row.reason === "unreadable" ? t("providers.usage.unreadable")
+      : t("providers.usage.unavailable");
+    return <p><span className="font-medium">{name}</span> {why}</p>;
   }
   const reset = formatResetLocal(row.fiveHour?.resetsAt ?? row.weekly?.resetsAt, locale);
   return (
