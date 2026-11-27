@@ -32,4 +32,4 @@ A Forja nunca faz merge nem push em branch protegida. A garantia forte é a cred
 - `maxConcurrentRuns` vem da definição (`pool_for`); a run espera o seu lugar.
 - Só um workspace registrado pelo gerenciador numa branch `forja/` é aceito pelo runner; um caminho com NUL falha fechado.
 
-Este passo ainda não está ligado a uma rota nem à sala de controle (próximas fatias de #440).
+`factory.loop.start` é a porta de produção: a tela e `POST /factory/work-items/{id}/run` chamam `dispatch.run_stage` com o driver de produção. `POST /factory/runs/{id}/stop` encerra a run e preserva a worktree. `POST /factory/runs/{id}/steer` entrega uma mensagem ao driver, já redigida. O driver de produção ainda não chama um modelo; ele registra a run, aceita a orientação e para quando pedido.

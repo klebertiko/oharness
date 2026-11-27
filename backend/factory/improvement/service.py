@@ -214,6 +214,7 @@ async def propose(db: AsyncSession, *, factory_id: str, before: dict, after: dic
 
 async def decide(db: AsyncSession, proposal_id: str, action: str, actor: tuple[str, str | None], note: str | None = None) -> ImprovementProposal:
     _human_only(actor, 'Approving, rejecting or sending a proposal back')
+    _refuse_secrets(note or '')
     proposal = await db.get(ImprovementProposal, proposal_id)
     if proposal is None:
         raise FactoryError('not_found', 404)
@@ -226,9 +227,10 @@ async def decide(db: AsyncSession, proposal_id: str, action: str, actor: tuple[s
         await _event(db, proposal, 'approved', actor, {'note': note or '', 'target': 'code', 'failure_ids': _loads(proposal.failure_ids_json, [])})
     elif action == 'approve':
         after = json.loads(proposal.after_json)
-        await _still_valid(db, proposal, after, actor)
         percent = int(_settings(after)['canaryPercent'])
-        await versions.activate(db, after, proposal.after_hash, actor[1] or 'human', mode='canary', percent=percent, label='improvement')
+        # The check and the activation hold the version lock together: no other change lands between them.
+        await versions.activate_after(lambda: _still_valid(db, proposal, after, actor), db, after, proposal.after_hash, actor[1] or 'human',
+                                      mode='canary', percent=percent, label='improvement')
         proposal.status = 'canary'
         proposal.canary_percent = percent
         proposal.decided_at = _now()

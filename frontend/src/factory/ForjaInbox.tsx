@@ -6,7 +6,7 @@ import type { MessageKey } from "@/i18n/translate";
 import { forjaApi, type InboxEntry } from "./forjaApi";
 import { OfflineNotice } from "./Offline";
 import { useExplain, useLoad } from "./useForja";
-import { ageParts, groupInbox } from "./view";
+import { ageParts, groupInbox, label } from "./view";
 
 const TONE: Record<InboxEntry["type"], "neutral" | "signal" | "warn" | "fault"> = {
   question: "signal",
@@ -115,7 +115,7 @@ export function ForjaInbox({ onOpen }: { onOpen: (id: string) => void }) {
         groups.map((group) => (
           <section key={group.work_item_id} aria-label={group.title} className="flex flex-col gap-2 rounded-panel border border-line-soft bg-sub-100 p-3">
             <h2 className="text-title text-ink">{group.title}</h2>
-            <p className="text-body text-ink-dim">{[group.factory_id, group.stage ? t(`forja.stage.${group.stage}` as MessageKey) : ""].filter(Boolean).join(" · ")}</p>
+            <p className="text-body text-ink-dim">{[group.factory_id, group.stage ? label(t, `forja.stage.${group.stage}`, group.stage) : ""].filter(Boolean).join(" · ")}</p>
             <ul className="flex flex-col gap-2">
               {group.entries.map((entry) => {
                 const age = ageParts(entry.since);
