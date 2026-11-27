@@ -8,6 +8,7 @@ import { useUsageStore } from "@/components/providers/usageStore";
 import { emptyRun, runReducer } from "./runReducer";
 import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { useRunWorktreeStore } from "@/store/runWorktreeStore";
+import { fallbackReason, useChatFallbackStore } from "@/store/chatFallbackStore";
 import { sendControl, startDirectRun, startRun, type DirectRunPayload } from "./runClient";
 import type { RunState } from "./types";
 
@@ -109,8 +110,11 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
         refreshed = true;
         void useUsageStore.getState().refresh();
       };
+      // Only a direct chat turn answers for the chat's own account; a harness node has its own pins.
+      const direct = !(harnessEnabledRef.current && !tools?.preset && tools?.permission_mode !== "plan");
       const onEvent = (event: string, data: Record<string, unknown>) => {
         if (generation !== generationRef.current || terminal) return;
+        if (direct && event === "node_start" && providerId) noteFallback(providerId, data);
         // Only backend completion evidence proves contact, including triage
         // events that have no segment in the preview plan.
         const id = data.connection_id;
@@ -215,4 +219,15 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
   }, []);
 
   return { run, elapsed, live, reset, start, stop, advance, resolveGate, resolveToolCall, steer };
+}
+
+/** The sidecar answered the chat's turn with another account of the saved order. Only the ids and the
+    closed class are read; the attempt's `reason` text never leaves this function. */
+function noteFallback(chatAccount: string, data: Record<string, unknown>): void {
+  const answered = data.connection_id;
+  const failover = data.failover as { attempts?: unknown } | undefined;
+  const first = Array.isArray(failover?.attempts) ? (failover.attempts[0] as Record<string, unknown> | undefined) : undefined;
+  if (typeof answered !== "string" || !answered || answered === chatAccount) return;
+  if (!first || first.connection_id !== chatAccount) return;
+  useChatFallbackStore.getState().note(chatAccount, answered, fallbackReason(first.reason_class));
 }

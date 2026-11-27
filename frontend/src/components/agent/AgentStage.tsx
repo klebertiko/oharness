@@ -23,6 +23,7 @@ import { WorktreeToggle } from "@/components/agent/WorktreeToggle";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
 import { ComposerUsageLimit } from "@/components/providers/UsageLimitBanner";
+import { ChatFallbackNotice } from "@/components/providers/FallbackNotice";
 import { EMPTY_TABLE } from "@/components/providers/stateTable";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
@@ -579,6 +580,7 @@ export function AgentStage() {
           {queueNotice && <Notice tone="warn" className="mb-2">{queueNotice}</Notice>}
           <QueuedMessages items={queue} paused={queuePaused} restored={queueRestored} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
             onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
+          <ChatFallbackNotice className="mb-2" />
           <ComposerUsageLimit
             draft={instruction}
             onHoldDraft={() => setInstruction("")}
