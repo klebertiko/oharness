@@ -26,6 +26,7 @@ import { join } from "node:path";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 import { settleForAxe } from "./axe-settle.mjs";
+import { clickDestination } from "./destination.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
@@ -138,7 +139,7 @@ async function session(sc, { theme = "dark", locale = "en", viewport = { width: 
     if (m.type() === "error" && !/status of 404/.test(m.text()) && !(sc.down && /status of 503/.test(m.text()))) errors.push(m.text().slice(0, 160));
   });
   await page.goto(base, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Providers", exact: true }).first().click();
+  await clickDestination(page, "Providers");
   await page.getByRole("heading", { level: 1, name: /^(Providers)$/ }).waitFor({ state: "attached" });
   return { context, page, errors, unexpected, sc };
 }
@@ -310,7 +311,7 @@ try {
     await page.getByRole("heading", { level: 2, name: "OpenRouter" }).waitFor();
     assert.ok((await primaries(page)).length <= 1, "at most one primary on the narrow detail");
     await shot(page, "providers-narrow-detail");
-    await page.getByRole("button", { name: "Providers", exact: true }).last().click();
+    await clickDestination(page, "Providers");
     await list(page).getByRole("button", { name: /^OpenRouter/ }).waitFor();
     ok("narrow: the list is the screen, a connection opens over it, Back returns to the list");
     await finish(S);

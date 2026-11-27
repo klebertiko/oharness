@@ -1,46 +1,81 @@
 /**
- * Theme persistence. Graphite is the default; Ivory is the person's choice and
- * persists. `public/theme-init.js` applies it before first paint; this module
- * is the runtime side (read, set, toggle) and must agree with that script on
- * the key and on the `theme-color` values, which mirror `--sub-000`.
+ * Theme persistence. System is the default and follows the OS. Graphite and
+ * Ivory are explicit choices and persist. `public/theme-init.js` applies the
+ * choice before first paint; this module is the runtime side and must agree
+ * with that script on the key and on the `theme-color` values, which mirror
+ * `--sub-000`.
  */
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "system";
 
 export const THEME_KEY = "oharness-theme";
 
-export const THEME_COLOR: Record<Theme, string> = {
+export const THEME_COLOR: Record<"dark" | "light", string> = {
   dark: "oklch(0.170 0.006 72)",
   light: "oklch(0.965 0.008 82)",
 };
 
+const isTheme = (value: string | null): value is Theme => value === "dark" || value === "light" || value === "system";
+
 export function storedTheme(): Theme {
   try {
-    return window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+    const value = window.localStorage.getItem(THEME_KEY);
+    return isTheme(value) ? value : "system";
   } catch {
-    return "dark";
+    return "system";
   }
 }
 
 /** The theme currently applied to the document. */
 export function appliedTheme(): Theme {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const value = document.documentElement.dataset.theme ?? null;
+  return isTheme(value) ? value : "system";
+}
+
+function themeColor(theme: Theme): string {
+  if (theme === "light") return THEME_COLOR.light;
+  if (theme === "dark") return THEME_COLOR.dark;
+  const light = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: light)").matches;
+  return light ? THEME_COLOR.light : THEME_COLOR.dark;
 }
 
 /** Apply a theme to the document and remember it. */
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   root.dataset.theme = theme;
-  root.style.colorScheme = theme;
+  root.style.colorScheme = theme === "system" ? "light dark" : theme;
   let meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) {
     meta = document.createElement("meta");
     meta.setAttribute("name", "theme-color");
     document.head.appendChild(meta);
   }
-  meta.setAttribute("content", THEME_COLOR[theme]);
+  meta.setAttribute("content", themeColor(theme));
   try {
     window.localStorage.setItem(THEME_KEY, theme);
   } catch {
     /* storage blocked: the choice lasts for this session */
   }
+}
+
+/** Whether the OS asks for a light theme right now. */
+export function osPrefersLight(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: light)").matches;
+}
+
+/** The theme actually on screen: `system` resolved against the OS. */
+export function resolvedTheme(theme: Theme, prefersLight: boolean): "dark" | "light" {
+  if (theme === "system") return prefersLight ? "light" : "dark";
+  return theme;
+}
+
+/**
+ * What one press of the theme button does. Every press changes what is on screen:
+ * from `system` it picks the other theme; from a choice that differs from the OS
+ * it goes back to `system`; from a choice equal to the OS it flips.
+ */
+export function nextTheme(theme: Theme, prefersLight: boolean): Theme {
+  const shown = resolvedTheme(theme, prefersLight);
+  const os = prefersLight ? "light" : "dark";
+  if (theme !== "system" && theme !== os) return "system";
+  return shown === "dark" ? "light" : "dark";
 }

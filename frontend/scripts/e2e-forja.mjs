@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 import { settleForAxe } from "./axe-settle.mjs";
+import { clickDestination } from "./destination.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const fixture = JSON.parse(readFileSync("src/lib/fixtures/ohm-roundtrip.json", "utf8"));
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
@@ -61,7 +62,7 @@ try {
       const page = await context.newPage();
       page.setDefaultTimeout(15000);
       await page.goto(base, { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "Forja", exact: true }).first().click();
+      await clickDestination(page, "Forja");
       const check = async (label) => {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${label}: sideways scroll`);
         await settleForAxe(page);
@@ -80,7 +81,7 @@ try {
       await check(`item ${where}`);
       await page.keyboard.press("Escape");
       for (const [tab, wait] of [["Inbox", "Which environment?"], ["Setup", "forja/npm-token"], ["Metrics", "Branches opened"]]) {
-        await page.getByRole("radio", { name: tab }).click();
+        await page.getByRole("navigation", { name: "Forja sections" }).getByRole("button", { name: tab }).click();
         await page.getByText(wait).first().waitFor();
         await check(`${tab.toLowerCase()} ${where}`);
       }

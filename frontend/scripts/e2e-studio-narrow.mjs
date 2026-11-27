@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 import { settleForAxe } from "./axe-settle.mjs";
+import { clickDestination } from "./destination.mjs";
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
 const API = "http://127.0.0.1:18099";
@@ -90,7 +91,7 @@ for (const theme of ["dark", "light"]) {
       await page.keyboard.press("Escape");
 
       // Describe -> proposal in the sheet.
-      await page.getByRole("button", { name: "Studio", exact: true }).first().click();
+      await clickDestination(page, "Studio");
       await page.getByRole("textbox", { name: /Describe the harness/ }).fill("Research a topic then check the brief");
       await page.getByRole("button", { name: "Draft with Nilo" }).click();
       const card = page.getByRole("region", { name: "Proposed changes" });
@@ -123,7 +124,7 @@ for (const theme of ["dark", "light"]) {
   page.setDefaultTimeout(12000);
   try {
     await page.goto(base, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Studio", exact: true }).first().click();
+    await clickDestination(page, "Studio");
     await page.getByRole("textbox", { name: /Describe the harness/ }).fill("Research a topic then check the brief");
     await page.getByRole("button", { name: "Draft with Nilo" }).click();
     await page.getByLabel("Proposed: Agent Researcher").waitFor({ state: "attached" });
