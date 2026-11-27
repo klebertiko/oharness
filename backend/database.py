@@ -69,7 +69,29 @@ def _migrate_usage_records(conn) -> None:
     legacy.drop(conn)
 
 
+def _migrate_factory_scores(conn) -> None:
+    """Scores became append-only: each result of a run carries its attempt and its origin. Idempotent; SQLite adds columns in place.
+    The rows written before were already one per run and scorer (the old code replaced them), so attempt 1 is right for all of them."""
+    if conn.dialect.name != "sqlite":
+        return
+    from sqlalchemy import inspect, text
+
+    names = inspect(conn).get_table_names()
+    if "factory_scores" in names:
+        columns = {column["name"] for column in inspect(conn).get_columns("factory_scores")}
+        if "attempt" not in columns:
+            conn.execute(text("ALTER TABLE factory_scores ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"))
+        if "origin" not in columns:
+            conn.execute(text("ALTER TABLE factory_scores ADD COLUMN origin VARCHAR(16) NOT NULL DEFAULT 'run_loop'"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_factory_scores_attempt ON factory_scores (factory_id, scorer_id, run_id, attempt)"))
+    if "factory_failures" in names:
+        columns = {column["name"] for column in inspect(conn).get_columns("factory_failures")}
+        if "attempt" not in columns:
+            conn.execute(text("ALTER TABLE factory_failures ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"))
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(_migrate_usage_records)
+        await conn.run_sync(_migrate_factory_scores)
         await conn.run_sync(Base.metadata.create_all)

@@ -60,6 +60,27 @@ def resolve_range(window: str | None, since: str | None, until: str | None, now:
     return window, now - timedelta(days=WINDOWS[window]), now
 
 
+def _opened_completed(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], start: datetime, end: datetime) -> list[dict]:
+    """Daily counts of items opened and items completed. Numbers only, so the series can be drawn without naming anyone."""
+    days = max(1, min(366, (end - start).days or 1))
+    opened, completed = [0] * days, [0] * days
+
+    def bucket(moment: datetime) -> int | None:
+        index = (moment - start).days
+        return index if 0 <= index < days else None
+
+    for item in items:
+        opened_at = bucket(item.created_at)
+        if opened_at is not None:
+            opened[opened_at] += 1
+        for event in events[item.id]:
+            if event.type == 'completed':
+                done_at = bucket(event.at)
+                if done_at is not None:
+                    completed[done_at] += 1
+    return [{'opened': left, 'completed': right} for left, right in zip(opened, completed)]
+
+
 def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifacts: dict[str, list[WorkItemArtifact]], runs: dict[str, list[WorkItemRun]],
           start: datetime, end: datetime) -> dict:
     def inside(moment: datetime) -> bool:
@@ -75,6 +96,7 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
     touched = []
     to_pr, to_review, to_merge, lifetime = [], [], [], []
     first_pass, returns, reviewed, verify_failures, interventions, after_verify = [], [], 0, 0, 0, 0
+    unattended = 0
     for item in items:
         evs, arts = events[item.id], artifacts[item.id]
         if inside(item.created_at) or any(inside(e.at) for e in evs):
@@ -119,7 +141,10 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
                 after_verify += 1
             returns.append(sum(1 for e in evs if e.type == 'returned_to_implement' and inside(e.at)))
         verify_failures += sum(1 for e in evs if e.type == 'verify_failed' and inside(e.at))
-        interventions += sum(1 for e in evs if inside(e.at) and e.actor_kind == 'human' and (e.type in INTERVENTIONS or (e.type == 'checkpoint_resolved' and json_kind(e) == 'question')))
+        item_interventions = sum(1 for e in evs if inside(e.at) and e.actor_kind == 'human' and (e.type in INTERVENTIONS or (e.type == 'checkpoint_resolved' and json_kind(e) == 'question')))
+        interventions += item_interventions
+        if item in touched and item_interventions == 0:
+            unattended += 1
     stage_runs: dict[str, int] = {}
     for item in touched:
         for run in runs[item.id]:
@@ -130,11 +155,14 @@ def _core(items: list[WorkItem], events: dict[str, list[WorkItemEvent]], artifac
             'basis': 'lifetime tokens of the items touched in the window', 'total_tokens': sum(i.cost_tokens for i in touched), 'median_tokens_per_pr': _median(shares),
             'tokens_by_stage': {'available': False, 'runs': dict(sorted(stage_runs.items()))},
             'by_size': {name: {'prs': v['prs'], 'median_tokens': _median(v['median_tokens'])} for name, v in sorted(by_size.items())},
+            'top_costs': sorted((item.cost_tokens for item in touched), reverse=True)[:5],
         },
         'quality': {'items_reviewed': reviewed, 'approved_first_review': statistics.mean(first_pass) if first_pass else None,
                     'avg_returns_to_implement': statistics.mean(returns) if returns else None, 'verify_failures': verify_failures, 'changes_requested_after_verify': after_verify},
         'autonomy': {'merged_without_human_push': {'available': False, 'reason': 'needs the commit authors of the branch, which the Forja does not keep'},
-                     'human_interventions_per_item': interventions / len(touched) if touched else None},
+                     'human_interventions_per_item': interventions / len(touched) if touched else None,
+                     'unattended_share': unattended / len(touched) if touched else None},
+        'flow': {'opened_completed': _opened_completed(items, events, start, end)},
         'cycle_time': {'run_to_pr_median_s': _median(to_pr), 'run_to_first_review_median_s': _median(to_review), 'run_to_merge_median_s': _median(to_merge),
                        'created_to_done_median_s': _median(lifetime), 'created_to_done_p90_s': _percentile(lifetime, 0.9)},
     }
