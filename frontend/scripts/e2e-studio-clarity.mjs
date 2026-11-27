@@ -82,7 +82,7 @@ try {
       "GET /flow/config": { enabled: false },
       "GET /chat/tools/permission": { thread_id: "qa", mode: "ask" },
       "GET /cowork/projects": { projects: [] },
-      "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections },
+      "GET /providers/clis": { clis: [] }, "GET /providers/usage-windows": { windows: [{ cli: "claude", provider: "anthropic", available: false, reason: "not-exposed" }, { cli: "codex", provider: "openai", available: false, reason: "unreadable" }, { cli: "cursor", provider: "cursor", available: false, reason: "not-exposed" }] }, "GET /providers/connections": { connections },
       "GET /bundles/examples": { examples: [] },
     };
     if (key === "GET /bundles/default" && failDefault) {

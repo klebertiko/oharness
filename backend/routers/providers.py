@@ -11,6 +11,7 @@ import unicodedata
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,12 +29,20 @@ from adapters.catalog import (
     validate_custom_endpoint,
     validate_custom_model,
 )
-from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
+from adapters.cli_shared import INVALID_CLI_MODEL, find_cli, run_cli, valid_cli_model
 from database import get_db
 from providers import store as connection_store
 from providers.diagnostics import build_report
+from providers.login_session import cancel_login, start_login
 from providers.resolution import ADAPTER_BY_PROVIDER
-from runtime.cli_detect import detect_clis
+from providers.usage_windows import (
+    NOT_EXPOSED,
+    NOT_INSTALLED,
+    parse_usage_windows,
+    read_codex_rate_limits,
+    windows_from_rate_limits,
+)
+from runtime.cli_detect import DETECTED, detect_clis
 from secret_store.base import SecretsStore
 
 router = APIRouter(prefix="/providers", tags=["providers"])
@@ -194,7 +203,55 @@ async def detect_subscription_clis(request: Request):
     never a credential, so it spends no tokens. The runner is injectable through
     ``app.state.cli_runner`` for tests."""
     runner = getattr(request.app.state, "cli_runner", None) or run_cli
-    return {"clis": await detect_clis(runner)}
+    clis = await detect_clis(runner)
+    for row in clis:
+        row["signed_in"] = bool(row.get("loggedIn"))
+    return {"clis": clis}
+
+
+@router.post("/clis/{cli_id}/login")
+async def begin_cli_login(cli_id: str, request: Request):
+    """Start the fixed sign-in command. The body is ignored; nothing printed is stored."""
+    finder = getattr(request.app.state, "login_finder", None) or None
+    spawner = getattr(request.app.state, "login_spawner", None) or None
+    try:
+        result = start_login(cli_id, **{k: v for k, v in (("finder", finder), ("spawner", spawner)) if v})
+    except KeyError:
+        raise HTTPException(404, "Unknown subscription CLI.") from None
+    if not result["ok"]:
+        reason = "not-started" if result.get("reason") == "not-started" else "not-installed"
+        return JSONResponse(status_code=409, content={"ok": False, "reason": reason})
+    return result
+
+
+@router.delete("/clis/login/{session_id}")
+async def stop_cli_login(session_id: str):
+    if not cancel_login(session_id):
+        raise HTTPException(404, "No sign-in is running.")
+    return {"id": session_id, "running": False}
+
+
+@router.get("/usage-windows")
+async def usage_windows(request: Request):
+    """5-hour and weekly windows. Missing data is unavailable, never 0%."""
+    reader = getattr(request.app.state, "usage_window_reader", None)
+    codex_reader = getattr(request.app.state, "codex_rate_reader", None) or read_codex_rate_limits
+    rows = []
+    for cli, provider, _cls in DETECTED:
+        if reader:
+            raw = reader(cli)
+            parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        elif cli == "codex":
+            # Only codex hands its windows to another program (app-server).
+            if codex_reader is read_codex_rate_limits and not find_cli("codex"):
+                parsed = dict(NOT_INSTALLED)
+            else:
+                parsed = windows_from_rate_limits(await codex_reader())
+        else:
+            # Claude and Cursor show usage only inside their own interactive session.
+            parsed = dict(NOT_EXPOSED)
+        rows.append({"cli": cli, "provider": provider, **parsed})
+    return {"windows": rows}
 
 
 @router.get("/diagnostics")

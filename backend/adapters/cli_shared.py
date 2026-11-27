@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from shutil import which
 from typing import AsyncIterator
 
@@ -98,6 +98,43 @@ def default_cli_cwd() -> Path:
     d = base / "OHarness" / "cli-runs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+# What cmd.exe (and wt.exe, for `;`) would read as syntax instead of a file name.
+PROGRAM_PATH_SYNTAX = frozenset('&|^%!"<>;')
+
+
+def checked_program(path: str, names: frozenset[str], *, windows: bool) -> str:
+    """A program path found by a PATH lookup, or a refusal. It is never rewritten.
+
+    Absolute, with a basename from the caller's fixed table, and none of the
+    characters a command interpreter or a terminal would parse. A caller passes
+    it as ``executable=`` (or as one argument after a literal program), so no
+    PATH or current-directory search decides what runs.
+    """
+    pure = PureWindowsPath(path) if windows else PurePosixPath(path)
+    if not pure.is_absolute() or pure.name.lower() not in names:
+        raise ValueError("refused")
+    if any(ch in PROGRAM_PATH_SYNTAX or ord(ch) < 32 for ch in path):
+        raise ValueError("refused")
+    return path
+
+
+def inert_cwd(*, windows: bool | None = None) -> str:
+    """A working directory the user's own processes cannot write to.
+
+    Agent runs write under ``default_cli_cwd()``, so a program started there
+    can be shadowed by a file a run planted: cmd.exe looks a name up in its
+    current directory first, and a CLI reads project config from it. Windows
+    gets ``%SystemRoot%/System32`` (admin-only writes, and the real cmd.exe
+    lives there), everything else gets ``/``. Nothing is created or cleaned,
+    so there is no window between a check and its use.
+    """
+    if windows is None:
+        windows = is_windows()
+    if windows:
+        root = os.environ.get("SYSTEMROOT") or os.environ.get("SystemRoot") or r"C:\Windows"
+        return str(PureWindowsPath(root, "System32"))
+    return "/"
 
 
 def resolve_cwd(requested: str | None, *, root: Path | str | None = None) -> Path:
@@ -357,6 +394,11 @@ def _clock_reset(hour: int, minute: int, second: int, ampm: str | None, now: dat
     if candidate <= base:
         candidate += timedelta(days=1)
     return _iso(candidate, base)
+
+
+def line_reset_at(line: str, now: datetime | None = None) -> str | None:
+    """The reset instant on one line, rebuilt as ISO. No other characters leave the line."""
+    return _reset_from_line(line, _as_aware(now or datetime.now().astimezone()))
 
 
 def _reset_from_line(line: str, now: datetime) -> str | None:

@@ -40,9 +40,10 @@ describe("nextStep - one action per state", () => {
     ["anthropic", "claude CLI is installed but not logged in. Run `claude login`.", "claude login"],
     ["openai", "codex CLI is installed but not logged in. Run `codex login`.", "codex login"],
     ["cursor", "cursor-agent CLI is installed but not logged in. Run `cursor-agent login`.", "cursor-agent login"],
-  ])("%s signed out copies its own login command", (provider, detail, login) => {
+  ])("%s signed out starts sign-in instead of copying the command", (provider, detail, login) => {
     const step = nextStep(conn({ provider: provider as Connection["provider"], health: "setup", enabled: false, detail }));
-    expect(step).toMatchObject({ kind: "copy", copy: login, label: `Copy \`${login}\``, status: "Sign-in needed" });
+    expect(step).toMatchObject({ kind: "login", login, label: "Sign in", status: "Sign-in needed" });
+    expect(step?.copy).toBeUndefined();
   });
 
   it("a missing CLI opens its install guide, even while the connection is still off", () => {
@@ -79,8 +80,8 @@ describe("nextStep - detected CLI state, before any run (R-PRV-01)", () => {
     expect(nextStep(cli({ cliState: "not-installed" }))).toMatchObject({ kind: "link", label: "Open install guide", status: "Not installed" });
   });
 
-  it("not-logged-in shows Sign in, with the command to copy", () => {
-    expect(nextStep(cli({ cliState: "not-logged-in" }))).toMatchObject({ kind: "copy", copy: "claude login", status: "Sign-in needed" });
+  it("not-logged-in shows Sign in, without copying the command", () => {
+    expect(nextStep(cli({ cliState: "not-logged-in" }))).toMatchObject({ kind: "login", login: "claude login", status: "Sign-in needed" });
   });
 
   it("ready, error and unavailable keep the ordinary step (Turn on)", () => {

@@ -14,6 +14,7 @@ import { catalogCodeFromFault } from "./errorCatalog";
 import { ProviderErrorNotice } from "./ProviderError";
 import { providerFault } from "@/components/agent/chatProvider";
 import { WithCode } from "./rows";
+import { LoginStatus } from "./LoginStatus";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
 import { metaLine, otherReadyAccounts, viewOf } from "./view";
@@ -105,6 +106,7 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             )}
           </header>
 
+          <LoginStatus connectionId={c.id} />
           {failureCode && !offline && !probing && <ProviderErrorNotice code={failureCode} />}
 
           {probing && !offline && (
