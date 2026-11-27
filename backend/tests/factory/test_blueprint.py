@@ -321,3 +321,34 @@ def test_saving_the_blueprint_frees_only_the_blueprint(client):
                                                     'stages': stages}, headers=HUMAN)
     assert resp.json()['status'] == 'rejected'
     assert 'protected_field' in {reason['code'] for reason in resp.json()['reasons']}
+
+
+def test_the_base_hash_is_checked_inside_the_version_lock(client, monkeypatch):
+    from factory import blueprint_router
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    seen = []
+    original = blueprint_router._still_base
+
+    async def watched(*args, **kwargs):
+        seen.append(versions._WRITES.locked())
+        return await original(*args, **kwargs)
+    monkeypatch.setattr(blueprint_router, '_still_base', watched)
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(),
+                                                    'blueprint': {'entry': [{'when': 'has label docs', 'to': 'spec'}, {'to': 'intake'}]}}, headers=HUMAN)
+    assert resp.status_code == 200 and resp.json()['status'] == 'canary', resp.text
+    assert seen == [True]
+
+
+def test_reading_during_a_trial_shows_the_trial_and_says_so(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    tried = {'entry': [{'when': 'has label docs', 'to': 'spec'}, {'to': 'intake'}]}
+    assert client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': tried},
+                       headers=HUMAN).json()['status'] == 'canary'
+    got = client.get('/factory/blueprint', params={'factory_id': FACTORY}).json()
+    assert got['trial'] is True and got['blueprint'] == tried and got['hash'] == _base()
+
+
+def test_nilo_returns_the_files_it_built(client):
+    resp = client.post('/factory/blueprint/nilo', json={'recipe': 'issue-pr', 'name': 'docs', 'request': 'small fixes'})
+    assert resp.status_code == 200 and resp.json()['ok'] is True
+    assert 'forja.yaml' in resp.json()['files'] and 'name: "docs"' in resp.json()['files']['forja.yaml']

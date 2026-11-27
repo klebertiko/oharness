@@ -447,3 +447,27 @@ def test_a_proposed_definition_that_nests_too_deep_is_refused(client):
     after['agents']['builder']['localSkills'] = deep
     resp = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': after, 'justification': 'x'}, headers=HUMAN)
     assert resp.status_code == 422
+
+
+def test_a_database_made_before_the_triggers_gets_them_at_startup(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import DBAPIError
+
+    from database import _migrate_factory_scores
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text('CREATE TABLE factory_scores (id VARCHAR PRIMARY KEY, factory_id VARCHAR, scorer_id VARCHAR, run_id VARCHAR, reason VARCHAR)'))
+        conn.execute(text('CREATE TABLE factory_failures (id VARCHAR PRIMARY KEY, reason VARCHAR)'))
+        conn.execute(text('CREATE TABLE factory_improvement_events (id INTEGER PRIMARY KEY, type VARCHAR)'))
+        conn.execute(text("INSERT INTO factory_scores (id, reason) VALUES ('s', 'old')"))
+        conn.execute(text("INSERT INTO factory_failures (id, reason) VALUES ('f', 'old')"))
+        conn.execute(text("INSERT INTO factory_improvement_events (id, type) VALUES (1, 'old')"))
+    with engine.begin() as conn:
+        _migrate_factory_scores(conn)
+    for table, column in (('factory_scores', 'reason'), ('factory_failures', 'reason'), ('factory_improvement_events', 'type')):
+        for statement in (f"UPDATE {table} SET {column} = 'x'", f'DELETE FROM {table}'):
+            with pytest.raises(DBAPIError), engine.begin() as conn:
+                conn.execute(text(statement))
+    with engine.begin() as conn:  # running it again is harmless
+        _migrate_factory_scores(conn)
+    engine.dispose()

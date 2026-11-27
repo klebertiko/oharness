@@ -22,6 +22,7 @@ export function ForjaBlueprint() {
   const [name, setName] = useState("payments");
   const [request, setRequest] = useState("");
   const [built, setBuilt] = useState<string | null>(null);
+  const [nilo, setNilo] = useState<{ files: Record<string, string>; errors: string[] } | null>(null);
 
   const run = async (work: () => Promise<string | undefined>) => {
     try {
@@ -75,9 +76,24 @@ export function ForjaBlueprint() {
           <Button size="sm" variant="primary" disabled={!name.trim()} onClick={() => void run(async () => {
             const result = await forjaApi.niloWorkflow({ recipe, name, request });
             setBuilt(result.ok ? t("forja.blueprint.valid") : t("forja.blueprint.invalid"));
+            setNilo({ files: result.files ?? {}, errors: result.errors.map((error) => error.message) });
             return undefined;
           })}>{t("forja.blueprint.nilo")}</Button>
           {built && <p role="status" className="text-body">{built}</p>}
+          {nilo && nilo.errors.length > 0 && (
+            <ul className="text-body">
+              {nilo.errors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          )}
+          {nilo &&
+            Object.entries(nilo.files).map(([file, text]) => (
+              <details key={file} className="rounded-control border border-line-soft p-2">
+                <summary className="text-body">{file}</summary>
+                <pre className="overflow-x-auto whitespace-pre-wrap text-body">{text}</pre>
+              </details>
+            ))}
         </div>
       )}
     </div>
@@ -100,7 +116,7 @@ function BlueprintEditor() {
   const { t } = useI18n();
   const explain = useExplain();
   const [factory, setFactory] = useState("");
-  const [loaded, setLoaded] = useState<{ factory: string; hash: string } | null>(null);
+  const [loaded, setLoaded] = useState<{ factory: string; hash: string; trial: boolean } | null>(null);
   const [draft, setDraft] = useState<Blueprint>({});
   const [when, setWhen] = useState("");
   const [to, setTo] = useState<(typeof ENTRY_TARGETS)[number]>("intake");
@@ -129,14 +145,18 @@ function BlueprintEditor() {
       setShown({ tone: "warn", text: explain(error) });
     }
   };
+  // The server's view replaces the local one: after a save the hash, the blueprint and the trial come from there.
+  const fetchFrom = async (name: string) => {
+    const got = await forjaApi.readBlueprint(name);
+    setLoaded({ factory: name, hash: got.hash, trial: Boolean(got.trial) });
+    setDraft((got.blueprint ?? {}) as Blueprint);
+    setPending(null);
+    setPath(null);
+  };
   const load = () =>
     attempt(async () => {
-      const got = await forjaApi.readBlueprint(factory);
-      setLoaded({ factory, hash: got.hash });
-      setDraft((got.blueprint ?? {}) as Blueprint);
-      setPending(null);
       setShown(null);
-      setPath(null);
+      await fetchFrom(factory);
     });
   const save = (confirmed: boolean) =>
     attempt(async () => {
@@ -160,6 +180,7 @@ function BlueprintEditor() {
           ? { tone: "warn", text: t("forja.blueprint.rejected"), reasons: saved.reasons?.map((reason) => reason.message) }
           : { tone: "info", text: t("forja.blueprint.saved") },
       );
+      if (saved.status !== "rejected") await fetchFrom(loaded.factory);
     });
   const remove = (kind: Kind, index: number) =>
     setDraft((current) => ({ ...current, [kind]: (current[kind] ?? []).filter((_, at) => at !== index) }));
@@ -231,7 +252,9 @@ function BlueprintEditor() {
           >
             {t("forja.blueprint.add")}
           </Button>
-          {pending ? (
+          {loaded.trial ? (
+            <Notice tone="info">{t("forja.blueprint.trialRunning")}</Notice>
+          ) : pending ? (
             <Notice tone="warn" title={t("forja.blueprint.removes")}>
               <ul>
                 {pending.map((item, index) => (

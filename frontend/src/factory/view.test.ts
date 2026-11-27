@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { FACTORY_COLUMNS, FACTORY_STAGES, FACTORY_STATUSES, type WorkItem } from "./types";
-import { actionsFor, ageParts, displayColumn, DISPLAY_COLUMNS, eventKey, groupByDisplay, groupInbox, moveReason, sourceKey, statusTone } from "./view";
+import { actionsFor, ageParts, displayColumn, DISPLAY_COLUMNS, eventKey, groupByDisplay, groupInbox, label, moveReason, sourceKey, statusTone } from "./view";
 import type { WorkItemEvent } from "./types";
 
 const backend = readFileSync(path.resolve(__dirname, "../../../backend/factory/stages.py"), "utf8");
@@ -85,5 +85,13 @@ describe("actionsFor", () => {
 describe("statusTone", () => {
   it("never leaves a state without a tone", () => {
     for (const status of FACTORY_STATUSES) expect(["neutral", "signal", "warn", "fault"]).toContain(statusTone(status));
+  });
+});
+
+describe("a label built from server data", () => {
+  it("uses the words when the catalog has them and the raw value when it does not", () => {
+    const t = (key: string) => `T:${key}`;
+    expect(label(t, "forja.stage.implement", "implement")).toBe("T:forja.stage.implement");
+    expect(label(t, "forja.stage.brand_new", "brand_new")).toBe("brand_new");
   });
 });

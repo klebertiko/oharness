@@ -223,6 +223,7 @@ class RunnerPool:
     """At most `limit` runs at once; the rest wait their turn (their work items stay `queued`)."""
 
     def __init__(self, limit: int):
+        self.limit = limit
         self._semaphore = asyncio.Semaphore(limit)
         self.running = 0
         self.waiting = 0

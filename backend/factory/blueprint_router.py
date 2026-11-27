@@ -122,9 +122,21 @@ def removed(before: dict | None, after: dict | None) -> list[dict]:
 
 @router.get('')
 async def read(factory_id: str = Query(pattern=rules.ID_PATTERN), db: AsyncSession = Depends(get_db)):
-    stable = await _stable(db, factory_id)
-    definition = json.loads(stable.definition_json)
-    return {'hash': stable.hash, 'blueprint': definition.get('blueprint') or {}, 'stages': definition.get('stages') or {}}
+    """The blueprint a person edits: the one in trial when a trial runs (no new save until it ends), else the active one.
+    `hash` is always the active version, the base a save is checked against."""
+    current = await versions.state(db, factory_id)
+    if current.stable is None:
+        raise HTTPException(status_code=404, detail={'code': 'no_stable', 'message': 'There is no active definition for this factory.'})
+    shown = json.loads((current.canary or current.stable).definition_json)
+    return {'hash': current.stable.hash, 'blueprint': shown.get('blueprint') or {}, 'stages': shown.get('stages') or {},
+            'trial': current.canary is not None}
+
+
+async def _still_base(db: AsyncSession, factory_id: str, base_hash: str) -> None:
+    """Run under the version lock, right before the activation: nothing changes the active version in between."""
+    current = await versions.state(db, factory_id)
+    if current.stable is None or current.stable.hash != base_hash:
+        raise HTTPException(status_code=409, detail={'code': 'stale', 'message': 'The active definition changed since the editor loaded it. Load it again.'})
 
 
 @router.post('/simulate')
@@ -158,7 +170,8 @@ async def save(body: SaveBody, request: Request, db: AsyncSession = Depends(get_
     if reasons:
         return {'status': 'rejected', 'reasons': reasons, 'removed': gone}
     try:
-        row = await versions.activate(db, after, hash_of(after), actor, mode='canary', percent=10, label='blueprint')
+        row = await versions.activate_after(lambda: _still_base(db, body.factory_id, body.base_hash), db, after, hash_of(after), actor,
+                                            mode='canary', percent=10, label='blueprint')
     except FactoryError as exc:
         raise HTTPException(status_code=exc.status, detail={'code': exc.code, 'message': exc.detail}) from None
     return {'hash': row.hash, 'kind': row.kind, 'mode': row.mode, 'percent': row.percent, 'status': 'canary', 'removed': gone}
@@ -188,6 +201,6 @@ async def nilo(body: NiloBody):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding='utf-8')
             loaded = load(root)
-            return {'ok': loaded.ok, 'errors': [issue.as_dict() for issue in loaded.issues if issue.severity == 'error'],
+            return {'ok': loaded.ok, 'files': files, 'errors': [issue.as_dict() for issue in loaded.issues if issue.severity == 'error'],
                     'review_required': bool((loaded.definition or {}).get('stages', {}).get('review', {}).get('required'))}
     return await anyio.to_thread.run_sync(_load)
