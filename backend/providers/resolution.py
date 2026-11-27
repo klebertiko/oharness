@@ -31,7 +31,7 @@ from adapters.catalog import (
     validate_custom_model,
 )
 from adapters.cli_shared import INVALID_CLI_MODEL, valid_cli_model
-from providers.preference import order_for_failover
+from providers.preference import failover_chain
 from secret_store.base import SecretsStore
 
 # connection.provider -> the adapters.get_adapter() key that actually talks to
@@ -106,6 +106,9 @@ class FailoverAttempt:
 
     connection_id: str
     reason: str
+    # Closed class (providers/preference.py REASON_CLASSES): the only part a client is shown.
+    # A connection that fails to *resolve* is unavailable for this run.
+    reason_class: str = "unavailable"
 
 
 def resolve_node_provider_with_failover(
@@ -140,10 +143,8 @@ def resolve_node_provider_with_failover(
     being threaded through as a fixed parameter here.
     """
     connections = connections or {}
-    provider_ids = [str(p) for p in (data.get("providerIds") or []) if p]
-    preference = data.get("preference")
-    if isinstance(preference, list) and provider_ids:
-        provider_ids = order_for_failover(provider_ids, [str(item) for item in preference if item])
+    # The request's own `preference` when it pins one, else the order saved on the Providers screen.
+    provider_ids = failover_chain(data, connections)
     if not provider_ids:
         raise ProviderResolutionError(
             "No provider is set for this node. Pin one on the node, or pick one "
