@@ -64,15 +64,23 @@ export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string;
     }
   };
 
-  const startRun = async () => {
+  const [choices, setChoices] = useState<{ id: string; name: string; root_path: string }[] | null>(null);
+  // Only a registered project whose definition is this item's Forja; with more than one, the person picks.
+  const startRun = async (repo?: string) => {
     try {
-      const projects = await forjaApi.projects();
-      const list = Array.isArray(projects) ? projects : projects.projects;
-      const repo = list.find((project) => project.rootPath)?.rootPath;
       if (!repo) {
-        setError(t("forja.runs.noProject"));
-        return;
+        const { repositories } = await forjaApi.itemRepositories(id);
+        if (repositories.length === 0) {
+          setError(t("forja.runs.noProject"));
+          return;
+        }
+        if (repositories.length > 1) {
+          setChoices(repositories);
+          return;
+        }
+        repo = repositories[0].root_path;
       }
+      setChoices(null);
       await forjaApi.startRun(id, repo);
       setError(null);
       await load();
@@ -183,6 +191,16 @@ export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string;
           {item.stage === "implement" && item.status === "queued" && !live && (
             <div>
               <Button size="sm" variant="primary" onClick={() => void startRun()}>{t("forja.runs.start")}</Button>
+              {choices && (
+                <fieldset className="mt-2 flex flex-wrap gap-2">
+                  <legend className="text-body text-ink-dim">{t("forja.runs.pickProject")}</legend>
+                  {choices.map((choice) => (
+                    <Button key={choice.id} size="sm" title={choice.root_path} onClick={() => void startRun(choice.root_path)}>
+                      {t("forja.runs.startIn", { name: choice.name })}
+                    </Button>
+                  ))}
+                </fieldset>
+              )}
             </div>
           )}
           <div className="flex flex-col gap-2">

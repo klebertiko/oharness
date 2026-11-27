@@ -51,6 +51,10 @@ async def _reset():
         await db.commit()
 
 
+def _base() -> str:
+    return _state().stable.hash
+
+
 def _activate(definition: dict):
     async def go():
         async with SessionLocal() as db:
@@ -200,14 +204,14 @@ def test_editing_the_blueprint_starts_a_trial_and_cannot_drop_the_review_gate(cl
         'factory_id': FACTORY, 'title': 'Old', 'source': {'kind': 'manual', 'ref': 'old-1'},
     }).json()
     saved = client.post('/factory/blueprint', json={
-        'factory_id': FACTORY,
+        'factory_id': FACTORY, 'base_hash': _base(),
         'blueprint': {'entry': [{'when': 'has label docs', 'to': 'implement'}, {'to': 'intake'}]},
     }, headers=HUMAN)
     assert saved.status_code == 200, saved.text
     assert saved.json()['mode'] == 'canary'
     assert client.get(f"/factory/work-items/{born['id']}").json()['factory_version'] == born['factory_version']
     refused = client.post('/factory/blueprint', json={
-        'factory_id': FACTORY,
+        'factory_id': FACTORY, 'base_hash': _base(),
         'blueprint': {'entry': [{'to': 'intake'}]},
         'stages': {'review': {'enabled': False, 'required': False}, 'verify': {'enabled': True, 'required': True}, 'spec': {'enabled': True, 'required': False}},
     }, headers=HUMAN)
@@ -222,7 +226,7 @@ def test_a_blueprint_that_skips_a_required_stage_is_refused(client):
     _activate(_definition({'entry': [{'to': 'intake'}]}))
     for blueprint in ({'entry': [{'when': 'has label docs', 'to': 'implement'}]},
                       {'routes': [{'from': 'review', 'to': 'handoff', 'when': 'always'}]}):
-        resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': blueprint}, headers=HUMAN)
+        resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': blueprint}, headers=HUMAN)
         assert resp.status_code == 200 and resp.json()['status'] == 'rejected', blueprint
         assert 'skip_required' in {reason['code'] for reason in resp.json()['reasons']}
     assert _state().canary is None
@@ -238,14 +242,14 @@ def test_an_entry_that_would_skip_a_required_stage_leaves_the_item_at_intake(cli
 
 def test_a_blueprint_that_is_not_valid_is_refused(client):
     _activate(_definition({'entry': [{'to': 'intake'}]}))
-    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': {'entry': [{'to': 'intake', 'mergeOnGreen': True}]}}, headers=HUMAN)
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': {'entry': [{'to': 'intake', 'mergeOnGreen': True}]}}, headers=HUMAN)
     assert resp.status_code == 200 and resp.json()['status'] == 'rejected'
     assert 'invalid_definition' in {reason['code'] for reason in resp.json()['reasons']}
 
 
 def test_the_agent_token_cannot_change_the_blueprint(client):
     _activate(_definition({'entry': [{'to': 'intake'}]}))
-    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': {'entry': [{'to': 'intake'}]}})
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': {'entry': [{'to': 'intake'}]}})
     assert resp.status_code == 403
 
 
@@ -261,3 +265,59 @@ def test_nilo_drops_a_request_that_holds_a_credential():
     assert 'ghp_' not in files['agents/foreman/agent.md']
     kept = compose('issue-pr', 'docs', 'reset the password page copy')
     assert 'password page' in kept['agents/foreman/agent.md']
+
+
+# ------------------------------------------------------------------------------------------- the editor starts from the active blueprint
+
+def test_the_active_blueprint_is_read_with_its_hash(client):
+    body = _definition({'entry': [{'to': 'intake'}], 'routes': [{'from': 'implement', 'to': 'end', 'when': 'has label stop', 'reason': 'x'}]})
+    _activate(body)
+    got = client.get('/factory/blueprint', params={'factory_id': FACTORY})
+    assert got.status_code == 200, got.text
+    assert got.json()['hash'] == _base() and got.json()['blueprint'] == body['blueprint']
+    assert client.get('/factory/blueprint', params={'factory_id': 'nobody'}).status_code == 404
+    assert client.get('/factory/blueprint', params={'factory_id': '../x'}).status_code == 422
+
+
+def test_a_save_from_an_older_version_is_refused_and_nothing_changes(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': '0' * 64, 'blueprint': {'entry': [{'to': 'intake'}]}},
+                       headers=HUMAN)
+    assert resp.status_code == 409 and resp.json()['detail']['code'] == 'stale'
+    assert client.post('/factory/blueprint', json={'factory_id': FACTORY, 'blueprint': {'entry': [{'to': 'intake'}]}},
+                       headers=HUMAN).status_code == 422
+    assert _state().canary is None
+
+
+def test_the_preview_names_what_the_save_would_remove_and_changes_nothing(client):
+    route = {'from': 'implement', 'to': 'end', 'when': 'has label stop', 'reason': 'x'}
+    gate = {'id': 'ask', 'stage': 'implement', 'prompt': 'Which?', 'when': 'has label docs'}
+    _activate(_definition({'entry': [{'to': 'intake'}], 'routes': [route], 'gates': [gate]}))
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'preview': True,
+                                                    'blueprint': {'entry': [{'to': 'intake'}], 'gates': [gate]}}, headers=HUMAN)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'preview'
+    assert resp.json()['removed'] == [{'kind': 'routes', 'rule': route}]
+    assert _state().canary is None
+
+
+def test_simulate_walks_the_active_or_the_draft_blueprint(client):
+    _activate(_definition({'entry': [{'to': 'intake'}], 'routes': [{'from': 'implement', 'to': 'end', 'when': 'has label stop', 'reason': 'x'}]}))
+    active = client.post('/factory/blueprint/simulate', json={'factory_id': FACTORY, 'facts': {'labels': ['stop']}})
+    assert active.status_code == 200, active.text
+    assert [step['stage'] for step in active.json()['path']] == ['intake']
+    draft = client.post('/factory/blueprint/simulate', json={'factory_id': FACTORY, 'facts': {'labels': ['stop']},
+                                                             'blueprint': {'entry': [{'when': 'has label stop', 'to': 'spec'}],
+                                                                           'routes': [{'from': 'spec', 'to': 'end', 'when': 'always'}]}})
+    assert [step['stage'] for step in draft.json()['path']] == ['spec', 'end']
+    assert client.post('/factory/blueprint/simulate', json={'factory_id': FACTORY, 'facts': {'labels': ['x'] * 500}}).status_code == 422
+
+
+def test_saving_the_blueprint_frees_only_the_blueprint(client):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    stages = {'review': {'enabled': True, 'required': True, 'agent': 'builder'}, 'verify': {'enabled': True, 'required': True},
+              'spec': {'enabled': True, 'required': True}}
+    resp = client.post('/factory/blueprint', json={'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': {'entry': [{'to': 'intake'}]},
+                                                    'stages': stages}, headers=HUMAN)
+    assert resp.json()['status'] == 'rejected'
+    assert 'protected_field' in {reason['code'] for reason in resp.json()['reasons']}

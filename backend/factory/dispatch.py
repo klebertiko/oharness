@@ -139,10 +139,12 @@ def _git(workspace: dict, args: list[str]) -> str:
 async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: str, assignment: dict, driver: Driver, store,
                     pool: runner.RunnerPool, repo, *, run_id: str | None = None, cancel: asyncio.Event | None = None,
                     steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
-                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None) -> str:
+                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None,
+                    on_seal: Callable[[], None] | None = None) -> str:
     """Runs `stage` for `item` and returns the run id. Raises DispatchError (nothing created) when it cannot start.
 
     `cancel` and `steering` are how a person stops the run and talks to it while it is going. A stop keeps the worktree.
+    `on_seal` is called at the point of no return: past it the stage completes, and a stop is refused instead of ignored.
     """
     agent_id, agent = _check(item, definition, stage, assignment)
     try:
@@ -171,6 +173,8 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             await driver(run)
             if run.stopped():
                 raise RunStopped('The run was stopped.')
+            if on_seal is not None:  # no await between the last check and the seal: a stop lands before it or is refused after it
+                on_seal()
             sha = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
             branch = f'forja/{item.id}-{run_id}'
             await foreman.implement_done(db, item, definition, branch, sha, base)
@@ -179,7 +183,7 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             await writer.append({'event': 'harness_done', 'data': {'status': 'complete', 'total_tokens': run.tokens, 'tokens_estimated': False}})
             if outcome is not None:
                 outcome['status'] = 'complete'
-        except RunStopped:
+        except (RunStopped, asyncio.CancelledError) as exc:  # a cancelled task ends the run as stopped, never as running forever
             await db.rollback()
             await db.refresh(item)
             if item.status == 'running':
@@ -190,6 +194,8 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
                                                                     'tokens_estimated': False}})
             if outcome is not None:
                 outcome['status'] = 'stopped'
+            if isinstance(exc, asyncio.CancelledError):
+                raise
         except Exception as exc:  # the run ends here, never the process: a person decides what happens next
             await db.rollback()
             await db.refresh(item)

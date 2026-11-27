@@ -4,26 +4,31 @@ from __future__ import annotations
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from database import SessionLocal
+from factory.improvement.orm import guard_statements, unguard_statements
 from factory import auth, versions
 from factory.definition import hash_of
 from factory.improvement.orm import FactoryFailure, FactoryScore, ImprovementEvent, ImprovementProposal
 from main import app
 
-from forja_improvement_defs import FACTORY, HUMAN, definition as _definition  # noqa: E402
+from forja_improvement_defs import FACTORY, HUMAN, definition as _definition
 
 SCORER = {auth.SCORER_HEADER: auth.scorer_credential()}
 
 
 async def _reset():
     async with SessionLocal() as db:
+        for statement in unguard_statements():  # the trail is append-only; a test reset lifts the triggers, then puts them back
+            await db.execute(text(statement))
         await db.execute(delete(ImprovementEvent))
         await db.execute(delete(ImprovementProposal))
         await db.execute(delete(FactoryScore))
         await db.execute(delete(FactoryFailure))
         await db.execute(delete(versions.DefinitionVersion).where(versions.DefinitionVersion.factory_id == FACTORY))
+        for statement in guard_statements():
+            await db.execute(text(statement))
         await db.commit()
 
 
