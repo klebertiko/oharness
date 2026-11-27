@@ -180,6 +180,14 @@ jobs:
         env:
           OHM_BROWSER_CHANNEL: chromium
         run: npm run test:e2e
+      # The catalogue lives under /dev, which the production export above drops (and e2e-shell proves 404s).
+      # A second export keeps it, only to walk every primitive in every state.
+      - name: Design-system e2e (export with dev routes)
+        env:
+          NEXT_PUBLIC_OH_DEV_ROUTES: "1"
+          OH_E2E_REQUIRE_DEV: "1"
+          OHM_BROWSER_CHANNEL: chromium
+        run: npm run build && node scripts/run-e2e.mjs design-system
       # The design-system catalogue in every state, both themes: the review looks at these, pass or fail.
       - name: Upload design-system captures
         if: always()

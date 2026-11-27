@@ -57,12 +57,14 @@ describe("AddForm: Tarball tab", () => {
     const onSubmit = vi.fn();
     const { container } = render(<AddForm onSubmit={onSubmit} onCancel={() => {}} />);
     await userEvent.click(screen.getByRole("radio", { name: "Tarball" }));
-    await userEvent.type(screen.getByLabelText("Address (https) or absolute path of a .tgz"), "https://example.com/a-1.0.0.tgz");
+    await userEvent.click(screen.getByLabelText("Address (https) or absolute path of a .tgz"));
+    await userEvent.paste("https://example.com/a-1.0.0.tgz");
     await userEvent.click(screen.getByRole("button", { name: "Check package" }));
     expect(screen.getByText("A web address needs its hash.")).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(await axeViolations(container)).toEqual([]);
-    await userEvent.type(screen.getByLabelText("Hash (sha512-… or sha256-…, or hex)"), SHA);
+    await userEvent.click(screen.getByLabelText("Hash (sha512-… or sha256-…, or hex)"));
+    await userEvent.paste(SHA);
     await userEvent.click(screen.getByRole("button", { name: "Check package" }));
     expect(onSubmit).toHaveBeenCalledWith({ kind: "tarball", spec: "https://example.com/a-1.0.0.tgz", integrity: SHA });
   });
@@ -71,7 +73,8 @@ describe("AddForm: Tarball tab", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
     render(<AddForm onSubmit={() => {}} onCancel={() => {}} />);
     await userEvent.click(screen.getByRole("radio", { name: "Tarball" }));
-    await userEvent.type(screen.getByLabelText("Endereço (https) ou caminho absoluto de um .tgz"), "\\\\servidor\\x\\a.tgz");
+    await userEvent.click(screen.getByLabelText("Endereço (https) ou caminho absoluto de um .tgz"));
+    await userEvent.paste("\\\\servidor\\x\\a.tgz");
     await userEvent.click(screen.getByRole("button", { name: "Verificar pacote" }));
     expect(screen.getByText(/Caminhos de rede/)).toBeTruthy();
   });

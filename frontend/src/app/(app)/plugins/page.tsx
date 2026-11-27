@@ -1,5 +1,7 @@
-import { PluginsRoute } from "@/components/plugins/PluginsRoute";
+"use client";
+
+import { Home } from "../../home";
 
 export default function PluginsPage() {
-  return <PluginsRoute />;
+  return <Home initialPath="/plugins" />;
 }
