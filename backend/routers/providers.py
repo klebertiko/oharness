@@ -216,7 +216,8 @@ async def begin_cli_login(cli_id: str, request: Request):
     except KeyError:
         raise HTTPException(404, "Unknown subscription CLI.") from None
     if not result["ok"]:
-        return JSONResponse(status_code=409, content={"ok": False, "reason": "not-installed"})
+        reason = "not-started" if result.get("reason") == "not-started" else "not-installed"
+        return JSONResponse(status_code=409, content={"ok": False, "reason": reason})
     return result
 
 

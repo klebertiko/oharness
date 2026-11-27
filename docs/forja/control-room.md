@@ -1,5 +1,7 @@
 # Sala de controle da Forja
 
+A lista do que a Forja cobre, do que este ciclo entrega e do que fica para a fatia seguinte está em [paridade.md](paridade.md). O quadro descrito abaixo é o de doze colunas; a entrega atual usa seis colunas de estágio e o selo de situação no cartão.
+
 A destinação **Forja** do app (barra lateral, `Alt+4`) junta o que a Forja local faz e o que espera uma pessoa. Tudo roda na sua máquina; nada sai dela. O desenho está no [ADR 0058](../adr/0058-factory-control-room-and-metrics.md).
 
 ## Seções

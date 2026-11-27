@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 import { evidenceDir } from "./e2e-evidence.mjs";
+import { clickDestination } from "./destination.mjs";
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = evidenceDir("studio-clarity");
 mkdirSync(output, { recursive: true });
@@ -122,7 +123,7 @@ try {
   assert.equal(await page.getByRole("option").count(), 1);
   await composer.press("Enter");
   await page.getByRole("button", { name: "Chat provider: Auto", exact: true }).waitFor({ state: "hidden" });
-  await page.getByRole("button", { name: "Chats", exact: true }).click();
+  await clickDestination(page, "Chats");
   step = "truthful provider selection";
   const auto = page.getByRole("button", { name: /Chat provider: Auto.*Not verified/ });
   await auto.waitFor();
@@ -139,7 +140,7 @@ try {
   await page.locator("main").getByText("OpenAI", { exact: true }).first().waitFor();
 
   step = "Studio sample and draft preservation";
-  await page.getByRole("button", { name: "Studio", exact: true }).click();
+  await clickDestination(page, "Studio");
   await page.getByRole("heading", { name: "Harness Studio", exact: true }).waitFor();
   await page.screenshot({ path: resolve(output, "overview.png") });
   await page.getByRole("button", { name: "Open harness: Agent + review", exact: true }).click();
@@ -184,7 +185,7 @@ try {
   assert.deepEqual(executions[0].graph_json.nodes.map(n => n.data.providerIds), [["anthropic"], ["openai"]]);
 
   step = "importing an edited default-ID bundle";
-  await page.getByRole("button", { name: "Studio", exact: true }).click();
+  await clickDestination(page, "Studio");
   await page.getByRole("button", { name: "Back to Studio", exact: true }).click();
   await page.getByRole("button", { name: "Open .ohm", exact: true }).click();
   const imported = { ...bundled, manifest: { ...bundled.manifest, name: "Edited framework copy" }, graph: { nodes: [{ id: "edited-copy", type: "agent", role: "agent", label: "Edited copy", position: { x: 120, y: 100 }, data: { label: "Edited copy", providerIds: ["openai"] } }], edges: [] } };
@@ -226,7 +227,7 @@ try {
   }
   step = "provider and slash menu responsive keyboard";
   await resize(1440);
-  await page.getByRole("button", { name: "Chats", exact: true }).click();
+  await clickDestination(page, "Chats");
   for (const width of [320, 375, 414, 768, 1440]) {
     await resize(width);
     const chip = page.getByRole("button", { name: /Chat provider: OpenAI/ });

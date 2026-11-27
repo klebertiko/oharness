@@ -39,9 +39,10 @@ describe("the board", () => {
   it("lists the work items by column, with cards a keyboard can reach", async () => {
     routes.set("GET /factory/work-items", { body: { items: [item(), item({ id: "i2", title: "Add search", column: "implementing", stage: "implement", status: "running" })] } });
     render(<ForjaScreen />);
-    const needs = await screen.findByRole("region", { name: /Needs you, 1 items/ });
+    const needs = await screen.findByRole("region", { name: /Spec, 1 items/ });
     expect(within(needs).getByRole("button", { name: "Open Fix login" })).toBeTruthy();
     expect(screen.getByRole("region", { name: /Implementing, 1 items/ })).toBeTruthy();
+    expect(within(needs).getByText("Waiting for you")).toBeTruthy();
     expect(await axeViolations(document.body)).toEqual([]);
   });
 
@@ -59,7 +60,7 @@ describe("the board", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
     routes.set("GET /factory/work-items", { body: { items: [item()] } });
     render(<ForjaScreen />);
-    expect(await screen.findByRole("region", { name: /Precisam de você, 1 itens/ })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: /Spec, 1 itens/ })).toBeTruthy();
   });
 });
 
@@ -149,7 +150,7 @@ describe("the inbox", () => {
     routes.set("GET /factory/inbox", { body: { entries: [entry], count: 1 } });
     routes.set("POST /factory/inbox/question%3Ai1%3A3/resolve", { status: 204, body: null });
     render(<ForjaScreen />);
-    await userEvent.click(screen.getByRole("radio", { name: "Inbox" }));
+    await userEvent.click(screen.getByRole("button", { name: "Inbox" }));
     expect(await screen.findByText("1 thing is waiting for you")).toBeTruthy();
     expect(screen.getByText("Which environment?")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Mark done" }));
@@ -165,7 +166,7 @@ describe("setup and metrics", () => {
     routes.set("GET /factory/definition", { body: { stable: null, canary: null } });
     routes.set("PUT /factory/secrets/npm-token", { body: { name: "npm-token" } });
     render(<ForjaScreen />);
-    await userEvent.click(screen.getByRole("radio", { name: "Setup" }));
+    await userEvent.click(screen.getByRole("button", { name: "Setup" }));
     expect(await screen.findByText("forja/npm-token")).toBeTruthy();
     expect(screen.getByText(/Values are never shown again/)).toBeTruthy();
     await userEvent.type(screen.getByLabelText("Name"), "npm-token");
@@ -186,10 +187,48 @@ describe("setup and metrics", () => {
       },
     });
     render(<ForjaScreen />);
-    await userEvent.click(screen.getByRole("radio", { name: "Metrics" }));
+    await userEvent.click(screen.getByRole("button", { name: "Metrics" }));
     expect(await screen.findByText("Branches opened")).toBeTruthy();
     expect(screen.getByText("50%")).toBeTruthy();
     expect(screen.getByText(/Not available: needs commit authors/)).toBeTruthy();
     expect(await axeViolations(document.body)).toEqual([]);
+  });
+
+  it("shows only the empty state when the period has no figures", async () => {
+    routes.set("GET /factory/work-items", { body: { items: [] } });
+    routes.set("GET /factory/metrics", { body: { schemaVersion: 1, window: "30d", throughput: { prs_opened: 0, items_completed: 0 }, cost: { total_tokens: 0 }, quality: {}, autonomy: {}, cycle_time: {} } });
+    render(<ForjaScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "Metrics" }));
+    expect(await screen.findByText("No data in this period")).toBeTruthy();
+    expect(screen.queryByText("Branches opened")).toBeNull();
+    expect(screen.queryByText("–")).toBeNull();
+  });
+});
+
+describe("rendered text", () => {
+  it("does not show raw event names or ISO stamps, in either theme", async () => {
+    routes.set("GET /factory/work-items", { body: { items: [item()] } });
+    routes.set("GET /factory/work-items/i1", { body: { ...item(), artifacts: [], runs: [{ run_id: "r1", stage: "implement", agent_id: "builder" }] } });
+    routes.set("GET /factory/work-items/i1/events", { body: { events: [{ sequence: 3, type: "checkpoint_requested", actor: { kind: "foreman", id: "foreman" }, data: { kind: "spec" }, at: "2026-11-01T10:05:00Z" }] } });
+    for (const theme of ["dark", "light"] as const) {
+      document.documentElement.dataset.theme = theme;
+      render(<ForjaScreen />);
+      await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog.textContent ?? "").not.toMatch(/_requested/);
+      expect(dialog.textContent ?? "").not.toMatch(/T\d\d:/);
+      cleanup();
+    }
+  });
+
+  it("has no serious axe violations on the board in both themes", async () => {
+    routes.set("GET /factory/work-items", { body: { items: [item()] } });
+    for (const theme of ["dark", "light"] as const) {
+      document.documentElement.dataset.theme = theme;
+      render(<ForjaScreen />);
+      await screen.findByRole("button", { name: "Open Fix login" });
+      expect(await axeViolations(document.body)).toEqual([]);
+      cleanup();
+    }
   });
 });

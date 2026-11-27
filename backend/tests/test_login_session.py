@@ -59,6 +59,19 @@ def test_unknown_cli_and_a_missing_binary_do_not_spawn(client: TestClient) -> No
     assert app.state.secrets_store._data == {}
 
 
+@pytest.mark.parametrize("error", [ValueError("refused"), FileNotFoundError("claude.CMD")])
+def test_a_launch_that_fails_is_a_closed_refusal_and_keeps_no_session(client: TestClient, error: Exception) -> None:
+    # A shim the launcher refuses (an npm `.cmd` on Windows), or a program that is not there.
+    def refuse(argv: list[str]) -> int:
+        raise error
+
+    app.state.login_spawner = refuse
+    response = client.post("/providers/clis/claude/login")
+    assert response.status_code == 409
+    assert response.json() == {"ok": False, "reason": "not-started"}
+    assert "CMD" not in response.text and "/usr/local/bin" not in response.text
+
+
 def test_cancel_stops_the_session_without_reading_output(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     killed: list[int] = []
     monkeypatch.setattr("providers.login_session.os.kill", lambda pid, sig: killed.append(pid))

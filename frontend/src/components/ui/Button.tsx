@@ -1,5 +1,6 @@
 "use client";
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useT } from "@/i18n/store";
 import { cn } from "@/lib/utils";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -41,6 +42,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   { variant = "secondary", size = "md", loading = false, icon, iconOnly = false, className, children, disabled, onClick, type = "button", ...rest },
   ref,
 ) {
+  const t = useT();
   return (
     <button
       ref={ref}
@@ -66,8 +68,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {loading && (
         <span
           role="status"
-          aria-label="Working"
-          className="absolute inset-0 m-auto h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+          aria-label={t("ui.working")}
+          className="absolute inset-0 m-auto size-(--icon) animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
         />
       )}
     </button>
