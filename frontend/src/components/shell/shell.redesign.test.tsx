@@ -177,11 +177,15 @@ describe("ActivityRail", () => {
   });
 
   it("toggles the theme through the theme module", async () => {
+    // A dark OS: from an explicit dark, the button flips to light; from light it offers the OS theme back.
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: !query.includes("light"), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
     document.documentElement.dataset.theme = "dark";
     render(<ActivityRail />);
     await userEvent.click(screen.getByRole("button", { name: "Use light theme" }));
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.style.colorScheme).toBe("light");
-    expect(screen.getByRole("button", { name: "Use dark theme" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Follow system theme" })).toBeTruthy();
+    window.matchMedia = original;
   });
 });

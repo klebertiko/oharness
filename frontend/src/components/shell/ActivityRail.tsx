@@ -7,6 +7,7 @@ import {
   Hammer,
   Keyboard,
   MessagesSquare,
+  Monitor,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -18,7 +19,7 @@ import type { LucideIcon } from "lucide-react";
 import { useShellStore, LEFT_MIN, RAIL_COLLAPSED, type RailSection } from "./shellStore";
 import { chordCaps, useIsMac } from "./keys";
 import { cn } from "@/lib/utils";
-import { appliedTheme, applyTheme, type Theme } from "@/lib/theme";
+import { appliedTheme, applyTheme, nextTheme, osPrefersLight, type Theme } from "@/lib/theme";
 
 /* Hallmark · design-system: design.md · designed-as-app */
 /**
@@ -94,14 +95,27 @@ export function ActivityRail({
   const toggleLeft = useShellStore((s) => s.toggleLeft);
 
   // theme-init.js has already applied the saved theme before first paint; this
-  // only mirrors it so the toggle shows the right icon and label.
-  const [theme, setTheme] = useState<Theme>("dark");
-  useEffect(() => setTheme(appliedTheme()), []);
+  // only mirrors it (and the OS preference, for `system`) so the button shows
+  // what a press will do.
+  const [theme, setTheme] = useState<Theme>("system");
+  const [prefersLight, setPrefersLight] = useState(false);
+  useEffect(() => {
+    setTheme(appliedTheme());
+    setPrefersLight(osPrefersLight());
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => setPrefersLight(query.matches);
+    query.addEventListener?.("change", onChange);
+    return () => query.removeEventListener?.("change", onChange);
+  }, []);
+  const target = nextTheme(theme, prefersLight);
   const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    applyTheme(next);
+    setTheme(target);
+    applyTheme(target);
   };
+  const themeIcon = target === "system" ? Monitor : target === "light" ? Sun : Moon;
+  const themeLabel =
+    target === "system" ? t("shell.rail.useSystem") : target === "light" ? t("shell.rail.useLight") : t("shell.rail.useDark");
 
   return (
     <nav
@@ -133,8 +147,8 @@ export function ActivityRail({
       )}
 
       <RailButton
-        icon={theme === "dark" ? Sun : Moon}
-        label={theme === "dark" ? t("shell.rail.useLight") : t("shell.rail.useDark")}
+        icon={themeIcon}
+        label={themeLabel}
         onClick={toggleTheme}
       />
       <RailButton icon={Keyboard} label={t("shell.rail.keymap")} hint="?" onClick={() => setKeymapOpen(true)} />

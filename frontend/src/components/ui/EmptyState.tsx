@@ -8,19 +8,23 @@ import { cn } from "@/lib/utils";
  */
 export function EmptyState({
   title,
+  icon,
   children,
   action,
   className,
 }: {
   title: string;
+  /** A line icon that names the missing thing. The sentence under it teaches the trigger. */
+  icon?: ReactNode;
   children?: ReactNode;
   action?: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-start gap-2 rounded-panel border border-dashed border-line-strong px-4 py-4", className)}>
-      <p className="t-title text-ink">{title}</p>
-      {children && <p className="max-w-[56ch] text-body text-ink-mute">{children}</p>}
+    <div className={cn("flex flex-col items-start gap-(--gap-2) rounded-panel border border-dashed border-border-2 px-(--pad-4) py-(--pad-4)", className)}>
+      {icon && <span className="text-fg-3">{icon}</span>}
+      <p className="t-title text-fg-1">{title}</p>
+      {children && <p className="max-w-[56ch] t-body text-fg-3">{children}</p>}
       {action}
     </div>
   );

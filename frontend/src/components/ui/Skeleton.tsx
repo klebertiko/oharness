@@ -6,7 +6,20 @@ import { cn } from "@/lib/utils";
  * the previous content and mark it `aria-busy` (experience.md).
  */
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-control bg-sub-200 motion-reduce:animate-none", className)} />;
+  return <div aria-hidden className={cn("animate-pulse rounded-xs bg-bg-hover motion-reduce:animate-none", className)} />;
+}
+
+/** One line with the body face's real height, so the skeleton matches the text it stands in for. */
+export function SkeletonText({ lines = 1, className }: { lines?: number; className?: string }) {
+  return (
+    <span aria-hidden className={cn("flex flex-col gap-(--gap-1)", className)}>
+      {Array.from({ length: lines }, (_, index) => (
+        <span key={index} className="t-body block rounded-xs bg-bg-hover text-transparent">
+          {"\u00a0"}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** `rows` skeleton lines at list-row height, announced once as a loading status. */

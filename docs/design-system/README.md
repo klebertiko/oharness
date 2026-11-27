@@ -88,8 +88,8 @@ Generated, not hand-written: `node scripts/check-contrast.mjs --md` computes WCA
 | `role-hitl` on `sub-000`, `sub-100` | 3:1 | 3.9 / 3.7 | 4.4 / 4.7 | Pass |
 | `role-skill` on `sub-000`, `sub-100` | 3:1 | 3.5 / 3.3 | 5.0 / 5.3 | Pass |
 | `role-mcp` on `sub-000`, `sub-100` | 3:1 | 3.6 / 3.4 | 4.8 / 5.1 | Pass |
-| `role-tool` on `sub-000`, `sub-100` | 3:1 | 3.2 / 3.0 | 5.4 / 5.7 | Pass |
+| `role-tool` on `sub-000`, `sub-100` | 3:1 | 3.4 / 3.1 | 5.1 / 5.5 | Pass |
 | `role-decision` on `sub-000`, `sub-100` | 3:1 | 3.9 / 3.6 | 4.5 / 4.7 | Pass |
 <!-- contrast:end -->
 
-Corrections applied from the first audit (`audit/screens.md`): `ink-faint` to L 0.665 in Graphite and 0.500 in Ivory (4.5:1 on all four substrates), `role-tool` to L 0.50 (3:1 or better on `sub-000` and `sub-100`), and control edges and state text routed through `line-strong`, `warn-text`, `fault-text` and `signal-text`.
+Corrections applied from the first audit (`audit/screens.md`): `ink-faint` to L 0.665 in Graphite and 0.500 in Ivory (4.5:1 on all four substrates), `role-tool` to L 0.50, later 0.51 (3:1 or better on `sub-000`, `sub-100` and `bg-elevated`), and control edges and state text routed through `line-strong`, `warn-text`, `fault-text` and `signal-text`.
