@@ -141,7 +141,10 @@ async def start(item_id: str, definition: dict, repo, store, driver=None, runner
         agent = definition['agents'][agent_id]
         ceiling = int((definition.get('ceilings') or {}).get('tokensPerRun') or 0)
         assignment = {'agent': agent_id, 'model': agent.get('model'), 'harness': agent.get('harness'), 'maxTokens': ceiling}
-        chosen = runner.select_runner(definition, task=runner_id, agent=agent.get('runner'))
+        try:
+            chosen = runner.select_runner(definition, task=runner_id, agent=agent.get('runner'))
+        except runner.RunnerError as exc:
+            raise dispatch.DispatchError(str(exc)) from exc
         bound = await engine_id(db, agent)
         run_id = str(uuid.uuid4())
         # Checked and claimed with no await in between: one item never has two runs going at once.

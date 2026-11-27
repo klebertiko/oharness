@@ -43,19 +43,32 @@ async def list_runs():
     return loop.snapshot()
 
 
-# root path -> (stat of forja.yaml, the name it gave): the folder is loaded again only when that file changes.
-_FORJA_NAMES: dict[str, tuple[tuple[int, int], str | None]] = {}
+# root path -> (stat of the definition files, the name it gave): the folder is loaded again only when one of them changes.
+FORJA_CACHE_MAX = 256
+_FORJA_NAMES: dict[str, tuple[tuple, str | None]] = {}
+
+
+def _signature(folder: Path) -> tuple:
+    """Size and time of forja.yaml and of every file under agents/, runners/ and mcp/: a stat each, nothing is read."""
+    files = [folder / 'forja.yaml']
+    for part in ('agents', 'runners', 'mcp'):
+        if (folder / part).is_dir():
+            files += sorted(path for path in (folder / part).rglob('*') if path.is_file())
+    out = []
+    for path in files:
+        stat = path.stat()
+        out.append((str(path.relative_to(folder)), stat.st_mtime_ns, stat.st_size))
+    return tuple(out)
 
 
 def _forja_of(root: str) -> str | None:
     """The name of the Forja a project folder defines, or None when it has no valid definition."""
     folder = Path(root) / '.oharness' / 'forja'
     try:
-        stat = (folder / 'forja.yaml').stat()
+        signature = _signature(folder)
     except OSError:
         _FORJA_NAMES.pop(root, None)
         return None
-    signature = (stat.st_mtime_ns, stat.st_size)
     known = _FORJA_NAMES.get(root)
     if known and known[0] == signature:
         return known[1]
@@ -64,7 +77,10 @@ def _forja_of(root: str) -> str | None:
     except definition_files.DefinitionNotFound:
         loaded = None
     name = (loaded.definition or {}).get('name') if loaded is not None and loaded.ok else None
+    _FORJA_NAMES.pop(root, None)
     _FORJA_NAMES[root] = (signature, name)
+    while len(_FORJA_NAMES) > FORJA_CACHE_MAX:  # the oldest entry goes first
+        del _FORJA_NAMES[next(iter(_FORJA_NAMES))]
     return name
 
 

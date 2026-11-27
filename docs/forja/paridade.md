@@ -73,7 +73,7 @@ Legenda:
 | W41 | Comandos de setup na worktree antes do primeiro estágio | Feito — cada comando do runner roda na worktree antes da nota do estágio |
 | W42 | Erro de setup diz qual comando falhou, com a saída redigida | Feito — a mensagem cita o comando e o valor do segredo não aparece |
 | W43 | Segredos por nome, sem mostrar o valor | Já na base. Rotação que mantém o nome: Fatia 2 |
-| W44 | Política de rede por agente | Feito — um host negado não chega a executar; a negação vence uma permissão do mesmo host |
+| W44 | Política de rede por agente | Feito como checagem da linha de comando antes de executar, inclusive a do servidor MCP. Não é firewall e não pega host montado em tempo de execução. A negação vence uma permissão do mesmo host, e o `allowedHosts` do agente soma ao da base. Modo supervisionado (#552) e bloqueio pelo SO ficam em PRs próprios |
 | W45 | MCP por agente, com cliente de verdade | Feito — o cliente fala JSON-RPC com um processo e com um servidor no mesmo processo: initialize e depois a lista de ferramentas |
 | W46 | Cada agente escolhe o harness | Feito — o `engine` tem de ser um harness que já existe no Studio. A escolha de conexão de provider fica no pacote de providers |
 | W47 | Um item usa um harness na especificação e outro na implementação | Feito — cada agente resolve o seu id; a run usa o do agente daquele estágio |
@@ -147,4 +147,4 @@ Legenda:
 
 **Fatia 2** (telas e regras, sem o laço de execução): blueprint editável, rotas e gates condicionais, evento de mudança de estágio, "Dispararia?", editor de definição, agentes e memória por seletor, automações na tela, nova Forja e "Montar com o Nilo", catálogo de erros na tela, gráfico das três recomendações.
 
-**Fatia 3** (o laço, a rede, o MCP e o harness por agente estão feitos): juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.
+**Fatia 3** (o laço, o MCP e o harness por agente estão feitos; a rede está feita como checagem da linha de comando antes de executar, que não é firewall e não pega host montado em tempo de execução, e o modo supervisionado (#552) e o bloqueio pelo SO ficam em PRs próprios): juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.

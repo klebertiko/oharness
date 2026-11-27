@@ -75,7 +75,7 @@ _JUDGED = tuple(re.compile(p) for p in (
     r'agents\.[^.]+\.networkPolicy\..+', r'scorers\.[^.]+\.(passingScore|enabled|selfImprovement|samplingRate)',
     r'selfImprovement\.(' + '|'.join(rules.SELF_IMPROVEMENT_DEFAULTS) + ')',
 ))
-_NEW_AGENT_PROTECTED = re.compile(r'agents\.[^.]+\.(harness|engine|trigger)')
+_NEW_AGENT_PROTECTED = re.compile(r'agents\.[^.]+\.(harness|engine|trigger|runner)')
 _MUST_STAY = tuple(re.compile(p) for p in (
     r'policy\.[^.]+', r'scorers\.[^.]+\.passingScore', r'selfImprovement\.(' + '|'.join(rules.SELF_IMPROVEMENT_DEFAULTS) + ')',
 ))

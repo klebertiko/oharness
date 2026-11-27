@@ -113,6 +113,19 @@ def _open(server: dict):
     return StdioTransport(command, args)
 
 
+def _refusal(definition: dict, agent_id: str, server: dict) -> str | None:
+    """The server's command line goes through the same checks as any command of the agent: no merge or protected push, and the
+    network policy of that agent. A check of the command line, not an egress firewall (ADR 0056)."""
+    from factory import network
+    from factory.runner import _protected, deny_command
+
+    command = server.get('command')
+    if not isinstance(command, str) or not command:
+        return None
+    argv = [command, *(str(arg) for arg in server.get('args') or [])]
+    return deny_command(argv, _protected(definition)) or network.command_denied(definition, agent_id, argv)
+
+
 async def tools_for(definition: dict, agent_id: str) -> list[str]:
     agent = (definition.get('agents') or {}).get(agent_id) or {}
     names: list[str] = []
@@ -120,6 +133,9 @@ async def tools_for(definition: dict, agent_id: str) -> list[str]:
         server = (definition.get('mcp') or {}).get(server_id)
         if not isinstance(server, dict):
             raise RunnerError(f'the MCP server {server_id} is not in the definition')
+        refused = _refusal(definition, agent_id, server)
+        if refused:
+            raise RunnerError(f'the MCP server {server_id} was not started: {refused}')
         transport = _overrides.get(server_id) or _open(server)
         try:
             names.extend(await list_tools(transport))

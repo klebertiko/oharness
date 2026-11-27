@@ -251,8 +251,11 @@ def select_runner(definition: dict, *, task: str | None = None, automation: str 
     """Task, then the automation, then the agent, then the first runner in the definition."""
     runners = definition.get('runners') or {}
     for candidate in (task, automation, agent):
-        if isinstance(candidate, str) and candidate in runners:
-            return candidate
+        if candidate is None:
+            continue
+        if candidate not in runners:  # a runner that is named and missing is refused, never swapped for another one
+            raise RunnerError(f'the runner {candidate} is not in the definition')
+        return candidate
     return next(iter(runners), None)
 
 
