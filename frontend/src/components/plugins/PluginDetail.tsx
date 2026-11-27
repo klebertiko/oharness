@@ -1,7 +1,7 @@
 "use client";
 import { Copy, Download, FileJson, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Badge, Button, ConfirmInline, Notice, Panel, Skeleton } from "@/components/ui";
+import { Badge, Button, ConfirmInline, Notice, Panel, Skeleton, Textarea } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
 import { CapabilityEffects } from "./CapabilityEffects";
@@ -102,14 +102,14 @@ export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginVie
           ) : logs.lines.length === 0 && !logs.error ? (
             <p className="text-body text-ink-mute">{t("plugins.logs.empty")}</p>
           ) : (
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable log must be reachable by keyboard (axe scrollable-region-focusable)
-            <div role="log" tabIndex={0} aria-label={t("plugins.logs.aria", { name: plugin.name })} className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control border border-line-soft bg-sub-200 p-2 font-mono text-code text-ink-dim">
-              {logs.lines.map((line, i) => (
-                <span key={i} className="block">
-                  {line}
-                </span>
-              ))}
-            </div>
+            // A read-only text box: it scrolls, the keyboard reaches it and a screen reader reads it, with no extra focus rules.
+            <Textarea
+              readOnly
+              mono
+              value={logs.lines.join("\n")}
+              aria-label={t("plugins.logs.aria", { name: plugin.name })}
+              rows={Math.min(12, Math.max(3, logs.lines.length))}
+            />
           )}
         </section>
 

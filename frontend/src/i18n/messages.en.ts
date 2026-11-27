@@ -655,8 +655,6 @@ export const en = {
   "shell.shortcuts.conflict": "This replaces {label}",
   "shell.shortcuts.empty": "No shortcut matches.",
   "shell.settings.heading": "Settings",
-  "shell.plugins.heading": "Plugins",
-  "shell.plugins.body": "Plugins you add show up here.",
   "shell.regions.titlebar": "Title bar",
   "shell.regions.sidebar": "Sidebar",
   "shell.regions.main": "Main",

@@ -9,6 +9,8 @@ each step to the live log of the screen.
 from __future__ import annotations
 
 import base64
+import email.message
+import gzip
 import hashlib
 import io
 import json
@@ -19,12 +21,17 @@ import stat
 import tarfile
 import threading
 import urllib.request
+import zlib
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import IO, Protocol, cast
 from urllib.parse import urlsplit
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_FILES = 2000
+# The tar stream after gunzip: the files plus room for their headers. tarfile only ever sees bytes already under this ceiling,
+# so a small gzip that expands without end, or a PAX header of many megabytes, is refused before it is parsed.
+MAX_UNPACKED_BYTES = MAX_BYTES + 4 * 1024 * 1024
 CHUNK = 64 * 1024
 METADATA_LIMIT = 2 * 1024 * 1024
 NPM_HOST = 'registry.npmjs.org'
@@ -39,8 +46,11 @@ _COMMIT = re.compile(r'^[0-9a-fA-F]{40}$')
 _HEX = re.compile(r'^[0-9a-fA-F]+$')
 _SRI = re.compile(r'^(sha512|sha256)-([A-Za-z0-9+/]+={0,2})$')
 _DIGEST_SIZE = {'sha512': 64, 'sha256': 32}
+# Names Windows keeps for devices, with or without an extension (`nul.txt` is the device too).
+_RESERVED = frozenset({'con', 'prn', 'aux', 'nul', *(f'com{n}' for n in range(1, 10)), *(f'lpt{n}' for n in range(1, 10))})
 
 Fetcher = Callable[[str, int], bytes]
+CancellableFetch = Callable[[str, int, 'threading.Event | None'], bytes]
 Progress = Callable[[str], None]
 # Downloads the https address of a tarball: (url, limit, cancel) -> bytes. The sidecar checks every address the name resolves to.
 TarballDownload = Callable[[str, int, 'threading.Event | None'], bytes]
@@ -54,8 +64,20 @@ class SourceError(Exception):
         self.code, self.message = code, message
 
 
+class _Readable(Protocol):
+    def read(self, n: int, /) -> bytes: ...
+
+
+class Cancellable(Protocol):
+    """A fetcher that takes the cancel event and checks it between chunks."""
+    cancellable: bool
+
+    def __call__(self, url: str, limit: int, cancel: threading.Event | None = None) -> bytes: ...
+
+
 class _TrustedRedirects(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(self, req: urllib.request.Request, fp: IO[bytes], code: int, msg: str, headers: email.message.Message,
+                         newurl: str) -> urllib.request.Request | None:
         _check_url(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -70,7 +92,7 @@ def _cancelled() -> SourceError:
     return SourceError('cancelled', 'The download was cancelled.')
 
 
-def read_capped(stream, limit: int, cancel: threading.Event | None = None) -> bytes:
+def read_capped(stream: _Readable, limit: int, cancel: threading.Event | None = None) -> bytes:
     """Read at most `limit + 1` bytes (one past the ceiling, so the caller can refuse it), checking `cancel` between chunks."""
     parts, total = [], 0
     while total <= limit:
@@ -86,27 +108,34 @@ def read_capped(stream, limit: int, cancel: threading.Event | None = None) -> by
     return b''.join(parts)
 
 
-def default_fetcher(url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
-    _check_url(url)
-    opener = urllib.request.build_opener(_TrustedRedirects)
-    request = urllib.request.Request(url, headers={'User-Agent': 'oharness-cordis'})
-    try:
-        with opener.open(request, timeout=30) as response:
-            data = read_capped(response, limit, cancel)
-    except SourceError:
-        raise
-    except OSError as error:
-        raise SourceError('download_failed', 'The package could not be downloaded.') from error
-    return data
+class _HttpsFetcher:
+    """The real download: https from npm or GitHub only, redirects checked, a timeout and the cancel event between chunks."""
+    cancellable = True
+
+    def __call__(self, url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
+        _check_url(url)
+        opener = urllib.request.build_opener(_TrustedRedirects)
+        request = urllib.request.Request(url, headers={'User-Agent': 'oharness-cordis'})
+        try:
+            with opener.open(request, timeout=30) as response:
+                data = read_capped(response, limit, cancel)
+        except SourceError:
+            raise
+        except OSError as error:
+            raise SourceError('download_failed', 'The package could not be downloaded.') from error
+        return data
 
 
-default_fetcher.cancellable = True  # type: ignore[attr-defined]
+default_fetcher: Cancellable = _HttpsFetcher()
 
 
-def _download(fetcher: Fetcher, url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
+def _download(fetcher: Fetcher | Cancellable, url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
     if cancel is not None and cancel.is_set():
         raise _cancelled()
-    data = fetcher(url, limit, cancel) if getattr(fetcher, 'cancellable', False) else fetcher(url, limit)  # type: ignore[call-arg]
+    if getattr(fetcher, 'cancellable', False):
+        data = cast(CancellableFetch, fetcher)(url, limit, cancel)
+    else:
+        data = cast(Fetcher, fetcher)(url, limit)
     if cancel is not None and cancel.is_set():
         raise _cancelled()
     if len(data) > limit:
@@ -128,20 +157,34 @@ def _clear(dest: Path) -> None:
             child.unlink(missing_ok=True)
 
 
+def _windows_unsafe(part: str) -> bool:
+    """A device name (`con`, `nul.txt`, `COM1.log`) or a name Windows would silently change (a trailing dot or space)."""
+    return part.endswith(('.', ' ')) or part.split('.', 1)[0].rstrip(' ').casefold() in _RESERVED
+
+
 def _safe_parts(name: str) -> tuple[str, ...]:
     if '\0' in name or '\\' in name or name.startswith('/'):
         raise SourceError('unsafe_archive', 'The archive has a file name that is not allowed.')
     parts = tuple(part for part in PurePosixPath(name).parts if part != '.')
-    if any(part == '..' or ':' in part for part in parts):
+    if any(part == '..' or ':' in part or _windows_unsafe(part) for part in parts):
         raise SourceError('unsafe_archive', 'The archive has a file name that is not allowed.')
     return parts
+
+
+def _gunzip(data: bytes) -> bytes:
+    """The tar stream of a .tgz, read in chunks and refused as soon as it passes `MAX_UNPACKED_BYTES`."""
+    with gzip.GzipFile(fileobj=io.BytesIO(data), mode='rb') as stream:
+        raw = read_capped(stream, MAX_UNPACKED_BYTES)
+    if len(raw) > MAX_UNPACKED_BYTES:
+        raise SourceError('archive_too_large', 'The archive unpacks to more than the limit.')
+    return raw
 
 
 def _extract(data: bytes, dest: Path) -> Path:
     """Unpack `data` (tar.gz) into `dest` and return the package folder: the single top-level folder when there is one."""
     dest.mkdir(parents=True, exist_ok=True)
     try:
-        with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tar:
+        with tarfile.open(fileobj=io.BytesIO(_gunzip(data)), mode='r:') as tar:
             members = tar.getmembers()
             if len(members) > MAX_FILES:
                 raise SourceError('archive_too_large', 'The archive has too many files.')
@@ -185,7 +228,7 @@ def _extract(data: bytes, dest: Path) -> Path:
     except SourceError:
         _clear(dest)
         raise
-    except (tarfile.TarError, EOFError, OSError, ValueError) as error:
+    except (tarfile.TarError, EOFError, OSError, ValueError, zlib.error) as error:
         _clear(dest)
         raise SourceError('bad_archive', 'The archive could not be read.') from error
     only = next(iter(tops)) if len(tops) == 1 else None
@@ -215,7 +258,7 @@ def _sha512_matches(data: bytes, declared: object) -> bool:
     return any(token == f'sha512-{digest}' for token in declared.split())
 
 
-def fetch_npm(name: str, version: str, dest: Path, *, fetcher: Fetcher = default_fetcher, cancel: threading.Event | None = None,
+def fetch_npm(name: str, version: str, dest: Path, *, fetcher: Fetcher | Cancellable = default_fetcher, cancel: threading.Event | None = None,
               progress: Progress | None = None) -> Path:
     if len(name) > 214 or not _NPM_NAME.match(name):
         raise SourceError('invalid_spec', 'That is not a valid npm package name.')
@@ -258,7 +301,7 @@ def _subdir_parts(subdir: str | None) -> tuple[str, ...]:
     return parts
 
 
-def fetch_github(spec: str, commit: str, subdir: str | None, dest: Path, *, fetcher: Fetcher = default_fetcher,
+def fetch_github(spec: str, commit: str, subdir: str | None, dest: Path, *, fetcher: Fetcher | Cancellable = default_fetcher,
                  cancel: threading.Event | None = None, progress: Progress | None = None) -> Path:
     if not _GH_REPO.match(spec) or set(spec.split('/', 1)[1]) <= {'.'}:
         raise SourceError('invalid_spec', 'Use owner/repository.')
@@ -308,6 +351,8 @@ def fetch_local(spec: str, dest: Path, *, progress: Progress | None = None) -> P
             here_path = Path(here)
             dirnames[:] = [name for name in dirnames if name not in ('node_modules', '.git')]
             for name in [*dirnames, *filenames]:
+                if _windows_unsafe(name):
+                    raise SourceError('unsafe_archive', 'The folder has a file name that is not allowed on Windows.')
                 entry = here_path / name
                 if _is_link(entry):
                     raise SourceError('unsafe_archive', 'The folder contains links; copy the real files instead.')

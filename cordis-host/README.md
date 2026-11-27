@@ -40,7 +40,7 @@ O processo pai segura o stdin do host. Quando ele fecha, o host sai. Por isso `n
 
 ## Cordis
 
-O pacote é `cordis@4.0.0-rc.11`, o mesmo commit que o DeepSeek Harness registra em `vendor/README.md` (`0b96d9fd517b998e44e2209560c9e5f0671ce933`). A integridade está no `package-lock.json` e em `src/pin.ts`. As modificações locais V1–V27 do DSH não entram. `@deepseek-ai/cordis` não é instalado; um hook de carregamento aponta esse specifier para o tarball acima, para haver uma só instância do módulo.
+O pacote é `cordis@4.0.0-rc.11`, o mesmo commit que o DeepSeek Harness registra em `vendor/README.md` (`0b96d9fd517b998e44e2209560c9e5f0671ce933`). A integridade está no `package-lock.json` e em `src/pin.ts`. O tarball entra como publicado, sem modificação local. `@deepseek-ai/cordis` não é instalado; um hook de carregamento aponta esse specifier para o tarball acima, para haver uma só instância do módulo.
 
 Schemastery é o tarball npm `3.18.0` (`gitHead` `9e1f54f8`). O DSH vende outro commit (`cf0b7e54`) com o mesmo número de versão. O teste de pin registra essa diferença.
 
@@ -54,6 +54,6 @@ O Node 22 precisa de `--experimental-transform-types` para carregar essas fontes
 2. O serviço `DirectoryPicker` do DSH, carregado `in-process`, cujo único import de biblioteca é Cordis, registra `directoryPicker` e a instância viva estende a classe vendorizada.
 3. O `tool-todo` do DSH, isolado, registra `todo_write` no serviço `tools`. Sem sessão de agente, o corpo do plugin recusa a chamada. Com um objeto de sessão mínimo, cujo `append` atravessa o canal, ele grava `todo/write` e devolve as contagens. A projeção `todos` fica só registrada: `apply` não é chamado.
 
-O que não fecha, de propósito: o `defineTool` daqui não valida o schema (um campo extra passa, e o teste mostra isso); não há pipeline, prompt de sistema nem guarda do DSH; não há log de sessão; patches de bundle são ignorados; a rede não é limitada no runtime isolado.
+O que não fecha, de propósito: o `defineTool` daqui não valida o schema (um campo extra passa, e o teste mostra isso); este host não tem pipeline de ferramentas, prompt de sistema nem guarda próprios; não há log de sessão; patches de bundle são ignorados; a rede não é limitada no runtime isolado.
 
 A decisão está no ADR 0071.

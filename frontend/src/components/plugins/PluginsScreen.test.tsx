@@ -107,10 +107,24 @@ describe("PluginsScreen", () => {
     routes.set(`GET /cordis/plugins/${id}/logs`, { body: { lines: ["[plugin notes-tool] started"] } });
     render(<PluginsScreen />);
     await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
-    expect(await screen.findByText("[plugin notes-tool] started")).toBeTruthy();
+    const log = () => screen.getByRole("textbox", { name: "Log lines of notes-tool" }) as HTMLTextAreaElement;
+    await waitFor(() => expect(log().value).toBe("[plugin notes-tool] started"));
     routes.set(`GET /cordis/plugins/${id}/logs`, { body: { lines: ["[plugin notes-tool] started", "[plugin notes-tool] error: x"] } });
     await userEvent.click(screen.getByRole("button", { name: "Refresh logs" }));
-    expect(await screen.findByText("[plugin notes-tool] error: x")).toBeTruthy();
+    await waitFor(() => expect(log().value).toContain("[plugin notes-tool] error: x"));
+  });
+
+  it("the scrolling log of a plugin is reachable by keyboard and keeps its name", async () => {
+    human();
+    serve();
+    routes.set(`GET /cordis/plugins/${id}/logs`, { body: { lines: ["[plugin notes-tool] started"] } });
+    render(<PluginsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Details of notes-tool" }));
+    const log = (await screen.findByRole("textbox", { name: "Log lines of notes-tool" })) as HTMLTextAreaElement;
+    expect(log.readOnly).toBe(true);
+    log.focus();
+    expect(document.activeElement).toBe(log);
+    expect(await axeViolations(document.body)).toEqual([]);
   });
 
   it("explains a 403 human_only on logs and on export with the credential sentence", async () => {

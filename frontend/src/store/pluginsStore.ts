@@ -28,6 +28,8 @@ interface ScriptDecisions {
 }
 /** How often a running download is read; the tests shorten it. */
 export const fetchPolling = { intervalMs: 400 };
+/** How often, and how many times, the screen asks a starting host whether it is up; the tests shorten it. */
+export const hostPolling = { intervalMs: 1000, maxTries: 30 };
 export const scriptKey = (fetchId: string, digest: string): string => `${fetchId}:${digest}`;
 
 interface Logs {
@@ -208,6 +210,9 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
     const list = fetched.preview.scripts;
     if (!scriptsAccepted(scripts, fetched.fetchId, fetched.preview.digest, list)) return;
     set({ add: { ...add, step: "installing", error: null, events: [...add.events, { step: "installing", at: Date.now() / 1000 }] } });
+    // The same token as the fetch: after a Cancel or a new add this install no longer owns the flow and writes nothing to it.
+    const mine = addRun;
+    const current = () => mine === addRun;
     try {
       const installed = await pluginsApi.install({
         fetch_id: fetched.fetchId,
@@ -217,12 +222,17 @@ export const usePluginsStore = create<PluginsState>((set, get) => ({
       });
       // The log's last word comes from the sidecar (installing, done); if it cannot be read the log keeps what it has.
       const last = await pluginsApi.fetchStatus(fetched.fetchId).catch(() => null);
+      if (!current()) {
+        // It was installed all the same: the list is read again from the sidecar instead of written from this old answer.
+        void get().load();
+        return;
+      }
       set((s) => ({
         add: { ...emptyAdd(), step: "done", fetchId: fetched.fetchId, events: last ? last.events : [...add.events, { step: "done", at: Date.now() / 1000 }], fetched, installed },
         plugins: [...s.plugins.filter((p) => p.id !== installed.id && p.name !== installed.name), installed],
       }));
     } catch (error) {
-      set({ add: { ...add, step: "preview", error: problem(error) } });
+      if (current()) set({ add: { ...add, step: "preview", error: problem(error) } });
     }
   },
 

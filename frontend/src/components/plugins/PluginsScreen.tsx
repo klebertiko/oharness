@@ -3,7 +3,7 @@ import { Plus, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, EmptyState, ErrorState, Notice, Segmented, SkeletonRows } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
-import { usePluginsStore } from "@/store/pluginsStore";
+import { hostPolling, usePluginsStore } from "@/store/pluginsStore";
 import { AddPlugin } from "./AddPlugin";
 import { CreatorCard } from "./CreatorCard";
 import { DiscoverTab } from "./DiscoverTab";
@@ -11,7 +11,7 @@ import { HostHeader } from "./HostHeader";
 import { NiloRequests } from "./NiloRequests";
 import { PluginDetail } from "./PluginDetail";
 import { PluginList } from "./PluginList";
-import { hasHumanCredential } from "./pluginsApi";
+import { hasHumanCredential, pluginsApi } from "./pluginsApi";
 import { usePresent } from "./present";
 import type { FetchRequest } from "./types";
 
@@ -35,6 +35,30 @@ export function PluginsScreen() {
     void load();
     void loadNilo();
   }, [load, loadNilo]);
+
+  // A host that is starting is asked again, a few times and then no more, until it is up, unavailable or failed; then the list is read.
+  const hostState = status?.state;
+  useEffect(() => {
+    if (hostState !== "starting") return;
+    let stopped = false;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const ask = async () => {
+      tries += 1;
+      const next = await pluginsApi.status().catch(() => null);
+      if (stopped) return;
+      if (next && next.state !== "starting") {
+        void load();
+        return;
+      }
+      if (tries < hostPolling.maxTries) timer = setTimeout(() => void ask(), hostPolling.intervalMs);
+    };
+    timer = setTimeout(() => void ask(), hostPolling.intervalMs);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [hostState, load]);
 
   const refresh = async () => {
     setRefreshing(true);

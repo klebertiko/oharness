@@ -7,18 +7,19 @@ address and token never appear in a response or a log.
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+from collections.abc import Callable
+from typing import Any, Literal, TypeVar
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from cordis import index
 from cordis.service import CordisService, ServiceError
 from cordis.sources import SourceError
 from cordis.supervisor import CordisUnavailable, HostRequestError
 from factory.auth import actor_for
 from sandbox.schemas import THREAD_ID_PATTERN
 
+_T = TypeVar('_T')
 router = APIRouter(prefix='/cordis', tags=['cordis'])
 PLUGIN_ID = r'^[0-9a-f]{16}$'
 
@@ -46,7 +47,7 @@ class InstallBody(BaseModel):
 
     @field_validator('config')
     @classmethod
-    def small_config(cls, value):
+    def small_config(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
         if value is not None and len(json.dumps(value)) > 16384:
             raise ValueError('config is at most 16 KiB')
         return value
@@ -64,7 +65,7 @@ def _service(request: Request) -> CordisService:
     return service
 
 
-def _call(run):
+def _call(run: Callable[[], _T]) -> _T:
     try:
         return run()
     except ServiceError as error:
@@ -93,7 +94,8 @@ def fetch_plugin(request: Request, body: FetchBody):
     options = {'version': body.version, 'commit': body.commit, 'subdir': body.subdir, 'integrity': body.integrity}
     if body.live:
         return _call(lambda: _service(request).start_fetch(body.kind, body.spec, **options))
-    return _call(lambda: _service(request).fetch(body.kind, body.spec, **options))
+    service = _service(request)
+    return _call(lambda: service.limited(lambda: service.fetch(body.kind, body.spec, **options)))
 
 
 @router.get('/plugins/fetch/{fetch_id}')
@@ -214,8 +216,4 @@ def execute_command(request: Request, body: CommandBody):
 @router.post('/index/fetch')
 def fetch_index(request: Request, body: IndexBody):
     _human(request)  # the person names the index; the sidecar fetches it so the screen never talks to a third party
-    service = _service(request)
-    try:
-        return index.fetch(body.url, fetcher=service.index_fetcher, resolve=service.index_resolver)
-    except index.IndexError_ as error:
-        raise HTTPException(status_code=422, detail={'code': error.code, 'message': error.message}) from None
+    return _call(lambda: _service(request).fetch_index(body.url))

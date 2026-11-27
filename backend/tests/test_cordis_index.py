@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from cordis import index
-from cordis.index import IndexError_
+from cordis.index import PluginIndexError
 from cordis.router import router
 from cordis.service import CordisService
 
@@ -43,7 +43,7 @@ def test_a_valid_index_keeps_plain_text_and_the_sources():
 
 @pytest.mark.parametrize('raw', [b'not json', b'[]', json.dumps({'format': 2, 'plugins': []}).encode(), json.dumps({'format': 1}).encode()])
 def test_an_index_with_the_wrong_shape_is_refused(raw):
-    with pytest.raises(IndexError_) as error:
+    with pytest.raises(PluginIndexError) as error:
         index.parse(raw)
     assert error.value.code == 'invalid_index'
 
@@ -75,13 +75,13 @@ def test_text_fields_are_capped_and_stripped_of_control_characters():
                                  'https://127.0.0.1/i.json', 'https://10.0.0.1/i.json', 'https://[::1]/i.json', 'ftp://example.com/i.json'])
 def test_only_public_https_addresses_are_fetched(url):
     calls = []
-    with pytest.raises(IndexError_) as error:
+    with pytest.raises(PluginIndexError) as error:
         index.fetch(url, fetcher=lambda u, limit: calls.append(u) or b'{}', resolve=resolver(PUBLIC))
     assert error.value.code == 'invalid_url' and calls == []
 
 
 def test_the_fetch_has_a_size_ceiling():
-    with pytest.raises(IndexError_) as error:
+    with pytest.raises(PluginIndexError) as error:
         index.fetch('https://example.com/i.json', fetcher=lambda u, limit: b'x' * (limit + 1), resolve=resolver(PUBLIC))
     assert error.value.code == 'index_too_large'
 
@@ -105,7 +105,7 @@ def test_the_route_needs_the_human_credential_and_answers_the_parsed_index(tmp_p
 @pytest.mark.parametrize('answers', [['127.0.0.1'], ['10.1.2.3'], ['169.254.169.254'], ['93.184.215.14', '192.168.0.9'], ['::1'], ['fd00::1'], []])
 def test_a_name_that_resolves_to_a_local_or_private_address_is_refused(answers):
     calls = []
-    with pytest.raises(IndexError_) as error:
+    with pytest.raises(PluginIndexError) as error:
         index.fetch('https://Index.Example.org./i.json', fetcher=lambda u, limit: calls.append(u) or good(),
                     resolve=resolver({'index.example.org': answers}))
     assert error.value.code == 'invalid_url' and calls == []
@@ -162,6 +162,6 @@ def test_a_redirect_is_refused(monkeypatch, status):
             pass
 
     monkeypatch.setattr(index, '_PinnedConnection', Redirect)
-    with pytest.raises(IndexError_) as error:
+    with pytest.raises(PluginIndexError) as error:
         index.fetch('https://example.com/i.json', resolve=resolver(PUBLIC))
     assert error.value.code == 'redirect_refused'

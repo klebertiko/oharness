@@ -7,6 +7,7 @@ the digest of that warning and those files.
 from __future__ import annotations
 
 import base64
+import contextlib
 import gzip
 import hashlib
 import io
@@ -19,9 +20,9 @@ import shutil
 import tarfile
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from cordis import index, sources
 from cordis.devarea import DevArea, DevError
@@ -30,10 +31,13 @@ from cordis.sources import Fetcher, SourceError
 from cordis.supervisor import RUNNING, UNAVAILABLE, CordisSupervisor, CordisUnavailable, HostRequestError
 
 _log = logging.getLogger(__name__)
+_T = TypeVar('_T')
 
 FETCH_ID = re.compile(r'^[0-9a-f]{16}$')
 STALE_STAGE_S = 24 * 3600
 MAX_JOBS = 20
+MAX_LIVE_JOBS = 4  # downloads and index fetches at the same time; one more answers 429
+MAX_VERSION_IN_NAME = 64
 MAX_CREATOR_THREADS = 200
 CANCEL_WAIT_S = 15
 THREAD_ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$')  # sandbox.schemas.THREAD_ID_PATTERN
@@ -54,13 +58,22 @@ def _host_error(error: HostRequestError) -> ServiceError:
     return ServiceError(status, str(body.get('code') or 'host_error'), str(message))
 
 
+def _file_part(text: str, fallback: str, limit: int) -> str:
+    """Only `[A-Za-z0-9._-]`, no `..`, at most `limit` characters: a piece of a download file name that cannot leave its folder."""
+    safe = re.sub(r'[^A-Za-z0-9._-]+', '-', text)
+    safe = re.sub(r'\.{2,}', '.', safe)[:limit].strip('.-')
+    return safe or fallback
+
+
 class CordisService:
-    def __init__(self, data_dir: Path, *, fetcher: Fetcher | None = None, supervisor_options: dict[str, Any] | None = None, enabled: bool = True):
+    MAX_LIVE_JOBS = MAX_LIVE_JOBS
+
+    def __init__(self, data_dir: Path, *, fetcher: Fetcher | sources.Cancellable | None = None, supervisor_options: dict[str, Any] | None = None, enabled: bool = True):
         self.data_dir = data_dir
         self.root = (data_dir / 'cordis-plugins').resolve()
         self.packages = self.root / 'pkg'
         self._enabled = enabled
-        self._fetcher: Fetcher = fetcher or sources.default_fetcher
+        self._fetcher: Fetcher | sources.Cancellable = fetcher or sources.default_fetcher
         self.registry = Registry(data_dir / 'cordis-plugins.json')
         self.supervisor = CordisSupervisor(self.root, on_running=self._reconcile, **(supervisor_options or {}))
         self._lock = threading.RLock()
@@ -73,6 +86,38 @@ class CordisService:
         self.index_resolver: index.Resolver | None = None  # tests inject one; None is getaddrinfo
         self.tarball_download: sources.TarballDownload | None = None  # tests inject one; None is the checked https download
         self._jobs: dict[str, dict[str, Any]] = {}  # live fetches: their log of steps, and the event Cancel sets
+        self._live_jobs = 0  # downloads and index fetches running now, at most MAX_LIVE_JOBS
+
+    # -- a ceiling on what runs at once ----------------------------------
+    def _take_slot(self) -> None:
+        with self._lock:
+            if self._live_jobs >= self.MAX_LIVE_JOBS:
+                raise ServiceError(429, 'too_many_jobs', f'{self.MAX_LIVE_JOBS} downloads are already running; wait for one to finish.')
+            self._live_jobs += 1
+
+    def _free_slot(self) -> None:
+        with self._lock:
+            self._live_jobs = max(0, self._live_jobs - 1)
+
+    @contextlib.contextmanager
+    def _slot(self) -> Iterator[None]:
+        self._take_slot()
+        try:
+            yield
+        finally:
+            self._free_slot()
+
+    def limited(self, run: Callable[[], _T]) -> _T:
+        """Run a download the route asked for inside the same ceiling as the live ones."""
+        with self._slot():
+            return run()
+
+    def fetch_index(self, url: str) -> dict[str, Any]:
+        with self._slot():
+            try:
+                return index.fetch(url, fetcher=self.index_fetcher, resolve=self.index_resolver)
+            except index.PluginIndexError as error:
+                raise ServiceError(422, error.code, error.message) from None
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
@@ -240,6 +285,9 @@ class CordisService:
             shutil.rmtree(stage, ignore_errors=True)
             raise
         with self._lock:
+            if cancel is not None and cancel.is_set():  # a Cancel that came during the preview: nothing is staged
+                shutil.rmtree(stage, ignore_errors=True)
+                raise ServiceError(422, 'cancelled', 'The download was cancelled.')
             self._staged[stage_id] = {'packageDir': str(package.resolve()), 'stageDir': str(stage), 'source': source, 'preview': preview}
         if progress is not None:
             progress('preview-ready')
@@ -262,6 +310,7 @@ class CordisService:
     def start_fetch(self, kind: str, spec: str, **options: Any) -> dict[str, Any]:
         """Start a fetch in the background and answer at once; `fetch_status` reports each step and `cancel_fetch` stops it."""
         self.supervisor.request('GET', '/v1/health')
+        self._take_slot()
         job: dict[str, Any] = {'id': secrets.token_hex(8), 'state': 'running', 'events': [], 'cancel': threading.Event(),
                                'result': None, 'error': None, 'started': time.time()}
         with self._lock:
@@ -270,20 +319,36 @@ class CordisService:
                 if old['state'] != 'running':
                     self._jobs.pop(old['id'], None)
         job['thread'] = threading.Thread(target=self._run_job, args=(job, kind, spec, options), name=f'cordis-fetch-{job["id"]}', daemon=True)
-        job['thread'].start()
+        try:
+            job['thread'].start()
+        except RuntimeError:
+            self._free_slot()
+            with self._lock:
+                job['state'], job['error'] = 'failed', {'code': 'fetch_failed', 'message': 'The download could not be started.'}
+            raise
         return self._job_view(job)
 
     def _run_job(self, job: dict[str, Any], kind: str, spec: str, options: dict[str, Any]) -> None:
-        result, failure = None, None
+        result, failure = None, {'code': 'fetch_failed', 'message': 'The package could not be checked.'}
         try:
             result = self.fetch(kind, spec, stage_id=job['id'], cancel=job['cancel'], progress=lambda step: self._event(job, step), **options)
+            failure = None
         except ServiceError as error:
             failure = {'code': error.code, 'message': error.message}
         except CordisUnavailable as error:
             failure = {'code': 'cordis_unavailable', 'message': error.reason or 'The plugin host is not running.'}
-        except Exception:  # noqa: BLE001 - the screen gets a stable code; the stack stays in the sidecar log
+        except HostRequestError:
+            _log.exception('the plugin host refused a fetch')
+            failure = {'code': 'host_error', 'message': 'The plugin host refused the request.'}
+        except (OSError, ValueError, KeyError, TypeError):
+            # The screen gets a stable code and the stack stays in the sidecar log. Anything else still ends this job below
+            # (the `finally`) and then reaches the thread's own handler, which logs it.
             _log.exception('plugin fetch failed')
-            failure = {'code': 'fetch_failed', 'message': 'The package could not be checked.'}
+        finally:
+            self._free_slot()
+            self._finish_job(job, result, failure)
+
+    def _finish_job(self, job: dict[str, Any], result: dict[str, Any] | None, failure: dict[str, str] | None) -> None:
         with self._lock:
             if job['state'] != 'running':
                 return
@@ -467,8 +532,9 @@ class CordisService:
                     info = tarfile.TarInfo(f'package/{file.relative_to(package).as_posix()}')
                     info.size, info.mode, info.mtime = len(data), 0o644, 0
                     tar.addfile(info, io.BytesIO(data))
-        safe = re.sub(r'[^A-Za-z0-9._-]+', '-', entry['name']).strip('-') or 'plugin'
-        return f'{safe}-{entry["version"]}.tgz', buffer.getvalue()
+        name = _file_part(str(entry['name']), 'plugin', 64)
+        version = _file_part(str(entry.get('version') or ''), '0.0.0', MAX_VERSION_IN_NAME)
+        return f'{name}-{version}.tgz', buffer.getvalue()
 
     def export_index(self, plugin_id: str) -> dict[str, Any]:
         """A `format: 1` index with this one plugin, built from its package.json and its files only: nothing of the package runs."""

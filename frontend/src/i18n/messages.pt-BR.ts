@@ -657,8 +657,6 @@ export const ptBR: Record<MessageKey, string> = {
   "shell.shortcuts.conflict": "Isto substitui {label}",
   "shell.shortcuts.empty": "Nenhum atalho corresponde.",
   "shell.settings.heading": "Configurações",
-  "shell.plugins.heading": "Plugins",
-  "shell.plugins.body": "Os plugins que você adicionar aparecem aqui.",
   "shell.regions.titlebar": "Barra de título",
   "shell.regions.sidebar": "Barra lateral",
   "shell.regions.main": "Principal",

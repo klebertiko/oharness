@@ -6,13 +6,13 @@ Status: proposta desta sessão (2026-11-12), spike da issue #466 (parte de #441)
 
 A Camada B precisa de um host Node, separado do sidecar FastAPI, no estilo do DeepSeek Harness (DSH): escuta só em `127.0.0.1`, porta e token efêmeros, compatibilidade de servidor para ferramentas, comandos, eventos e serviços, confirmação humana na instalação, e os avisos de segurança do DSH.
 
-O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671ce933` e aplica 27 modificações locais (V1–V27). O `cordis.patch.yml` do DSH é uma sobreposição de configuração, não essas modificações. O pacote publicado `@deepseek-ai/cordis` é outra linha (4.1.0 na data deste pin). O DSH não tem permissão por plugin, deixa o agente aprovar scripts de build e é software de prévia.
+O DSH vende Cordis `4.0.0-rc.11` no commit `0b96d9fd517b998e44e2209560c9e5f0671ce933`. O pacote publicado `@deepseek-ai/cordis` é outra linha (4.1.0 na data deste pin). O DSH não tem permissão por plugin, deixa o agente aprovar scripts de build e é software de prévia.
 
 ## Decisão
 
 1. O host mora em `cordis-host/`. Não entra no processo do FastAPI e não muda a via de assinatura (`credential.kind=cli`).
 2. O processo escuta só em `127.0.0.1` com porta `0`. O token tem 32 bytes, vai no header `Authorization: Bearer`, e a comparação é o hash SHA-256 dos dois lados. Token na query não autentica. O header `Host` tem de ser `127.0.0.1` e a porta deste processo. Uma variável de ambiente de porta não move o bind.
-3. A cópia do Cordis é o tarball npm `cordis@4.0.0-rc.11` (integridade no `package-lock.json`; `gitHead` do registro igual ao commit do `vendor/README.md` do DSH). O specifier `@deepseek-ai/cordis` resolve para esse mesmo módulo, para um plugin do DSH e o host compartilharem uma instância. Não instalamos `@deepseek-ai/cordis@4.1.0` e não aplicamos V1–V27.
+3. A cópia do Cordis é o tarball npm `cordis@4.0.0-rc.11` (integridade no `package-lock.json`; `gitHead` do registro igual ao commit do `vendor/README.md` do DSH). O specifier `@deepseek-ai/cordis` resolve para esse mesmo módulo, para um plugin do DSH e o host compartilharem uma instância. Não instalamos `@deepseek-ai/cordis@4.1.0`, e o tarball entra como publicado, sem modificação local.
 4. Há dois runtimes. `isolated` é o padrão (omissão significa `isolated`): o plugin roda num processo Node próprio, descrito no item 10. `in-process` roda no processo do host com o alcance do usuário, e por isso o pacote só é aceito se declarar as quatro capacidades (`files`, `network`, `processes` e `credentials`); sem isso a prévia recusa com `runtime-not-supported`. Outro valor também é recusado. Omissão de `capabilities` não concede nada; antes, ela listava as quatro.
 5. A instalação importa o módulo só depois de `accept: true` e de um digest que amarra a versão do aviso, o nome, a versão, o caminho real, o runtime, as capacidades e os scripts de lifecycle. O aviso (versão 3), em en e pt-BR, diz o que o processo isolado não alcança sem capacidade, o que cada capacidade concede (e que `files` alcança o código do próprio host), que a rede não é limitada e alcança os serviços do computador, inclusive este host, que `in-process` tem tudo de uma vez, e que sandbox e aprovação protegem as ações do agente e não o código do plugin além desses limites. Confirmar o digest é o que concede as capacidades declaradas.
 6. Scripts `preinstall`, `install`, `postinstall` e `prepare` nunca são executados. O corpo `approvedBuilds` ou `allowBuilds` é recusado. Confirmar esses scripts é `scripts: "do-not-run"`.
@@ -117,12 +117,12 @@ As três provas desta fatia estão em `cordis-host/test/proofs.test.ts`: a prova
 - o ambiente do filho completado pelo libuv (HOMEPATH, USERPROFILE, TEMP, PATH e outras). O teste de `credentials` só prova a ausência de uma variável própria do host;
 - `--disable-sigusr1` num sistema sem SIGUSR1. O teste do inspector no Windows só chama `_debugProcess`, e o teste de SIGTERM faz `skip` lá.
 
-O que os testes desta fatia não fecham, em nenhum sistema: o pipeline de ferramentas do DSH, o log de sessão, a dobra de projeções, os patches V1–V27, a sobreposição de bundle, e a rede no runtime isolado. A tela "Cordis Plugins" e o modo criador estão na seção anterior.
+O que os testes desta fatia não fecham, em nenhum sistema: um pipeline de ferramentas em volta do host (este host não tem um), o log de sessão, a dobra de projeções, modificações sobre o Cordis fixado (este host não faz nenhuma), patches de bundle (reconhecidos e ignorados) e a rede no runtime isolado. A tela "Cordis Plugins" e o modo criador estão na seção anterior.
 
 ## Alternativas rejeitadas
 
 - Depender de `@deepseek-ai/cordis`: traz a linha republicada, não o rc.11 que o DSH registra.
-- Copiar as 27 modificações locais: o próprio DSH as trata como prévia, e quebram o pin auditável.
+- Modificar o Cordis fixado: quebraria o pin auditável.
 - Deixar o agente aprovar scripts de instalação: é a fraqueza que esta fatia não repete.
 - Afirmar que capacidades isolam o plugin sem fronteira por trás: o aviso do DSH diz o contrário. Agora `files`, `processes` e `credentials` têm uma fronteira de processo; `network` continua só declarada, e o aviso diz isso.
 - Bloquear `node:module`, `fs` ou `child_process` por hook no mesmo processo: `createRequire`, `process.binding` e o próprio `process` contornam, e isso daria uma falsa sensação de sandbox.
