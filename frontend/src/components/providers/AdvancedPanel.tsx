@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Input, Notice, Panel } from "@/components/ui";
 import { useT } from "@/i18n/store";
 import { apiUrl } from "@/lib/apiBase";
@@ -16,6 +16,25 @@ export function AdvancedPanel({ c }: { c: Connection }) {
   const [allow, setAllow] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  // Per-model options have no fields here yet; they are kept as loaded so a save does not erase them.
+  const [models, setModels] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    let live = true;
+    void fetch(apiUrl(`/providers/connections/${encodeURIComponent(c.id)}/advanced`))
+      .then(async (res) => (res.ok ? ((await res.json()) as Record<string, unknown>) : null))
+      .catch(() => null)
+      .then((body) => {
+        if (!live || !body) return;
+        const loaded = body.retryPolicy;
+        if (typeof loaded === "string" && (POLICIES as readonly string[]).includes(loaded)) setPolicy(loaded as (typeof POLICIES)[number]);
+        if (typeof body.retryCap === "number") setCap(String(body.retryCap));
+        if (Array.isArray(body.allowlist)) setAllow(body.allowlist.filter((item): item is string => typeof item === "string").join(", "));
+        if (body.models && typeof body.models === "object" && !Array.isArray(body.models)) setModels(body.models as Record<string, unknown>);
+      });
+    return () => {
+      live = false;
+    };
+  }, [c.id]);
   const save = async () => {
     const retryCap = Number(cap);
     const res = await fetch(apiUrl(`/providers/connections/${encodeURIComponent(c.id)}/advanced`), {
@@ -25,10 +44,10 @@ export function AdvancedPanel({ c }: { c: Connection }) {
         retryPolicy: policy,
         retryCap: Number.isInteger(retryCap) ? retryCap : cap,
         allowlist: allow.split(",").map((item) => item.trim()).filter(Boolean),
-        models: {},
+        models,
       }),
-    });
-    if (!res.ok) {
+    }).catch(() => null);
+    if (!res?.ok) {
       setSaved(false);
       setError(t("providers.advanced.rejected"));
       return;
