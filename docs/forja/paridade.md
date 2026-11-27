@@ -29,11 +29,11 @@ Legenda:
 
 | # | Capacidade | Situação |
 |---|---|---|
-| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2, neste PR — editar grava um teste; o item que já corre fica na versão antiga; remover o gate de revisão é recusado |
+| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2, neste PR — a tela carrega o blueprint ativo e lista entradas, rotas e gates. Ela edita a partir dele, mostra o que o salvamento remove antes de gravar e grava um teste; o item que já corre fica na versão antiga; pular um estágio obrigatório é recusado. O diagrama visual não está neste PR |
 | W12 | Entrada condicional (a primeira transição que a condição aceita) | Fatia 2, neste PR — um item com o rótulo `docs` entra em implementação |
 | W13 | Devolver a revisão para implementação, com teto | Já na base o retorno da política. Neste PR (fatia 2) o teto por transição manda o item para uma pessoa |
 | W14 | Rota condicional que encerra o item com um motivo | Fatia 2, neste PR |
-| W15 | Simular o caminho com um payload de exemplo | Fatia 2, neste PR |
+| W15 | Simular o caminho com um payload de exemplo | Fatia 2, neste PR — `POST /factory/blueprint/simulate` com rótulos de exemplo, sobre o blueprint ativo ou o rascunho da tela |
 | W16 | Gate de aprovação da especificação | Já na base |
 | W17 | Gate condicional: perguntar quando uma condição em prosa for verdadeira | Fatia 2, neste PR — o gate pausa com a pergunta declarada |
 | W18 | Mudança de definição não altera o que já está em execução | Já na base. Neste PR o teste de canário confirma que o item antigo fica na versão em que nasceu |
@@ -131,7 +131,7 @@ Legenda:
 | W78 | Definição em `.oharness/forja`, com scorers, benchmarks, política de rede e autoaperfeiçoamento | Neste PR essas seções no schema, opcionais, sem quebrar uma definição antiga. Roteadores e um schema por tipo de arquivo: Fatia 2 e Fatia 3 |
 | W79 | Validar a definição | Já na base na rota e na CLI. A ferramenta MCP: Fatia 3 |
 | W80 | Roteador que escolhe o modelo por regra | Fatia 3 |
-| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2, neste PR — o Nilo monta a definição e o validador confere antes de gravar; um pedido para tirar a revisão não tira o gate |
+| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2, neste PR — o Nilo monta a definição e o validador confere; um pedido para tirar a revisão não tira o gate. Gravar o que o Nilo montou não está neste PR |
 | W82 | Um item com dois repositórios e a ordem de merge declarada por pessoa | Fatia 3 |
 | W83 | O setup pergunta o escopo e o validador recusa item fora dele | Fatia 2 |
 | W84 | Primeiro teste: um item pequeno e um checklist de avaliação | Fatia 2 |
