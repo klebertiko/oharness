@@ -3,7 +3,7 @@ import { ListRow, Notice, Skeleton, StatusMark } from "@/components/ui";
 import { useT } from "@/i18n/store";
 import { SpendCard } from "./SpendCard";
 import type { Connection } from "./providerStore";
-import { GROUP_LABEL, groupViews, type ConnectionView } from "./view";
+import { accountKind, GROUP_LABEL, groupViews, type ConnectionView } from "./view";
 
 function Row({ v, selected, onSelect }: { v: ConnectionView; selected: boolean; onSelect: () => void }) {
   const t = useT();
@@ -19,7 +19,7 @@ function Row({ v, selected, onSelect }: { v: ConnectionView; selected: boolean; 
             {step && <span> · {step.hint}</span>}
           </>
         }
-        trailing={<span className="t-body text-ink-mute">{t(c.residence === "local" ? "meta.local" : "meta.cloud")}</span>}
+        trailing={<span className="t-body text-ink-mute">{t(accountKind(c))}</span>}
         selected={selected}
         onClick={onSelect}
         className="py-2"

@@ -704,3 +704,15 @@ describe("worktree events", () => {
     expect(state.notices.at(-1)).toBe("The worktree was removed. It had no changes to keep.");
   });
 });
+
+it("keeps the closed provider failure class of a node error and of a run error, never a free string", () => {
+  const running = runReducer(emptyRun, { type: "sse", event: "run_start", data: { run_id: "pf", order: [{ node_id: "direct" }] } });
+  const failed = runReducer(running, { type: "sse", event: "node_error", data: { node_id: "direct", provider_failure: "overload", error: "x" } });
+  expect(failed.plan[0].failure).toBe("overload");
+  expect(failed.failure).toBe("overload");
+  const odd = runReducer(running, { type: "sse", event: "node_error", data: { node_id: "direct", provider_failure: "CANARY person@example.com" } });
+  expect(odd.plan[0].failure).toBeUndefined();
+  expect(odd.failure).toBeUndefined();
+  const streamErr = runReducer(running, { type: "sse", event: "error", data: { provider_failure: "transport", error: "x" } });
+  expect(streamErr.failure).toBe("endpoint_unreachable");
+});

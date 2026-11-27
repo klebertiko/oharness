@@ -365,6 +365,33 @@ it("ignores an unknown cli-* class and never shows backend text for a known one"
   expect(conn.detail).not.toContain("CANARY");
 });
 
+it("a usage limit stores only the reset instant", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live", detail: "keep" })], usageLimit: null });
+  const { onEvent } = startAndCapture("an", true);
+  act(() => onEvent("node_error", {
+    node_id: "direct",
+    connection_id: "an",
+    provider_failure: "usage_limit",
+    reset_at: "2026-11-21T09:20:00+00:00",
+    error: "CANARY person@example.com",
+  }));
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.failure).toBe("usage_limit");
+  expect(conn.resetAt).toBe("2026-11-21T09:20:00+00:00");
+  expect(conn.detail).not.toContain("CANARY");
+  expect(JSON.stringify(useProviderStore.getState().usageLimit)).not.toContain("CANARY");
+  expect(JSON.stringify(useProviderStore.getState().usageLimit)).not.toContain("@");
+  act(() => onEvent("node_error", {
+    node_id: "direct",
+    connection_id: "an",
+    provider_failure: "usage_limit",
+    reset_at: "6:20am person@example.com",
+    error: "CANARY",
+  }));
+  expect(useProviderStore.getState().connections[0].resetAt).toBeUndefined();
+  expect(useProviderStore.getState().usageLimit?.resetAt).toBeNull();
+});
+
 it("ignores completion and close callbacks from a superseded stream", () => {
   useProviderStore.setState({ connections: [connection({})] });
   const { result, onEvent } = startAndCapture("an");
@@ -447,4 +474,24 @@ it("asks for the run's own worktree only for a harness run that has a folder and
   useRunWorktreeStore.setState({ enabled: false });
   act(() => harness.result.current.start({ instruction: "hi", mode: "live", step: false, cwd: "D:/work" }));
   expect(startRunMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("worktree");
+});
+
+it.each(["overload", "timeout"] as const)("a %s run failure faults the connection with that class and no backend text", (pf) => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live", detail: "keep" })], usageLimit: null });
+  const { onEvent } = startAndCapture("an");
+  act(() => onEvent("node_error", { node_id: "direct", connection_id: "an", provider_failure: pf, error: "CANARY-backend-text" }));
+  const conn = useProviderStore.getState().connections[0];
+  expect(conn.health).toBe("fault");
+  expect(conn.failure).toBe(pf);
+  expect(providerFault(conn)).toBe(pf);
+  expect(conn.detail).not.toContain("CANARY");
+});
+
+it("a usage limit on a run-level error with no connection id lands on the chat's connection", () => {
+  useProviderStore.setState({ connections: [connection({ id: "an", health: "live", detail: "keep" })], usageLimit: null });
+  const { onEvent, result } = startAndCapture("an", true);
+  act(() => onEvent("error", { provider_failure: "usage_limit", reset_at: "2026-11-21T09:20:00+00:00", error: "CANARY" }));
+  expect(useProviderStore.getState().usageLimit).toEqual({ connectionId: "an", resetAt: "2026-11-21T09:20:00+00:00" });
+  expect(useProviderStore.getState().connections[0].failure).toBe("usage_limit");
+  expect(result.current.run.failure).toBe("usage_limit");
 });

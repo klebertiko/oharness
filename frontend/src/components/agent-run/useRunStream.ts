@@ -129,6 +129,12 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
               ok: false,
               detail: "Provider transport failed. Test the connection to check reachability.",
             });
+          } else if (pf === "usage_limit") {
+            // Only the reset instant. The error string is fixed text and is not stored.
+            useProviderStore.getState().noteUsageLimit(id, data.reset_at);
+          } else if (pf === "overload" || pf === "timeout") {
+            // The class is the whole message: the catalog says what, why and what to do.
+            useProviderStore.getState().reportRunOutcome(id, { ok: false, detail: "", failure: pf });
           } else if (pf === "cli-signin" || pf === "cli-missing" || pf === "cli-timeout" || pf === "cli-error") {
             // Closed set only; the text is ours (catalog), never the backend's or the CLI's.
             useProviderStore.getState().reportRunOutcome(id, {
@@ -137,6 +143,11 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
               detail: tr(`run.cliFailure.${pf}`),
             });
           }
+        }
+        if (event === "error" && data.provider_failure === "usage_limit") {
+          // A run-level error names no node, and may name no connection: it is the chat's connection.
+          const owner = typeof id === "string" && id.trim() ? id : providerId;
+          if (owner) useProviderStore.getState().noteUsageLimit(owner, data.reset_at);
         }
         dispatch({ type: "sse", event, data });
         if (event === "harness_done" || event === "error") {

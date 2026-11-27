@@ -9,11 +9,14 @@ import { ConnectionPanel } from "./ConnectionPanel";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { ModelsPanel } from "./ModelsPanel";
 import { providerKey, vendorName } from "./providerText";
-import { specOf, type Connection } from "./providerStore";
+import { specOf, useProviderStore, type Connection } from "./providerStore";
+import { catalogCodeFromFault } from "./errorCatalog";
+import { ProviderErrorNotice } from "./ProviderError";
+import { providerFault } from "@/components/agent/chatProvider";
 import { WithCode } from "./rows";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
-import { metaLine, viewOf } from "./view";
+import { metaLine, otherReadyAccounts, viewOf } from "./view";
 
 /** The store's detail often opens by restating the status word ("Not connected. Add a key…"); the header already says it. */
 const withoutStatus = (detail: string, status: string) => (detail.startsWith(`${status}.`) ? detail.slice(status.length + 1).trim() : detail);
@@ -54,6 +57,10 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
   const agentOnly = spec.catalogue === "agent-only";
   const textKeys = PROVIDER_TEXT_KEY[providerKey(c)];
   const primaryWord = step && actions.copied === step.copy && step.copy ? t("action.copied") : step?.label;
+  const connections = useProviderStore((s) => s.connections);
+  // "Use another account" with nowhere to go is turned off, and the reason is said beside it.
+  const noOther = step?.kind === "limit" && otherReadyAccounts(connections, c.id).length === 0;
+  const failureCode = c.health === "fault" ? catalogCodeFromFault(providerFault(c)) : null;
 
   return (
     <div className="@container flex h-full min-h-0 flex-col" aria-busy={probing || undefined}>
@@ -80,9 +87,14 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             {!offline && (
               <div className="flex flex-wrap items-center gap-2">
                 {step && !keyIsTheAction && (
-                  <Button variant="primary" onClick={() => actions.runStep()} loading={probing && step.kind === "retest"}>
+                  <Button variant="primary" onClick={() => actions.runStep()} loading={probing && step.kind === "retest"} disabled={noOther} aria-describedby={noOther ? "oh-limit-no-other" : undefined}>
                     {primaryWord}
                   </Button>
+                )}
+                {noOther && (
+                  <p id="oh-limit-no-other" className="t-body basis-full text-ink-dim">
+                    {t("providers.limit.noOther")}
+                  </p>
                 )}
                 {showTest && (
                   <Button onClick={() => void actions.test()} loading={probing && !(step?.kind === "retest")}>
@@ -92,6 +104,8 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
               </div>
             )}
           </header>
+
+          {failureCode && !offline && !probing && <ProviderErrorNotice code={failureCode} />}
 
           {probing && !offline && (
             <p role="status" className="t-body text-ink-dim">
@@ -104,7 +118,7 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
           ) : (
             <>
               <ConnectionPanel c={c} actions={actions} />
-              {agentOnly ? <HandoffPanel /> : <ModelsPanel c={c} />}
+              {agentOnly ? <AgentOnlyPanel /> : <ModelsPanel c={c} />}
               <ActivityPanel c={c} usage={usage} />
             </>
           )}
@@ -128,19 +142,11 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
   );
 }
 
-function HandoffPanel() {
+function AgentOnlyPanel() {
   const t = useT();
   return (
-    <Panel title={t("handoff.title")} titleId="oh-handoff" level={3}>
-      <div className="grid gap-3 p-3 @md:grid-cols-2">
-        {(["cloud", "local"] as const).map((k) => (
-          <div key={k} className="rounded-control border border-line-soft bg-sub-200 p-3">
-            <p className="t-title text-ink">{t(`handoff.${k}.title`)}</p>
-            <p className="t-meta mt-1 break-all text-ink-mute">{t(`handoff.${k}.cmd`)}</p>
-            <p className="t-body mt-2 text-ink-dim">{t(`handoff.${k}.body`)}</p>
-          </div>
-        ))}
-      </div>
+    <Panel title={t("providers.agentOnly.title")} titleId="oh-agent-only" level={3}>
+      <p className="t-body p-3 text-ink-dim">{t("providers.agentOnly.body")}</p>
     </Panel>
   );
 }

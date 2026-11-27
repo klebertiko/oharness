@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { specOf, useProviderStore, type Connection } from "./providerStore";
 import { nextStep, type NextStep } from "./nextStep";
+import { otherReadyAccounts } from "./view";
 
 export const KEY_FIELD_ID = "oh-provider-key";
 export const ENDPOINT_FIELD_ID = "oh-provider-endpoint";
@@ -94,6 +95,12 @@ export function useConnectionActions(c: Connection) {
       case "model":
         focusField(document.querySelector<HTMLElement>(`[${MODEL_PICKER_ATTR}] button`));
         break;
+      case "limit": {
+        // The button is off when there is nowhere to go (ConnectionDetail says why).
+        const next = otherReadyAccounts(useProviderStore.getState().connections, c.id)[0];
+        if (next) useProviderStore.getState().select(next.id);
+        break;
+      }
       default:
         void test();
     }

@@ -30,9 +30,13 @@ import os
 import platform
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from shutil import which
 from typing import AsyncIterator
+
+from .base import AdapterResult
 
 # What a CLI needs to locate its own config/session and run at all.
 # Deliberately excludes ANTHROPIC_API_KEY, OPENAI_API_KEY, CURSOR_API_KEY, or
@@ -243,8 +247,9 @@ async def _kill(proc: "asyncio.subprocess.Process") -> None:
 CLI_SIGNIN = "cli-signin"
 CLI_MISSING = "cli-missing"
 CLI_TIMEOUT = "cli-timeout"
+CLI_USAGE_LIMIT = "usage_limit"
 CLI_ERROR = "cli-error"
-CLI_FAILURES = (CLI_SIGNIN, CLI_MISSING, CLI_TIMEOUT, CLI_ERROR)
+CLI_FAILURES = (CLI_SIGNIN, CLI_MISSING, CLI_TIMEOUT, CLI_USAGE_LIMIT, CLI_ERROR)
 
 # A model the user typed becomes the value of `--model` in a CLI's argv, so it
 # is checked before it gets there: a CLI alias ("sonnet") or a model id
@@ -276,8 +281,132 @@ CLI_FAILURE_MESSAGES = {
     CLI_SIGNIN: "The CLI is not signed in. Sign in with the CLI, then retry.",
     CLI_MISSING: "The CLI is not installed on this machine. Install it, then retry.",
     CLI_TIMEOUT: "The CLI did not answer in time. Retry, or check that it is running.",
+    CLI_USAGE_LIMIT: "The subscription usage limit was reached. It frees up at the reset time.",
     CLI_ERROR: "The CLI failed to run the request. Check it in Providers and retry.",
 }
+
+# A reset instant we stored ourselves. Anything else (free text, an address) is dropped.
+_RESET_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
+_MAX_RETRY_S = 14 * 24 * 60 * 60
+
+# Limit phrases only count at the START of a line, same rule as `_SIGNIN_LINE`.
+_USAGE_LIMIT_LINE = re.compile(
+    r"^\W*(?:error:?\s*)?(?:"
+    r"limit reached\b"
+    r"|(?:you(?:'ve| have) )?(?:hit|reached) (?:your )?(?:usage |rate )?limit\b"
+    r"|usage limit\b"
+    r"|out of usage\b"
+    r"|rate limit(?:ed)?\b"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+_ISO_IN_LINE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})")
+_CLOCK_IN_LINE = re.compile(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?\b", re.IGNORECASE)
+
+
+def clean_reset_at(value: object, *, now: datetime | None = None) -> str | None:
+    """An ISO reset instant, or None. Never a slice of the text it was read from.
+
+    An instant further ahead than the Retry-After cap (`_MAX_RETRY_S`) is dropped too.
+    """
+    if not isinstance(value, str) or not _RESET_AT.fullmatch(value):
+        return None
+    if "@" in value or any(ch.isspace() for ch in value):
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    current = now if now is not None else datetime.now(timezone.utc)
+    if moment - _as_aware(current) > timedelta(seconds=_MAX_RETRY_S):
+        return None
+    return value
+
+
+def _as_aware(moment: datetime) -> datetime:
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def _iso(moment: datetime, now: datetime | None = None) -> str | None:
+    return clean_reset_at(_as_aware(moment).isoformat(timespec="seconds"), now=now)
+
+
+def _parse_absolute(token: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(token.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return _as_aware(parsed)
+
+
+def _clock_reset(hour: int, minute: int, second: int, ampm: str | None, now: datetime) -> str | None:
+    if ampm:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12
+        if ampm.lower() == "pm":
+            hour += 12
+    elif not 0 <= hour <= 23:
+        return None
+    if not 0 <= minute <= 59 or not 0 <= second <= 59:
+        return None
+    base = _as_aware(now)
+    candidate = base.replace(hour=hour, minute=minute, second=second, microsecond=0)
+    if candidate <= base:
+        candidate += timedelta(days=1)
+    return _iso(candidate, base)
+
+
+def _reset_from_line(line: str, now: datetime) -> str | None:
+    """The reset instant on this one line, rebuilt as ISO. No other characters leave."""
+    absolute = _ISO_IN_LINE.search(line)
+    if absolute:
+        parsed = _parse_absolute(absolute.group(0))
+        if parsed is not None:
+            return _iso(parsed, now)
+    clock = _CLOCK_IN_LINE.search(line)
+    if not clock:
+        return None
+    second = int(clock.group(3) or 0)
+    return _clock_reset(int(clock.group(1)), int(clock.group(2)), second, clock.group(4), now)
+
+
+def reset_from_retry_after(value: str | None, *, now: datetime | None = None) -> str | None:
+    """HTTP Retry-After (delta-seconds or HTTP-date) as an ISO instant, or None."""
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw or "@" in raw:
+        return None
+    moment = _as_aware(now or datetime.now().astimezone())
+    if raw.isdigit():
+        seconds = int(raw)
+        if seconds > _MAX_RETRY_S:
+            return None
+        return _iso(moment + timedelta(seconds=seconds), moment)
+    if not _looks_like_http_date(raw):
+        return None
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if parsed is None:
+        return None
+    return _iso(parsed, moment)
+
+
+def _looks_like_http_date(raw: str) -> bool:
+    return "," in raw and ":" in raw
+
+
+@dataclass(frozen=True)
+class CliOutcome:
+    """Closed class plus, for a usage limit, only the reset instant."""
+
+    failure: str
+    reset_at: str | None = None
 
 # Sign-in phrases only count at the START of a line (re.M): the same words in the
 # middle of a sentence - a task's own text echoed back - must not flip the class.
@@ -296,23 +425,56 @@ _SIGNIN_LINE = re.compile(
 )
 
 
+def _limit_line(text: str) -> str | None:
+    match = _USAGE_LIMIT_LINE.search(text or "")
+    if not match:
+        return None
+    end = text.find("\n", match.start())
+    return text[match.start():] if end < 0 else text[match.start():end]
+
+
+def classify_cli_outcome(*, returncode: int, text: str = "", timed_out: bool = False, now: datetime | None = None) -> CliOutcome:
+    """Closed class. ``text`` is only read here. A usage limit also keeps the reset instant and nothing else."""
+    if timed_out:
+        return CliOutcome(CLI_TIMEOUT)
+    if returncode != 0:
+        line = _limit_line(text or "")
+        if line is not None:
+            reset = _reset_from_line(line, _as_aware(now or datetime.now().astimezone()))
+            return CliOutcome(CLI_USAGE_LIMIT, reset_at=reset)
+        if _SIGNIN_LINE.search(text or ""):
+            return CliOutcome(CLI_SIGNIN)
+    return CliOutcome(CLI_ERROR)
+
+
 def classify_cli_failure(*, returncode: int, text: str = "", timed_out: bool = False) -> str:
     """Closed failure class from the exit code plus anchored phrases in ``text``.
 
     ``text`` is only read here, never returned."""
-    if timed_out:
-        return CLI_TIMEOUT
-    if returncode != 0 and _SIGNIN_LINE.search(text or ""):
-        return CLI_SIGNIN
-    return CLI_ERROR
+    return classify_cli_outcome(returncode=returncode, text=text, timed_out=timed_out).failure
+
+
+def failure_result(*, returncode: int, text: str, fallback_error: str, timed_out: bool = False) -> AdapterResult:
+    """An adapter result for a CLI failure. A usage limit keeps the fixed message and the reset instant, never ``text``."""
+    outcome = classify_cli_outcome(returncode=returncode, text=text, timed_out=timed_out)
+    if outcome.failure == CLI_USAGE_LIMIT:
+        return AdapterResult(
+            content="",
+            error=CLI_FAILURE_MESSAGES[CLI_USAGE_LIMIT],
+            failure=CLI_USAGE_LIMIT,
+            reset_at=outcome.reset_at or "",
+        )
+    return AdapterResult(content="", error=fallback_error, failure=outcome.failure)
 
 
 class CliFailure(RuntimeError):
     """A CLI-backed adapter failed. Carries only the closed class; ``str()`` is a
-    fixed message, so nothing the CLI printed can travel with it."""
+    fixed message, so nothing the CLI printed can travel with it. ``reset_at`` is
+    an ISO instant for a usage limit, or None."""
 
-    def __init__(self, failure: str = CLI_ERROR) -> None:
+    def __init__(self, failure: str = CLI_ERROR, *, reset_at: str | None = None) -> None:
         self.failure = failure if failure in CLI_FAILURES else CLI_ERROR
+        self.reset_at = clean_reset_at(reset_at) if self.failure == CLI_USAGE_LIMIT else None
         super().__init__(CLI_FAILURE_MESSAGES[self.failure])
 
 
@@ -366,7 +528,7 @@ async def completed_result_events(adapter, prompt: str, config) -> AsyncIterator
     yield {"kind": "phase", "phase": "writing", "detail": config.model or config.adapter}
     result = await adapter.invoke(prompt, config)
     if result.error:
-        raise CliFailure(result.failure)
+        raise CliFailure(result.failure, reset_at=result.reset_at or None)
     yield {"kind": "text", "text": result.content}
     if result.tokens_used > 0:
         yield {"kind": "usage", "tokens": result.tokens_used, "model": result.model}

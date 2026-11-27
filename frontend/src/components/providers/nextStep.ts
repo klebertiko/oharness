@@ -1,8 +1,9 @@
 import { modelNotPulled, providerFault, providerReadiness } from "@/components/agent/chatProvider";
-import { tr } from "@/i18n/store";
+import { tr, useLocaleStore } from "@/i18n/store";
 import { specOf, type Connection } from "./providerStore";
 import { vendorName } from "./providerText";
 import { ACTION_TEXT, STATE_TABLE, type ActionId } from "./stateTable";
+import { formatResetLocal } from "./usageLimit";
 
 /**
  * The one thing that would make a connection answer runs, phrased as an
@@ -29,7 +30,8 @@ export type NextStep = {
     | "replaceKey"
     | "checkEndpoint"
     | "copy"
-    | "link";
+    | "link"
+    | "limit";
   label: string;
   hint: string;
   /** More specific status word than the generic one, when the failure class is known. */
@@ -62,6 +64,7 @@ function faultStep(c: Connection): NextStep | null {
       if (c.provider === "ollama" && c.residence === "local") return act("copy", "copyServe", { copy: "ollama serve", thenRetest: true });
       return spec.endpoint.editable ? act("checkEndpoint", "checkEndpoint") : retest();
     case "rate-limited":
+    case "overload":
       return act("retest", "testLater");
     case "out-of-credits":
       return spec.billingUrl ? act("link", "openBilling", { href: spec.billingUrl, thenRetest: true }) : retest();
@@ -74,9 +77,14 @@ function faultStep(c: Connection): NextStep | null {
       return url ? act("link", "openInstall", { href: url, thenRetest: true }) : retest();
     }
     case "cli-timeout":
+    case "timeout":
     case "cli-error":
     case "unknown":
       return retest();
+    case "usage_limit": {
+      const time = formatResetLocal(c.resetAt, useLocaleStore.getState().locale);
+      return act("limit", "useOther", time ? { status: tr("providers.limit.until", { time }) } : {});
+    }
   }
 }
 
@@ -130,6 +138,8 @@ export function distanceToReady(c: Connection): number | null {
     case "copy":
       // `ollama pull` for an unpulled default is one command away; a login or `ollama serve` is a failure to fix.
       return providerFault(c) ? 2 : 0;
+    case "limit":
+      return 2;
     default:
       return 2;
   }

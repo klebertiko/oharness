@@ -39,7 +39,7 @@ from .cli_shared import (
     CliFailure,
     CliMissing,
     CliRunResult,
-    classify_cli_failure,
+    failure_result,
     completed_result_events,
     reported_model,
     reported_tokens,
@@ -123,10 +123,10 @@ class ClaudeCliAdapter(AgentAdapter):
         if result.timed_out:
             return AdapterResult(content="", error=f"claude CLI timed out after {timeout:.0f}s", failure="cli-timeout")
         if result.returncode != 0:
-            return AdapterResult(
-                content="",
-                error=_last_line(result.stderr) or f"claude CLI exited {result.returncode}",
-                failure=classify_cli_failure(returncode=result.returncode, text=result.stderr),
+            return failure_result(
+                returncode=result.returncode,
+                text=result.stderr,
+                fallback_error=_last_line(result.stderr) or f"claude CLI exited {result.returncode}",
             )
 
         try:
@@ -143,9 +143,7 @@ class ClaudeCliAdapter(AgentAdapter):
 
         if payload.get("is_error"):
             reported = str(payload.get("result") or "claude CLI reported an error")
-            return AdapterResult(
-                content="", error=reported, failure=classify_cli_failure(returncode=1, text=reported),
-            )
+            return failure_result(returncode=1, text=reported, fallback_error=reported)
 
         return AdapterResult(
             content=str(payload.get("result", "")),
@@ -159,7 +157,7 @@ class ClaudeCliAdapter(AgentAdapter):
         # reasonable stream for a single-shot invocation.
         result = await self.invoke(prompt, config)
         if result.error:
-            raise CliFailure(result.failure)
+            raise CliFailure(result.failure, reset_at=result.reset_at or None)
         yield result.content
 
     async def stream_events(self, prompt: str, config: AdapterConfig) -> AsyncIterator[dict]:

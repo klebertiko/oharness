@@ -240,7 +240,7 @@ describe("states", () => {
 
   it("an agent-only connection shows the handoff and no dead buttons", () => {
     show([conn({ id: "cursor", provider: "cursor", label: "Cursor", residence: "cloud", models: [], endpoint: "https://api.cursor.com" })]);
-    expect(screen.getByText("How the handoff works")).toBeTruthy();
+    expect(screen.getByText("Agent tasks")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delegate a task|launch in terminal/i })).toBeNull();
     expect(screen.queryByText("Models")).toBeNull();
   });
@@ -454,7 +454,7 @@ describe("language and accessibility", () => {
     show([conn({ health: "fault", detail: "Could not reach http://127.0.0.1:11434.", defaultModel: "gemma4:26b" })]);
     expect(screen.getAllByText("Inacessível").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Copiar `ollama serve`" })).toBeTruthy();
-    expect(screen.getByText("Precisa de ação")).toBeTruthy();
+    expect(screen.getByText("Precisa de você")).toBeTruthy();
     expect(screen.getByText("Conexão")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Endereço de Ollama local" })).toBeTruthy();
   });
@@ -470,5 +470,40 @@ describe("language and accessibility", () => {
       expect(await axeViolations(container)).toEqual([]);
       unmount();
     }
+  });
+});
+
+describe("a provider failure on the account (catalog)", () => {
+  it("says what happened, why, and what to do for a run that found the service overloaded", () => {
+    show([router({ secret: sealed, health: "fault", failure: "overload", detail: "" })]);
+    const notice = screen.getAllByRole("alert").find((el) => el.textContent?.includes("The service is overloaded"));
+    expect(notice, "catalog notice").toBeTruthy();
+    expect(notice!.textContent).toContain("It could not answer right now");
+    expect(notice!.textContent).toContain("Try again in a few minutes");
+  });
+
+  it("shows nothing from the catalog for a healthy account", () => {
+    show([router({ secret: sealed })]);
+    expect(document.querySelector("[data-provider-error]")).toBeNull();
+  });
+});
+
+describe("use another account at a subscription limit", () => {
+  const limited = (over: Partial<Connection> = {}) =>
+    conn({ id: "anthropic-cli", provider: "anthropic", label: "Anthropic", residence: "cloud", endpoint: "", models: [], health: "fault", failure: "usage_limit", detail: "", ...over });
+
+  it("is turned off, and says why, when no other account is ready", () => {
+    show([limited(), router({ enabled: false })]);
+    const button = screen.getByRole("button", { name: "Use another account" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText("No other account is ready")).toBeTruthy();
+  });
+
+  it("opens the ready account when there is one", () => {
+    show([limited(), router({ secret: sealed })]);
+    const button = screen.getByRole("button", { name: "Use another account" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    expect(useProviderStore.getState().selectedId).toBe("openrouter");
   });
 });
