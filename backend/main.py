@@ -1,10 +1,13 @@
 import hmac
 import logging
+import math
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 import anyio.to_thread
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from database import SessionLocal, init_db
@@ -26,6 +29,7 @@ from factory.definition_router import router as factory_definition_router
 from factory.metrics_router import router as factory_metrics_router
 from factory.inbox_router import router as factory_inbox_router
 from factory.memory_router import router as factory_memory_router
+from factory.improvement.router import router as factory_improvement_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
 from cordis.router import router as cordis_router
@@ -81,6 +85,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OHarness API", version=APP_VERSION, lifespan=lifespan)
+
+
+def _finite(node):
+    """A 422 echoes the input it refused. NaN and Infinity are not JSON, so they are echoed as text instead of failing the response."""
+    if isinstance(node, float) and not math.isfinite(node):
+        return str(node)
+    if isinstance(node, dict):
+        return {key: _finite(value) for key, value in node.items()}
+    if isinstance(node, (list, tuple)):
+        return [_finite(value) for value in node]
+    return node
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request: Request, exc: RequestValidationError):
+    return await request_validation_exception_handler(request, RequestValidationError(_finite(list(exc.errors()))))
 
 app.add_middleware(
     CORSMiddleware,
@@ -163,6 +183,7 @@ app.include_router(factory_secrets_router)
 app.include_router(factory_router)
 app.include_router(factory_definition_router)
 app.include_router(factory_memory_router)
+app.include_router(factory_improvement_router)
 app.include_router(cordis_router)
 
 

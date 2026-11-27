@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import secrets
 import sys
 
 from fastapi import Request
@@ -46,6 +47,22 @@ def credential_class(request: Request) -> str:
 
 def human_available() -> bool:
     return bool(_expected()) or os.environ.get(DEV_ENV) == '1'
+
+
+SCORER_HEADER = 'x-oharness-scorer'
+# The run loop's own credential for recording scores. Made in this process at import and kept in memory only: it is not in the
+# environment, the token file or any child process, so an agent holding the sidecar token cannot present it.
+_scorer = secrets.token_urlsafe(32)
+
+
+def scorer_credential() -> str:
+    """For the run loop inside this process. Never hand it to an agent or write it anywhere."""
+    return _scorer
+
+
+def is_scorer(request: Request) -> bool:
+    presented = request.headers.get(SCORER_HEADER, '')
+    return bool(presented) and hmac.compare_digest(presented, _scorer)
 
 
 def actor_for(request: Request) -> tuple[str, str | None]:

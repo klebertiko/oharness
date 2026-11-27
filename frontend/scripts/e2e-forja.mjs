@@ -80,7 +80,7 @@ try {
       await check(`item ${where}`);
       await page.keyboard.press("Escape");
       for (const [tab, wait] of [["Inbox", "Which environment?"], ["Setup", "forja/npm-token"], ["Metrics", "Branches opened"]]) {
-        await page.getByRole("radio", { name: tab }).click();
+        await page.getByRole("button", { name: tab }).click();
         await page.getByText(wait).first().waitFor();
         await check(`${tab.toLowerCase()} ${where}`);
       }
