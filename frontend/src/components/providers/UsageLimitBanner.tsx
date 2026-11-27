@@ -48,13 +48,15 @@ export function UsageLimitBanner({
   }, [held, resetAt]);
 
   const headline = time ? t("providers.limit.banner", { time }) : t("providers.limit.bannerNoTime");
+  // Without a reset instant nothing would ever send a held draft, so it stays in the composer.
+  const canHold = msUntil(resetAt) != null;
 
   return (
     <Notice tone="warn" role="alert" title={headline}>
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button size="sm" variant="primary" disabled={!draft.trim() || held != null} onClick={() => {
+        <Button size="sm" variant="primary" disabled={!canHold || !draft.trim() || held != null} onClick={() => {
           const text = draft.trim();
-          if (!text) return;
+          if (!text || !canHold) return;
           setHeld(text);
           onHoldDraft();
         }}>

@@ -38,7 +38,7 @@ export function ForjaMetrics() {
   const dur = (value: unknown) => duration(typeof value === "number" ? value : null);
   const autonomy = g("autonomy");
   const gap = (autonomy.merged_without_human_push ?? {}) as { available?: boolean; reason?: string };
-  const empty = (g("throughput").prs_opened ?? 0) === 0 && (g("throughput").items_completed ?? 0) === 0;
+  const empty = (g("throughput").prs_opened ?? 0) === 0 && (g("throughput").items_completed ?? 0) === 0 && (g("cost").total_tokens ?? 0) === 0;
   const groups: [string, [string, string][]][] = [
     [t("forja.metrics.throughput"), [[t("forja.metrics.prsOpened"), n(g("throughput").prs_opened)], [t("forja.metrics.prsMerged"), n(g("throughput").prs_merged)], [t("forja.metrics.itemsCompleted"), n(g("throughput").items_completed)]]],
     [t("forja.metrics.cost"), [[t("forja.metrics.medianTokens"), n(g("cost").median_tokens_per_pr)], [t("forja.metrics.totalTokens"), n(g("cost").total_tokens)]]],
@@ -46,10 +46,17 @@ export function ForjaMetrics() {
     [t("forja.metrics.autonomy"), [[t("forja.metrics.interventions"), n(autonomy.human_interventions_per_item)]]],
     [t("forja.metrics.cycle"), [[t("forja.metrics.runToPr"), dur(g("cycle_time").run_to_pr_median_s)], [t("forja.metrics.runToReview"), dur(g("cycle_time").run_to_first_review_median_s)], [t("forja.metrics.runToMerge"), dur(g("cycle_time").run_to_merge_median_s)]]],
   ];
+  if (empty) {
+    return (
+      <div className="flex flex-col gap-3 p-3">
+        {picker}
+        <EmptyState title={t("forja.metrics.noData")} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3 p-3">
       {picker}
-      {empty && <EmptyState title={t("forja.metrics.noData")} />}
       <div className="grid gap-3 @2xl:grid-cols-2">
         {groups.map(([title, rows]) => (
           <section key={title} aria-label={title} className="rounded-panel border border-line-soft bg-sub-100 p-3">

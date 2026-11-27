@@ -6,7 +6,8 @@ import type { MessageKey } from "@/i18n/translate";
 import { forjaApi } from "./forjaApi";
 import type { FactoryAction, WorkItem, WorkItemArtifact, WorkItemEvent } from "./types";
 import { useExplain } from "./useForja";
-import { actionsFor, openQuestion, statusTone } from "./view";
+import { actionsFor, ageParts, eventKey, openQuestion, sourceKey, statusTone } from "./view";
+import { formatDate } from "@/i18n/translate";
 
 type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string; stage: string; agent_id: string | null }[] };
 
@@ -15,7 +16,7 @@ type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string
  * do. Text that came from outside is shown as data in its own block and is never an instruction. There is no merge action (ADR 0055).
  */
 export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const { t, number } = useI18n();
+  const { t, number, locale } = useI18n();
   const explain = useExplain();
   const [item, setItem] = useState<Detail | null>(null);
   const [events, setEvents] = useState<WorkItemEvent[]>([]);
@@ -64,6 +65,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
   };
 
   const question = item && item.status === "awaiting_human" ? openQuestion(events) : null;
+  const source = item ? sourceKey(item) : null;
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()} title={item?.title ?? t("forja.loading")} showClose>
@@ -74,7 +76,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
           </Notice>
         </div>
       )}
-      {item && (
+      {item && source && (
         <div className="flex flex-col gap-4 p-4 text-body">
           {error && <Notice tone="warn">{error}</Notice>}
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -85,9 +87,9 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
               <Badge tone={statusTone(item.status)}>{t(`forja.status.${item.status}` as MessageKey)}</Badge>
             </dd>
             <dt className="text-ink-dim">{t("forja.item.source")}</dt>
-            <dd>{item.source.kind}</dd>
+            <dd>{t(source.key, source.n ? { n: source.n } : undefined)}</dd>
             <dt className="text-ink-dim">{t("forja.item.cost")}</dt>
-            <dd>{number(item.cost.tokens)}</dd>
+            <dd>{t("forja.item.tokens", { n: number(item.cost.tokens) })}</dd>
           </dl>
           <section aria-labelledby="forja-spec">
             <h3 id="forja-spec" className="mb-1 text-title">
@@ -112,8 +114,20 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
             <pre className="whitespace-pre-wrap rounded-control border border-line-soft bg-sub-200 p-2">{item.origin_context.text || "–"}</pre>
           </section>
           <List title={t("forja.item.artifacts")} id="forja-artifacts" empty={t("forja.item.none")} rows={item.artifacts.map((a) => `${a.kind}: ${a.ref}`)} />
-          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${r.stage} · ${r.agent_id ?? "–"} · ${r.run_id}`)} />
-          <List title={t("forja.item.history")} id="forja-history" empty={t("forja.item.none")} rows={events.map((e) => `${e.at.slice(0, 16).replace("T", " ")} · ${e.actor.kind} · ${e.type}`)} />
+          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${t(`forja.stage.${r.stage}` as MessageKey)} · ${r.agent_id ?? t("forja.item.none")}`)} />
+          <section aria-labelledby="forja-history">
+            <h3 id="forja-history" className="mb-1 text-title">{t("forja.item.history")}</h3>
+            {events.length === 0 ? <p className="text-ink-mute">{t("forja.item.none")}</p> : (
+              <ul className="flex max-h-40 flex-col gap-0.5 overflow-auto text-ink-dim">
+                {events.map((event) => {
+                  const age = ageParts(event.at);
+                  const when = age ? (age.n == null ? t(age.key) : t(age.key, { n: number(age.n) })) : "";
+                  const absolute = Number.isNaN(Date.parse(event.at)) ? "" : formatDate(locale, new Date(event.at));
+                  return <li key={event.sequence} title={absolute}>{when} · {t(eventKey(event))}</li>;
+                })}
+              </ul>
+            )}
+          </section>
           {question && (
             <section aria-labelledby="forja-question" className="flex flex-col gap-2">
               <h3 id="forja-question" className="text-title">

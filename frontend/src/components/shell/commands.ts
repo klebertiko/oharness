@@ -2,37 +2,49 @@ import type { LucideIcon } from "lucide-react";
 import {
   Boxes,
   Hammer,
+  Keyboard,
   MessagesSquare,
+  PanelLeft,
+  PanelRight,
   Plug,
+  Plus,
   Power,
   PowerOff,
+  Puzzle,
+  Settings,
+  SunMoon,
   Workflow,
 } from "lucide-react";
 import { tr } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
+import { applyTheme, appliedTheme, nextTheme, osPrefersLight, type Theme } from "@/lib/theme";
 import { useHarnessSessionStore } from "@/store/harnessSessionStore";
+import { useThreadStore } from "@/store/threadStore";
+import { cycleRegion } from "./regions";
 import { useShellStore, type RailSection } from "./shellStore";
+import { useShortcutStore } from "./shortcuts";
 
 /**
  * One command = one thing a person can ask the app to do.
- *
- * The palette is the canonical index of the application's verbs. If an action
- * exists only as a button, it is a bug: the button is a shortcut to a command,
- * never the only way in.
+ * The same list feeds the palette, the menus and the shortcut modal.
  */
 export interface Command {
   id: string;
-  /** Human-written, imperative. "Run harness", not "Running the harness". */
+  /** Human-written, imperative. */
   label: string;
   /** Grouping kicker shown once per run of commands. */
   group: string;
   icon: LucideIcon;
-  /** Chord spec understood by keys.ts, e.g. "Mod+Enter". */
+  /** Chord spec understood by keys.ts, e.g. "Mod+Enter". Effective binding. */
   chord?: string;
-  /** Machine-side detail shown mono at the right: adapter, node type, id. */
+  /** Binding before a person rebinds it. */
+  defaultChord?: string;
+  /** Machine-side detail shown mono at the right. */
   meta?: string;
   /** Extra substrings the matcher should accept. */
   keywords?: string;
+  /** Alternate names, searched with the label. */
+  aliases?: string[];
   role?: string;
   disabled?: boolean;
   run: () => void;
@@ -40,26 +52,133 @@ export interface Command {
 
 const goTo = (section: RailSection) => () => useShellStore.getState().setSection(section);
 
-/** Every destination in the rail, plus the harness on/off verbs. */
+interface NavSpec {
+  section: RailSection;
+  label: MessageKey;
+  icon: LucideIcon;
+  chord?: string;
+  keywords: string;
+}
+
+const NAV: NavSpec[] = [
+  { section: "chats", label: "shell.cmd.goChats", icon: MessagesSquare, chord: "Alt+1", keywords: "conversation thread session" },
+  { section: "forja", label: "shell.cmd.goForja", icon: Hammer, chord: "Alt+2", keywords: "work items inbox" },
+  { section: "studio", label: "shell.cmd.goStudio", icon: Boxes, chord: "Alt+3", keywords: "canvas design harness graph" },
+  { section: "plugins", label: "shell.cmd.goPlugins", icon: Puzzle, chord: "Alt+4", keywords: "extensions" },
+  { section: "settings", label: "shell.cmd.goSettings", icon: Settings, chord: "Alt+5", keywords: "preferences language theme" },
+  { section: "providers", label: "shell.cmd.goProviders", icon: Plug, keywords: "models keys" },
+];
+
+function bind(id: string, fallback?: string): string | undefined {
+  return useShortcutStore.getState().chordFor(id, fallback);
+}
+
+export function startSession() {
+  useThreadStore.getState().createThread();
+  useShellStore.getState().setSection("chats");
+  useShellStore.getState().setDrawerOpen(false);
+}
+
+/** Shell commands. Studio verbs are added by the page and share this shape. */
 export function shellNavCommands(): Command[] {
-  const nav: { section: RailSection; label: MessageKey; icon: LucideIcon; chord: string; keywords: string }[] = [
-    { section: "chats", label: "shell.cmd.goChats", icon: MessagesSquare, chord: "Alt+1", keywords: "conversation thread agent" },
-    { section: "studio", label: "shell.cmd.goStudio", icon: Boxes, chord: "Alt+2", keywords: "canvas design harness graph" },
-    { section: "providers", label: "shell.cmd.goProviders", icon: Plug, chord: "Alt+3", keywords: "models keys anthropic openai ollama" },
-    { section: "forja", label: "shell.cmd.goForja", icon: Hammer, chord: "Alt+4", keywords: "factory work items inbox metrics agents secrets" },
+  const nav = NAV.map(({ section, label, icon, chord, keywords }) => ({
+    id: `go:${section}`,
+    label: tr(label),
+    group: tr("shell.cmd.group.goTo"),
+    icon,
+    chord: bind(`go:${section}`, chord),
+    defaultChord: chord,
+    keywords,
+    aliases: [section],
+    meta: section,
+    run: goTo(section),
+  }));
+
+  const view: Command[] = [
+    {
+      id: "session:new",
+      label: tr("shell.cmd.newSession"),
+      group: tr("shell.cmd.group.session"),
+      icon: Plus,
+      chord: bind("session:new", "Mod+N"),
+      defaultChord: "Mod+N",
+      keywords: "chat thread start",
+      aliases: ["new chat"],
+      run: startSession,
+    },
+    {
+      id: "sidebar:cycle",
+      label: tr("shell.cmd.toggleLeft"),
+      group: tr("shell.cmd.group.view"),
+      icon: PanelLeft,
+      chord: bind("sidebar:cycle", "Mod+B"),
+      defaultChord: "Mod+B",
+      keywords: "collapse hide rail panel",
+      run: () => useShellStore.getState().toggleLeft(),
+    },
+    {
+      id: "dock:toggle",
+      label: tr("shell.cmd.toggleDock"),
+      group: tr("shell.cmd.group.view"),
+      icon: PanelRight,
+      chord: bind("dock:toggle", "Mod+\\"),
+      defaultChord: "Mod+\\",
+      keywords: "inspector panel right",
+      run: () => useShellStore.getState().toggleRight(),
+    },
+    {
+      id: "dock:toggle-alt",
+      label: tr("shell.cmd.toggleDockAlt"),
+      group: tr("shell.cmd.group.view"),
+      icon: PanelRight,
+      chord: bind("dock:toggle-alt", "Mod+Alt+B"),
+      defaultChord: "Mod+Alt+B",
+      keywords: "inspector",
+      run: () => useShellStore.getState().toggleRight(),
+    },
+    {
+      id: "palette:open",
+      label: tr("shell.keymap.palette"),
+      group: tr("shell.cmd.group.view"),
+      icon: Keyboard,
+      chord: bind("palette:open", "Mod+K"),
+      defaultChord: "Mod+K",
+      keywords: "search commands",
+      run: () => useShellStore.getState().setPaletteOpen(true),
+    },
+    {
+      id: "shortcuts:open",
+      label: tr("shell.cmd.shortcuts"),
+      group: tr("shell.cmd.group.view"),
+      icon: Keyboard,
+      chord: bind("shortcuts:open", "Mod+/"),
+      defaultChord: "Mod+/",
+      keywords: "keymap keyboard",
+      run: () => useShellStore.getState().setKeymapOpen(true),
+    },
+    {
+      id: "regions:cycle",
+      label: tr("shell.cmd.cycleRegions"),
+      group: tr("shell.cmd.group.view"),
+      icon: PanelLeft,
+      chord: bind("regions:cycle", "F6"),
+      defaultChord: "F6",
+      keywords: "focus landmarks",
+      run: () => cycleRegion(1),
+    },
+    {
+      id: "theme:toggle",
+      label: tr(THEME_LABEL[themeTarget()]),
+      group: tr("shell.cmd.group.view"),
+      icon: SunMoon,
+      keywords: "dark light system appearance",
+      run: () => applyTheme(themeTarget()),
+    },
   ];
 
   return [
-    ...nav.map(({ section, label, icon, chord, keywords }) => ({
-      id: `go:${section}`,
-      label: tr(label),
-      group: tr("shell.cmd.group.goTo"),
-      icon,
-      chord,
-      keywords,
-      meta: section,
-      run: goTo(section),
-    })),
+    ...nav,
+    ...view,
     {
       id: "harness:library",
       label: tr("shell.cmd.openLibrary"),
@@ -87,6 +206,11 @@ export function shellNavCommands(): Command[] {
   ];
 }
 
+/** Chords the shortcut modal is allowed to show: exactly the registry, nothing else. */
+export function chordsIn(commands: Command[]): string[] {
+  return commands.flatMap((command) => (command.chord ? [command.chord] : []));
+}
+
 export interface Match {
   command: Command;
   score: number;
@@ -95,10 +219,8 @@ export interface Match {
 }
 
 /**
- * Subsequence matcher, scored on how *early* and how *contiguously* the query
- * lands. Deliberately not a fuzzy library: on a command set this size a real
- * fuzzy ranker mostly produces surprising order, and surprise is the one thing
- * a palette cannot afford — the same query must always yield the same top row.
+ * Subsequence matcher, scored on how early and how contiguously the query
+ * lands. The same query must always yield the same top row.
  */
 export function matchCommands(commands: Command[], query: string): Match[] {
   const q = query.trim().toLowerCase();
@@ -109,7 +231,7 @@ export function matchCommands(commands: Command[], query: string): Match[] {
   const out: Match[] = [];
   for (const command of commands) {
     const hay = command.label.toLowerCase();
-    const extra = `${command.group} ${command.meta ?? ""} ${command.keywords ?? ""}`.toLowerCase();
+    const extra = `${command.group} ${command.meta ?? ""} ${command.keywords ?? ""} ${(command.aliases ?? []).join(" ")} ${command.chord ?? ""}`.toLowerCase();
 
     const direct = hay.indexOf(q);
     if (direct >= 0) {
@@ -121,7 +243,6 @@ export function matchCommands(commands: Command[], query: string): Match[] {
       continue;
     }
 
-    // Subsequence over the label.
     const hits: number[] = [];
     let qi = 0;
     let gaps = 0;
@@ -144,3 +265,15 @@ export function matchCommands(commands: Command[], query: string): Match[] {
 
   return out.sort((a, b) => b.score - a.score);
 }
+
+/** What `theme:toggle` does now: `system` resolved against the OS, never the theme already shown (see nextTheme). */
+function themeTarget(): Theme {
+  if (typeof document === "undefined") return "light";
+  return nextTheme(appliedTheme(), osPrefersLight());
+}
+
+const THEME_LABEL = {
+  system: "shell.rail.useSystem",
+  light: "shell.rail.useLight",
+  dark: "shell.rail.useDark",
+} as const satisfies Record<Theme, MessageKey>;

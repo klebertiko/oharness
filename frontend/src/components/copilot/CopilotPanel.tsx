@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/Button";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import { useShellStore } from "@/components/shell/shellStore";
 import { useCanvasStore } from "@/store/canvasStore";
 import { PROPOSAL_STATES } from "@/lib/copilot/rules";
@@ -116,6 +116,7 @@ export function CopilotPanel() {
 
   return (
     <Panel
+      variant="dock"
       title="Nilo"
       className="h-full"
       actions={

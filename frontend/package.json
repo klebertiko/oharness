@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/strip-dev-routes.mjs",
     "start": "next start",
     "lint": "biome lint --error-on-warnings .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:ohm:e2e": "node scripts/e2e-ohm-roundtrip.mjs",
     "test:ohm:mutation": "node scripts/mutate-ohm-roundtrip.mjs",
+    "test:ui:mutation": "node scripts/mutate-ui-primitives.mjs",
     "test:e2e": "node scripts/run-e2e.mjs"
   },
   "dependencies": {
