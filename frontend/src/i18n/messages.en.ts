@@ -1140,6 +1140,8 @@ export const en = {
   "providers.preference.down": "Move {name} down",
   "providers.preference.upShort": "Up",
   "providers.preference.downShort": "Down",
+  "providers.preference.unsaved": "No order saved yet. Move an account to save one: when the chat's account cannot answer, the others are then tried in this order.",
+  "providers.preference.saved": "The chat tries its own account first, then the others in this order.",
   "providers.models.picker": "Model",
   "providers.models.intent": "By intent",
   "providers.models.all": "All",

@@ -1142,6 +1142,8 @@ export const ptBR: Record<MessageKey, string> = {
   "providers.preference.down": "Descer {name}",
   "providers.preference.upShort": "Subir",
   "providers.preference.downShort": "Descer",
+  "providers.preference.unsaved": "Nenhuma ordem salva ainda. Mova uma conta para salvar: quando a conta do chat não puder responder, as outras serão tentadas nesta ordem.",
+  "providers.preference.saved": "O chat tenta primeiro a própria conta e depois as outras, nesta ordem.",
   "providers.models.picker": "Modelo",
   "providers.models.intent": "Por intenção",
   "providers.models.all": "Todos",
