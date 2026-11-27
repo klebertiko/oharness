@@ -29,13 +29,19 @@ from adapters.catalog import (
     validate_custom_endpoint,
     validate_custom_model,
 )
-from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
+from adapters.cli_shared import INVALID_CLI_MODEL, find_cli, run_cli, valid_cli_model
 from database import get_db
 from providers import store as connection_store
 from providers.diagnostics import build_report
 from providers.login_session import cancel_login, start_login
 from providers.resolution import ADAPTER_BY_PROVIDER
-from providers.usage_windows import parse_usage_windows
+from providers.usage_windows import (
+    NOT_EXPOSED,
+    NOT_INSTALLED,
+    parse_usage_windows,
+    read_codex_rate_limits,
+    windows_from_rate_limits,
+)
 from runtime.cli_detect import DETECTED, detect_clis
 from secret_store.base import SecretsStore
 
@@ -229,10 +235,21 @@ async def stop_cli_login(session_id: str):
 async def usage_windows(request: Request):
     """5-hour and weekly windows. Missing data is unavailable, never 0%."""
     reader = getattr(request.app.state, "usage_window_reader", None)
+    codex_reader = getattr(request.app.state, "codex_rate_reader", None) or read_codex_rate_limits
     rows = []
     for cli, provider, _cls in DETECTED:
-        raw = reader(cli) if reader else ""
-        parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        if reader:
+            raw = reader(cli)
+            parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        elif cli == "codex":
+            # Only codex hands its windows to another program (app-server).
+            if codex_reader is read_codex_rate_limits and not find_cli("codex"):
+                parsed = dict(NOT_INSTALLED)
+            else:
+                parsed = windows_from_rate_limits(await codex_reader())
+        else:
+            # Claude and Cursor show usage only inside their own interactive session.
+            parsed = dict(NOT_EXPOSED)
         rows.append({"cli": cli, "provider": provider, **parsed})
     return {"windows": rows}
 
