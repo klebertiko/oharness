@@ -9,8 +9,8 @@ import { KeymapSheet } from "./KeymapSheet";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
 import { ActivityRail } from "./ActivityRail";
+import { shellNavCommands, type Command } from "./commands";
 import { useShellStore } from "./shellStore";
-import type { Command } from "./commands";
 
 afterEach(cleanup);
 
@@ -170,22 +170,30 @@ describe("TitleBar", () => {
 describe("ActivityRail", () => {
   it("marks only the current destination with aria-current=page", () => {
     useShellStore.setState({ section: "providers", hydrated: true });
-    render(<ActivityRail />);
+    render(<ActivityRail variant="open" />);
     const nav = screen.getByRole("navigation", { name: "Destinations" });
     expect(within(nav).getByRole("button", { name: "Providers" }).getAttribute("aria-current")).toBe("page");
     expect(within(nav).getByRole("button", { name: "Chats" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("toggles the theme through the theme module", async () => {
-    // A dark OS: from an explicit dark, the button flips to light; from light it offers the OS theme back.
+  it("toggles the theme from the command registry like the rail did: system, the other theme, back", () => {
+    // A dark OS. The command's label names what running it does.
     const original = window.matchMedia;
     window.matchMedia = ((query: string) => ({ matches: !query.includes("light"), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
-    document.documentElement.dataset.theme = "dark";
-    render(<ActivityRail />);
-    await userEvent.click(screen.getByRole("button", { name: "Use light theme" }));
+    const toggle = () => shellNavCommands().find((command) => command.id === "theme:toggle")!;
+    document.documentElement.dataset.theme = "system";
+    expect(toggle().label).toBe("Use light theme");
+    toggle().run();
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.style.colorScheme).toBe("light");
-    expect(screen.getByRole("button", { name: "Follow system theme" })).toBeTruthy();
+    expect(toggle().label).toBe("Follow system theme");
+    toggle().run();
+    expect(document.documentElement.dataset.theme).toBe("system");
+    // An explicit choice equal to the OS flips.
+    document.documentElement.dataset.theme = "dark";
+    expect(toggle().label).toBe("Use light theme");
+    toggle().run();
+    expect(document.documentElement.dataset.theme).toBe("light");
     window.matchMedia = original;
   });
 });

@@ -22,6 +22,18 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const base = process.env.OHM_E2E_URL || "http://127.0.0.1:3000";
+// The production export has no /dev (scripts/strip-dev-routes.mjs; e2e-shell proves the 404). This script
+// needs a build made with NEXT_PUBLIC_OH_DEV_ROUTES=1; CI runs one for it and sets OH_E2E_REQUIRE_DEV=1 so a
+// missing page fails instead of skipping.
+const probe = await fetch(`${base}/dev/design-system`);
+if (probe.status === 404) {
+  if (process.env.OH_E2E_REQUIRE_DEV === "1") {
+    console.error("FAIL design system: /dev/design-system is 404 but OH_E2E_REQUIRE_DEV=1 (build with NEXT_PUBLIC_OH_DEV_ROUTES=1).");
+    process.exit(1);
+  }
+  console.log("SKIP design system: this export has no /dev (a production build). Build with NEXT_PUBLIC_OH_DEV_ROUTES=1 to run it.");
+  process.exit(0);
+}
 const out = evidenceDir("design-system");
 mkdirSync(out, { recursive: true });
 
