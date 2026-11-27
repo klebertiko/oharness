@@ -58,9 +58,9 @@ export function Sheet({
             }
           }}
           className={cn(
-            "oh-sheet fixed left-1/2 z-50 flex max-h-[calc(100dvh-var(--h-titlebar)-20px)] w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden",
+            "oh-sheet fixed left-1/2 z-50 flex max-h-[calc(100dvh-var(--h-titlebar)-var(--sheet-offset))] w-[min(var(--sheet-max),calc(100vw-var(--sheet-inset)))] -translate-x-1/2 flex-col overflow-hidden",
             "rounded-float border border-line bg-sub-100 shadow-(--shadow-float)",
-            placement === "top" ? "top-[calc(var(--h-titlebar)+10px)]" : "top-1/2 -translate-y-1/2",
+            placement === "top" ? "top-[calc(var(--h-titlebar)+var(--sheet-offset))]" : "top-1/2 -translate-y-1/2",
             className,
           )}
         >

@@ -5,7 +5,7 @@ import { ROLE_ICON } from "@/lib/roles";
 import { useCanvasStore } from "@/store/canvasStore";
 import styles from "@/components/canvas/canvas.module.css";
 import { PORTS } from "@/lib/ports";
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import type { NodeTemplate, NodeType } from "@/lib/types";
 import { useT } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
@@ -99,7 +99,7 @@ function TemplateRow({ template }: { template: NodeTemplate }) {
 export function NodePalette() {
   const t = useT();
   return (
-    <Panel title={t("sidebar.palette.title")} meta={t("sidebar.palette.meta")} className="h-full">
+    <Panel variant="dock" title={t("sidebar.palette.title")} meta={t("sidebar.palette.meta")} className="h-full">
       <p className="px-2 pb-2 pt-1 text-body text-ink-mute">
         {t("sidebar.palette.intro")}
       </p>

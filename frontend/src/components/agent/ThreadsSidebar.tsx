@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent } from "react";
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { Panel } from "@/components/shell/Panel";
+import { Panel } from "@/components/ui";
 import { Button, EmptyState, Input } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import type { MessageKey } from "@/i18n/translate";
@@ -55,7 +55,7 @@ export function ThreadsSidebar() {
   );
 
   return (
-    <Panel title="Chats" className="h-full">
+    <Panel variant="dock" title="Chats" className="h-full">
       <div className="px-2 pb-1 pt-2">
         <Button
           icon={<Plus size={14} strokeWidth={2} aria-hidden />}
