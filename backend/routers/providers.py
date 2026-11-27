@@ -96,6 +96,15 @@ class ConnectionUpdate(BaseModel):
     _label = field_validator("label")(_plain_label)
 
 
+# More accounts than anyone keeps; a bound on the body, not a product limit.
+MAX_PREFERENCE_LEN = 64
+
+
+class PreferenceBody(BaseModel):
+    """The order failover walks: connection ids, first tried first. Ids left out have no place in it."""
+    order: list[str] = Field(..., max_length=MAX_PREFERENCE_LEN)
+
+
 class SecretBody(BaseModel):
     key: str = Field(..., min_length=1)
 
@@ -135,6 +144,7 @@ def _public_connection(row: dict[str, Any]) -> dict[str, Any]:
         "enabled": row.get("enabled", False),
         "secretRef": row.get("secretRef"),
         "defaultModel": row.get("defaultModel", ""),
+        "rank": row.get("rank"),
     }
 
 
@@ -350,6 +360,25 @@ async def update_connection(
     await connection_store.upsert(db, updated)
     connections[connection_id] = updated
     return _public_connection(updated)
+
+
+@router.put("/preference")
+async def save_preference(
+    body: PreferenceBody,
+    connections: dict = Depends(get_connections),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save the failover order. A run that does not pin its own `preference` walks it (providers/preference.py)."""
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(400, "Each connection can appear once in the order.")
+    if any(cid not in connections for cid in body.order):
+        raise HTTPException(404, "Connection not found")
+    place = {cid: index for index, cid in enumerate(body.order)}
+    # Commit copies first; swap them into memory only once the DB accepted them.
+    updated = {cid: {**row, "rank": place.get(cid)} for cid, row in connections.items()}
+    await connection_store.upsert_many(db, list(updated.values()))
+    connections.update(updated)
+    return {"order": list(body.order)}
 
 
 @router.delete("/connections/{connection_id}", status_code=204)

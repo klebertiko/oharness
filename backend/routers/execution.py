@@ -27,8 +27,9 @@ from run_budget import STATUS_BUDGET_EXCEEDED, HarnessCeiling, parse_run_budget
 from engine import RUNS, RunControl, STATUS_COMPLETE, STATUS_ERROR, STATUS_STOPPED, _sse, execute_harness
 from triage import decide_with_laya, route_message
 from usage_tracking import BudgetExceededError
-from providers.resolution import ProviderResolutionError, resolve_node_provider
+from providers.resolution import FailoverAttempt, ProviderResolutionError, ResolvedProvider, resolve_node_provider
 from providers.outcomes import failure_details
+from providers.preference import failover_reason_class, saved_order
 from flow import config as flow_config
 from flow.config import resolve_flow_switch
 from sandbox.approval import ApprovalConflict
@@ -623,6 +624,49 @@ async def _execute_run(body: ExecuteRequest, request: Request, db: AsyncSession,
     )
 
 
+def _next_direct_fallback(
+    rest: list[str], connections: dict, secrets, cwd: str | None,
+) -> tuple[ResolvedProvider, list[FailoverAttempt]] | None:
+    """Take accounts off the front of `rest` until one resolves. The chat's own model is never carried over:
+    a fallback account runs its own default. Accounts that do not resolve are returned as attempts."""
+    rejected: list[FailoverAttempt] = []
+    while rest:
+        connection_id = rest.pop(0)
+        try:
+            resolved = resolve_node_provider(
+                {"providerIds": [connection_id]}, "llm", "Nilo",
+                connections=connections, secrets_store=secrets, cwd=cwd,
+            )
+        except ProviderResolutionError as exc:
+            rejected.append(FailoverAttempt(connection_id=connection_id, reason=str(exc)))
+            continue
+        return resolved, rejected
+    return None
+
+
+async def _next_direct_fallback_within_budget(
+    rest: list[str], connections: dict, secrets, cwd: str | None,
+) -> tuple[ResolvedProvider, list[FailoverAttempt]] | None:
+    """`_next_direct_fallback`, but a fallback account is held to the same spend ceiling as the chosen one."""
+    passed: list[FailoverAttempt] = []
+    while True:
+        found = _next_direct_fallback(rest, connections, secrets, cwd)
+        if found is None:
+            return None
+        resolved, rejected = found
+        passed.extend(rejected)
+        residence, billing = usage_tracking.connection_billing(connections.get(resolved.connection_id))
+        try:
+            async with SessionLocal() as session:
+                await usage_tracking.enforce_budget_or_raise(
+                    session, model=resolved.config.model or None, residence=residence, billing=billing, model_expected=True,
+                )
+        except BudgetExceededError as exc:
+            passed.append(FailoverAttempt(connection_id=resolved.connection_id, reason=str(exc), reason_class="budget"))
+            continue
+        return resolved, passed
+
+
 @router.post("/direct")
 async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -661,6 +705,9 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
     # there is, matching `engine.py`'s per-node harness-loop check exactly.
     node_id = "direct"
     connection_id = None
+    secrets = None
+    fallback_ids: list[str] = []
+    failover_attempts: list[FailoverAttempt] = []
     residence: str | None = None
     billing: str | None = None
     budget_status: usage_tracking.BudgetStatus | None = None
@@ -669,14 +716,25 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         adapter = get_adapter("mock")
         config = AdapterConfig(adapter="mock", model=body.model or "mock-1")
     else:
+        secrets = getattr(request.app.state, "secrets_store", None)
+        # The chat's own account is always tried first. Only when a person saved an order on the
+        # Providers screen, and only for a plain turn (a tool broker is built for one adapter), the
+        # other accounts of that order follow it. No saved order: exactly one account, as before.
+        if body.connection_id and tool_options is None:
+            fallback_ids = [cid for cid in saved_order(connections) if cid != body.connection_id]
         try:
             resolved = resolve_node_provider(
                 {"providerIds": [body.connection_id] if body.connection_id else [], "model": body.model},
                 "llm", "Nilo", connections=connections,
-                secrets_store=getattr(request.app.state, "secrets_store", None), cwd=cwd,
+                secrets_store=secrets, cwd=cwd,
             )
         except ProviderResolutionError as exc:
-            raise HTTPException(400, str(exc)) from exc
+            fallback = _next_direct_fallback(fallback_ids, connections, secrets, cwd)
+            if fallback is None:
+                raise HTTPException(400, str(exc)) from exc
+            failover_attempts.append(FailoverAttempt(connection_id=body.connection_id or "", reason=str(exc)))
+            failover_attempts.extend(fallback[1])
+            resolved = fallback[0]
         adapter_name, adapter, config = resolved.adapter_name, resolved.adapter, resolved.config
         connection_id = resolved.connection_id
         residence, billing = usage_tracking.connection_billing(connections.get(connection_id))
@@ -720,7 +778,56 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
         "intrinsic": False,
     }
 
+    def mark_failover() -> None:
+        # Connection id and closed class only: the reason text can carry a label or a provider's words.
+        if failover_attempts:
+            node_view["failover"] = {
+                "attempts": [{"connection_id": a.connection_id, "reason_class": a.reason_class} for a in failover_attempts],
+            }
+
+    mark_failover()
     writer = RunWriter(run_id)
+
+    async def first_answer():
+        """Pull past the phase lead-in until the account in use proves it answers. One that fails first is
+        passed over for the next account of the saved order, before `node_start`, so it is never shown as
+        the one answering. Returns the buffered events, the live stream, and the error when none answered."""
+        nonlocal adapter_name, adapter, config, connection_id, residence, billing, model
+        while True:
+            live = control.stream_until_stopped(adapter.stream_events(prompt, config))
+            head: list[dict] = []
+            try:
+                while True:
+                    event = await live.__anext__()
+                    head.append(event)
+                    if event.get("kind") != "phase":
+                        return head, live, None
+            except StopAsyncIteration:
+                return head, live, None
+            except Exception as exc:
+                failed = FailoverAttempt(
+                    connection_id=connection_id or "",
+                    reason="",
+                    reason_class=failover_reason_class(failure_details(exc).get("provider_failure")),
+                )
+                fallback = await _next_direct_fallback_within_budget(fallback_ids, connections, secrets, cwd)
+                if fallback is None:
+                    return head, None, exc
+                failover_attempts.append(failed)
+                failover_attempts.extend(fallback[1])
+                nxt = fallback[0]
+                adapter_name, adapter, config, connection_id = nxt.adapter_name, nxt.adapter, nxt.config, nxt.connection_id
+                residence, billing = usage_tracking.connection_billing(connections.get(connection_id))
+                model = config.model
+                node_view.update({"adapter": adapter_name, "model": model, "connection_id": connection_id})
+                mark_failover()
+
+    async def replay(head: list[dict], live):
+        for event in head:
+            yield event
+        if live is not None:
+            async for event in live:
+                yield event
 
     async def event_stream():
         status = STATUS_ERROR
@@ -760,12 +867,25 @@ async def run_direct(body: DirectRequest, request: Request, db: AsyncSession = D
                 status = STATUS_STOPPED
                 yield emit("run_stopped", {"at_node": node_id})
             else:
-                yield emit("node_start", node_view)
                 node_start = time.time()
+                head: list[dict] = []
+                live = None
+                early_error: Exception | None = None
+                peeked = bool(fallback_ids)
+                if peeked:
+                    head, live, early_error = await first_answer()
+                    effective_model = model
+                yield emit("node_start", node_view)
 
                 try:
-                    stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
-                    async for ev in control.stream_until_stopped(stream):
+                    if early_error is not None:
+                        raise early_error
+                    if peeked:
+                        events = replay(head, live)
+                    else:
+                        stream = broker.stream(prompt, adapter, config) if broker else adapter.stream_events(prompt, config)
+                        events = control.stream_until_stopped(stream)
+                    async for ev in events:
                         kind = ev.get("kind")
                         if broker and (kind.startswith(('tool_', 'subagent_')) or kind == 'capabilities'):
                             yield emit(kind, {'node_id': node_id, **{k: v for k, v in ev.items() if k != 'kind'}})

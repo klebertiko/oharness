@@ -26,6 +26,7 @@ def _to_dict(row: ProviderConnection) -> dict[str, Any]:
         "enabled": row.enabled,
         "secretRef": row.secret_ref,
         "defaultModel": row.default_model,
+        "rank": row.rank,
     }
 
 
@@ -37,10 +38,7 @@ async def load_all(db: AsyncSession) -> dict[str, dict[str, Any]]:
     return {row.id: _to_dict(row) for row in result.scalars().all()}
 
 
-async def upsert(db: AsyncSession, conn: dict[str, Any]) -> None:
-    """Write the full row through, matching whatever the in-memory dict
-    holds after a create/update/secret call — the DB is a mirror, not a
-    separate source of partial truth to reconcile."""
+async def _apply(db: AsyncSession, conn: dict[str, Any]) -> None:
     existing = await db.get(ProviderConnection, conn["id"])
     if existing is None:
         existing = ProviderConnection(id=conn["id"])
@@ -52,6 +50,21 @@ async def upsert(db: AsyncSession, conn: dict[str, Any]) -> None:
     existing.enabled = bool(conn.get("enabled", False))
     existing.secret_ref = conn.get("secretRef")
     existing.default_model = conn.get("defaultModel", "")
+    existing.rank = conn.get("rank")
+
+
+async def upsert(db: AsyncSession, conn: dict[str, Any]) -> None:
+    """Write the full row through, matching whatever the in-memory dict
+    holds after a create/update/secret call — the DB is a mirror, not a
+    separate source of partial truth to reconcile."""
+    await _apply(db, conn)
+    await db.commit()
+
+
+async def upsert_many(db: AsyncSession, conns: list[dict[str, Any]]) -> None:
+    """Write several full rows in one commit (the saved failover order touches every row), so it is never half saved."""
+    for conn in conns:
+        await _apply(db, conn)
     await db.commit()
 
 

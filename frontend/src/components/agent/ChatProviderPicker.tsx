@@ -16,6 +16,8 @@ import { ComboAction, Combobox, type ComboOption } from "@/components/ui/Combobo
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useChatModelStore, modelOverride, NEW_CHAT_KEY } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
+import { useChatRecentStore } from "@/store/chatRecentStore";
+import { cheapestModel } from "@/components/providers/modelChoice";
 import { useThreadStore } from "@/store/threadStore";
 import { useT } from "@/i18n/store";
 import { nextStep, distanceToReady, needsActionDetail } from "@/components/providers/nextStep";
@@ -132,6 +134,31 @@ export function ChatProviderPicker({
 
   const [open, setOpen] = useState(false);
 
+  const recentPicks = useChatRecentStore((s) => s.recent);
+  const remember = useChatRecentStore((s) => s.remember);
+  const usableConnections = useMemo(
+    () => rows.slice(1).map((r) => connections.find((c) => c.id === r.id)).filter((c): c is NonNullable<typeof c> => Boolean(c)),
+    [rows, connections],
+  );
+  // Only picks whose account can still answer; a gone account is fixed on Providers, not offered here.
+  const recent = useMemo(
+    () =>
+      recentPicks
+        .map((r) => ({ connection: usableConnections.find((c) => c.id === r.connectionId && providerReadiness(c).ready), model: r.model }))
+        .filter((r): r is { connection: NonNullable<typeof r.connection>; model: string } => Boolean(r.connection)),
+    [recentPicks, usableConnections],
+  );
+  const cheapest = useMemo(() => {
+    const pick = cheapestModel(usableConnections.filter((c) => providerReadiness(c).ready));
+    if (!pick) return null;
+    return {
+      connection: pick.connection,
+      model: pick.model,
+      label: t("providers.models.cheapest"),
+      detail: t("providers.models.cheapest.detail", { model: pick.model, name: pick.connection.label, in: String(pick.price[0]), out: String(pick.price[1]) }),
+    };
+  }, [usableConnections, t]);
+
   const options = useMemo(() => {
     const built = buildComboOptions({
         connections,
@@ -146,6 +173,9 @@ export function ChatProviderPicker({
         toneDot: (c) => <span className={"h-1.5 w-1.5 flex-none rounded-full " + toneDotClass(providerReadiness(c).tone)} aria-hidden />,
         rowDetail: (c) => rows.find((r) => r.id === c.id)?.detail ?? "",
         needsAction,
+        recent,
+        recentGroup: t("providers.models.recent"),
+        cheapest,
     });
     // A choice whose connection is gone stays listed so the selection is never invisible.
     const stale = rows.find((r) => r.id && !connections.some((c) => c.id === r.id));
@@ -158,7 +188,7 @@ export function ChatProviderPicker({
       });
     }
     return built;
-  }, [connections, chosenId, rows, overrides, threadKey, needsAction]);
+  }, [connections, chosenId, rows, overrides, threadKey, needsAction, recent, cheapest, t]);
 
   // A model the list does not carry (a new release, a custom id) can still be typed for the connection in use.
   const searchOptions = useCallback(
@@ -199,6 +229,7 @@ export function ChatProviderPicker({
       }
       setChosen(parsed.connectionId);
       if (!parsed.model) return;
+      remember({ connectionId: parsed.connectionId, model: parsed.model });
       // Shift flips the scope for this one pick; the radio sets it for the next ones (touch has no Shift).
       const forConversation = modelAppliesToChat && (scope === "conversation") !== Boolean(meta?.shift);
       if (forConversation) {
@@ -211,7 +242,7 @@ export function ChatProviderPicker({
         });
       }
     },
-    [scope, modelAppliesToChat, setChosen, setOverride, setDefaultModel, threadKey, goToProviders],
+    [scope, modelAppliesToChat, setChosen, setOverride, setDefaultModel, threadKey, goToProviders, remember],
   );
 
   const optionValue = chosenId && connection ? selectedOptionId(connection, pinned || connection.defaultModel) : chosenId ?? AUTO_ID;

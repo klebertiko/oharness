@@ -74,6 +74,8 @@ export interface Connection {
   failure?: ProviderFaultClass;
   /** ISO instant a subscription limit frees up. Absent when the class did not name one. */
   resetAt?: string;
+  /** Place in the saved failover order (0 first). Absent or null: no order saved for it. */
+  rank?: number | null;
   /** The sign-in could not be started from the app, so the step is to copy the command instead. */
   loginRefused?: LoginRefusal;
 }
@@ -326,6 +328,7 @@ type BackendConnectionRow = {
   enabled: boolean;
   secretRef: string | null;
   defaultModel?: string;
+  rank?: number | null;
 };
 
 /** Create-if-missing so /probe and /secret never 404 on a connection this
@@ -530,6 +533,10 @@ interface ProviderState {
   saveEndpoint: (id: string, endpoint: string) => Promise<boolean>;
   /** Persist the model a run uses when its node pins none; false (and unchanged) on refusal. */
   setDefaultModel: (id: string, model: string) => Promise<boolean>;
+  /** Rename a connection through its update route; the old name comes back when the sidecar refuses. */
+  renameConnection: (id: string, label: string) => Promise<boolean>;
+  /** Save the order failover walks (first tried first). Ids left out lose their place. */
+  savePreference: (ids: string[]) => Promise<boolean>;
   toggleEnabled: (id: string) => Promise<void>;
   bindToggle: (id: string) => void;
   bindMove: (id: string, dir: -1 | 1) => void;
@@ -591,6 +598,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
             endpoint: row.endpoint,
             enabled: row.enabled,
             defaultModel: row.defaultModel ?? "",
+            rank: typeof row.rank === "number" ? row.rank : null,
             // The offline template's "Not connected. Add a key..." sentence
             // would contradict a row the sidecar says is on.
             detail: hydratedDetail(c, row),
@@ -803,6 +811,36 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (value === c.endpoint) return true;
     const ok = await putConnection({ ...c, endpoint: value }, { endpoint: value });
     if (ok) set({ connections: patch(get().connections, id, (x) => ({ ...x, endpoint: value })) });
+    return ok;
+  },
+
+  renameConnection: async (id, label) => {
+    const c = get().connections.find((x) => x.id === id);
+    const value = label.trim();
+    if (!c || !value || value === c.label) return false;
+    const previous = c.label;
+    set({ connections: patch(get().connections, id, (x) => ({ ...x, label: value })) });
+    const ok = await putConnection(c, { label: value });
+    if (!ok) set({ connections: patch(get().connections, id, (x) => (x.label === value ? { ...x, label: previous } : x)) });
+    return ok;
+  },
+
+  savePreference: async (ids) => {
+    const before = new Map(get().connections.map((c) => [c.id, c.rank ?? null]));
+    const place = new Map(ids.map((id, index) => [id, index]));
+    set({ connections: get().connections.map((c) => ({ ...c, rank: place.get(c.id) ?? null })) });
+    let ok = false;
+    try {
+      const res = await fetch(apiUrl("/providers/preference"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: ids }),
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    if (!ok) set({ connections: get().connections.map((c) => ({ ...c, rank: before.get(c.id) ?? null })) });
     return ok;
   },
 
