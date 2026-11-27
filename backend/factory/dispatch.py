@@ -45,20 +45,50 @@ def _scrub(value, redactor: runner.RunRedactor):
     return value
 
 
+class RunStopped(Exception):
+    """A person stopped the run. The worktree stays; the stage does not complete."""
+
+
 class StageRun:
     """What the driver sees of the run. Everything it does is journaled, redacted, and bounded."""
 
     def __init__(self, *, run_id: str, item_id: str, stage: str, agent_id: str, workspace: dict, definition: dict, store,
-                 redactor: runner.RunRedactor, writer: RunWriter, limit: int):
+                 redactor: runner.RunRedactor, writer: RunWriter, limit: int, cancel: asyncio.Event | None = None,
+                 steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
+                 engine: str | None = None, runner_id: str | None = None):
         self.run_id, self.item_id, self.stage, self.agent_id = run_id, item_id, stage, agent_id
+        self.definition = definition
+        self.engine, self.runner_id = engine, runner_id
         self.workspace = workspace
         self.tokens = 0
         self._definition, self._store, self._redactor, self._writer, self._limit = definition, store, redactor, writer, limit
+        self._cancel = cancel or asyncio.Event()
+        self._steering = steering if steering is not None else []
+        self._on_child = on_child
+
+    def stopped(self) -> bool:
+        return self._cancel.is_set()
+
+    def pull_steering(self) -> list[str]:
+        found = list(self._steering)
+        self._steering.clear()
+        return found
+
+    async def open_child(self, label: str) -> str:
+        """A nested run under this one. It shares the worktree; it does not move the item."""
+        child_id = str(uuid.uuid4())
+        text = str(label)[:80]
+        if self._on_child is not None:
+            self._on_child(child_id, text)
+        await self._journal('child_run', {'run_id': child_id, 'label': text})
+        return child_id
 
     async def _journal(self, event: str, data: dict) -> None:
         await self._writer.append({'event': event, 'data': _scrub(data, self._redactor)})
 
     async def tool(self, argv: list[str], timeout_s: float = TOOL_TIMEOUT_S) -> dict:
+        if self.stopped():
+            raise RunStopped('The run was stopped.')
         await self._journal('tool_call', {'name': 'command', 'argv': list(argv)})
         try:
             result = await runner.run_as_agent(self._definition, self.agent_id, list(argv), self.workspace, self._store, timeout_s)
@@ -107,8 +137,15 @@ def _git(workspace: dict, args: list[str]) -> str:
 
 
 async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: str, assignment: dict, driver: Driver, store,
-                    pool: runner.RunnerPool, repo) -> str:
-    """Runs `stage` for `item` and returns the run id. Raises DispatchError (nothing created) when it cannot start."""
+                    pool: runner.RunnerPool, repo, *, run_id: str | None = None, cancel: asyncio.Event | None = None,
+                    steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
+                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None,
+                    on_seal: Callable[[], None] | None = None) -> str:
+    """Runs `stage` for `item` and returns the run id. Raises DispatchError (nothing created) when it cannot start.
+
+    `cancel` and `steering` are how a person stops the run and talks to it while it is going. A stop keeps the worktree.
+    `on_seal` is called at the point of no return: past it the stage completes, and a stop is refused instead of ignored.
+    """
     agent_id, agent = _check(item, definition, stage, assignment)
     try:
         _, redactor = runner.secrets_for(definition, agent_id, store)
@@ -118,7 +155,7 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
     if limit <= 0:
         raise DispatchError('the run has no token ceiling')
     async with pool.slot():
-        run_id = str(uuid.uuid4())
+        run_id = run_id or str(uuid.uuid4())
         db.add(ExecutionLog(id=run_id, harness_id='forja', harness_name=f'forja/{item.id}/{stage}', status='running'))
         db.add(RunRecord(id=run_id, source='forja'))
         await db.commit()
@@ -131,14 +168,34 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             workspace = await asyncio.to_thread(runner.create_run_workspace, repo, item.id, run_id)
             base = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
             run = StageRun(run_id=run_id, item_id=item.id, stage=stage, agent_id=agent_id, workspace=workspace, definition=definition,
-                           store=store, redactor=redactor, writer=writer, limit=limit)
+                           store=store, redactor=redactor, writer=writer, limit=limit, cancel=cancel, steering=steering, on_child=on_child,
+                           engine=engine, runner_id=runner_id)
             await driver(run)
+            if run.stopped():
+                raise RunStopped('The run was stopped.')
+            if on_seal is not None:  # no await between the last check and the seal: a stop lands before it or is refused after it
+                on_seal()
             sha = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
             branch = f'forja/{item.id}-{run_id}'
             await foreman.implement_done(db, item, definition, branch, sha, base)
             item.cost_tokens = (item.cost_tokens or 0) + run.tokens
             await db.commit()
             await writer.append({'event': 'harness_done', 'data': {'status': 'complete', 'total_tokens': run.tokens, 'tokens_estimated': False}})
+            if outcome is not None:
+                outcome['status'] = 'complete'
+        except (RunStopped, asyncio.CancelledError) as exc:  # a cancelled task ends the run as stopped, never as running forever
+            await db.rollback()
+            await db.refresh(item)
+            if item.status == 'running':
+                item.status = 'queued'
+            await service.add_event(db, item, 'run_stopped', foreman.FOREMAN, {'run_id': run_id})
+            await db.commit()
+            await writer.append({'event': 'harness_done', 'data': {'status': 'stopped', 'total_tokens': run.tokens if run else 0,
+                                                                    'tokens_estimated': False}})
+            if outcome is not None:
+                outcome['status'] = 'stopped'
+            if isinstance(exc, asyncio.CancelledError):
+                raise
         except Exception as exc:  # the run ends here, never the process: a person decides what happens next
             await db.rollback()
             await db.refresh(item)
@@ -149,4 +206,6 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             await db.commit()
             await writer.append({'event': 'harness_done', 'data': {'status': 'error', 'total_tokens': tokens, 'tokens_estimated': False,
                                                                     'error': message}})
+            if outcome is not None:
+                outcome['status'] = 'error'
         return run_id

@@ -158,6 +158,13 @@ async def activate(*args, **kwargs) -> DefinitionVersion:
         return await _activate(*args, **kwargs)
 
 
+async def activate_after(check, *args, **kwargs) -> DefinitionVersion:
+    """`check()` and the activation as one step under the same lock: nothing changes the active version in between."""
+    async with _WRITES:
+        await check()
+        return await _activate(*args, **kwargs)
+
+
 async def promote(*args, **kwargs) -> DefinitionVersion:
     async with _WRITES:
         return await _promote(*args, **kwargs)

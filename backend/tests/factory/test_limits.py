@@ -316,3 +316,10 @@ def test_keeping_the_same_merge_sentence_while_editing_elsewhere_is_allowed():
     after = copy.deepcopy(before)
     after['agents']['builder']['instructions'] = 'Write tests first.\nNever run git merge yourself.'
     assert 'add_merge' not in {reason['code'] for reason in limits.check(before, after)}
+
+
+def test_a_new_agent_cannot_bring_its_own_runner():
+    after = _definition()
+    after['agents']['helper'] = {'role': 'custom', 'enabled': True, 'permissions': {'mode': 'read_only'}, 'secrets': [], 'instructions': 'Help.',
+                                 'runner': 'main'}
+    assert 'protected_field' in _codes(after)

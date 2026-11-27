@@ -30,7 +30,9 @@ _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 MAX_FILE_BYTES = 256 * 1024
 GITHUB_FILTERS = {"repos", "labels", "authors", "base_branches", "actions", "skip_bots"}
 WEBHOOK_FILTERS = {"webhooks", "payload"}
-EVENTS = {"github": {"issues", "pull_request", "issue_comment", "pull_request_review_comment"}, "webhook": {"received"}, "schedule": {"cron_fired"}}
+EVENTS = {"github": {"issues", "pull_request", "issue_comment", "pull_request_review_comment"}, "webhook": {"received"}, "schedule": {"cron_fired"},
+          "factory": {"work_item_stage_changed"}}
+FACTORY_FILTERS = {"stage", "status"}
 
 
 class AutomationError(ValueError):
@@ -113,7 +115,7 @@ def _trigger(where: str, raw) -> Trigger:
         raise AutomationError(f"{where}: unsupported trigger {provider}/{event}")
     if not isinstance(flt, dict):
         raise AutomationError(f"{where}: filter must be a mapping")
-    allowed = {"github": GITHUB_FILTERS, "webhook": WEBHOOK_FILTERS, "schedule": set()}[provider]
+    allowed = {"github": GITHUB_FILTERS, "webhook": WEBHOOK_FILTERS, "schedule": set(), "factory": FACTORY_FILTERS}[provider]
     if set(flt) - allowed:
         raise AutomationError(f"{where}: {provider} filters are {', '.join(sorted(allowed)) or 'none'}")
     if provider == "webhook" and not (isinstance(flt.get("webhooks"), list) and flt["webhooks"]):
@@ -176,6 +178,31 @@ def load_automations(directory: Path) -> dict[str, Automation]:
 
 
 # -- matching -----------------------------------------------------------------------------------------------------------------------
+def explain_trigger(trigger: Trigger, event: Event) -> list[str]:
+    """Filter names that keep this trigger from firing. An empty list means it would fire."""
+    if (trigger.provider, trigger.event) != (event.provider, event.event):
+        return ["event"]
+    flt = trigger.filter
+    if trigger.provider == "schedule":
+        return [] if trigger.name == event.fields.get("schedule") else ["schedule"]
+    if trigger.provider == "webhook":
+        failed = []
+        if event.fields.get("webhook") not in flt.get("webhooks", []):
+            failed.append("webhooks")
+        if "payload" in flt and not match_payload(flt["payload"], event.payload):
+            failed.append("payload")
+        return failed
+    if trigger.provider == "factory":
+        return [key for key in flt if not match_field(flt[key], event.fields.get(key))]
+    if flt.get("skip_bots", "all") in ("all", True) and event.fields.get("bot"):
+        return ["skip_bots"]
+    failed = []
+    for key, field_name in (("repos", "repo"), ("labels", "labels"), ("authors", "author"), ("base_branches", "base_branch"), ("actions", "action")):
+        if key in flt and not match_field(flt[key], event.fields.get(field_name)):
+            failed.append(key)
+    return failed
+
+
 def trigger_matches(trigger: Trigger, event: Event) -> bool:
     if (trigger.provider, trigger.event) != (event.provider, event.event):
         return False
@@ -184,6 +211,8 @@ def trigger_matches(trigger: Trigger, event: Event) -> bool:
         return trigger.name == event.fields.get("schedule")
     if trigger.provider == "webhook":
         return event.fields.get("webhook") in flt.get("webhooks", []) and ("payload" not in flt or match_payload(flt["payload"], event.payload))
+    if trigger.provider == "factory":
+        return all(match_field(flt[key], event.fields.get(key)) for key in flt)
     if flt.get("skip_bots", "all") in ("all", True) and event.fields.get("bot"):
         return False  # bots are skipped unless the automation opts in with skip_bots: none
     return all(match_field(flt[key], event.fields.get(field_name)) for key, field_name in
