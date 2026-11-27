@@ -511,7 +511,7 @@ interface ProviderState {
       already be a caller-confirmed provider-level failure (see
       `isProviderLevelFailure`'s doc comment for why no caller uses it yet)
       — never a bad prompt, an HITL rejection, or a Stop. */
-  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing" }) => void;
+  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing"; failure?: ProviderFaultClass }) => void;
   /** Record a usage limit. Only a validated reset instant is kept; the error text is ignored. */
   noteUsageLimit: (id: string, resetAt: unknown) => void;
   /** The window has opened, or the person picked another way out. */
@@ -679,7 +679,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       set({ connections: patch(get().connections, id, (x) => ({ ...x, cliState: undefined, health: "setup", detail })) });
     } else {
       set({
-        connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),
+        connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail, ...(outcome.failure ? { failure: outcome.failure } : {}) })),
       });
     }
   },

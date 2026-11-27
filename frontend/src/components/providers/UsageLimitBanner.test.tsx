@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocaleStore } from "@/i18n/store";
+import { useComposerDraftStore } from "@/store/composerDraftStore";
 import { UsageLimitBanner } from "./UsageLimitBanner";
 import { formatResetLocal } from "./usageLimit";
 
@@ -10,6 +11,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-21T09:00:00Z"));
   useLocaleStore.setState({ locale: "en" });
+  useComposerDraftStore.setState({ held: null });
 });
 afterEach(() => {
   cleanup();
@@ -31,6 +33,7 @@ function show(over: Partial<Parameters<typeof UsageLimitBanner>[0]> = {}) {
       onUseAccount={onUseAccount}
       onUseApiKey={onUseApiKey}
       onRelease={onRelease}
+      onCancelHold={vi.fn()}
       {...over}
     />,
   );
@@ -89,8 +92,34 @@ describe("usage limit banner", () => {
   it("says so when no other account is ready", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
     show({ accounts: [], draft: "olá" });
-    fireEvent.click(screen.getByRole("button", { name: "Usar outra conta" }));
-    expect(screen.getByText("Nenhuma outra conta está pronta")).toBeTruthy();
+    const other = screen.getByRole("button", { name: "Usar outra conta" }) as HTMLButtonElement;
+    expect(other.disabled).toBe(true);
+    expect(other.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(other.getAttribute("aria-describedby")!)?.textContent).toBe("Nenhuma outra conta está pronta");
     expect(screen.getByRole("alert").textContent).toContain("Limite da assinatura atingido");
+  });
+
+  it("keeps the held text when the banner goes away and comes back, then sends it", () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Wait and send when it frees up" }));
+    cleanup();
+    expect(useComposerDraftStore.getState().held).toBe("hello from the composer");
+    const { onRelease } = show({ draft: "" });
+    expect(screen.getByRole("status").textContent).toContain("Held until");
+    act(() => { vi.advanceTimersByTime(20 * 60 * 1000); });
+    expect(onRelease).toHaveBeenCalledWith("hello from the composer");
+    expect(useComposerDraftStore.getState().held).toBeNull();
+  });
+
+  it("cancels the hold and gives the text back to the composer", () => {
+    const onCancelHold = vi.fn();
+    const { onRelease } = show({ onCancelHold });
+    fireEvent.click(screen.getByRole("button", { name: "Wait and send when it frees up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel and give the text back" }));
+    expect(onCancelHold).toHaveBeenCalledWith("hello from the composer");
+    expect(useComposerDraftStore.getState().held).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    act(() => { vi.advanceTimersByTime(20 * 60 * 1000); });
+    expect(onRelease).not.toHaveBeenCalled();
   });
 });

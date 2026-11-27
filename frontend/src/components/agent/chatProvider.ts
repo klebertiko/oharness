@@ -115,6 +115,8 @@ export const FAULT_CLASSES = [
   "cli-timeout",
   "cli-error",
   "usage_limit",
+  "overload",
+  "timeout",
   "unknown",
 ] as const;
 export type ProviderFaultClass = (typeof FAULT_CLASSES)[number];

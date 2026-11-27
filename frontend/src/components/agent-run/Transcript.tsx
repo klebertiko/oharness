@@ -14,6 +14,7 @@ import { groupActivity, segmentActivity, summarizeGroup } from "./activity";
 import { Gate } from "./Gate";
 import { ToolCard } from "./ToolCard";
 import { useActiveRunStore } from "@/store/activeRunStore";
+import { ProviderErrorLines } from "@/components/providers/ProviderError";
 import { connectionLabel, isPinnedMismatch } from "./pinnedConnection";
 import { rollupTotals, type TokenSource } from "./rollup";
 import type { Block, RunState, Segment, ToolCall } from "./types";
@@ -419,7 +420,13 @@ function SegmentView({
               <span className="t-label" style={{ color: "var(--fault-text)" }}>
                 fault
               </span>
-              <p className={`t-body mt-0.5 text-ink-dim ${css.prose}`}>{segment.error}</p>
+              {segment.failure ? (
+                <div className="t-body mt-0.5 text-ink-dim">
+                  <ProviderErrorLines code={segment.failure} />
+                </div>
+              ) : (
+                <p className={`t-body mt-0.5 text-ink-dim ${css.prose}`}>{segment.error}</p>
+              )}
             </div>
           )}
         </div>

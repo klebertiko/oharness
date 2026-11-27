@@ -1,3 +1,4 @@
+import { catalogCodeFromWire } from "@/components/providers/errorCatalog";
 import { tr } from "@/i18n/store";
 import type { NodeType } from "@/lib/types";
 import type { Block, FailoverAttempt, RunState, Segment, Subagent, ToolCall } from "./types";
@@ -412,6 +413,7 @@ export function runReducer(state: RunState, action: Action): RunState {
       const previous = state.plan.find((s) => s.nodeId === String(d.node_id))?.tokens ?? 0;
       const supplied = Number(action.data.tokens ?? previous);
       const tokens = Number.isFinite(supplied) && supplied >= 0 ? supplied : previous;
+      const failure = catalogCodeFromWire(action.data.provider_failure) ?? undefined;
       return {
         ...patch(state, String(d.node_id), (s) => ({
           ...s,
@@ -419,8 +421,10 @@ export function runReducer(state: RunState, action: Action): RunState {
           phase: "",
           tokens,
           error: String(action.data.error ?? "Unknown error"),
+          ...(failure ? { failure } : {}),
           endedAt: Date.now(),
         })),
+        ...(failure ? { failure } : {}),
         totals: { ...state.totals, tokens: state.totals.tokens + tokens - previous },
         status: "error",
       };
@@ -636,14 +640,17 @@ export function runReducer(state: RunState, action: Action): RunState {
       };
     }
 
-    case "error":
+    case "error": {
+      const failure = catalogCodeFromWire(action.data.provider_failure) ?? undefined;
       return {
         ...state,
+        ...(failure ? { failure } : {}),
         subagents: settleSubagents(state.subagents),
         status: "error",
         endedAt: Date.now(),
         notices: [...state.notices, String(action.data.error ?? "Stream error")],
       };
+    }
 
     case "plan_error":
       return { ...state, planNotSaved: true };

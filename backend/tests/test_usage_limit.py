@@ -141,3 +141,34 @@ def test_adapter_threads_the_class_and_drops_the_cli_text() -> None:
     assert caught.value.failure == CLI_USAGE_LIMIT
     assert caught.value.reset_at == result.reset_at
     assert CANARY not in str(caught.value) and EMAIL not in str(caught.value)
+
+
+def test_a_reset_instant_past_the_retry_after_cap_is_dropped() -> None:
+    from adapters.cli_shared import clean_reset_at
+
+    now = datetime(2026, 11, 21, 9, 0, tzinfo=timezone.utc)
+    assert clean_reset_at("2026-12-05T09:00:00+00:00", now=now) == "2026-12-05T09:00:00+00:00"
+    assert clean_reset_at("2026-12-05T09:00:01+00:00", now=now) is None
+    assert clean_reset_at("2099-01-01T00:00:00Z", now=now) is None
+    assert CliFailure(CLI_USAGE_LIMIT, reset_at="2099-01-01T00:00:00Z").reset_at is None
+
+
+def test_a_run_level_error_carries_the_usage_limit_class_and_the_reset_instant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failure outside any node still names the class, so the chat can show the limit banner."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    reset = (datetime.now(timezone.utc) + timedelta(minutes=20)).replace(microsecond=0).isoformat()
+
+    async def stream(*args, **kwargs):
+        raise CliFailure(CLI_USAGE_LIMIT, reset_at=reset)
+        yield ""  # an async generator, like the engine's
+
+    monkeypatch.setattr("routers.execution.execute_harness", stream)
+    with TestClient(app) as client:
+        response = client.post("/execute/", json={"graph_json": {"nodes": [], "edges": []}})
+    frames = [f for f in response.text.split("\n\n") if f.startswith("event: error")]
+    assert len(frames) == 1
+    data = json.loads(frames[0].split("data: ", 1)[1])
+    assert data == {"provider_failure": CLI_USAGE_LIMIT, "error": CLI_FAILURE_MESSAGES[CLI_USAGE_LIMIT], "reset_at": reset}
