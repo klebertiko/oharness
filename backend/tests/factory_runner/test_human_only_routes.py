@@ -19,6 +19,7 @@ HUMAN_ONLY = {
     ('POST', '/factory/inbox/{key}/resolve'), ('DELETE', '/factory/inbox/{key}/resolve'),
     ('PATCH', '/factory/memory/{note_id}'), ('DELETE', '/factory/memory/{note_id}'), ('DELETE', '/factory/memory'),
     ('PUT', '/factory/secrets/{name}'), ('DELETE', '/factory/secrets/{name}'),
+    ('POST', '/factory/work-items/{item_id}/network-approvals'),
 }
 # Mutating routes an agent may call, or that decide per action inside (covered by their own tests).
 OPEN_OR_PER_ACTION = {
@@ -52,6 +53,8 @@ def test_a_human_only_route_refuses_the_agent_credential_and_not_the_persons(cli
     body = {'params': {'factory_id': 'payments', 'agent_id': 'builder'}}  # what the routes need to get past validation, so the credential check is what answers
     if method in ('POST', 'PUT', 'PATCH'):
         body['json'] = {'value': 'abcd-efgh', 'text': 'x', 'status': 'open', 'factory_id': 'no-such-factory', 'workspace': 'no-such-folder', 'expected_hash': 'a' * 64}
+        if path.endswith('/network-approvals'):
+            body['json'] = {'request_id': 'expired-request', 'decision': 'once'}
     agent = client.request(method, url, **body)
     assert agent.status_code == 403 and agent.json()['detail']['code'] == 'human_only', (method, path, agent.status_code)
     person = client.request(method, url, headers=HUMAN, **body)

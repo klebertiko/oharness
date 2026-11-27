@@ -55,7 +55,7 @@ class StageRun:
     def __init__(self, *, run_id: str, item_id: str, stage: str, agent_id: str, workspace: dict, definition: dict, store,
                  redactor: runner.RunRedactor, writer: RunWriter, limit: int, cancel: asyncio.Event | None = None,
                  steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
-                 engine: str | None = None, runner_id: str | None = None):
+                 engine: str | None = None, runner_id: str | None = None, supervisor=None):
         self.run_id, self.item_id, self.stage, self.agent_id = run_id, item_id, stage, agent_id
         self.definition = definition
         self.engine, self.runner_id = engine, runner_id
@@ -65,6 +65,7 @@ class StageRun:
         self._cancel = cancel or asyncio.Event()
         self._steering = steering if steering is not None else []
         self._on_child = on_child
+        self.supervisor = supervisor
 
     def stopped(self) -> bool:
         return self._cancel.is_set()
@@ -87,11 +88,27 @@ class StageRun:
         await self._writer.append({'event': event, 'data': _scrub(data, self._redactor)})
 
     async def tool(self, argv: list[str], timeout_s: float = TOOL_TIMEOUT_S) -> dict:
+        argv = list(argv)
         if self.stopped():
             raise RunStopped('The run was stopped.')
         await self._journal('tool_call', {'name': 'command', 'argv': list(argv)})
         try:
-            result = await runner.run_as_agent(self._definition, self.agent_id, list(argv), self.workspace, self._store, timeout_s)
+            from factory import network_supervision
+            decision = network_supervision.classify(self._definition, self.agent_id, list(argv))
+            denied = runner.deny_command(argv, runner._protected(self._definition)) or decision.blocked
+            approved = False
+            if not denied and decision.required:
+                approved = self.supervisor is not None and await self.supervisor.authorize(list(argv))
+                if not approved:
+                    denied = 'This command needs human network approval; it did not run.'
+            if self.stopped():
+                raise RunStopped('The run was stopped.')
+            if denied:
+                result = {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False,
+                          'redactions': 0, 'duration_ms': 0}
+            else:
+                result = await runner.run_as_agent(self._definition, self.agent_id, list(argv), self.workspace, self._store, timeout_s,
+                                                   network_approved=approved)
         except runner.RunnerError as exc:
             result = {'ok': False, 'result': str(exc), 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
         result = _scrub(result, self._redactor)
@@ -170,9 +187,16 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             run = StageRun(run_id=run_id, item_id=item.id, stage=stage, agent_id=agent_id, workspace=workspace, definition=definition,
                            store=store, redactor=redactor, writer=writer, limit=limit, cancel=cancel, steering=steering, on_child=on_child,
                            engine=engine, runner_id=runner_id)
+            from factory import network_approvals
+            run.supervisor = await network_approvals.make_supervisor(
+                db, item, run_id, definition, agent_id, run._cancel, lambda value: _scrub(value, redactor), run._journal)
+            await writer.append({'event': 'network_isolation', 'data': {'isolation': 'none', 'mode': 'supervised'}})
             await driver(run)
+            await db.refresh(item)
             if run.stopped():
                 raise RunStopped('The run was stopped.')
+            if item.status != 'running':
+                raise RunStopped('The item changed while the run was active.')
             if on_seal is not None:  # no await between the last check and the seal: a stop lands before it or is refused after it
                 on_seal()
             sha = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
@@ -183,9 +207,11 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             await writer.append({'event': 'harness_done', 'data': {'status': 'complete', 'total_tokens': run.tokens, 'tokens_estimated': False}})
             if outcome is not None:
                 outcome['status'] = 'complete'
-        except (RunStopped, asyncio.CancelledError) as exc:  # a cancelled task ends the run as stopped, never as running forever
+        except (RunStopped, asyncio.CancelledError) as stopped:
             await db.rollback()
             await db.refresh(item)
+            from factory.network_approvals import expire
+            await expire(db, item, run_id)
             if item.status == 'running':
                 item.status = 'queued'
             await service.add_event(db, item, 'run_stopped', foreman.FOREMAN, {'run_id': run_id})
@@ -194,11 +220,13 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
                                                                     'tokens_estimated': False}})
             if outcome is not None:
                 outcome['status'] = 'stopped'
-            if isinstance(exc, asyncio.CancelledError):
+            if isinstance(stopped, asyncio.CancelledError):
                 raise
         except Exception as exc:  # the run ends here, never the process: a person decides what happens next
             await db.rollback()
             await db.refresh(item)
+            from factory.network_approvals import expire
+            await expire(db, item, run_id)
             message = redactor.redact(f'{type(exc).__name__}: {exc}')
             tokens = run.tokens if run else 0
             item.cost_tokens = (item.cost_tokens or 0) + tokens
@@ -208,4 +236,7 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
                                                                     'error': message}})
             if outcome is not None:
                 outcome['status'] = 'error'
+        finally:
+            if run is not None and run.supervisor is not None:
+                run.supervisor.close()
         return run_id

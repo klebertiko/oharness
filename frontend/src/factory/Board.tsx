@@ -84,6 +84,7 @@ function Card({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }
         <span className="text-title text-ink">{item.title}</span>
         <span className="flex flex-wrap items-center gap-2 text-body text-ink-dim">
           <Badge tone={statusTone(item.status)}>{label(t, `forja.status.${item.status}`, item.status)}</Badge>
+          {item.network?.mode === "supervised" && <Badge tone="warn">{t("forja.network.supervised")}</Badge>}
           <span>{t(source.key, source.n ? { n: source.n } : undefined)}</span>
           {age && <span>{age.n == null ? t(age.key) : t(age.key, { n: number(age.n) })}</span>}
           <span>{t("forja.item.tokens", { n: number(item.cost.tokens) })}</span>

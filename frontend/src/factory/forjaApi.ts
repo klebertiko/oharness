@@ -4,7 +4,7 @@
  * the screens turn into a plain sentence instead of a failure.
  */
 import { apiUrl } from "@/lib/apiBase";
-import type { FactoryAction, WorkItem, WorkItemArtifact, WorkItemEvent } from "./types";
+import type { FactoryAction, NetworkRequest, NetworkStatus, WorkItem, WorkItemArtifact, WorkItemEvent } from "./types";
 
 declare global {
   interface Window {
@@ -54,6 +54,7 @@ export interface InboxEntry {
   resolved: boolean;
   notice?: "pending" | "reverted";
   factory_id?: string;
+  network_request?: NetworkRequest;
 }
 export interface VersionRow { hash: string; kind: string; mode: string; percent: number | null; label: string | null; previous_hash: string | null; activated_by: string; activated_at: string }
 export interface DefinitionState { stable: VersionRow | null; canary: VersionRow | null }
@@ -64,6 +65,9 @@ export interface MemoryNote { id: string; text: string; origin: "human" | "agent
 export type Metrics = Record<string, Record<string, unknown>> & { schemaVersion: number; window: string };
 
 export const forjaApi = {
+  networkStatus: () => call<NetworkStatus>("/factory/network-status"),
+  approveNetwork: (id: string, requestId: string, decision: "once" | "host" | "deny") =>
+    call<void>(`/factory/work-items/${encodeURIComponent(id)}/network-approvals`, { method: "POST", ...json({ request_id: requestId, decision }) }),
   items: (limit = 200) => call<{ items: WorkItem[] }>(`/factory/work-items?limit=${limit}`),
   item: (id: string) => call<WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string; stage: string; agent_id: string | null }[] }>(`/factory/work-items/${encodeURIComponent(id)}`),
   events: (id: string) => call<{ events: WorkItemEvent[] }>(`/factory/work-items/${encodeURIComponent(id)}/events?limit=100`),

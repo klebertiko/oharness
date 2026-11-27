@@ -1,6 +1,19 @@
 /** English is the source catalog: every key exists here first, and `messages.pt-BR.ts` must define the same keys (a type error otherwise). Machine data (ids, commands, model names) never goes through a catalog. */
 export const en = {
   "common.cancel": "Cancel",
+  "forja.network.supervised": "Supervised network",
+  "forja.network.noIsolation": "Commands run without operating-system isolation. Network or uncertain commands pause for your approval; this supervision does not enforce network isolation.",
+  "forja.network.supervisedBody": "Network or uncertain commands pause for your approval.",
+  "forja.network.review": "Review network request",
+  "forja.network.command": "Command arguments",
+  "forja.network.hosts": "Requested hosts",
+  "forja.network.unknownHost": "The destination cannot be determined. Only a one-time approval is available.",
+  "forja.network.once": "Approve once",
+  "forja.network.host": "Always allow this host",
+  "forja.network.hostScope": "Remember this host for this agent in this factory while its policy stays unchanged.",
+  "forja.network.deny": "Deny",
+  "forja.network.stale": "This network request is no longer active. Review the current state before deciding again.",
+  "forja.network.expired": "This run no longer has a live network request. Restart the run to request approval again.",
 
   "ui.pickerAria": "{label} picker",
   "ui.loading": "Loading…",

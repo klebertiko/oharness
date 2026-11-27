@@ -3,6 +3,19 @@ import type { MessageKey } from "./messages.en";
 /** Brazilian Portuguese. Same keys as `messages.en.ts`; the design system's content rules apply (sentence case, second person, say what to do next, no exclamation marks). The only source file where accented text is allowed (`guardrails.test.ts`). */
 export const ptBR: Record<MessageKey, string> = {
   "common.cancel": "Cancelar",
+  "forja.network.supervised": "Rede supervisionada",
+  "forja.network.noIsolation": "Os comandos rodam sem isolamento do sistema operacional. Comandos de rede ou incertos aguardam sua aprovação; essa supervisão não impõe isolamento de rede.",
+  "forja.network.supervisedBody": "Comandos de rede ou incertos aguardam sua aprovação.",
+  "forja.network.review": "Revisar pedido de rede",
+  "forja.network.command": "Argumentos do comando",
+  "forja.network.hosts": "Hosts solicitados",
+  "forja.network.unknownHost": "Não foi possível determinar o destino. Só é possível aprovar uma vez.",
+  "forja.network.once": "Aprovar uma vez",
+  "forja.network.host": "Sempre permitir este host",
+  "forja.network.hostScope": "Lembrar este host para este agente nesta factory enquanto a política não mudar.",
+  "forja.network.deny": "Negar",
+  "forja.network.stale": "Este pedido de rede não está mais ativo. Confira o estado atual antes de decidir novamente.",
+  "forja.network.expired": "Esta execução não tem mais um pedido de rede ativo. Reinicie a execução para pedir aprovação novamente.",
 
   "ui.pickerAria": "Seletor de {label}",
   "ui.loading": "Carregando…",

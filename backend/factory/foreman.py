@@ -396,6 +396,14 @@ async def recover_items(db: AsyncSession) -> int:
     for item in items:
         await service.add_event(db, item, 'recovered', SYSTEM, {'reason': 'the sidecar restarted while this item was running'})
         await service.request_checkpoint(db, item, SYSTEM, 'question', 'The app restarted while this item was running. Answer to continue from where the last run stopped.')
+    from factory.network_approvals import expire
+    waiting = list(await db.scalars(select(WorkItem).where(WorkItem.status.in_(('awaiting_human', 'parked', 'claimed')))))
+    for item in waiting:
+        if await expire(db, item):
+            if item.status not in ('parked', 'claimed'):
+                await service.request_checkpoint(db, item, SYSTEM, 'question',
+                    'The app restarted while a command awaited approval. No pending approval was reused. Answer to start a new run.')
+            items.append(item)
     await db.commit()
     return len(items)
 

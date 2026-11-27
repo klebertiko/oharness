@@ -99,14 +99,15 @@ def _protected(definition: dict) -> list[str]:
     return [b for repo in definition['repositories'] for b in repo['protectedBranches']]
 
 
-async def run_as_agent(definition: dict, agent_id: str, argv: list[str], workspace: dict, store, timeout_s: float = 60) -> dict:
+async def run_as_agent(definition: dict, agent_id: str, argv: list[str], workspace: dict, store, timeout_s: float = 60,
+                       *, network_approved: bool = False) -> dict:
     """One command with the agent secrets for this call only (never global) and the values removed from the result. `workspace` is what
     `create_run_workspace` returned: the command runs at the root of that run worktree and nowhere else."""
     denied = deny_command(argv, _protected(definition))
     if denied:
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     from factory import network
-    blocked = network.command_denied(definition, agent_id, argv)
+    blocked = None if network_approved else network.command_denied(definition, agent_id, argv)
     if blocked:
         return {'ok': False, 'result': blocked, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)

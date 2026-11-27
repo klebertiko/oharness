@@ -19,6 +19,7 @@ router = APIRouter(prefix='/factory', tags=['factory'])
 
 
 def _item_json(item: WorkItem) -> dict:
+    from factory.network_supervision import item_network
     return {
         'id': item.id, 'factory_id': item.factory_id, 'factory_version': item.factory_version, 'title': item.title,
         'source': {'kind': item.source_kind, 'subtype': item.source_subtype, 'ref': item.source_ref, 'url': item.source_url,
@@ -31,6 +32,7 @@ def _item_json(item: WorkItem) -> dict:
         'spec': {'text': item.spec_text, 'revision': item.spec_revision, 'approved_revision': item.approved_revision},
         'claim': json.loads(item.claim_json) if item.claim_json else None,
         'cost': {'tokens': item.cost_tokens},
+        'network': item_network(item.id),
         'created_at': item.created_at.isoformat() + 'Z', 'updated_at': item.updated_at.isoformat() + 'Z',
         'closed_at': item.closed_at.isoformat() + 'Z' if item.closed_at else None,
     }
@@ -115,6 +117,26 @@ async def post_action(item_id: str, body: ActionBody, request: Request, db: Asyn
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail={'code': 'conflict', 'message': 'A concurrent request changed this item; retry.'})
+    return _item_json(item)
+
+
+@router.get('/network-status')
+async def network_status():
+    return {'isolation': 'none', 'mode': 'supervised'}
+
+
+class NetworkApprovalBody(BaseModel):
+    request_id: str = Field(min_length=1, max_length=100)
+    decision: str = Field(pattern=r'^(once|host|deny)$')
+
+
+@router.post('/work-items/{item_id}/network-approvals')
+async def network_approval(item_id: str, body: NetworkApprovalBody, request: Request, db: AsyncSession = Depends(get_db)):
+    from factory.network_approvals import decide
+    try:
+        item = await decide(db, item_id, body.request_id, body.decision, actor_for(request))
+    except service.FactoryError as exc:
+        raise _http(exc)
     return _item_json(item)
 
 
