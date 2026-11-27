@@ -1,8 +1,7 @@
 "use client";
-import { Badge, ListRow } from "@/components/ui";
+import { Badge, ListRow, Switch } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { STATE_BADGE, STATE_KEY, usePresent } from "./present";
-import { Switch } from "./Switch";
 import type { PluginView } from "./types";
 
 /** The installed plugins: name, version, source, state, capabilities, and the switch. A row opens the detail panel. */
@@ -37,7 +36,7 @@ export function PluginList({
               onClick={() => onSelect(p.id)}
             />
             <Badge tone={STATE_BADGE[p.state]}>{t(STATE_KEY[p.state])}</Badge>
-            <Switch checked={p.enabled} label={t("plugins.toggle", { name: p.name })} disabled={!canChange} busy={busy[p.id]} onChange={(on) => onToggle(p.id, on)} />
+            <Switch checked={p.enabled} label={t("plugins.toggle", { name: p.name })} disabled={!canChange || busy[p.id]} aria-busy={busy[p.id] || undefined} onCheckedChange={(on) => onToggle(p.id, on)} />
           </div>
           {(p.capabilities.length > 0 || p.message || p.state === "changed") && (
             <div className="flex flex-col gap-1 px-3 pb-1">

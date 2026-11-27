@@ -78,7 +78,7 @@ try {
     const responses = {
       "GET /bundles/default": bundled,
       "GET /health": { status: "ok" },
-      "GET /flow/config": { enabled: false },
+      "GET /flow/config": { enabled: false }, "GET /cordis/creator": { threadId: "t", enabled: false },
       "GET /chat/tools/permission": { thread_id: "qa", mode: "ask" },
       "GET /cowork/projects": { projects: [] },
       "GET /providers/clis": { clis: [] }, "GET /providers/connections": { connections },

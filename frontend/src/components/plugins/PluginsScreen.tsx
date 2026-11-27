@@ -1,7 +1,7 @@
 "use client";
 import { Plus, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, EmptyState, Notice, Segmented, SkeletonRows } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Notice, Segmented, SkeletonRows } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { usePluginsStore } from "@/store/pluginsStore";
 import { AddPlugin } from "./AddPlugin";
@@ -90,17 +90,12 @@ export function PluginsScreen() {
               <NiloRequests canChange={canChange} />
               {phase === "loading" && <SkeletonRows rows={3} label={t("plugins.loading")} />}
               {phase === "error" && (
-                <Notice
-                  tone="fault"
+                <ErrorState
                   title={t("plugins.error.title")}
-                  action={
-                    <Button size="sm" onClick={() => void refresh()}>
-                      {t("plugins.error.retry")}
-                    </Button>
-                  }
-                >
-                  {t("plugins.error.why", { reason: refreshError?.message ?? "" })}
-                </Notice>
+                  reason={t("plugins.error.why", { reason: refreshError?.message ?? "" })}
+                  diagnostic={`GET /cordis/plugins: ${refreshError?.message ?? ""}`}
+                  onRetry={() => void refresh()}
+                />
               )}
               {phase === "ready" && plugins.length === 0 && (
                 <EmptyState

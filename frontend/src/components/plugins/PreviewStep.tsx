@@ -1,10 +1,9 @@
 "use client";
 import { useId, useState } from "react";
-import { Button, Notice } from "@/components/ui";
+import { Button, Checkbox, Notice } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
 import { type ScriptDecision, scriptKey, usePluginsStore } from "@/store/pluginsStore";
 import { CapabilityEffects } from "./CapabilityEffects";
-import { Checkbox } from "./Checkbox";
 import { usePresent } from "./present";
 import type { FetchResult } from "./types";
 
@@ -95,9 +94,7 @@ export function PreviewStep({ fetched, installing, error, onBack, onInstall, onD
         </h4>
         <p className="text-body text-ink-dim">{p.warning[locale] ?? p.warning.en}</p>
       </section>
-      <Checkbox checked={trusted} onChange={setTrusted} disabled={installing}>
-        {t("plugins.confirm")}
-      </Checkbox>
+      <Checkbox label={t("plugins.confirm")} checked={trusted} onChange={(event) => setTrusted(event.currentTarget.checked)} disabled={installing} />
       {error && <Notice tone="fault" title={t("plugins.install.failed")}>{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={declined ? onDecline : onBack} disabled={installing || locked}>
