@@ -43,16 +43,29 @@ async def list_runs():
     return loop.snapshot()
 
 
+# root path -> (stat of forja.yaml, the name it gave): the folder is loaded again only when that file changes.
+_FORJA_NAMES: dict[str, tuple[tuple[int, int], str | None]] = {}
+
+
 def _forja_of(root: str) -> str | None:
     """The name of the Forja a project folder defines, or None when it has no valid definition."""
     folder = Path(root) / '.oharness' / 'forja'
-    if not folder.is_dir():
+    try:
+        stat = (folder / 'forja.yaml').stat()
+    except OSError:
+        _FORJA_NAMES.pop(root, None)
         return None
+    signature = (stat.st_mtime_ns, stat.st_size)
+    known = _FORJA_NAMES.get(root)
+    if known and known[0] == signature:
+        return known[1]
     try:
         loaded = definition_files.load(folder)
     except definition_files.DefinitionNotFound:
-        return None
-    return (loaded.definition or {}).get('name') if loaded.ok else None
+        loaded = None
+    name = (loaded.definition or {}).get('name') if loaded is not None and loaded.ok else None
+    _FORJA_NAMES[root] = (signature, name)
+    return name
 
 
 async def _repositories_for(db: AsyncSession, factory_id: str) -> list[dict]:
@@ -68,7 +81,8 @@ async def _repositories_for(db: AsyncSession, factory_id: str) -> list[dict]:
 
 
 @router.get('/work-items/{item_id}/repositories')
-async def item_repositories(item_id: ItemId, db: AsyncSession = Depends(get_db)):
+async def item_repositories(item_id: ItemId, request: Request, db: AsyncSession = Depends(get_db)):
+    _human(request)  # it names folders on this machine
     try:
         item = await service.get(db, item_id)
     except service.FactoryError as exc:

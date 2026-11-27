@@ -175,13 +175,17 @@ async def start(item_id: str, definition: dict, repo, store, driver=None, runner
             row.status = 'error'
             raise
         except asyncio.CancelledError:
+            # Cancelled anywhere, also before the stage body took over: the item gets its status back.
             row.status = 'stopped'
+            await db.rollback()
+            await _restore(item_id, previous)
             raise
         except Exception:
-            # A failure outside the stage itself (the database, the journal): the row closes and the item gets its status back.
+            # A failure outside the stage itself, or in its own error handler: the row closes and the item gets its status back.
+            # `item_id`, not `item.id`: after the rollback the row is expired and reading it would need the database again.
             row.status = 'error'
             await db.rollback()
-            await _restore(item.id, previous)
+            await _restore(item_id, previous)
             raise
         finally:
             if row.status in _LIVE:
