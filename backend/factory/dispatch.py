@@ -54,8 +54,11 @@ class StageRun:
 
     def __init__(self, *, run_id: str, item_id: str, stage: str, agent_id: str, workspace: dict, definition: dict, store,
                  redactor: runner.RunRedactor, writer: RunWriter, limit: int, cancel: asyncio.Event | None = None,
-                 steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None):
+                 steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
+                 engine: str | None = None, runner_id: str | None = None):
         self.run_id, self.item_id, self.stage, self.agent_id = run_id, item_id, stage, agent_id
+        self.definition = definition
+        self.engine, self.runner_id = engine, runner_id
         self.workspace = workspace
         self.tokens = 0
         self._definition, self._store, self._redactor, self._writer, self._limit = definition, store, redactor, writer, limit
@@ -136,7 +139,8 @@ def _git(workspace: dict, args: list[str]) -> str:
 async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: str, assignment: dict, driver: Driver, store,
                     pool: runner.RunnerPool, repo, *, run_id: str | None = None, cancel: asyncio.Event | None = None,
                     steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
-                    outcome: dict | None = None, on_seal: Callable[[], None] | None = None) -> str:
+                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None,
+                    on_seal: Callable[[], None] | None = None) -> str:
     """Runs `stage` for `item` and returns the run id. Raises DispatchError (nothing created) when it cannot start.
 
     `cancel` and `steering` are how a person stops the run and talks to it while it is going. A stop keeps the worktree.
@@ -164,7 +168,8 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
             workspace = await asyncio.to_thread(runner.create_run_workspace, repo, item.id, run_id)
             base = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
             run = StageRun(run_id=run_id, item_id=item.id, stage=stage, agent_id=agent_id, workspace=workspace, definition=definition,
-                           store=store, redactor=redactor, writer=writer, limit=limit, cancel=cancel, steering=steering, on_child=on_child)
+                           store=store, redactor=redactor, writer=writer, limit=limit, cancel=cancel, steering=steering, on_child=on_child,
+                           engine=engine, runner_id=runner_id)
             await driver(run)
             if run.stopped():
                 raise RunStopped('The run was stopped.')

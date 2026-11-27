@@ -105,6 +105,10 @@ async def run_as_agent(definition: dict, agent_id: str, argv: list[str], workspa
     denied = deny_command(argv, _protected(definition))
     if denied:
         return {'ok': False, 'result': denied, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
+    from factory import network
+    blocked = network.command_denied(definition, agent_id, argv)
+    if blocked:
+        return {'ok': False, 'result': blocked, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0, 'duration_ms': 0}
     env, redactor = secrets_for(definition, agent_id, store)
     if not _is_run_workspace(workspace):
         raise RunnerError('commands run only at the root of a run workspace made by the runner')
@@ -241,6 +245,18 @@ class RunnerPool:
         finally:
             self.running -= 1
             self._semaphore.release()
+
+
+def select_runner(definition: dict, *, task: str | None = None, automation: str | None = None, agent: str | None = None) -> str | None:
+    """Task, then the automation, then the agent, then the first runner in the definition."""
+    runners = definition.get('runners') or {}
+    for candidate in (task, automation, agent):
+        if candidate is None:
+            continue
+        if candidate not in runners:  # a runner that is named and missing is refused, never swapped for another one
+            raise RunnerError(f'the runner {candidate} is not in the definition')
+        return candidate
+    return next(iter(runners), None)
 
 
 def runner_config(definition: dict, runner_id: str | None = None) -> dict:
