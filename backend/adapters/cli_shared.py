@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from shutil import which
 from typing import AsyncIterator
 
@@ -98,6 +98,43 @@ def default_cli_cwd() -> Path:
     d = base / "OHarness" / "cli-runs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+# What cmd.exe (and wt.exe, for `;`) would read as syntax instead of a file name.
+PROGRAM_PATH_SYNTAX = frozenset('&|^%!"<>;')
+
+
+def checked_program(path: str, names: frozenset[str], *, windows: bool) -> str:
+    """A program path found by a PATH lookup, or a refusal. It is never rewritten.
+
+    Absolute, with a basename from the caller's fixed table, and none of the
+    characters a command interpreter or a terminal would parse. A caller passes
+    it as ``executable=`` (or as one argument after a literal program), so no
+    PATH or current-directory search decides what runs.
+    """
+    pure = PureWindowsPath(path) if windows else PurePosixPath(path)
+    if not pure.is_absolute() or pure.name.lower() not in names:
+        raise ValueError("refused")
+    if any(ch in PROGRAM_PATH_SYNTAX or ord(ch) < 32 for ch in path):
+        raise ValueError("refused")
+    return path
+
+
+def inert_cwd(*, windows: bool | None = None) -> str:
+    """A working directory the user's own processes cannot write to.
+
+    Agent runs write under ``default_cli_cwd()``, so a program started there
+    can be shadowed by a file a run planted: cmd.exe looks a name up in its
+    current directory first, and a CLI reads project config from it. Windows
+    gets ``%SystemRoot%/System32`` (admin-only writes, and the real cmd.exe
+    lives there), everything else gets ``/``. Nothing is created or cleaned,
+    so there is no window between a check and its use.
+    """
+    if windows is None:
+        windows = is_windows()
+    if windows:
+        root = os.environ.get("SYSTEMROOT") or os.environ.get("SystemRoot") or r"C:\Windows"
+        return str(PureWindowsPath(root, "System32"))
+    return "/"
 
 
 def resolve_cwd(requested: str | None, *, root: Path | str | None = None) -> Path:
@@ -304,11 +341,21 @@ _ISO_IN_LINE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?
 _CLOCK_IN_LINE = re.compile(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?\b", re.IGNORECASE)
 
 
-def clean_reset_at(value: object) -> str | None:
-    """An ISO reset instant, or None. Never a slice of the text it was read from."""
+def clean_reset_at(value: object, *, now: datetime | None = None) -> str | None:
+    """An ISO reset instant, or None. Never a slice of the text it was read from.
+
+    An instant further ahead than the Retry-After cap (`_MAX_RETRY_S`) is dropped too.
+    """
     if not isinstance(value, str) or not _RESET_AT.fullmatch(value):
         return None
     if "@" in value or any(ch.isspace() for ch in value):
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    current = now if now is not None else datetime.now(timezone.utc)
+    if moment - _as_aware(current) > timedelta(seconds=_MAX_RETRY_S):
         return None
     return value
 
@@ -319,8 +366,8 @@ def _as_aware(moment: datetime) -> datetime:
     return moment
 
 
-def _iso(moment: datetime) -> str | None:
-    return clean_reset_at(_as_aware(moment).isoformat(timespec="seconds"))
+def _iso(moment: datetime, now: datetime | None = None) -> str | None:
+    return clean_reset_at(_as_aware(moment).isoformat(timespec="seconds"), now=now)
 
 
 def _parse_absolute(token: str) -> datetime | None:
@@ -346,7 +393,7 @@ def _clock_reset(hour: int, minute: int, second: int, ampm: str | None, now: dat
     candidate = base.replace(hour=hour, minute=minute, second=second, microsecond=0)
     if candidate <= base:
         candidate += timedelta(days=1)
-    return _iso(candidate)
+    return _iso(candidate, base)
 
 
 def line_reset_at(line: str, now: datetime | None = None) -> str | None:
@@ -360,7 +407,7 @@ def _reset_from_line(line: str, now: datetime) -> str | None:
     if absolute:
         parsed = _parse_absolute(absolute.group(0))
         if parsed is not None:
-            return _iso(parsed)
+            return _iso(parsed, now)
     clock = _CLOCK_IN_LINE.search(line)
     if not clock:
         return None
@@ -380,7 +427,7 @@ def reset_from_retry_after(value: str | None, *, now: datetime | None = None) ->
         seconds = int(raw)
         if seconds > _MAX_RETRY_S:
             return None
-        return _iso(moment + timedelta(seconds=seconds))
+        return _iso(moment + timedelta(seconds=seconds), moment)
     if not _looks_like_http_date(raw):
         return None
     try:
@@ -389,7 +436,7 @@ def reset_from_retry_after(value: str | None, *, now: datetime | None = None) ->
         return None
     if parsed is None:
         return None
-    return _iso(parsed)
+    return _iso(parsed, moment)
 
 
 def _looks_like_http_date(raw: str) -> bool:

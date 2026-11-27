@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 import types
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import NamedTuple
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adapters.cli_shared import default_cli_cwd
+from adapters.cli_shared import default_cli_cwd, inert_cwd
 from main import app
 from providers import login_session
 from providers.login_session import cancel_login, default_spawner, reset_sessions, start_login
@@ -134,16 +136,27 @@ def _record_popen(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list[str], dict
     return calls
 
 
-def test_default_spawner_runs_the_literal_command_not_the_resolved_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_spawner_runs_the_found_program_by_path_with_a_literal_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_os(monkeypatch, "posix", environ={})
     calls = _record_popen(monkeypatch)
     assert default_spawner(["/usr/local/bin/claude", "login"]) == 77
     argv, kwargs = calls[0]
     assert argv == ["claude", "login"]
+    # No PATH lookup at all: the program is the absolute path the finder returned.
+    assert kwargs["executable"] == "/usr/local/bin/claude"
     assert kwargs["stdin"] is subprocess.DEVNULL
     assert kwargs["stdout"] is subprocess.DEVNULL
     assert kwargs["stderr"] is subprocess.DEVNULL
-    assert "/usr/local/bin" not in " ".join(argv)
+
+
+def test_a_windows_exe_runs_by_its_path_so_the_sidecar_folder_is_never_searched(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_os(monkeypatch, "nt")
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    calls = _record_popen(monkeypatch)
+    assert default_spawner([r"C:\Users\me\.local\bin\claude.exe", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["claude", "login"]
+    assert kwargs["executable"] == r"C:\Users\me\.local\bin\claude.exe"
 
 
 def test_default_spawner_opens_a_terminal_with_the_same_fixed_command(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,20 +166,44 @@ def test_default_spawner_opens_a_terminal_with_the_same_fixed_command(monkeypatc
         lambda name: "/usr/bin/xterm" if name == "xterm" else None,
     )
     calls = _record_popen(monkeypatch)
-    assert default_spawner(["/opt/tools/cursor-agent.cmd", "login"]) == 77
-    assert calls[0][0] == ["xterm", "-e", "cursor-agent", "login"]
+    assert default_spawner(["/opt/tools/cursor-agent", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["xterm", "-e", "/opt/tools/cursor-agent", "login"]
+    assert kwargs["executable"] == "/usr/bin/xterm"
 
 
 def test_default_spawner_prefers_the_windows_terminal_when_it_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_os(monkeypatch, "nt")
     monkeypatch.setattr(
         "providers.login_session.which",
-        lambda name: "C:\\Windows\\wt.exe" if name == "wt.exe" else None,
+        lambda name: r"C:\Users\me\AppData\Local\Microsoft\WindowsApps\wt.exe" if name == "wt.exe" else None,
     )
     calls = _record_popen(monkeypatch)
-    assert default_spawner(["/opt/codex.exe", "login"]) == 77
-    assert calls[0][0] == ["wt.exe", "codex", "login"]
-    assert calls[0][1]["start_new_session"] is False
+    assert default_spawner([r"C:\Program Files\OpenAI\codex.exe", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["wt.exe", "-d", SYSTEM32, r"C:\Program Files\OpenAI\codex.exe", "login"]
+    assert kwargs["executable"] == r"C:\Users\me\AppData\Local\Microsoft\WindowsApps\wt.exe"
+    assert kwargs["start_new_session"] is False
+
+
+@pytest.mark.parametrize("terminal", ["wt", r"C:\x;y\wt.exe", r"C:\tools\notwt.exe"])
+def test_a_terminal_that_is_not_an_absolute_checked_path_is_not_used(monkeypatch: pytest.MonkeyPatch, terminal: str) -> None:
+    _fake_os(monkeypatch, "nt")
+    monkeypatch.setattr(login_session, "which", lambda name: terminal if name == "wt.exe" else None)
+    calls = _record_popen(monkeypatch)
+    assert default_spawner([r"C:\tools\codex.exe", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["codex", "login"] and kwargs["executable"] == r"C:\tools\codex.exe"
+
+
+@pytest.mark.parametrize("found", ["claude", "bin/claude", r"C:\a&b\claude.exe", "/opt/a\nb/claude"])
+def test_a_program_path_that_is_relative_or_has_syntax_is_refused(monkeypatch: pytest.MonkeyPatch, found: str) -> None:
+    _fake_os(monkeypatch, "nt" if "\\" in found else "posix", environ={})
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    calls = _record_popen(monkeypatch)
+    with pytest.raises(ValueError):
+        default_spawner([found, "login"])
+    assert calls == []
 
 
 def test_default_spawner_refuses_anything_outside_the_three_commands(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -187,40 +224,134 @@ def test_default_spawner_refuses_anything_outside_the_three_commands(monkeypatch
     assert calls == []
 
 
-def test_spawns_run_in_the_app_owned_directory_not_the_sidecar_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+ENV_CANARY = "OH_LOGIN_CANARY_51b2"
+SYSTEM32 = inert_cwd(windows=True)
+SYSTEM_CMD = SYSTEM32 + r"\cmd.exe"
+
+
+def test_spawns_run_in_a_directory_no_run_can_write_with_the_cli_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ENV_CANARY, CANARY)
     _fake_os(monkeypatch, "posix", environ={})
     calls = _record_popen(monkeypatch)
     default_spawner(["/usr/local/bin/codex", "login"])
-    assert calls[0][1]["cwd"] == str(default_cli_cwd())
+    kwargs = calls[0][1]
+    assert kwargs["cwd"] == inert_cwd(windows=False) == "/"
+    assert kwargs["cwd"] != str(default_cli_cwd())
+    env = kwargs["env"]
+    assert ENV_CANARY not in env and ENV_CANARY.upper() not in env
+    assert env["NoDefaultCurrentDirectoryInExePath"] == "1"
+    assert CANARY not in env.values()
 
 
-@pytest.mark.parametrize(
-    ("shim", "name"),
-    [("C:\\npm\\claude.CMD", "claude"), ("C:\\npm\\codex.cmd", "codex"), ("C:\\npm\\cursor-agent.cmd", "cursor-agent")],
-)
-def test_a_windows_npm_shim_runs_through_cmd_with_only_literals(
-    monkeypatch: pytest.MonkeyPatch, shim: str, name: str,
-) -> None:
+def test_a_display_session_keeps_only_what_a_terminal_needs(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_os(monkeypatch, "posix", environ={"DISPLAY": ":1", "XAUTHORITY": "/home/u/.Xauthority", ENV_CANARY: CANARY})
+    monkeypatch.setattr(login_session, "which", lambda name: "/usr/bin/xterm" if name == "xterm" else None)
+    calls = _record_popen(monkeypatch)
+    default_spawner(["/usr/local/bin/claude", "login"])
+    env = calls[0][1]["env"]
+    assert env["DISPLAY"] == ":1" and env["XAUTHORITY"] == "/home/u/.Xauthority"
+    assert ENV_CANARY not in env
+
+
+SHIM_LINE = "cmd.exe /d /v:off /s /c %OH_LOGIN_COMMAND%"
+CREATE_NEW_CONSOLE = 0x00000010
+
+
+@pytest.mark.parametrize("shim", [
+    r"C:\npm\claude.CMD",
+    r"C:\npm\codex.cmd",
+    r"C:\Program Files (x86)\nodejs\cursor-agent.cmd",
+    r"C:\Users\a@b (c)\AppData\Roaming\npm\claude.cmd",
+])
+def test_a_windows_npm_shim_reaches_cmd_with_exactly_two_quotes(monkeypatch: pytest.MonkeyPatch, shim: str) -> None:
+    monkeypatch.setenv(ENV_CANARY, CANARY)
     _fake_os(monkeypatch, "nt")
     monkeypatch.setattr(login_session, "which", lambda _name: None)
     calls = _record_popen(monkeypatch)
     assert default_spawner([shim, "login"]) == 77
     argv, kwargs = calls[0]
-    assert argv == ["cmd.exe", "/c", name, "login"]
-    assert "npm" not in " ".join(argv)
-    assert kwargs["cwd"] == str(default_cli_cwd())
-    assert kwargs["stdout"] is subprocess.DEVNULL and kwargs["stderr"] is subprocess.DEVNULL
+    # Every argv element is a literal; this is the exact line CreateProcess receives.
+    assert subprocess.list2cmdline(argv) == SHIM_LINE
+    # cmd.exe expands the variable before it reads quotes, so the shim is one quoted word.
+    assert kwargs["env"]["OH_LOGIN_COMMAND"] == f'"{shim}" login'
+    assert kwargs["executable"] == SYSTEM_CMD
+    assert kwargs["cwd"] == SYSTEM32
+    assert kwargs["env"]["NoDefaultCurrentDirectoryInExePath"] == "1"
+    assert ENV_CANARY not in kwargs["env"]
+    assert kwargs["creationflags"] == CREATE_NEW_CONSOLE
+    assert "shell" not in kwargs
 
 
-def test_a_windows_npm_shim_opens_in_the_windows_terminal_through_cmd(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_windows_npm_shim_never_goes_through_the_windows_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A tab may be opened by a terminal that is already running, with its own environment.
     _fake_os(monkeypatch, "nt")
     monkeypatch.setattr(
         login_session, "which",
-        lambda name: "C:\\Windows\\wt.exe" if name == "wt.exe" else None,
+        lambda name: r"C:\Windows\wt.exe" if name == "wt.exe" else None,
     )
     calls = _record_popen(monkeypatch)
-    assert default_spawner(["C:\\npm\\codex.cmd", "login"]) == 77
-    assert calls[0][0] == ["wt.exe", "cmd.exe", "/c", "codex", "login"]
+    assert default_spawner([r"C:\npm\codex.cmd", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert subprocess.list2cmdline(argv) == SHIM_LINE
+    assert kwargs["executable"] == SYSTEM_CMD
+
+
+@pytest.mark.skipif(os.name != "nt", reason="cmd.exe quoting exists only on Windows")
+@pytest.mark.parametrize("folder", ["Program Files (x86)", "a@b (c)"])
+def test_a_real_shim_in_a_folder_with_spaces_parentheses_or_at_runs_with_login(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, folder: str,
+) -> None:
+    marker = tmp_path / "ran.txt"
+    npm = tmp_path / folder / "nodejs"
+    npm.mkdir(parents=True)
+    shim = npm / "claude.cmd"
+    shim.write_text(f'@echo off\r\necho [%1][%2]> "{marker}"\r\n', encoding="ascii")
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    assert default_spawner([str(shim), "login"])
+    deadline = time.monotonic() + 15
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    time.sleep(0.3)
+    assert marker.read_text(encoding="ascii").strip() == "[login][]"
+
+
+@pytest.mark.parametrize("bad", [
+    r"C:\a&b\claude.cmd", r"C:\a|b\claude.cmd", r"C:\a^b\claude.cmd", r"C:\%PATH%\claude.cmd",
+    r"C:\a!b!\claude.cmd", r'C:\a"b\claude.cmd', r"C:\a;b\claude.cmd", "C:\\a\nb\\claude.cmd",
+    r"npm\claude.cmd", "claude.cmd", r"C:\a<b\claude.cmd", r"C:\a>b\claude.cmd",
+])
+def test_a_shim_path_cmd_could_reinterpret_is_refused(monkeypatch: pytest.MonkeyPatch, bad: str) -> None:
+    _fake_os(monkeypatch, "nt")
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    calls = _record_popen(monkeypatch)
+    with pytest.raises(ValueError):
+        default_spawner([bad, "login"])
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="cmd.exe resolves names only on Windows")
+def test_a_claude_cmd_planted_where_runs_write_does_not_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Runs write under %LOCALAPPDATA%\OHarness\cli-runs. A shim planted there must not start on "Sign in".
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    # The Windows default: cmd.exe searches its current directory before PATH.
+    monkeypatch.delenv("NoDefaultCurrentDirectoryInExePath", raising=False)
+    runs = default_cli_cwd()
+    planted_marker = tmp_path / "planted-ran.txt"
+    (runs / "claude.cmd").write_text(f'@echo off\r\necho x> "{planted_marker}"\r\n', encoding="ascii")
+    npm = tmp_path / "npm"
+    npm.mkdir()
+    real_marker = tmp_path / "real-ran.txt"
+    shim = npm / "claude.cmd"
+    shim.write_text(f'@echo off\r\necho %1> "{real_marker}"\r\n', encoding="ascii")
+    monkeypatch.setenv("PATH", str(npm) + os.pathsep + os.environ.get("PATH", ""))
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    assert default_spawner([str(shim), "login"])
+    deadline = time.monotonic() + 15
+    while not real_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    time.sleep(0.5)
+    assert not planted_marker.exists()
+    assert real_marker.read_text(encoding="ascii").strip() == "login"
 
 
 def test_finished_sessions_are_dropped_and_the_table_is_capped() -> None:

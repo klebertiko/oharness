@@ -446,3 +446,20 @@ describe("Transcript — warnings, retries and skip reasons", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 });
+
+describe("a provider failure in the run view", () => {
+  afterEach(cleanup);
+  it("reads the catalog row a real node_error carried, not the error string", () => {
+    useLocaleStore.setState({ locale: "en" });
+    useProviderStore.setState({ connections: [] });
+    let run = runReducer(emptyRun, { type: "reset", mode: "live", step: false });
+    run = runReducer(run, { type: "sse", event: "run_start", data: { run_id: "pf", order: [{ node_id: "dev", type: "agent", label: "Dev" }] } });
+    run = runReducer(run, { type: "sse", event: "node_start", data: { node_id: "dev" } });
+    run = runReducer(run, { type: "sse", event: "node_error", data: { node_id: "dev", provider_failure: "timeout", error: "CANARY-run-text" } });
+    render(<Transcript run={run} onResolve={() => undefined} />);
+    expect(screen.getByText("The answer did not arrive in time")).toBeTruthy();
+    expect(screen.getByText("The connection took too long")).toBeTruthy();
+    expect(screen.getByText("Try again")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("CANARY");
+  });
+});

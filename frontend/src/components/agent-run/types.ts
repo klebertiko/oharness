@@ -1,3 +1,4 @@
+import type { ProviderErrorCode } from "@/components/providers/errorCatalog";
 import type { NodeType } from "@/lib/types";
 
 /** One tool invocation, from call to result. */
@@ -111,6 +112,8 @@ export interface Segment {
       "not captured" — a 0 from the wire is never stored as a measurement. */
   latencyMs?: number;
   error?: string;
+  /** The provider failure row (`provider_failure` mapped onto the catalog). Absent when the class named no cause. */
+  failure?: ProviderErrorCode;
   /** Why a PASS/FAIL branch was not taken (`node_skipped.reason`). Absent when the engine did not say, including a pending node `harness_done` marks skipped. */
   skipReason?: string;
   /** Gate fail-port loops (`gate_retry`), oldest first. `target` is the node id execution resumed at. */
@@ -177,6 +180,8 @@ export interface RouteDecision {
 export interface RunState {
   runId: string | null;
   status: RunStatus;
+  /** The provider failure row of the last failed node or of the stream error. Absent when none named a cause. */
+  failure?: ProviderErrorCode;
   /** What this run's provider/workspace can do with tools — from the `capabilities` event. */
   capabilities?: ToolCapabilities | null;
   mode: string;

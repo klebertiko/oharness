@@ -101,3 +101,8 @@ export function accountKind(c: Connection): MessageKey {
 export function metaLine(c: Connection): string {
   return tr(accountKind(c));
 }
+
+/** Accounts other than `exceptId` that could answer a chat turn right now: where "Use another account" can go. */
+export function otherReadyAccounts(connections: Connection[], exceptId: string): Connection[] {
+  return connections.filter((c) => c.id !== exceptId && isChatCapable(c) && providerReadiness(c).ready);
+}
