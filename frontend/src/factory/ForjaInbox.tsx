@@ -39,6 +39,10 @@ export function ForjaInbox({ onOpen }: { onOpen: (id: string) => void }) {
   open.current = onOpen;
   index.current = current;
   useEffect(() => {
+    const timer = window.setInterval(reload, 1500);
+    return () => window.clearInterval(timer);
+  }, [reload]);
+  useEffect(() => {
     if (!undo) return;
     const timer = window.setTimeout(() => setUndo((id) => (id === undo ? null : id)), UNDO_MS);
     return () => window.clearTimeout(timer);
@@ -52,7 +56,7 @@ export function ForjaInbox({ onOpen }: { onOpen: (id: string) => void }) {
       const row = list[index.current];
       if (!row) return;
       if (event.key === "Enter") open.current(row.work_item_id);
-      if ((event.key === "e" || event.key === "E") && !row.resolved) {
+      if ((event.key === "e" || event.key === "E") && !row.resolved && !row.network_request) {
         void forjaApi.resolveEntry(row.id).then(() => setUndo(row.id)).then(() => reload()).catch((error: unknown) => setError(explain(error)));
       }
     };
@@ -123,16 +127,17 @@ export function ForjaInbox({ onOpen }: { onOpen: (id: string) => void }) {
                   <li key={entry.id} className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={TONE[entry.type]}>{t(`forja.inbox.type.${entry.type}` as MessageKey)}</Badge>
+                      {entry.network_request && <Badge tone="warn">{t("forja.network.supervised")}</Badge>}
                       {age && <span className="text-body text-ink-dim">{age.n == null ? t(age.key) : t(age.key, { n: number(age.n) })}</span>}
                     </div>
                     {entry.summary && <p className="text-body text-ink-dim">{entry.summary}</p>}
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => onOpen(entry.work_item_id)}>{t("forja.inbox.open")}</Button>
-                      {entry.resolved ? (
+                      <Button size="sm" onClick={() => onOpen(entry.work_item_id)}>{t(entry.network_request ? "forja.network.review" : "forja.inbox.open")}</Button>
+                      {!entry.network_request && (entry.resolved ? (
                         <Button size="sm" variant="ghost" onClick={() => void change(() => forjaApi.undoEntry(entry.id))}>{t("forja.inbox.undo")}</Button>
                       ) : (
                         <Button size="sm" variant="ghost" onClick={() => void change(() => forjaApi.resolveEntry(entry.id), entry.id)}>{t("forja.inbox.resolve")}</Button>
-                      )}
+                      ))}
                     </div>
                   </li>
                 );

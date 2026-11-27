@@ -84,7 +84,14 @@ def _derive(item: WorkItem, events: list[WorkItemEvent], include_info: bool) -> 
         if item.stage == 'spec' and spec_event is not None and item.spec_text and item.approved_revision != item.spec_revision:
             out.append(_entry('spec_review', item, spec_event, f'Revision {item.spec_revision}'))
         if asked is not None:
-            out.append(_entry('question', item, asked, str(_data(asked).get('question') or '')))
+            entry = _entry('question', item, asked, str(_data(asked).get('question') or ''))
+            request = _data(asked).get('network_request')
+            if request:
+                entry['network_request'] = request
+                entry['actions'] = ['network_approve_once', 'network_deny']
+                if request.get('can_remember'):
+                    entry['actions'].insert(1, 'network_approve_host')
+            out.append(entry)
         if not out:
             quiet = next((e for e in reversed(events) if e.type not in _NOT_IDENTITY), None)  # a note does not change what is blocking
             out.append(_entry('blocked', item, quiet, 'Waiting for a person to decide how this continues.'))

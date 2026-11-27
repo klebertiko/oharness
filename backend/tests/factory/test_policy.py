@@ -182,7 +182,7 @@ def test_a_run_uses_the_named_engine_and_the_agents_tools(ready, tmp_path, monke
     assert '.ohm' not in text and 'Bundle' not in text
 
 
-def test_a_failed_setup_names_the_command_and_hides_the_secret(ready, tmp_path, monkeypatch):
+def test_a_failed_setup_names_the_command_and_hides_the_secret(ready, tmp_path, monkeypatch, approve_factory_network):
     repo = _repo(tmp_path, monkeypatch)
     store = MemorySecrets()
     store.put('forja/npm-token', VALUE)
@@ -246,7 +246,13 @@ def test_an_mcp_server_starts_with_a_clean_environment_and_a_timeout(monkeypatch
               '    sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":msg["id"],"result":r})+"\\n"); sys.stdout.flush()\n')
     body = defn(mcp={'docs': {'command': sys.executable, 'args': ['-c', script]}})
     body['agents']['builder']['mcp'] = ['docs']
-    assert anyio.run(agent_mcp.tools_for, body, 'builder') == ['docs']
+    async def approved_tools():
+        from factory.network_supervision import Supervisor, resolve
+        async def approve(request):
+            resolve('mcp-test', request['id'], 'once')
+        supervisor = Supervisor('mcp-run', 'mcp-test', body, 'builder', approve)
+        return await agent_mcp.tools_for(body, 'builder', supervisor=supervisor)
+    assert anyio.run(approved_tools) == ['docs']
     assert 'OH_SIDECAR_TOKEN_FOR_TEST' not in json.loads(leak.read_text())
 
     silent = defn(mcp={'quiet': {'command': sys.executable, 'args': ['-c', 'import time; time.sleep(60)']}})

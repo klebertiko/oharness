@@ -289,3 +289,142 @@ describe("rendered text", () => {
     }
   });
 });
+
+describe("supervised network", () => {
+  const pending = { id: "net-1", run_id: "r1", argv: ["curl", "https://registry.npmjs.org"], hosts: ["registry.npmjs.org"], reason: "Network command", can_remember: true };
+  const checkpoint = { sequence: 3, type: "checkpoint_requested", actor: { kind: "foreman", id: null }, data: { kind: "question", question_id: "net-1", question: "Network command", network_request: pending }, at: "2026-11-01T10:00:00Z" };
+  const setup = (request: typeof pending | null = pending) => {
+    const network = { isolation: "none", mode: "supervised", pending: request };
+    routes.set("GET /factory/network-status", { body: { isolation: "none", mode: "supervised" } });
+    routes.set("GET /factory/work-items", { body: { items: [item({ stage: "implement", network })] } });
+    routes.set("GET /factory/work-items/i1", { body: { ...item({ stage: "implement", network }), artifacts: [], runs: [] } });
+    routes.set("GET /factory/work-items/i1/events", { body: { events: [checkpoint] } });
+    routes.set("GET /factory/runs", { body: { runs: [], limit: 2, running: 0, waiting: 1 } });
+  };
+
+  it("shows successive network requests while the stage start is still awaiting completion", async () => {
+    setup(null);
+    const ready = { ...item({ stage: "implement", status: "queued", network: { isolation: "none", mode: "supervised", pending: null } }), artifacts: [], runs: [] };
+    routes.set("GET /factory/work-items/i1", { body: ready });
+    routes.set("GET /factory/work-items/i1/events", { body: { events: [] } });
+    routes.set("GET /cowork/projects", { body: [{ id: "p1", name: "App", rootPath: "/work/app" }] });
+    const fetchRoute = globalThis.fetch;
+    let finishRun: (() => void) | undefined;
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
+      if (new URL(url).pathname === "/factory/work-items/i1/run" && init.method === "POST") {
+        setup();
+        routes.set("GET /factory/runs", { body: { runs: [{ run_id: "r1", item_id: "i1", title: "Fix login", stage: "implement", agent_id: "builder", status: "running", engine: null, harness: "local", children: [] }], limit: 2, running: 1, waiting: 1 } });
+        return new Promise<Response>((resolve) => { finishRun = () => resolve(new Response(JSON.stringify({ run_id: "r1", status: "done" }))); });
+      }
+      if (new URL(url).pathname === "/factory/work-items/i1/network-approvals" && init.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        calls.push({ method: "POST", path: new URL(url).pathname, body, headers: init.headers as Record<string, string> });
+        setup(null);
+        routes.set("GET /factory/work-items/i1/events", { body: { events: [] } });
+        return new Response(null, { status: 204 });
+      }
+      return fetchRoute(url, init);
+    });
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Run this stage" }));
+    try {
+      const stop = await screen.findByRole("button", { name: "Stop run" }, { timeout: 2500 });
+      routes.set("POST /factory/runs/r1/stop", { status: 204, body: null });
+      await userEvent.click(stop);
+      await waitFor(() => expect(calls.some((c) => c.path === "/factory/runs/r1/stop" && c.method === "POST")).toBe(true));
+      await userEvent.click(await screen.findByRole("button", { name: "Approve once" }, { timeout: 2500 }));
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Approve once" })).toBeNull());
+      setup({ ...pending, id: "net-2", hosts: ["example.org"], argv: ["curl", "https://example.org"] });
+      expect(await screen.findByText("example.org", {}, { timeout: 2500 })).toBeTruthy();
+      expect(screen.getByText(/for this agent in this factory while its policy stays unchanged/)).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Approve once" }));
+      await waitFor(() => expect(calls.filter((c) => c.path.endsWith("/network-approvals")).map((c) => c.body)).toEqual([
+        { request_id: "net-1", decision: "once" }, { request_id: "net-2", decision: "once" },
+      ]));
+    } finally {
+      finishRun?.();
+    }
+  }, 10000);
+
+  it("discovers a network request with the Inbox already open and retains the search filter", async () => {
+    setup();
+    routes.set("GET /factory/inbox", { body: { entries: [], count: 0 } });
+    render(<ForjaScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "Inbox" }));
+    const search = await screen.findByLabelText("Search");
+    await userEvent.type(search, "login");
+    routes.set("GET /factory/inbox", { body: { entries: [{ id: "q1", type: "question", work_item_id: "i1", title: "Fix login", stage: "implement", status: "awaiting_human", since: "x", summary: "Network command", actions: ["network_approve_once"], network_request: pending, resolved: false }], count: 1 } });
+    expect(await screen.findByRole("button", { name: "Review network request" }, { timeout: 2500 })).toBeTruthy();
+    expect((screen.getByLabelText("Search") as HTMLInputElement).value).toBe("login");
+    expect(screen.getByText("Fix login")).toBeTruthy();
+  });
+
+  it.each([ ["Approve once", "once"], ["Always allow this host", "host"], ["Deny", "deny"] ])("sends %s as a human network decision", async (name, decision) => {
+    setup();
+    window.__OH_HUMAN__ = "human-network";
+    routes.set("POST /factory/work-items/i1/network-approvals", { status: 204, body: null });
+    render(<ForjaScreen />);
+    const card = await screen.findByRole("button", { name: "Open Fix login" });
+    expect(within(card).getByText("Supervised network")).toBeTruthy();
+    expect(await screen.findByText(/without operating-system isolation/i)).toBeTruthy();
+    await userEvent.click(card);
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText('[' + '"curl","https://registry.npmjs.org"' + ']')).toBeTruthy();
+    expect(within(dialog).getByText("registry.npmjs.org")).toBeTruthy();
+    expect(within(dialog).queryByLabelText("Your answer")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name }));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({ request_id: "net-1", decision }));
+    expect(calls.find((c) => c.method === "POST")?.headers["x-oharness-human"]).toBe("human-network");
+  });
+
+  it("does not offer host persistence for uncertain commands", async () => {
+    setup({ ...pending, hosts: [], can_remember: false });
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    expect(await screen.findByRole("button", { name: "Approve once" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Always allow this host" })).toBeNull();
+  });
+
+  it("explains an expired durable checkpoint without offering a false approval or generic answer", async () => {
+    setup(null);
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    expect(await screen.findByText(/Restart the run to request approval again/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve once" })).toBeNull();
+    expect(screen.queryByLabelText("Your answer")).toBeNull();
+  });
+
+  it("retains the expired explanation when the interrupted run has failed", async () => {
+    setup(null);
+    const network = { isolation: "none", mode: "supervised", pending: null };
+    routes.set("GET /factory/work-items/i1", { body: { ...item({ stage: "implement", status: "failed", network }), artifacts: [], runs: [] } });
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    expect(await screen.findByText(/Restart the run to request approval again/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve once" })).toBeNull();
+  });
+
+  it("refreshes a stale request and explains why the decision was rejected", async () => {
+    setup();
+    routes.set("POST /factory/work-items/i1/network-approvals", { status: 409, body: { detail: { code: "network_request_stale", message: "expired" } } });
+    render(<ForjaScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open Fix login" }));
+    await screen.findByRole("button", { name: "Approve once" });
+    setup(null);
+    await userEvent.click(screen.getByRole("button", { name: "Approve once" }));
+    expect(await screen.findByText(/This network request is no longer active/)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Approve once" })).toBeNull());
+  });
+
+  it("opens a network request from the Inbox for a decision instead of marking it done", async () => {
+    setup();
+    routes.set("GET /factory/inbox", { body: { entries: [{ id: "q1", type: "question", work_item_id: "i1", title: "Fix login", stage: "implement", status: "awaiting_human", since: "x", summary: "Network command", actions: ["network_approve_once", "network_approve_host", "network_deny"], network_request: pending, resolved: false }], count: 1 } });
+    render(<ForjaScreen />);
+    await userEvent.click(screen.getByRole("button", { name: "Inbox" }));
+    const review = await screen.findByRole("button", { name: "Review network request" });
+    expect(screen.queryByRole("button", { name: "Mark done" })).toBeNull();
+    await userEvent.click(review);
+    expect(await screen.findByRole("button", { name: "Approve once" })).toBeTruthy();
+  });
+});

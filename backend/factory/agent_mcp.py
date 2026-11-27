@@ -113,15 +113,28 @@ def _open(server: dict):
     return StdioTransport(command, args)
 
 
-async def tools_for(definition: dict, agent_id: str) -> list[str]:
+async def tools_for(definition: dict, agent_id: str, *, supervisor=None) -> list[str]:
     agent = (definition.get('agents') or {}).get(agent_id) or {}
     names: list[str] = []
     for server_id in agent.get('mcp') or []:
         server = (definition.get('mcp') or {}).get(server_id)
         if not isinstance(server, dict):
             raise RunnerError(f'the MCP server {server_id} is not in the definition')
+        if server_id not in _overrides:
+            argv = [str(server.get('command') or ''), *[str(arg) for arg in server.get('args') or []]]
+            from factory.runner import deny_command
+            if reason := deny_command(argv, [b for repo in definition.get('repositories', []) for b in repo['protectedBranches']]):
+                raise RunnerError(reason)
+            if supervisor is None or not await supervisor.authorize(argv, kind='mcp'):
+                if supervisor is not None and supervisor.cancel.is_set():
+                    from factory.dispatch import RunStopped
+                    raise RunStopped('The run was stopped before its MCP server started.')
+                raise RunnerError('The MCP server needs human network approval; it did not start.')
         transport = _overrides.get(server_id) or _open(server)
         try:
+            if supervisor is not None and supervisor.cancel.is_set():
+                from factory.dispatch import RunStopped
+                raise RunStopped('The run was stopped before its MCP server started.')
             names.extend(await list_tools(transport))
         finally:
             await transport.close()

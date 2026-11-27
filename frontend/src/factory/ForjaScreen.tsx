@@ -11,12 +11,13 @@ import { ForjaRuns } from "./ForjaRuns";
 import { ForjaSetup } from "./ForjaSetup";
 import { forjaApi, type RunBoard } from "./forjaApi";
 import { ItemSheet } from "./ItemSheet";
+import type { NetworkStatus } from "./types";
 
 type Tab = "board" | "inbox" | "runs" | "blueprint" | "metrics" | "improvements" | "setup";
 
 /**
  * The Forja destination (ADR 0058): the work items as a board, what waits for a person, how the Forja is set up and how it is doing.
- * Everything is local; nothing leaves the machine. A drag only moves a card when the blueprint allows it; otherwise it says why.
+ * A drag only moves a card when the blueprint allows it; otherwise it says why.
  */
 export function ForjaScreen() {
   const { t } = useI18n();
@@ -24,20 +25,36 @@ export function ForjaScreen() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [runs, setRuns] = useState<RunBoard | null>(null);
+  const [network, setNetwork] = useState<NetworkStatus | null>(null);
   const [loopState, setLoopState] = useState<"unknown" | "ready" | "off">("unknown");
   const refresh = () => setVersion((v) => v + 1);
   useEffect(() => {
     let gone = false;
-    forjaApi.runs().then((body) => {
-      if (gone) return;
-      setRuns(body);
-      setLoopState("ready");
-    }).catch(() => {
-      if (gone) return;
-      setRuns(null);
-      setLoopState("off");
-    });
+    forjaApi.networkStatus().then((body) => { if (!gone) setNetwork(body); }).catch(() => { if (!gone) setNetwork(null); });
     return () => { gone = true; };
+  }, []);
+  useEffect(() => {
+    let gone = false;
+    let inFlight = false;
+    const loadRuns = async () => {
+      if (gone || inFlight) return;
+      inFlight = true;
+      try {
+        const body = await forjaApi.runs();
+        if (gone) return;
+        setRuns(body);
+        setLoopState("ready");
+      } catch {
+        if (gone) return;
+        setRuns(null);
+        setLoopState("off");
+      } finally {
+        inFlight = false;
+      }
+    };
+    void loadRuns();
+    const timer = window.setInterval(() => void loadRuns(), 1500);
+    return () => { gone = true; window.clearInterval(timer); };
   }, [version]);
   const live = runs?.runs.find((run) => run.item_id === openId && (run.status === "running" || run.status === "starting")) ?? null;
 
@@ -53,6 +70,7 @@ export function ForjaScreen() {
   return (
     <div className="@container flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <h1 className="sr-only">{t("forja.screen")}</h1>
+      {network?.mode === "supervised" && <Notice tone="warn" className="m-3 mb-0" title={t("forja.network.supervised")}>{t(network.isolation === "none" ? "forja.network.noIsolation" : "forja.network.supervisedBody")}</Notice>}
       {loopState === "off" && <Notice tone="warn" className="m-3 mb-0" title={t("forja.runner.title")}>{t("forja.runner.body")}</Notice>}
       <nav aria-label={t("forja.tabs")} className="flex flex-wrap gap-1 border-b border-line-soft px-3 py-2">
         {sections.map((section) => (

@@ -255,6 +255,8 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         await enter_stage(db, item, 'implement', actor)
     elif a == 'answer':
         question = await _open_question(db, item)
+        if question is not None and json.loads(question.data_json).get('network_request'):
+            raise FactoryError('network_decision_required', 409, 'Use the network approval controls for this command.')
         if question is None or not body.text or item.status != 'awaiting_human':
             raise FactoryError('no_open_question')
         if body.question_id and body.question_id != json.loads(question.data_json).get('question_id'):
@@ -312,6 +314,9 @@ async def apply_action(db: AsyncSession, item: WorkItem, body: ActionBody, actor
         else:
             _move(item, item.stage, prior)
     await db.commit()
+    if a in ('cancel', 'park', 'claim'):
+        from factory.network_supervision import cancel_for_item
+        cancel_for_item(item.id)
     return item
 
 

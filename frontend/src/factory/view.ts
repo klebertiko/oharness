@@ -61,10 +61,10 @@ export function actionsFor(item: WorkItem): FactoryAction[] {
 }
 
 /** The question a person has not answered yet. */
-export function openQuestion(events: WorkItemEvent[]): { id: string; text: string } | null {
+export function openQuestion(events: WorkItemEvent[]): { id: string; text: string; network: boolean } | null {
   const resolved = new Set(events.filter((e) => e.type === "checkpoint_resolved").map((e) => String(e.data.question_id ?? "")));
   const asked = [...events].reverse().find((e) => e.type === "checkpoint_requested" && e.data.kind === "question" && !resolved.has(String(e.data.question_id ?? "")));
-  return asked ? { id: String(asked.data.question_id), text: String(asked.data.question ?? "") } : null;
+  return asked ? { id: String(asked.data.question_id), text: String(asked.data.question ?? ""), network: Boolean(asked.data.network_request) } : null;
 }
 
 const EVENT_KEYS: Record<string, MessageKey> = {

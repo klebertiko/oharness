@@ -49,6 +49,25 @@ from pathlib import Path
 
 import pytest
 
+
+@pytest.fixture()
+def approve_factory_network(monkeypatch):
+    """Legacy runner tests simulate a human decision through the real checkpoint service."""
+    from factory import network_approvals
+    from database import SessionLocal
+    original = network_approvals.make_supervisor
+
+    async def supervised(*args, **kwargs):
+        gate = await original(*args, **kwargs)
+        checkpoint = gate.checkpoint
+        async def approve(request):
+            await checkpoint(request)
+            async with SessionLocal() as db:
+                await network_approvals.decide(db, gate.item_id, request['id'], 'once', ('human', 'test-person'))
+        gate.checkpoint = approve
+        return gate
+    monkeypatch.setattr(network_approvals, 'make_supervisor', supervised)
+
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _REAL_DATA_DIR = (_BACKEND_DIR / "data").resolve()
 

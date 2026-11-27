@@ -11,6 +11,9 @@ export type FactorySourceKind = (typeof FACTORY_SOURCE_KINDS)[number];
 
 export interface FactorySource { kind: FactorySourceKind; subtype: string | null; ref: string; url: string | null; thread_ref: string | null }
 
+export interface NetworkRequest { id: string; run_id: string; argv: string[]; hosts: string[]; reason: string; can_remember: boolean }
+export interface NetworkStatus { isolation: 'none' | 'os'; mode: 'supervised' | 'enforced' }
+
 export interface WorkItem {
   id: string;
   factory_id: string;
@@ -34,6 +37,7 @@ export interface WorkItem {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  network?: NetworkStatus & { pending: NetworkRequest | null };
 }
 
 export interface WorkItemEvent { sequence: number; type: string; actor: { kind: 'human' | 'foreman' | 'agent' | 'system' | 'source'; id: string | null }; data: Record<string, unknown>; at: string }

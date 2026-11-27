@@ -2,7 +2,7 @@
 
 A lista do que a Forja cobre, do que este ciclo entrega e do que fica para a fatia seguinte está em [paridade.md](paridade.md). O quadro descrito abaixo é o de doze colunas; a entrega atual usa seis colunas de estágio e o selo de situação no cartão.
 
-A destinação **Forja** do app (barra lateral, `Alt+4`) junta o que a Forja local faz e o que espera uma pessoa. Tudo roda na sua máquina; nada sai dela. O desenho está no [ADR 0058](../adr/0058-factory-control-room-and-metrics.md).
+A destinação **Forja** do app (barra lateral, `Alt+4`) junta o que a Forja local faz e o que espera uma pessoa. A execução é local; comandos e servidores MCP podem acessar a rede conforme as decisões abaixo. O desenho está no [ADR 0058](../adr/0058-factory-control-room-and-metrics.md).
 
 ## Seções
 
@@ -16,6 +16,27 @@ A destinação **Forja** do app (barra lateral, `Alt+4`) junta o que a Forja loc
 Aprovar ou editar uma especificação, responder, pedir mudanças, avançar um estágio, confirmar o merge, verificar o pouso, resolver ou desfazer na caixa de entrada (ler a caixa não pede), ativar uma versão, gravar ou apagar segredos e editar ou apagar memória (acrescentar uma nota de memória não pede) pedem a credencial da pessoa. Cancelar, estacionar, retomar e assumir um item não pedem (se devem pedir é decisão pendente do dono, #442). **No app de desktop** o shell a gera a cada abertura, entrega ao sidecar (por stdin) e à janela principal (`window.__OH_HUMAN__`), só em memória: ela não aparece em URL, armazenamento do navegador, log nem evento, e não é o token que agentes, a CLI e o MCP usam (ADR 0055). Pelo desenho, essas decisões funcionam na tela do app e só nela: um agente, o MCP ou a CLI recebem 403 `human_only`. **Ainda não verificado no app instalado (#445):** isso está provado em teste de unidade (script, ambiente e guarda de origem), não no instalador NSIS.
 
 Onde não há o shell do app, nada define a credencial e a tela explica em uma frase que a decisão é de uma pessoa, em vez de mostrar um erro. Isso vale para abrir o frontend num navegador ou rodar só o backend; para desenvolver, `OH_FACTORY_DEV_HUMAN=1` no backend é a ponte explícita (mais fraca: qualquer cliente local passa por pessoa).
+
+## Rede supervisionada
+
+Sem isolamento de rede do sistema operacional, a factory e os itens mostram
+**Rede supervisionada**. Um comando de rede ou que não possa ser reconhecido
+como local fica na Caixa de entrada antes de executar. Abra o pedido para ver
+o comando, os hosts conhecidos e escolher **Aprovar uma vez** ou **Negar**.
+O detalhe se atualiza enquanto o comando espera; parar ou cancelar invalida a
+aprovação pendente. Após reiniciar o app, uma pergunta de recuperação permite
+retomar com uma nova execução, sem reutilizar aprovações avulsas.
+
+**Sempre para este host** aparece apenas para a forma reconhecida
+`curl --disable https://host/...`, sem opções adicionais. A permissão vale para
+o mesmo agente na mesma factory enquanto a definição não mudar. Scripts,
+interpretadores e servidores MCP sempre pedem uma decisão individual. Negar
+explicitamente um host na definição continua impedindo o comando conhecido.
+
+Isso registra consentimento humano, não um firewall: um script aprovado pode
+construir outros destinos em tempo de execução. O histórico guarda a decisão e
+o journal registra `isolation: none` e cada uso aprovado. O [ADR 0072](../adr/0072-forja-supervised-network.md)
+detalha os limites.
 
 ## Ainda não está nesta tela
 

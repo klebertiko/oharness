@@ -25,7 +25,7 @@ async def production_driver(run: StageRun) -> None:
             raise runner.RunnerError(f'setup failed: {name}: {detail}')
     if run.engine:
         await run.note(f'engine {run.engine}')
-    names = await agent_mcp.tools_for(run.definition, run.agent_id)
+    names = await agent_mcp.tools_for(run.definition, run.agent_id, supervisor=run.supervisor)
     if names:
         await run.note('tools ' + ','.join(names))
     await run.note('The stage ran in its worktree.')

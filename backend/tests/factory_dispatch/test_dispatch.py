@@ -66,7 +66,7 @@ async def _reset():
 
 
 @pytest.fixture()
-def db_ready():
+def db_ready(approve_factory_network):
     anyio.run(init_db)
     yield
     anyio.run(_reset)
