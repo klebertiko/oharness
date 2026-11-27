@@ -254,7 +254,7 @@ def test_the_board_keeps_only_the_latest_finished_runs():
     for index in range(loop.MAX_FINISHED + 20):
         loop.BOARD.open(loop.LiveRun(run_id=f'r{index}', item_id=f'i{index}', title='t', stage='implement', agent_id='a',
                                      status='complete', engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
-    assert len(loop.BOARD.runs) <= loop.MAX_FINISHED + 1
+    assert len(loop.BOARD.runs) == loop.MAX_FINISHED
     assert 'r0' not in loop.BOARD.runs and f'r{loop.MAX_FINISHED + 19}' in loop.BOARD.runs
     loop.BOARD.reset()
 
@@ -265,3 +265,162 @@ def test_run_and_item_ids_in_the_path_are_checked(ready, monkeypatch):
         assert client.post('/factory/runs/not a run/stop', headers=HUMAN).status_code == 422
         assert client.post('/factory/runs/x' * 3 + '/steer', json={'text': 'hi'}, headers=HUMAN).status_code in (404, 422)
         assert client.post('/factory/runs/00000000-0000-0000-0000-000000000000/steer', json={'text': 'hi', 'extra': 1}, headers=HUMAN).status_code == 422
+
+
+# ------------------------------------------------------------------------------- a run that ends badly still frees the item and the board
+
+async def _status(item_id):
+    async with SessionLocal() as db:
+        return (await service.get(db, item_id)).status
+
+
+def test_a_crash_outside_the_stage_frees_the_item_and_the_board(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+
+    async def broken(*_args, **_kwargs):
+        raise RuntimeError('the database went away')
+    monkeypatch.setattr(loop.dispatch.service, 'link_run', broken)
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db)).id
+        before = await _status(item_id)
+        with pytest.raises(RuntimeError):
+            await loop.start(item_id, defn(), repo, store)
+        return item_id, before
+
+    item_id, before = anyio.run(case)
+    assert loop.BOARD.active_for_item(item_id) is None
+    assert [row.status for row in loop.BOARD.runs.values()] == ['error']
+    assert anyio.run(_status, item_id) == before
+
+
+def test_a_cancelled_run_frees_the_item_and_the_board(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+    started = asyncio.Event()
+
+    async def forever(run):
+        started.set()
+        await asyncio.Event().wait()
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db)).id
+        before = await _status(item_id)
+        task = asyncio.create_task(loop.start(item_id, defn(), repo, store, driver=forever))
+        await asyncio.wait_for(started.wait(), timeout=30)
+        assert await _status(item_id) == 'running'
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return item_id, before
+
+    item_id, before = anyio.run(case)
+    assert loop.BOARD.active_for_item(item_id) is None
+    assert [row.status for row in loop.BOARD.runs.values()] == ['stopped']
+    assert anyio.run(_status, item_id) == before
+
+
+def test_a_stop_after_the_point_of_no_return_is_refused(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+    seen = {}
+    original = loop.dispatch.foreman.implement_done
+
+    async def finishing(db, item, *args, **kwargs):
+        run_id = next(iter(loop.BOARD.runs))
+        try:
+            loop.stop(run_id)
+            seen['stop'] = 'accepted'
+        except loop.TooLate:
+            seen['stop'] = 'too_late'
+        return await original(db, item, *args, **kwargs)
+    monkeypatch.setattr(loop.dispatch.foreman, 'implement_done', finishing)
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db)).id
+        return await loop.start(item_id, defn(), repo, store)
+
+    run_id = anyio.run(case)
+    assert seen == {'stop': 'too_late'}
+    assert loop.BOARD.get(run_id).status == 'complete'
+
+
+def test_a_run_still_starting_counts_as_the_items_run(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db)).id
+        loop.BOARD.open(loop.LiveRun(run_id='other', item_id=item_id, title='t', stage='implement', agent_id='builder', status='starting',
+                                     engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
+        with pytest.raises(loop.dispatch.DispatchError):
+            await loop.start(item_id, defn(), repo, store)
+
+    anyio.run(case)
+
+
+def test_the_routes_answer_a_full_queue_a_credential_a_finishing_run_and_a_bad_item_id(ready, monkeypatch):
+    monkeypatch.setenv('OH_HUMAN_TOKEN', 'human-secret')
+    run_id = '00000000-0000-0000-0000-00000000000a'
+    late_id = '00000000-0000-0000-0000-00000000000b'
+    row = loop.BOARD.open(loop.LiveRun(run_id=run_id, item_id='i', title='t', stage='implement', agent_id='a', status='running',
+                                       engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
+    loop.BOARD.open(loop.LiveRun(run_id=late_id, item_id='j', title='t', stage='implement', agent_id='a', status='finishing',
+                                 engine=None, harness=None, cancel=asyncio.Event(), steering=[]))
+    with TestClient(app) as client:
+        secret = client.post(f'/factory/runs/{run_id}/steer', json={'text': 'use ghp_' + 'a' * 36}, headers=HUMAN)
+        assert secret.status_code == 422 and secret.json()['detail']['code'] == 'looks_secret'
+        row.steering.extend(['x'] * loop.MAX_STEERING)
+        full = client.post(f'/factory/runs/{run_id}/steer', json={'text': 'hi'}, headers=HUMAN)
+        assert full.status_code == 429 and full.json()['detail']['code'] == 'steering_full'
+        for action, body in (('stop', None), ('steer', {'text': 'hi'})):
+            late = client.post(f'/factory/runs/{late_id}/{action}', json=body, headers=HUMAN)
+            assert late.status_code == 409 and late.json()['detail']['code'] == 'too_late', action
+        assert client.post('/factory/work-items/bad id!/run', json={'repo': '/tmp/x'}, headers=HUMAN).status_code == 422
+        assert client.post('/factory/work-items/' + 'a' * 201 + '/run', json={'repo': '/tmp/x'}, headers=HUMAN).status_code == 422
+
+
+# ------------------------------------------------------------------------------------- the run goes to the repository of the item's Forja
+
+def _forja_project(root: Path, name: str) -> Path:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).parents[1] / 'factory_definition'))
+    from factory_definition_files import FILES
+    for rel, text in FILES.items():
+        target = root / '.oharness' / 'forja' / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text.replace('name: payments', f'name: {name}', 1) if rel == 'forja.yaml' else text, encoding='utf-8')
+    return root
+
+
+def test_the_run_goes_only_to_a_project_of_the_items_forja(ready, monkeypatch, tmp_path):
+    from models import CoworkProject
+    monkeypatch.setenv('OH_HUMAN_TOKEN', 'human-secret')
+    mine = _forja_project(tmp_path / 'mine', 'payments')
+    theirs = _forja_project(tmp_path / 'theirs', 'other')
+    (tmp_path / 'plain').mkdir()
+
+    async def register():
+        async with SessionLocal() as db:
+            for folder in (mine, theirs, tmp_path / 'plain'):
+                db.add(CoworkProject(name=folder.name, root_path=str(folder)))
+            await db.commit()
+            return (await _item(db, 'repo-1')).id
+
+    async def unregister():
+        async with SessionLocal() as db:
+            await db.execute(delete(CoworkProject).where(CoworkProject.root_path.in_([str(mine), str(theirs), str(tmp_path / 'plain')])))
+            await db.commit()
+
+    item_id = anyio.run(register)
+    try:
+        with TestClient(app) as client:
+            listed = client.get(f'/factory/work-items/{item_id}/repositories')
+            assert listed.status_code == 200, listed.text
+            assert [row['root_path'] for row in listed.json()['repositories']] == [str(mine)]
+            for folder in (theirs, tmp_path / 'plain'):
+                wrong = client.post(f'/factory/work-items/{item_id}/run', json={'repo': str(folder)}, headers=HUMAN)
+                assert wrong.status_code == 409 and wrong.json()['detail']['code'] == 'wrong_repository', folder
+    finally:
+        anyio.run(unregister)
