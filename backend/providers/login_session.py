@@ -200,7 +200,11 @@ def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = de
     path = finder(binary)
     if not path:
         return {"ok": False, "reason": "not-installed"}
-    pid = spawner([path, *args])
+    try:
+        pid = spawner([path, *args])
+    except (ValueError, OSError):
+        # A shim the launcher refuses, or a program that did not start. The reason stays closed.
+        return {"ok": False, "reason": "not-started"}
     session = LoginSession(id=secrets.token_hex(8), cli=cli_id, pid=pid, running=True)
     _sessions[session.id] = session
     return {"ok": True, "id": session.id, "cli": cli_id, "running": True}
