@@ -18,13 +18,15 @@ from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from factory import service
+from factory.improvement.orm import ImprovementProposal
 from factory.inbox_orm import InboxDismissal
 from factory.orm import WorkItem, WorkItemEvent
 
-TYPES = ('question', 'question_answered', 'spec_review', 'handoff_ready', 'blocked', 'failed')
+TYPES = ('question', 'question_answered', 'spec_review', 'handoff_ready', 'blocked', 'failed', 'improvement')
 ACTIONS = {
     'question': ['answer'], 'question_answered': [], 'spec_review': ['approve_spec', 'edit_spec'],
     'handoff_ready': ['confirm_merged', 'request_changes'], 'blocked': ['advance', 'cancel'], 'failed': ['note'],
+    'improvement': [],
 }
 FAILED_WINDOW = timedelta(days=7)
 DISMISSAL_KEEP = timedelta(days=30)
@@ -117,7 +119,44 @@ async def entries(db: AsyncSession, factory_id: str | None = None, *, include_in
             entry['resolved'] = entry['id'] in dismissed
             if include_resolved or not entry['resolved']:
                 found.append(entry)
+    found.extend(await _improvements(db, factory_id, dismissed, include_resolved))
     return sorted(found, key=lambda e: e['since'], reverse=True)
+
+
+def group_entries(entries: list[dict]) -> list[dict]:
+    """One group per work item, in the order the entries already have (newest first)."""
+    order: list[str] = []
+    groups: dict[str, dict] = {}
+    for entry in entries:
+        key = entry['work_item_id']
+        if key not in groups:
+            order.append(key)
+            groups[key] = {'work_item_id': key, 'title': entry['title'], 'factory_id': entry['factory_id'],
+                           'stage': entry['stage'], 'entries': []}
+        groups[key]['entries'].append(entry)
+    return [groups[key] for key in order]
+
+
+async def _improvements(db: AsyncSession, factory_id: str | None, dismissed: set[str], include_resolved: bool) -> list[dict]:
+    """Pending proposals, and a trial that rolled itself back, so the inbox can say so."""
+    query = select(ImprovementProposal).where(ImprovementProposal.status.in_(('pending', 'rolled_back')))
+    if factory_id:
+        query = query.where(ImprovementProposal.factory_id == factory_id)
+    rows = list(await db.scalars(query))
+    found = []
+    for row in rows:
+        if row.status == 'rolled_back' and row.verdict != 'worsened':
+            continue
+        entry = {
+            'id': f'improvement:{row.id}:0', 'type': 'improvement', 'work_item_id': row.id, 'factory_id': row.factory_id,
+            'title': row.factory_id, 'stage': '', 'status': 'awaiting_human', 'since': (row.created_at.isoformat() + 'Z'),
+            'summary': row.justification[:SUMMARY_CHARS], 'actions': [], 'resolved': False,
+            'notice': 'reverted' if row.status == 'rolled_back' else 'pending',
+        }
+        entry['resolved'] = entry['id'] in dismissed
+        if include_resolved or not entry['resolved']:
+            found.append(entry)
+    return found
 
 
 async def _audit(db: AsyncSession, item_id: str, type_: str, actor: tuple[str, str | None], key: str, entry_type: str) -> None:

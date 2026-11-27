@@ -14,6 +14,10 @@
             "enabled": {
               "type": "boolean"
             },
+            "engine": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "type": "string"
+            },
             "harness": {
               "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
               "type": "string"
@@ -82,6 +86,39 @@
             "model": {
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$",
               "type": "string"
+            },
+            "networkPolicy": {
+              "additionalProperties": false,
+              "properties": {
+                "allowedHosts": {
+                  "items": {
+                    "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|(?:\\d{1,3}\\.){3}\\d{1,3})$",
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "deniedHosts": {
+                  "items": {
+                    "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|(?:\\d{1,3}\\.){3}\\d{1,3})$",
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "extends": {
+                  "items": {
+                    "pattern": "^[a-z0-9][a-z0-9./@^-]{0,80}$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "type": "object"
             },
             "permissions": {
               "additionalProperties": false,
@@ -167,6 +204,41 @@
     "alias": {
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
       "type": "string"
+    },
+    "benchmarks": {
+      "additionalProperties": false,
+      "maxProperties": 50,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "agent": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "type": "string"
+            },
+            "repeats": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "successCriteria": {
+              "maxLength": 4000,
+              "minLength": 0,
+              "type": "string"
+            },
+            "task": {
+              "maxLength": 4000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "task"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
     },
     "ceilings": {
       "additionalProperties": false,
@@ -273,6 +345,39 @@
     "name": {
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
       "type": "string"
+    },
+    "networkPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedHosts": {
+          "items": {
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|(?:\\d{1,3}\\.){3}\\d{1,3})$",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "deniedHosts": {
+          "items": {
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|(?:\\d{1,3}\\.){3}\\d{1,3})$",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "extends": {
+          "items": {
+            "pattern": "^[a-z0-9][a-z0-9./@^-]{0,80}$",
+            "type": "string"
+          },
+          "maxItems": 10,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "type": "object"
     },
     "policy": {
       "additionalProperties": false,
@@ -414,6 +519,138 @@
     },
     "schemaVersion": {
       "const": "1.0.0"
+    },
+    "scorers": {
+      "additionalProperties": false,
+      "maxProperties": 50,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]{0,62}$": {
+          "additionalProperties": false,
+          "properties": {
+            "agents": {
+              "items": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "check": {
+              "enum": [
+                "ci_failed",
+                "qa_rejected",
+                "sec_found",
+                "gate_changes",
+                "pr_closed_unmerged",
+                "returns_over_cap",
+                "human_intervention",
+                "cost_over_envelope"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "enum": [
+                "classification",
+                "deterministic"
+              ]
+            },
+            "labels": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "description": {
+                    "maxLength": 400,
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "score": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "value": {
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value",
+                  "score"
+                ],
+                "type": "object"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            "model": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$",
+              "type": "string"
+            },
+            "passingScore": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "rubric": {
+              "maxLength": 20000,
+              "minLength": 0,
+              "type": "string"
+            },
+            "samplingRate": {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            "selfImprovement": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "passingScore"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "selfImprovement": {
+      "additionalProperties": false,
+      "properties": {
+        "ageDays": {
+          "maximum": 90,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "analyst": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "canaryPercent": {
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "failureThreshold": {
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "minSampleRuns": {
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sampleDays": {
+          "maximum": 90,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
     },
     "skills": {
       "additionalProperties": false,

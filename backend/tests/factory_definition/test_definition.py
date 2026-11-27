@@ -117,6 +117,17 @@ def test_custom_agents_do_not_get_embedded_skills(make_definition):
     assert 'agents.helper.skills[0]' in _paths(_issues(root))
 
 
+def test_an_agent_may_name_a_studio_harness_as_its_engine(make_definition):
+    ok = make_definition({'agents/reviewer/agent.md': agent_md(*REVIEWER, extra='engine: review-flow')})
+    loaded = definition.load(ok)
+    assert loaded.ok, [i.as_dict() for i in loaded.issues]
+    assert loaded.definition['agents']['reviewer']['engine'] == 'review-flow'
+    bare = make_definition()
+    assert definition.load(bare).ok and 'engine' not in definition.load(bare).definition['agents']['reviewer']
+    writer = make_definition({'agents/builder/agent.md': agent_md(*BUILDER, extra='engine: build-flow')})
+    assert 'agents.builder.engine' in _paths(_issues(writer))
+
+
 def test_a_harness_only_goes_on_an_agent_that_cannot_write(make_definition):
     ok = make_definition({'agents/reviewer/agent.md': agent_md(*REVIEWER, extra='harness: review-flow')})
     assert definition.load(ok).ok
