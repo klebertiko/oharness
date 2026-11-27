@@ -65,14 +65,16 @@ class SourceError(Exception):
 
 
 class _Readable(Protocol):
-    def read(self, n: int, /) -> bytes: ...
+    def read(self, n: int, /) -> bytes:
+        """Up to `n` bytes; empty at the end."""
 
 
 class Cancellable(Protocol):
     """A fetcher that takes the cancel event and checks it between chunks."""
     cancellable: bool
 
-    def __call__(self, url: str, limit: int, cancel: threading.Event | None = None) -> bytes: ...
+    def __call__(self, url: str, limit: int, cancel: threading.Event | None = None) -> bytes:
+        """The body of `url`, at most `limit` bytes; stops when `cancel` is set."""
 
 
 class _TrustedRedirects(urllib.request.HTTPRedirectHandler):
