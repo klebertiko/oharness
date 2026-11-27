@@ -125,6 +125,7 @@ async def _detect_one(cli: str, provider: str, cls: type[AgentAdapter], runner: 
         "version": version,
         "state": state,
         "detail": detail,
+        "plan": probe.plan or None,
     }
 
 

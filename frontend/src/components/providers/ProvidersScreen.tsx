@@ -4,6 +4,8 @@ import { Button, Notice } from "@/components/ui";
 import { useT } from "@/i18n/store";
 import { ConnectionDetail, DetailSkeleton } from "./ConnectionDetail";
 import { ConnectionList } from "./ConnectionList";
+import { FirstAccountCard } from "./FirstAccountCard";
+import { shouldProbe } from "./health";
 import { AccountOrderPanel } from "./PreferenceOrder";
 import { UsageStrip } from "./UsageWindows";
 import { useProviderStore } from "./providerStore";
@@ -25,6 +27,7 @@ export function ProvidersScreen() {
   const loadState = useProviderStore((s) => s.loadState);
   const hydrate = useProviderStore((s) => s.hydrate);
   const detectClis = useProviderStore((s) => s.detectClis);
+  const probe = useProviderStore((s) => s.probe);
   const offline = loadState === "offline";
   const loading = loadState === "loading";
   const opened = connections.find((c) => c.id === selectedId);
@@ -35,6 +38,19 @@ export function ProvidersScreen() {
   useEffect(() => {
     if (loadState === "ready") void detectClis();
   }, [loadState, detectClis]);
+  useEffect(() => {
+    const last = new Map<string, number>();
+    const onFocus = () => {
+      const now = Date.now();
+      for (const connection of useProviderStore.getState().connections) {
+        if (!connection.enabled || !shouldProbe(last.get(connection.id), now)) continue;
+        last.set(connection.id, now);
+        void probe(connection.id);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [probe]);
   useEffect(() => {
     if (!pinned && (loadState === "ready" || loadState === "offline") && connections.length) setPinned(defaultConnectionId(connections));
   }, [pinned, loadState, connections]);
@@ -57,6 +73,7 @@ export function ProvidersScreen() {
           {t("offline.body")}
         </Notice>
       )}
+      {!offline && !loading && <FirstAccountCard connections={connections} onChoose={select} />}
       {!offline && !loading && <UsageStrip connections={connections} />}
       {!offline && !loading && <AccountOrderPanel />}
       <div className="grid min-h-0 flex-1 @2xl:grid-cols-[20rem_minmax(0,1fr)]">

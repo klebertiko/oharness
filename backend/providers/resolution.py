@@ -45,6 +45,9 @@ ADAPTER_BY_PROVIDER: dict[str, str] = {
     "openai": "codex",  # ChatGPT subscription via the codex CLI, not a metered key
     "ollama": "ollama",
     "openrouter": "openrouter",
+    "xai": "openai",
+    "deepseek": "openai",
+    "gemini": "openai",
     # Connections a person creates (#402): generic protocols with their own
     # id, endpoint and key. Metered, never the subscription CLIs (I13).
     "openai-compatible": "openai",

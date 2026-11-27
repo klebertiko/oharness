@@ -220,7 +220,8 @@ def test_claude_probe_live_when_logged_in(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert probe.ok is True
     assert probe.health == "live"
-    assert "a@b.com" in probe.detail
+    assert probe.plan == "Pro"
+    assert "a@b.com" not in probe.detail and "a@b.com" not in str(probe.facts)
 
 
 def test_claude_probe_setup_when_not_logged_in(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -399,7 +400,8 @@ def test_cursor_probe_live_when_authenticated(monkeypatch: pytest.MonkeyPatch) -
 
     assert probe.ok is True
     assert probe.health == "live"
-    assert "a@b.com" in probe.detail
+    assert probe.plan == ""
+    assert "a@b.com" not in probe.detail and "a@b.com" not in str(probe.facts)
 
 
 def test_cursor_probe_setup_when_cli_missing(monkeypatch: pytest.MonkeyPatch) -> None:

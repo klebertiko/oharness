@@ -25,4 +25,7 @@ export const PROVIDER_TEXT_KEY = {
   openrouter: { summary: "provider.openrouter.summary", caveat: "provider.openrouter.caveat", where: "provider.openrouter.where" },
   "openai-compatible": { summary: "provider.openaiCompatible.summary", caveat: "provider.openaiCompatible.caveat", where: "provider.openaiCompatible.where" },
   "anthropic-gateway": { summary: "provider.anthropicGateway.summary", caveat: "provider.anthropicGateway.caveat", where: "provider.anthropicGateway.where" },
+  xai: { summary: "provider.xai.summary", caveat: "provider.xai.caveat", where: "provider.xai.where" },
+  deepseek: { summary: "provider.deepseek.summary", caveat: "provider.deepseek.caveat", where: "provider.deepseek.where" },
+  gemini: { summary: "provider.gemini.summary", caveat: "provider.gemini.caveat", where: "provider.gemini.where" },
 } as const satisfies Record<string, { summary: MessageKey; caveat: MessageKey | undefined; where: MessageKey }>;

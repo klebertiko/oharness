@@ -8,6 +8,7 @@ import { Row, Rows, WithCode } from "./rows";
 import { VAULT_LABEL, activeVault, prefixMatches } from "./secrets";
 import { specOf, useProviderStore, type Connection } from "./providerStore";
 import { ENDPOINT_FIELD_ID, KEY_FIELD_ID, type ConnectionActions } from "./useConnectionActions";
+import { visibleFact } from "./accountFacts";
 import { providerKey, vendorName } from "./providerText";
 
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "");
@@ -79,13 +80,14 @@ function KeyRow({ c, actions }: { c: Connection; actions: ConnectionActions }) {
   }
 
   if (spec.credential.kind === "cli") {
-    const account = c.facts.find((f) => f.k === "account")?.v;
+    const account = visibleFact("account", c.facts.find((f) => f.k === "account")?.v ?? "");
+    const plan = visibleFact("plan", c.facts.find((f) => f.k === "plan")?.v ?? "");
     const cli = spec.credential.login?.split(" ")[0] ?? spec.vendor;
     return (
       <Row label={t("key.label.cli")}>
         <p className="t-body text-ink">{t("key.cli.value", { cli })}</p>
         <p className="t-body mt-0.5 max-w-[62ch] text-ink-mute">
-          {account ? t("key.cli.signedIn", { account }) : <WithCode text={t(PROVIDER_TEXT_KEY[providerKey(c)].where)} />}
+          {plan ? t("providers.plan.value", { plan }) : account ? t("key.cli.signedIn", { account }) : <WithCode text={t(PROVIDER_TEXT_KEY[providerKey(c)].where)} />}
         </p>
       </Row>
     );
