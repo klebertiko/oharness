@@ -13,9 +13,9 @@
   var saved = null;
   var prev = null;
   var old = null;
-  var vw = 1280;
-  var flow = 280;
-  var path = "/";
+  var vw;
+  var flow;
+  var path;
   var dynamic = false;
 
   try {
