@@ -2,7 +2,8 @@
 
 The command is one of three fixed argv lists. The request cannot name a binary,
 a flag, or a prompt. Stdout and stderr are discarded, and the secrets store is
-never touched.
+never touched. It runs in a directory no run can write to, with the CLI
+environment allowlist, never the sidecar's whole environment.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from pathlib import PureWindowsPath
 from shutil import which
 from typing import Callable
 
-from adapters.cli_shared import default_cli_cwd, find_cli
+from adapters.cli_shared import find_cli, inert_cwd, scrub_env
 
 # cli id -> (binary name, fixed args). Never built from request text.
 LOGIN_ARGV: dict[str, tuple[str, ...]] = {
@@ -53,7 +54,8 @@ def _keep(session: LoginSession) -> None:
 
 
 # Basename from the installed path -> the literal command that is actually started.
-# The path passed in is never executed, so a request cannot choose a binary.
+# The request never supplies the path: it comes from a PATH lookup of a fixed name. Only a
+# Windows `.cmd` shim is started by that path, after `_checked_shim`; anything else runs the literal.
 _LOGIN_NAMES = {
     "claude": "claude",
     "claude.exe": "claude",
@@ -71,8 +73,21 @@ _LOGIN_NAMES = {
 class _Login:
     name: str
     # An npm `.cmd` shim on Windows: CreateProcess cannot start it, `cmd.exe /c` can.
-    # The words handed to cmd.exe are still the literals below, never the path found on disk.
-    via_cmd: bool
+    # cmd.exe gets the shim's absolute path, so it never looks a bare name up anywhere.
+    shim: str | None = None
+
+
+# What cmd.exe (and wt.exe, for `;`) would read as syntax instead of a file name.
+_CMD_SYNTAX = frozenset('&|^%!"<>;')
+
+
+def _checked_shim(path: str) -> str:
+    """The absolute `.cmd` path found on PATH, or a refusal. It is never rewritten or escaped."""
+    if not PureWindowsPath(path).is_absolute():
+        raise ValueError("refused")
+    if any(ch in _CMD_SYNTAX or ord(ch) < 32 for ch in path):
+        raise ValueError("refused")
+    return path
 
 
 def _checked_login(argv: list[str]) -> _Login:
@@ -83,12 +98,30 @@ def _checked_login(argv: list[str]) -> _Login:
     name = _LOGIN_NAMES.get(base)
     if name is None:
         raise ValueError("refused")
-    return _Login(name=name, via_cmd=os.name == "nt" and base.endswith(".cmd"))
+    if os.name == "nt" and base.endswith(".cmd"):
+        return _Login(name=name, shim=_checked_shim(argv[0]))
+    return _Login(name=name)
 
 
 def _login_cwd() -> str:
-    """The app-owned directory, so neither CreateProcess nor cmd.exe finds a program planted in the sidecar's cwd."""
-    return str(default_cli_cwd())
+    """A directory no run can write to. cmd.exe searches its own cwd before PATH."""
+    return inert_cwd(windows=os.name == "nt")
+
+
+def _system_cmd() -> str:
+    """cmd.exe by absolute path, so the launcher's own search order is not involved either."""
+    return str(PureWindowsPath(_login_cwd(), "cmd.exe"))
+
+
+# A terminal window needs these to appear on a desktop session; none of them is a credential.
+_DISPLAY_ENV = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
+
+
+def _login_env() -> dict[str, str]:
+    """The CLI allowlist, plus the display, plus no current-directory lookup on Windows."""
+    extra = {key: os.environ[key] for key in _DISPLAY_ENV if os.environ.get(key)}
+    extra["NoDefaultCurrentDirectoryInExePath"] = "1"
+    return scrub_env(extra)
 
 
 def _terminal_kind() -> str | None:
@@ -115,44 +148,31 @@ def _spawn_direct(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     raise ValueError("refused")
 
 
-def _spawn_cmd(name: str) -> int:
-    detached = os.name != "nt"
-    if name == "claude":
-        return _quiet(subprocess.Popen(
-            ["cmd.exe", "/c", "claude", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    if name == "codex":
-        return _quiet(subprocess.Popen(
-            ["cmd.exe", "/c", "codex", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    if name == "cursor-agent":
-        return _quiet(subprocess.Popen(
-            ["cmd.exe", "/c", "cursor-agent", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    raise ValueError("refused")
+def _spawn_cmd(shim: str) -> int:
+    """cmd.exe by absolute path runs the checked shim by absolute path. Only the shim is not a literal."""
+    return _quiet(subprocess.Popen(
+        ["cmd.exe", "/c", shim, "login"],
+        executable=_system_cmd(),
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=_login_cwd(), env=_login_env(),
+    ))
 
 
 def _spawn_wt(name: str) -> int:
@@ -161,44 +181,31 @@ def _spawn_wt(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["wt.exe", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["wt.exe", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["wt.exe", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     raise ValueError("refused")
 
 
-def _spawn_wt_cmd(name: str) -> int:
-    detached = os.name != "nt"
-    if name == "claude":
-        return _quiet(subprocess.Popen(
-            ["wt.exe", "cmd.exe", "/c", "claude", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    if name == "codex":
-        return _quiet(subprocess.Popen(
-            ["wt.exe", "cmd.exe", "/c", "codex", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    if name == "cursor-agent":
-        return _quiet(subprocess.Popen(
-            ["wt.exe", "cmd.exe", "/c", "cursor-agent", "login"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
-        ))
-    raise ValueError("refused")
+def _spawn_wt_cmd(shim: str) -> int:
+    """A Windows Terminal tab may be opened by an already running terminal with its own
+    directory and environment, so the tab's directory, cmd.exe and the shim are all absolute."""
+    return _quiet(subprocess.Popen(
+        ["wt.exe", "-d", _login_cwd(), _system_cmd(), "/c", shim, "login"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=_login_cwd(), env=_login_env(),
+    ))
 
 
 def _spawn_emulator(name: str) -> int:
@@ -207,19 +214,19 @@ def _spawn_emulator(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     raise ValueError("refused")
 
@@ -230,19 +237,19 @@ def _spawn_xterm(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached, cwd=_login_cwd(),
+            start_new_session=detached, cwd=_login_cwd(), env=_login_env(),
         ))
     raise ValueError("refused")
 
@@ -256,12 +263,12 @@ def default_spawner(argv: list[str]) -> int | None:
     login = _checked_login(argv)
     kind = _terminal_kind()
     if kind == "wt":
-        return _spawn_wt_cmd(login.name) if login.via_cmd else _spawn_wt(login.name)
+        return _spawn_wt_cmd(login.shim) if login.shim else _spawn_wt(login.name)
     if kind == "x-terminal-emulator":
         return _spawn_emulator(login.name)
     if kind == "xterm":
         return _spawn_xterm(login.name)
-    return _spawn_cmd(login.name) if login.via_cmd else _spawn_direct(login.name)
+    return _spawn_cmd(login.shim) if login.shim else _spawn_direct(login.name)
 
 
 def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = default_spawner) -> dict:

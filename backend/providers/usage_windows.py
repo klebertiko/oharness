@@ -6,7 +6,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from adapters.cli_shared import _kill, default_cli_cwd, find_cli, line_reset_at, scrub_env
+from adapters.cli_shared import _kill, find_cli, inert_cwd, line_reset_at, scrub_env
 
 _PCT = re.compile(
     r"(?P<label>5[\s-]*hour|five[\s-]*hour|weekly|week)\s+usage:\s*(?P<pct>\d{1,3})%\s*(?P<left>left)?",
@@ -148,7 +148,8 @@ async def read_codex_rate_limits(*, timeout: float = CODEX_READ_TIMEOUT_S) -> di
     """Ask the installed codex app-server for the rate limits. None when it is absent or silent.
 
     The program and its one argument are literals, the environment is the CLI
-    allowlist, and stderr is discarded. The app-server exits on end of input
+    allowlist, and stderr is discarded. The working directory is one no run can
+    write to, so a planted project config is never read. The app-server exits on end of input
     before it answers, so stdin stays open until the reply arrives.
     """
     if not find_cli("codex"):
@@ -157,7 +158,7 @@ async def read_codex_rate_limits(*, timeout: float = CODEX_READ_TIMEOUT_S) -> di
         proc = await asyncio.create_subprocess_exec(
             "codex", "app-server",
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            env=scrub_env(), limit=_MAX_LINE, cwd=str(default_cli_cwd()),
+            env=scrub_env(), limit=_MAX_LINE, cwd=inert_cwd(),
         )
     except OSError:
         return None

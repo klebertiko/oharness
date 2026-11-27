@@ -226,7 +226,7 @@ def _seen(server: FakeServer) -> dict:
 
 
 def test_the_reader_runs_the_literal_app_server_with_the_cli_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from adapters.cli_shared import default_cli_cwd
+    from adapters.cli_shared import default_cli_cwd, inert_cwd
     from providers.usage_windows import read_codex_rate_limits
 
     server = _fake_server(tmp_path, monkeypatch)
@@ -242,8 +242,8 @@ def test_the_reader_runs_the_literal_app_server_with_the_cli_environment(tmp_pat
         "COMSPEC", "USERNAME", "USER", "LANG", "LC_ALL"}}
     assert kwargs["stderr"] is asyncio.subprocess.DEVNULL
     assert kwargs["limit"] == 256 * 1024
-    assert kwargs["cwd"] == str(default_cli_cwd())
-    assert Path(seen["cwd"]).resolve() == default_cli_cwd().resolve()
+    assert kwargs["cwd"] == inert_cwd() != str(default_cli_cwd())
+    assert Path(seen["cwd"]).resolve() == Path(inert_cwd()).resolve()
     assert server.procs[0].returncode is not None
 
 

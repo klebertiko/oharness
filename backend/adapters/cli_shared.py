@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from shutil import which
 from typing import AsyncIterator
 
@@ -98,6 +98,24 @@ def default_cli_cwd() -> Path:
     d = base / "OHarness" / "cli-runs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def inert_cwd(*, windows: bool | None = None) -> str:
+    """A working directory the user's own processes cannot write to.
+
+    Agent runs write under ``default_cli_cwd()``, so a program started there
+    can be shadowed by a file a run planted: cmd.exe looks a name up in its
+    current directory first, and a CLI reads project config from it. Windows
+    gets ``%SystemRoot%/System32`` (admin-only writes, and the real cmd.exe
+    lives there), everything else gets ``/``. Nothing is created or cleaned,
+    so there is no window between a check and its use.
+    """
+    if windows is None:
+        windows = is_windows()
+    if windows:
+        root = os.environ.get("SYSTEMROOT") or os.environ.get("SystemRoot") or r"C:\Windows"
+        return str(PureWindowsPath(root, "System32"))
+    return "/"
 
 
 def resolve_cwd(requested: str | None, *, root: Path | str | None = None) -> Path:

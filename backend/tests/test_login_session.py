@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 import types
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import NamedTuple
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adapters.cli_shared import default_cli_cwd
+from adapters.cli_shared import default_cli_cwd, inert_cwd
 from main import app
 from providers import login_session
 from providers.login_session import cancel_login, default_spawner, reset_sessions, start_login
@@ -187,40 +189,102 @@ def test_default_spawner_refuses_anything_outside_the_three_commands(monkeypatch
     assert calls == []
 
 
-def test_spawns_run_in_the_app_owned_directory_not_the_sidecar_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+ENV_CANARY = "OH_LOGIN_CANARY_51b2"
+SYSTEM32 = inert_cwd(windows=True)
+SYSTEM_CMD = SYSTEM32 + r"\cmd.exe"
+
+
+def test_spawns_run_in_a_directory_no_run_can_write_with_the_cli_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ENV_CANARY, CANARY)
     _fake_os(monkeypatch, "posix", environ={})
     calls = _record_popen(monkeypatch)
     default_spawner(["/usr/local/bin/codex", "login"])
-    assert calls[0][1]["cwd"] == str(default_cli_cwd())
+    kwargs = calls[0][1]
+    assert kwargs["cwd"] == inert_cwd(windows=False) == "/"
+    assert kwargs["cwd"] != str(default_cli_cwd())
+    env = kwargs["env"]
+    assert ENV_CANARY not in env and ENV_CANARY.upper() not in env
+    assert env["NoDefaultCurrentDirectoryInExePath"] == "1"
+    assert CANARY not in env.values()
 
 
-@pytest.mark.parametrize(
-    ("shim", "name"),
-    [("C:\\npm\\claude.CMD", "claude"), ("C:\\npm\\codex.cmd", "codex"), ("C:\\npm\\cursor-agent.cmd", "cursor-agent")],
-)
-def test_a_windows_npm_shim_runs_through_cmd_with_only_literals(
-    monkeypatch: pytest.MonkeyPatch, shim: str, name: str,
-) -> None:
+def test_a_display_session_keeps_only_what_a_terminal_needs(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_os(monkeypatch, "posix", environ={"DISPLAY": ":1", "XAUTHORITY": "/home/u/.Xauthority", ENV_CANARY: CANARY})
+    monkeypatch.setattr(login_session, "which", lambda name: "/usr/bin/xterm" if name == "xterm" else None)
+    calls = _record_popen(monkeypatch)
+    default_spawner(["/usr/local/bin/claude", "login"])
+    env = calls[0][1]["env"]
+    assert env["DISPLAY"] == ":1" and env["XAUTHORITY"] == "/home/u/.Xauthority"
+    assert ENV_CANARY not in env
+
+
+@pytest.mark.parametrize("shim", [r"C:\npm\claude.CMD", r"C:\npm\codex.cmd", r"C:\Program Files (x86)\nodejs\cursor-agent.cmd"])
+def test_a_windows_npm_shim_runs_by_its_checked_absolute_path(monkeypatch: pytest.MonkeyPatch, shim: str) -> None:
+    monkeypatch.setenv(ENV_CANARY, CANARY)
     _fake_os(monkeypatch, "nt")
     monkeypatch.setattr(login_session, "which", lambda _name: None)
     calls = _record_popen(monkeypatch)
     assert default_spawner([shim, "login"]) == 77
     argv, kwargs = calls[0]
-    assert argv == ["cmd.exe", "/c", name, "login"]
-    assert "npm" not in " ".join(argv)
-    assert kwargs["cwd"] == str(default_cli_cwd())
+    assert argv == ["cmd.exe", "/c", shim, "login"]
+    assert kwargs["executable"] == SYSTEM_CMD
+    assert kwargs["cwd"] == SYSTEM32
+    assert kwargs["env"]["NoDefaultCurrentDirectoryInExePath"] == "1"
+    assert ENV_CANARY not in kwargs["env"]
     assert kwargs["stdout"] is subprocess.DEVNULL and kwargs["stderr"] is subprocess.DEVNULL
+    assert "shell" not in kwargs
 
 
-def test_a_windows_npm_shim_opens_in_the_windows_terminal_through_cmd(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_windows_npm_shim_opens_in_the_windows_terminal_by_absolute_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_os(monkeypatch, "nt")
     monkeypatch.setattr(
         login_session, "which",
-        lambda name: "C:\\Windows\\wt.exe" if name == "wt.exe" else None,
+        lambda name: r"C:\Windows\wt.exe" if name == "wt.exe" else None,
     )
     calls = _record_popen(monkeypatch)
-    assert default_spawner(["C:\\npm\\codex.cmd", "login"]) == 77
-    assert calls[0][0] == ["wt.exe", "cmd.exe", "/c", "codex", "login"]
+    assert default_spawner([r"C:\npm\codex.cmd", "login"]) == 77
+    argv, kwargs = calls[0]
+    assert argv == ["wt.exe", "-d", SYSTEM32, SYSTEM_CMD, "/c", r"C:\npm\codex.cmd", "login"]
+    assert kwargs["cwd"] == SYSTEM32
+
+
+@pytest.mark.parametrize("bad", [
+    r"C:\a&b\claude.cmd", r"C:\a|b\claude.cmd", r"C:\a^b\claude.cmd", r"C:\%PATH%\claude.cmd",
+    r"C:\a!b!\claude.cmd", r'C:\a"b\claude.cmd', r"C:\a;b\claude.cmd", "C:\\a\nb\\claude.cmd",
+    r"npm\claude.cmd", "claude.cmd", r"C:\a<b\claude.cmd", r"C:\a>b\claude.cmd",
+])
+def test_a_shim_path_cmd_could_reinterpret_is_refused(monkeypatch: pytest.MonkeyPatch, bad: str) -> None:
+    _fake_os(monkeypatch, "nt")
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    calls = _record_popen(monkeypatch)
+    with pytest.raises(ValueError):
+        default_spawner([bad, "login"])
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="cmd.exe resolves names only on Windows")
+def test_a_claude_cmd_planted_where_runs_write_does_not_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Runs write under %LOCALAPPDATA%\OHarness\cli-runs. A shim planted there must not start on "Sign in".
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    # The Windows default: cmd.exe searches its current directory before PATH.
+    monkeypatch.delenv("NoDefaultCurrentDirectoryInExePath", raising=False)
+    runs = default_cli_cwd()
+    planted_marker = tmp_path / "planted-ran.txt"
+    (runs / "claude.cmd").write_text(f'@echo off\r\necho x> "{planted_marker}"\r\n', encoding="ascii")
+    npm = tmp_path / "npm"
+    npm.mkdir()
+    real_marker = tmp_path / "real-ran.txt"
+    shim = npm / "claude.cmd"
+    shim.write_text(f'@echo off\r\necho %1> "{real_marker}"\r\n', encoding="ascii")
+    monkeypatch.setenv("PATH", str(npm) + os.pathsep + os.environ.get("PATH", ""))
+    monkeypatch.setattr(login_session, "which", lambda _name: None)
+    assert default_spawner([str(shim), "login"])
+    deadline = time.monotonic() + 15
+    while not real_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    time.sleep(0.5)
+    assert not planted_marker.exists()
+    assert real_marker.read_text(encoding="ascii").strip() == "login"
 
 
 def test_finished_sessions_are_dropped_and_the_table_is_capped() -> None:
