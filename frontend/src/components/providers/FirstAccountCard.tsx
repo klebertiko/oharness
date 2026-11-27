@@ -31,7 +31,7 @@ export function FirstAccountCard({
       <h2 className="t-title text-ink">{t("providers.first.title")}</h2>
       <p className="t-body mt-1 text-ink-dim">{t("providers.first.body")}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => pick("cli")}>{t("providers.first.subscription")}</Button>
+        <Button onClick={() => pick("cli")}>{t("providers.first.subscription")}</Button>
         <Button onClick={() => pick("api-key")}>{t("providers.first.apiKey")}</Button>
         <Button onClick={() => pick("local")}>{t("providers.first.local")}</Button>
       </div>

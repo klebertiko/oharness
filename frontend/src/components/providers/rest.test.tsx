@@ -32,6 +32,15 @@ describe("plan and health", () => {
   });
 });
 
+describe("first account card weight", () => {
+  it("offers the three ways in as equals, so it never competes with the screen's one primary action", () => {
+    render(<FirstAccountCard connections={[conn({})]} onChoose={() => undefined} />);
+    for (const name of ["Subscription", "API key", "Local model"]) {
+      expect(screen.getByRole("button", { name }).className, name).not.toMatch(/(^|\s)bg-signal(\s|$)/);
+    }
+  });
+});
+
 describe("first account", () => {
   it("shows one card until an account is ready, in Portuguese", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
