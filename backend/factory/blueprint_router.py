@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from factory import blueprint as blueprint_rules
 from factory import definition_rules as rules
-from factory import versions
+from factory import json_limits, versions
 from factory.auth import actor_for
 from factory.definition import hash_of, load, validate
 from factory.improvement import limits
@@ -28,9 +28,7 @@ NAME = r'^[a-z0-9][a-z0-9_.-]{0,63}$'
 
 
 def _bounded(value):
-    if value is not None and len(json.dumps(value)) > BODY_MAX_BYTES:
-        raise ValueError(f'at most {BODY_MAX_BYTES} bytes')
-    return value
+    return json_limits.bounded(value, BODY_MAX_BYTES)
 
 
 # A person edits the blueprint here, so only the blueprint is free; every other field keeps the rules of a proposal.

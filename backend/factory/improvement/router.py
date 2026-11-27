@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from factory import definition_rules as rules
+from factory import json_limits
 from factory.auth import actor_for, is_scorer
 from factory.improvement import benchmarks, service
 from factory.improvement.orm import FactoryFailure
@@ -28,19 +29,6 @@ ID = rules.ID_PATTERN
 ROW_ID = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 RUN_ID = r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
 RowId = Annotated[str, Path(pattern=ROW_ID)]
-
-
-def _depth(value) -> int:
-    """How deep the mapping nests, walked without recursion so a deep value cannot exhaust the stack."""
-    deepest, stack = 0, [(value, 1)]
-    while stack:
-        node, level = stack.pop()
-        deepest = max(deepest, level)
-        if level > rules.MAX_YAML_DEPTH:
-            return level
-        children = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
-        stack.extend((child, level + 1) for child in children if isinstance(child, (dict, list)))
-    return deepest
 
 
 class NoteBody(BaseModel):
@@ -61,11 +49,7 @@ class AnalyzeBody(BaseModel):
     @field_validator('after')
     @classmethod
     def _bounded(cls, value):
-        if value is not None and _depth(value) > rules.MAX_YAML_DEPTH:
-            raise ValueError(f'the proposed definition nests deeper than {rules.MAX_YAML_DEPTH} levels')
-        if value is not None and len(json.dumps(value)) > rules.MAX_TOTAL_BYTES:
-            raise ValueError('the proposed definition is too large')
-        return value
+        return json_limits.bounded(value, rules.MAX_TOTAL_BYTES, 'the proposed definition')
 
 
 class RunBody(BaseModel):
@@ -120,9 +104,7 @@ class ScoreBody(BaseModel):
     @field_validator('evidence')
     @classmethod
     def _small(cls, value):
-        if len(json.dumps(value)) > 4000:
-            raise ValueError('evidence holds at most 4000 bytes')
-        return value
+        return json_limits.bounded(value, 4000, 'evidence')
 
 
 def _http(exc: FactoryError) -> HTTPException:

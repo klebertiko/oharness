@@ -352,3 +352,32 @@ def test_nilo_returns_the_files_it_built(client):
     resp = client.post('/factory/blueprint/nilo', json={'recipe': 'issue-pr', 'name': 'docs', 'request': 'small fixes'})
     assert resp.status_code == 200 and resp.json()['ok'] is True
     assert 'forja.yaml' in resp.json()['files'] and 'name: "docs"' in resp.json()['files']['forja.yaml']
+
+
+# ------------------------------------------------------------------------------------------- a body that nests too deep is refused
+
+def _nested(levels: int) -> dict:
+    root: dict = {}
+    node = root
+    for _ in range(levels):
+        node['x'] = {}
+        node = node['x']
+    return root
+
+
+@pytest.mark.parametrize('levels', [60, 900])
+def test_every_blueprint_body_that_nests_too_deep_is_refused(client, levels):
+    _activate(_definition({'entry': [{'to': 'intake'}]}))
+    deep = _nested(levels)
+    bodies = [
+        ('/factory/blueprint', {'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': deep}),
+        ('/factory/blueprint', {'factory_id': FACTORY, 'base_hash': _base(), 'blueprint': {'entry': [{'to': 'intake'}]}, 'stages': deep}),
+        ('/factory/blueprint/simulate', {'factory_id': FACTORY, 'blueprint': deep}),
+        ('/factory/blueprint/would-fire', {'provider': 'github', 'event': 'issues', 'filter': deep}),
+        ('/factory/blueprint/would-fire', {'provider': 'github', 'event': 'issues', 'fields': deep}),
+        ('/factory/blueprint/would-fire', {'provider': 'github', 'event': 'issues', 'payload': deep}),
+    ]
+    for route, body in bodies:
+        resp = client.post(route, json=body, headers=HUMAN)
+        assert resp.status_code == 422, (route, list(body), resp.status_code)
+    assert _state().canary is None

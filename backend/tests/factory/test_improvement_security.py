@@ -471,3 +471,15 @@ def test_a_database_made_before_the_triggers_gets_them_at_startup(tmp_path):
     with engine.begin() as conn:  # running it again is harmless
         _migrate_factory_scores(conn)
     engine.dispose()
+
+
+@pytest.mark.parametrize('levels', [60, 900])
+def test_score_evidence_that_nests_too_deep_is_refused(client, levels):
+    _activate(definition())
+    deep: dict = {}
+    node = deep
+    for _ in range(levels):
+        node['x'] = {}
+        node = node['x']
+    resp = _score(client, hash_of(definition()), 'deep-1', True, evidence=deep)
+    assert resp.status_code == 422, resp.text
