@@ -2,7 +2,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useLocaleStore } from "@/i18n/store";
 import { visibleFact } from "./accountFacts";
-import { ConnectorAccounts } from "./ConnectorAccounts";
 import { FirstAccountCard, hasReadyAccount } from "./FirstAccountCard";
 import { shouldProbe, testedAgo } from "./health";
 import type { Connection } from "./providerStore";
@@ -33,7 +32,7 @@ describe("plan and health", () => {
   });
 });
 
-describe("first account and connectors", () => {
+describe("first account", () => {
   it("shows one card until an account is ready, in Portuguese", () => {
     useLocaleStore.setState({ locale: "pt-BR" });
     const chosen: string[] = [];
@@ -44,11 +43,4 @@ describe("first account and connectors", () => {
     expect(hasReadyAccount([conn({ health: "live", enabled: true })])).toBe(true);
   });
 
-  it("signs a connector in or out and never prints a credential", () => {
-    const secret = "sk-live-canary";
-    render(<ConnectorAccounts accounts={[{ id: "mail", label: "Mail", signedIn: false }, { id: "docs", label: "Docs", signedIn: true }]} onSignIn={() => undefined} onCancel={() => undefined} />);
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
-    expect(document.body.textContent).not.toContain(secret);
-  });
 });

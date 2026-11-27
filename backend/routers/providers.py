@@ -6,7 +6,6 @@ once, stores it, and returns only ``{secretRef}``.
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 from typing import Any, Literal
@@ -32,9 +31,7 @@ from adapters.catalog import (
 )
 from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
 from database import get_db
-from models import ConnectionAdvanced
 from providers import store as connection_store
-from providers.advanced import dumps_advanced, validate_advanced
 from providers.diagnostics import build_report
 from providers.login_session import cancel_login, start_login
 from providers.resolution import ADAPTER_BY_PROVIDER
@@ -287,37 +284,6 @@ async def create_connection(
     await connection_store.upsert(db, row)
     connections[body.id] = row
     return _public_connection(row)
-
-
-@router.get("/connections/{connection_id}/advanced")
-async def get_advanced(connection_id: str, connections: dict = Depends(get_connections), db: AsyncSession = Depends(get_db)):
-    if connection_id not in connections:
-        raise HTTPException(404, "Connection not found")
-    row = await db.get(ConnectionAdvanced, connection_id)
-    if row is None:
-        return {"retryPolicy": "inherit", "retryCap": 2, "allowlist": [], "models": {}}
-    return json.loads(row.payload)
-
-
-@router.put("/connections/{connection_id}/advanced")
-async def put_advanced(connection_id: str, request: Request, connections: dict = Depends(get_connections), db: AsyncSession = Depends(get_db)):
-    if connection_id not in connections:
-        raise HTTPException(404, "Connection not found")
-    try:
-        body = await request.json()
-    except ValueError:
-        body = None
-    clean, error = validate_advanced(body)
-    if error or clean is None:
-        raise HTTPException(400, error or "The advanced options could not be read.")
-    row = await db.get(ConnectionAdvanced, connection_id)
-    if row is None:
-        row = ConnectionAdvanced(connection_id=connection_id, payload=dumps_advanced(clean))
-        db.add(row)
-    else:
-        row.payload = dumps_advanced(clean)
-    await db.commit()
-    return clean
 
 
 @router.get("/connections/{connection_id}")

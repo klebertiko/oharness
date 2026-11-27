@@ -472,3 +472,14 @@ describe("language and accessibility", () => {
     }
   });
 });
+
+describe("setup guide and options that have an effect", () => {
+  it("links each account to its guide in the repo and shows no Advanced panel the engine would ignore", () => {
+    show([router()]);
+    const guide = screen.getByRole("link", { name: /How to configure/ }) as HTMLAnchorElement;
+    expect(guide.href).toBe("https://github.com/klebertiko/oharness/blob/main/docs/guides/providers/openrouter.md");
+    expect(guide.target).toBe("_blank");
+    expect(screen.queryByRole("heading", { name: "Advanced" })).toBeNull();
+    expect(screen.queryByLabelText("Retry cap")).toBeNull();
+  });
+});

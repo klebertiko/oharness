@@ -111,15 +111,6 @@ class ProviderConnection(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class ConnectionAdvanced(Base):
-    """Retry policy, model allowlist, and per-model display options for one connection."""
-
-    __tablename__ = "connection_advanced"
-
-    connection_id: Mapped[str] = mapped_column(String, primary_key=True)
-    payload: Mapped[str] = mapped_column(Text, default="{}")
-
-
 class CoworkProject(Base):
     __tablename__ = "cowork_projects"
 

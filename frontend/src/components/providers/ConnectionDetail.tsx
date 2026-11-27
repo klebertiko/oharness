@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Button, Notice, Panel, Skeleton, StatusMark } from "@/components/ui";
 import { useT } from "@/i18n/store";
 import { Monogram } from "./atoms";
@@ -11,11 +11,11 @@ import { ModelsPanel } from "./ModelsPanel";
 import { providerKey, vendorName } from "./providerText";
 import { specOf, type Connection } from "./providerStore";
 import { WithCode } from "./rows";
-import { AdvancedPanel } from "./AdvancedPanel";
 import { LoginStatus } from "./LoginStatus";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
 import { metaLine, viewOf } from "./view";
+import { setupGuideUrl } from "./guide";
 
 /** The store's detail often opens by restating the status word ("Not connected. Add a key…"); the header already says it. */
 const withoutStatus = (detail: string, status: string) => (detail.startsWith(`${status}.`) ? detail.slice(status.length + 1).trim() : detail);
@@ -109,7 +109,6 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
               <ConnectionPanel c={c} actions={actions} />
               {agentOnly ? <AgentOnlyPanel /> : <ModelsPanel c={c} />}
               <ActivityPanel c={c} usage={usage} />
-              <AdvancedPanel c={c} />
             </>
           )}
 
@@ -124,6 +123,15 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
                   <WithCode text={t(textKeys.caveat)} />
                 </Notice>
               )}
+              <a
+                href={setupGuideUrl(c.provider)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-control-md items-center gap-1.5 rounded-control px-2 text-body text-ink-dim transition-colors hover:bg-sub-200 hover:text-ink pointer-coarse:h-control-touch"
+              >
+                {t("providers.guide.how")}
+                <ExternalLink size={12} strokeWidth={1.7} aria-hidden />
+              </a>
             </div>
           </Panel>
         </div>
