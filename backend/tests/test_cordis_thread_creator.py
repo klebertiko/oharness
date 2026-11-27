@@ -87,3 +87,20 @@ def test_starters_hands_out_the_starting_files(service):
     assert result['status'] == 'applied'
     assert {row['kind'] for row in result['starters']} == {'tool', 'command', 'service'}
     assert all(row['content'] for row in result['starters'])
+
+
+def test_the_app_lifespan_binds_the_chat_tool_to_its_service_and_unbinds_on_stop():
+    """The binding lives in the app, so cordis.service never imports cordis.creator (no import cycle)."""
+    import ast
+    import pathlib
+
+    from main import app
+
+    tree = ast.parse(pathlib.Path('cordis/service.py').read_text(encoding='utf8'))
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
+    assert 'creator' not in imported and 'cordis.creator' not in imported
+    with TestClient(app):
+        bound = creator._bound
+        assert bound is not None and bound is app.state.cordis
+    assert creator._bound is None

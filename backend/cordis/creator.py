@@ -31,10 +31,6 @@ _ARGS: dict[str, tuple[str, ...]] = {
     'api_catalog': (),
     'starters': (),
 }
-# What the approval card in chat says each action does (the person approves one action at a time).
-ACTION_TEXT = {'list': 'List the plugins in development', 'scaffold': 'Create plugin {name}', 'write_file': 'Write a file of plugin {name}',
-               'read_file': 'Read a file of plugin {name}', 'preview': 'Preview plugin {name}', 'request_install': 'Ask to install {name}',
-               'logs': 'Read the logs of plugin {name}', 'api_catalog': 'Read the host API catalog', 'starters': 'Read the starter files'}
 TOOL_SCHEMA = {'type': 'function', 'function': {
     'name': TOOL_NAME,
     'description': ('Develop a Cordis plugin in the development area (dev/<name>): list, scaffold, write_file, read_file, preview, '

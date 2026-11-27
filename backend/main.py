@@ -30,6 +30,7 @@ from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
 from cordis.router import router as cordis_router
 from cordis.service import CordisService, disabled_by_environment
+from cordis import creator as cordis_creator
 from secret_store.factory import build_secrets_store
 from factory.auth import load_human_credential
 
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
     try:
         app.state.cordis = CordisService(_cordis_data_dir(), enabled=not disabled_by_environment(os.environ))
         app.state.cordis.start()
+        cordis_creator.bind(app.state.cordis)  # the chat tool reaches this service only while the sidecar runs
     except Exception:  # plugins are optional: the sidecar serves everything else without them
         logging.getLogger(__name__).exception("the plugin manager could not start")
         app.state.cordis = None
@@ -74,6 +76,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         if app.state.cordis is not None:
+            cordis_creator.bind(None)
             await anyio.to_thread.run_sync(app.state.cordis.stop)
 
 

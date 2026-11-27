@@ -93,7 +93,8 @@ def test_cancel_stops_the_download_and_removes_the_staging(tmp_path):
     net = SlowNet()
     service = make(tmp_path, net=net)
     started = service.start_fetch('npm', 'demo', version='1.0.0')
-    assert net.started.wait(5)
+    began = net.started.wait(5)
+    assert began
     stage = service.packages / started['fetchId']
     assert stage.is_dir()
     begun = time.monotonic()
@@ -170,9 +171,11 @@ def test_the_routes_start_poll_and_cancel_and_need_the_person(tmp_path, monkeypa
     assert client.post('/cordis/plugins/fetch', json=body).status_code == 403
     started = client.post('/cordis/plugins/fetch', json=body, headers=human).json()
     assert started['state'] == 'running'
-    assert net.started.wait(5)
+    began = net.started.wait(5)
+    assert began
     assert client.get(f'/cordis/plugins/fetch/{started["fetchId"]}').status_code == 403
-    assert client.delete(f'/cordis/plugins/fetch/{started["fetchId"]}').status_code == 403
+    refused = client.delete(f'/cordis/plugins/fetch/{started["fetchId"]}')
+    assert refused.status_code == 403
     seen = client.get(f'/cordis/plugins/fetch/{started["fetchId"]}', headers=human).json()
     assert seen['events'][0]['step'] == 'downloading'
     cancelled = client.delete(f'/cordis/plugins/fetch/{started["fetchId"]}', headers=human).json()

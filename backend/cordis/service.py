@@ -76,17 +76,12 @@ class CordisService:
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
-        from cordis import creator  # the chat tool reaches this service only while it runs
-        creator.bind(self)
         if not self._enabled:
             self.supervisor._set(UNAVAILABLE, 'Plugins are turned off (OH_CORDIS_DISABLE).')
             return
         self.supervisor.start()
 
     def stop(self) -> None:
-        from cordis import creator
-        if creator._bound is self:
-            creator.bind(None)
         self.supervisor.stop()
 
     # -- helpers ---------------------------------------------------------
