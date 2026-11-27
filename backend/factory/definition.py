@@ -21,13 +21,20 @@ from factory import definition_rules as rules
 from sandbox.secrets import redact
 
 # The free-text string fields of the schema: a contract test compares this set with the schema, so a new text field cannot skip the check.
-FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks'})
+FREE_TEXT_FIELDS = frozenset({'instructions', 'text', 'command', 'args', 'automations', 'webhooks', 'description', 'rubric', 'task',
+                             'successCriteria'})
 MAX_FILES = 2000
 # Shapes the shared `redact` misses (hyphenated vendor keys, bearer tokens, URLs with a password), checked on top of it.
 _MORE_SECRETS = re.compile(r'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}'
                            r'|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|gsk_[A-Za-z0-9]{30,}'
                            r'|github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,30}://[^\s/:@]+:[^\s/@]{3,}@')
-_CREDENTIAL_FLAG = re.compile(r'^--?[A-Za-z0-9-]*(?:key|token|secret|pass|passwd|password|credential|auth)[A-Za-z0-9-]*$', re.IGNORECASE)
+_FLAG_SHAPE = re.compile(r'--?[A-Za-z0-9-]+')
+_CREDENTIAL_WORDS = ('key', 'token', 'secret', 'pass', 'credential', 'auth')
+
+
+def _credential_flag(arg: str) -> bool:
+    """`--api-key`, `-token`, `--password`...: a flag shape (linear match) whose name holds a credential word."""
+    return bool(_FLAG_SHAPE.fullmatch(arg)) and any(word in arg.lower() for word in _CREDENTIAL_WORDS)
 _PLAIN_NAME = re.compile(r'^[A-Za-z0-9_./-]{1,80}$')
 _LONG_TOKEN = re.compile(r'[A-Za-z0-9_+/=.~-]{20,}')
 _ID = re.compile(rules.ID_PATTERN)
@@ -416,6 +423,8 @@ def _semantic_issues(definition: dict) -> list[Issue]:
             add(f'{where}.permissions.mode', f'exceeds the Forja limit policy.maxPermissionMode ({policy["maxPermissionMode"]}); raising it is an explicit change')
         if agent.get('harness') and mode not in rules.HARNESS_SAFE_MODES:
             add(f'{where}.harness', 'a harness run gives the model no tools, so it only serves agents that cannot write (mode plan or read_only)')
+        if agent.get('engine') and mode not in rules.HARNESS_SAFE_MODES:
+            add(f'{where}.engine', 'a harness run gives the model no tools, so it only serves agents that cannot write (mode plan or read_only)')
         ceiling = agent.get('tokenCeiling')
         if run_cap and ceiling and ceiling > run_cap:
             add(f'{where}.tokenCeiling', 'cannot exceed ceilings.tokensPerRun')
@@ -429,7 +438,7 @@ def _semantic_issues(definition: dict) -> list[Issue]:
                 add(f'repositories[{i}].{key}', 'a segment is a name Windows cannot create (con, nul, a trailing dot...)')
     for name, server in definition['mcp'].items():
         args = server.get('args', [])
-        if any(_CREDENTIAL_FLAG.match(a) and k + 1 < len(args) and not args[k + 1].startswith('-') for k, a in enumerate(args)):
+        if any(_credential_flag(a) and k + 1 < len(args) and not args[k + 1].startswith('-') for k, a in enumerate(args)):
             add(f'mcp.{name}.args', 'a credential flag followed by a value; pass credentials through env with a secretRef')
     ids = [r['id'] for r in definition['repositories']]
     if len(set(ids)) != len(ids):
@@ -454,6 +463,18 @@ def _semantic_issues(definition: dict) -> list[Issue]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- loader
+
+def validate(definition: object) -> list[Issue]:
+    """The checks `load` runs on a merged definition that did not come from disk (a proposed change, for one). Errors and warnings."""
+    if not isinstance(definition, dict):
+        return [Issue('forja.yaml', '', 'must be a mapping')]
+    merged = _integral_floats(definition)
+    schema = _schema_issues(merged)
+    issues = schema + _secret_issues(merged) + _single_line_issues(merged)
+    if not schema:
+        issues += _semantic_issues(merged)
+    return sorted(set(issues), key=lambda i: (i.file, i.path, i.message))
+
 
 def load(directory: str | Path) -> Loaded:
     root = Path(directory)

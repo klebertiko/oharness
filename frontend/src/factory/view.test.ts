@@ -2,14 +2,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { FACTORY_COLUMNS, FACTORY_STAGES, FACTORY_STATUSES, type WorkItem } from "./types";
-import { actionsFor, BOARD_COLUMNS, groupByColumn, statusTone } from "./view";
+import { actionsFor, ageParts, displayColumn, DISPLAY_COLUMNS, eventKey, groupByDisplay, groupInbox, moveReason, sourceKey, statusTone } from "./view";
+import type { WorkItemEvent } from "./types";
 
 const backend = readFileSync(path.resolve(__dirname, "../../../backend/factory/stages.py"), "utf8");
 const PATTERNS = { STAGES: /STAGES = \(([^)]*)\)/, STATUSES: /STATUSES = \(([^)]*)\)/, COLUMNS: /COLUMNS = \(([^)]*)\)/ };
 const tuple = (name: keyof typeof PATTERNS) => [...(PATTERNS[name].exec(backend)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 
 const item = (over: Partial<WorkItem>): WorkItem =>
-  ({ id: "1", title: "t", column: "new", stage: "intake", status: "queued", spec: { text: "", revision: 0, approved_revision: null }, ...over }) as WorkItem;
+  ({ id: "1", title: "t", column: "new", stage: "intake", status: "queued", source: { kind: "cli", subtype: null, ref: "cli:1", url: null, thread_ref: null }, spec: { text: "", revision: 0, approved_revision: null }, ...over }) as WorkItem;
 
 describe("the vocabulary is the backend's single table", () => {
   it("has the same stages, statuses and columns as backend/factory/stages.py", () => {
@@ -17,17 +18,50 @@ describe("the vocabulary is the backend's single table", () => {
     expect([...FACTORY_STATUSES]).toEqual(tuple("STATUSES"));
     expect([...FACTORY_COLUMNS]).toEqual(tuple("COLUMNS"));
   });
-  it("shows every column but the closed one on the board", () => {
-    expect([...BOARD_COLUMNS, "closed"].sort()).toEqual([...FACTORY_COLUMNS].sort());
+  it("shows six stage columns, and keeps status off the board", () => {
+    expect(DISPLAY_COLUMNS).toEqual(["intake", "spec", "implement", "review", "merge", "done"]);
+    expect(displayColumn(item({ stage: "intake", status: "queued" }))).toBe("intake");
+    expect(displayColumn(item({ stage: "spec", status: "awaiting_human" }))).toBe("spec");
+    expect(displayColumn(item({ stage: "implement", status: "running" }))).toBe("implement");
+    expect(displayColumn(item({ stage: "handoff", status: "waiting_merge" }))).toBe("merge");
+    expect(displayColumn(item({ stage: "handoff", status: "done" }))).toBe("done");
+    expect(displayColumn(item({ stage: "implement", status: "failed" }))).toBe("implement");
   });
 });
 
-describe("groupByColumn", () => {
-  it("puts each item in its column and keeps cancelled and failed behind the filter", () => {
-    const items = [item({ id: "a", column: "needs_you" }), item({ id: "b", column: "closed", status: "failed" })];
-    expect(groupByColumn(items, false).get("needs_you")?.map((i) => i.id)).toEqual(["a"]);
-    expect(groupByColumn(items, false).has("closed")).toBe(false);
-    expect(groupByColumn(items, true).get("closed")?.map((i) => i.id)).toEqual(["b"]);
+describe("groupByDisplay", () => {
+  it("puts a failed item in its stage column and hides a cancelled one", () => {
+    const items = [item({ id: "a", stage: "spec", status: "awaiting_human" }), item({ id: "b", stage: "implement", status: "failed" }), item({ id: "c", status: "cancelled" })];
+    expect(groupByDisplay(items).get("spec")?.map((row) => row.id)).toEqual(["a"]);
+    expect(groupByDisplay(items).get("implement")?.map((row) => row.id)).toEqual(["b"]);
+    expect([...groupByDisplay(items).values()].flat().map((row) => row.id)).not.toContain("c");
+  });
+});
+
+describe("moves", () => {
+  it("allows the next column and explains a skip", () => {
+    expect(moveReason("intake", "spec")).toBe("allowed");
+    expect(moveReason("intake", "review")).toBe("blocked");
+    expect(moveReason("review", "implement")).toBe("allowed");
+  });
+});
+
+describe("words on screen", () => {
+  it("never uses the raw event name or an ISO stamp", () => {
+    const event = { sequence: 1, type: "checkpoint_requested", actor: { kind: "foreman", id: null }, data: { kind: "spec" }, at: "2026-11-01T10:00:00Z" } as WorkItemEvent;
+    expect(eventKey(event)).toBe("forja.event.checkpoint");
+    expect(eventKey({ ...event, type: "something_new" })).toBe("forja.event.update");
+    expect(JSON.stringify(ageParts(event.at, Date.parse("2026-11-01T12:00:00Z")))).not.toMatch(/T\d\d:/);
+    expect(sourceKey(item({ source: { kind: "github", subtype: null, ref: "o/r#123", url: null, thread_ref: null } }))).toEqual({ key: "forja.source.githubNumber", n: "123" });
+  });
+});
+
+describe("groupInbox", () => {
+  it("groups rows that belong to the same item", () => {
+    const entry = { id: "a", type: "question" as const, work_item_id: "i1", factory_id: "payments", title: "Fix login", stage: "triage", status: "awaiting_human", since: "x", summary: "Which?", actions: [], resolved: false };
+    const groups = groupInbox([entry, { ...entry, id: "b", type: "spec_review" }]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].entries.map((row) => row.id)).toEqual(["a", "b"]);
   });
 });
 

@@ -1,17 +1,20 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type PanelVariant = "panel" | "float" | "inset";
+export type PanelVariant = "panel" | "float" | "inset" | "dock";
 
 const VARIANT: Record<PanelVariant, string> = {
-  panel: "rounded-panel border border-line-soft bg-sub-100 shadow-[inset_0_1px_0_var(--surface-highlight)]",
-  float: "rounded-float border border-line bg-sub-100 shadow-(--shadow-float)",
-  inset: "rounded-control border border-line-soft bg-sub-200",
+  panel: "oh-inset-highlight rounded-panel border border-line-soft bg-bg-pane",
+  float: "rounded-float border border-line bg-bg-elevated shadow-(--shadow-float)",
+  inset: "rounded-control border border-line-soft bg-bg-hover",
+  /* Docked regions (the shell columns) have no second frame. */
+  dock: "oh-inset-highlight rounded-none border-0 bg-bg-pane",
 };
 
 /**
- * A surface with an optional 32px header. Elevation is a value step plus a
- * hairline; only `float` carries a shadow. A titled panel is a labelled region.
+ * A surface with an optional header at the panel-head token (32px). Elevation
+ * is a value step plus a hairline; only `float` carries a shadow. A titled
+ * panel is a labelled region. `dock` is the flush column used by the shell.
  */
 export function Panel({
   variant = "panel",

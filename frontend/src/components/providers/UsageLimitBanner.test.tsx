@@ -47,6 +47,14 @@ describe("usage limit banner", () => {
     expect(screen.getByRole("button", { name: "Use an API key" })).toBeTruthy();
   });
 
+  it("does not take the draft when no reset time is known, since nothing would send it", () => {
+    const { onHoldDraft } = show({ resetAt: null });
+    const hold = screen.getByRole("button", { name: "Wait and send when it frees up" }) as HTMLButtonElement;
+    expect(hold.disabled).toBe(true);
+    fireEvent.click(hold);
+    expect(onHoldDraft).not.toHaveBeenCalled();
+  });
+
   it("holds the draft and sends it when the window opens", () => {
     const { onRelease, onHoldDraft } = show();
     fireEvent.click(screen.getByRole("button", { name: "Wait and send when it frees up" }));
