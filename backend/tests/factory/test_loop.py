@@ -416,7 +416,8 @@ def test_the_run_goes_only_to_a_project_of_the_items_forja(ready, monkeypatch, t
     item_id = anyio.run(register)
     try:
         with TestClient(app) as client:
-            listed = client.get(f'/factory/work-items/{item_id}/repositories')
+            assert client.get(f'/factory/work-items/{item_id}/repositories').status_code == 403
+            listed = client.get(f'/factory/work-items/{item_id}/repositories', headers=HUMAN)
             assert listed.status_code == 200, listed.text
             assert [row['root_path'] for row in listed.json()['repositories']] == [str(mine)]
             for folder in (theirs, tmp_path / 'plain'):
@@ -424,3 +425,113 @@ def test_the_run_goes_only_to_a_project_of_the_items_forja(ready, monkeypatch, t
                 assert wrong.status_code == 409 and wrong.json()['detail']['code'] == 'wrong_repository', folder
     finally:
         anyio.run(unregister)
+
+
+def test_when_the_error_handler_itself_fails_the_item_still_gets_its_status_back(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+
+    async def boom(run):
+        raise ValueError('the agent broke')
+
+    async def handler_breaks(*_args, **_kwargs):
+        raise RuntimeError('the checkpoint could not be written')
+    monkeypatch.setattr(loop.dispatch.service, 'request_checkpoint', handler_breaks)
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db, 'handler-1')).id
+        before = await _status(item_id)
+        with pytest.raises(RuntimeError):
+            await loop.start(item_id, defn(), repo, store, driver=boom)
+        return item_id, before
+
+    item_id, before = anyio.run(case)
+    assert before != 'running' and anyio.run(_status, item_id) == before
+    assert loop.BOARD.active_for_item(item_id) is None
+
+
+def test_a_cancel_before_the_stage_body_still_gives_the_item_its_status_back(ready, store, tmp_path, monkeypatch):
+    repo = _repo(tmp_path, monkeypatch)
+    reached = asyncio.Event()
+    original = loop.dispatch.service.link_run
+
+    async def link_then_hang(db, item, *args, **kwargs):
+        await original(db, item, *args, **kwargs)
+        item.status = 'running'
+        await db.commit()
+        reached.set()
+        await asyncio.Event().wait()
+    monkeypatch.setattr(loop.dispatch.service, 'link_run', link_then_hang)
+
+    async def case():
+        async with SessionLocal() as db:
+            item_id = (await _item(db, 'cancel-early')).id
+        before = await _status(item_id)
+        task = asyncio.create_task(loop.start(item_id, defn(), repo, store))
+        await asyncio.wait_for(reached.wait(), timeout=30)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return item_id, before
+
+    item_id, before = anyio.run(case)
+    assert anyio.run(_status, item_id) == before
+    assert loop.BOARD.active_for_item(item_id) is None
+
+
+def test_the_forja_of_a_project_is_read_again_only_when_its_file_changes(tmp_path, monkeypatch):
+    from factory import runs_router
+    root = _forja_project(tmp_path / 'cached', 'payments')
+    runs_router._FORJA_NAMES.clear()
+    calls = []
+    original = runs_router.definition_files.load
+
+    def counted(folder):
+        calls.append(folder)
+        return original(folder)
+    monkeypatch.setattr(runs_router.definition_files, 'load', counted)
+    assert runs_router._forja_of(str(root)) == 'payments'
+    assert runs_router._forja_of(str(root)) == 'payments'
+    assert len(calls) == 1
+    forja = root / '.oharness' / 'forja' / 'forja.yaml'
+    forja.write_text(forja.read_text(encoding='utf-8').replace('name: payments', 'name: billing', 1) + '\n', encoding='utf-8')
+    assert runs_router._forja_of(str(root)) == 'billing'
+    assert len(calls) == 2
+
+
+def test_the_forja_of_a_project_is_read_again_when_an_agent_runner_or_mcp_file_changes(tmp_path, monkeypatch):
+    from factory import runs_router
+    root = _forja_project(tmp_path / 'deep', 'payments')
+    runs_router._FORJA_NAMES.clear()
+    calls = []
+    original = runs_router.definition_files.load
+
+    def counted(folder):
+        calls.append(folder)
+        return original(folder)
+    monkeypatch.setattr(runs_router.definition_files, 'load', counted)
+    forja = root / '.oharness' / 'forja'
+    assert runs_router._forja_of(str(root)) == 'payments' and len(calls) == 1
+    agent = next((forja / 'agents').rglob('agent.md'))
+    agent.write_text(agent.read_text(encoding='utf-8') + '\nMore.\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 2
+    (forja / 'mcp').mkdir(exist_ok=True)
+    (forja / 'mcp' / 'docs.yaml').write_text('command: x\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 3
+    (forja / 'runners').mkdir(exist_ok=True)
+    (forja / 'runners' / 'main.yaml').write_text('type: local\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 4
+
+
+def test_the_forja_cache_has_a_ceiling(tmp_path):
+    from factory import runs_router
+    runs_router._FORJA_NAMES.clear()
+    for index in range(runs_router.FORJA_CACHE_MAX + 10):
+        folder = tmp_path / f'p{index}' / '.oharness' / 'forja'
+        folder.mkdir(parents=True)
+        (folder / 'forja.yaml').write_text('kind: forja\n', encoding='utf-8')
+        runs_router._forja_of(str(tmp_path / f'p{index}'))
+    assert len(runs_router._FORJA_NAMES) <= runs_router.FORJA_CACHE_MAX
