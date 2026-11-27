@@ -4,9 +4,10 @@ from __future__ import annotations
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
 from database import SessionLocal
+from factory.improvement.orm import guard_statements, unguard_statements
 from factory import auth, versions
 from factory.definition import hash_of
 from factory.improvement.orm import AppendOnlyError, FactoryFailure, FactoryScore, ImprovementEvent, ImprovementProposal
@@ -22,11 +23,15 @@ def _scorer() -> dict:
 
 async def _reset():
     async with SessionLocal() as db:
+        for statement in unguard_statements():  # the trail is append-only; a test reset lifts the triggers, then puts them back
+            await db.execute(text(statement))
         await db.execute(delete(ImprovementEvent))
         await db.execute(delete(ImprovementProposal))
         await db.execute(delete(FactoryScore))
         await db.execute(delete(FactoryFailure))
         await db.execute(delete(versions.DefinitionVersion).where(versions.DefinitionVersion.factory_id.in_((FACTORY, OTHER))))
+        for statement in guard_statements():
+            await db.execute(text(statement))
         await db.commit()
 
 
@@ -358,3 +363,111 @@ def test_the_service_itself_refuses_a_decision_without_the_person(client):
                     await call()
                 assert caught.value.code == 'human_only'
     anyio.run(go)
+
+
+# ------------------------------------------------------------------------------------------------------------- the decision itself
+
+def test_the_limits_run_again_at_the_decision_even_when_the_version_did_not_change(client, monkeypatch):
+    _activate(definition())
+    proposal = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': definition('Build, then ask.'),
+                                                                  'justification': 'x'}, headers=HUMAN).json()
+    assert proposal['status'] == 'pending'
+    from factory.improvement import limits
+    monkeypatch.setattr(limits, 'check', lambda before, after, **_: [{'code': 'weaken_gate', 'path': 'stages.review', 'message': 'x'}])
+    resp = client.post(f"/factory/improvements/{proposal['id']}/decide", json={'action': 'approve'}, headers=HUMAN)
+    assert resp.status_code == 409 and resp.json()['detail']['code'] == 'rejected_by_validator'
+    assert _state().canary is None
+    listed = {row['id']: row for row in client.get('/factory/improvements', params={'factory_id': FACTORY}).json()['proposals']}
+    assert listed[proposal['id']]['status'] == 'rejected'
+
+
+def test_the_check_and_the_activation_hold_the_version_lock_together(client, monkeypatch):
+    _activate(definition())
+    proposal = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': definition('Build, then ask.'),
+                                                                  'justification': 'x'}, headers=HUMAN).json()
+    from factory.improvement import service
+    seen = []
+    original = service._still_valid
+
+    async def watched(*args, **kwargs):
+        seen.append(versions._WRITES.locked())
+        return await original(*args, **kwargs)
+    monkeypatch.setattr(service, '_still_valid', watched)
+    assert client.post(f"/factory/improvements/{proposal['id']}/decide", json={'action': 'approve'}, headers=HUMAN).status_code == 200
+    assert seen == [True]
+
+
+def test_a_decision_note_with_a_credential_is_refused(client):
+    _activate(definition())
+    proposal = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': definition('Build, then ask.'),
+                                                                  'justification': 'x'}, headers=HUMAN).json()
+    resp = client.post(f"/factory/improvements/{proposal['id']}/decide",
+                       json={'action': 'reject', 'note': 'use ghp_' + 'a' * 36}, headers=HUMAN)
+    assert resp.status_code == 422 and resp.json()['detail']['code'] == 'looks_secret'
+    listed = {row['id']: row for row in client.get('/factory/improvements', params={'factory_id': FACTORY}).json()['proposals']}
+    assert listed[proposal['id']]['status'] == 'pending'
+
+
+@pytest.mark.parametrize('patch', ['ｇｉｔ ｍｅｒｇｅ main\n', 'gi​t mer‍ge main\n', 'glab mr merge 3\n', 'auto­merge: true\n'])
+def test_a_merge_hidden_by_unicode_or_on_another_forge_is_refused(client, patch):
+    _activate(definition())
+    resp = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'code_patch': patch, 'justification': 'x'}, headers=HUMAN)
+    assert resp.status_code == 200 and any(reason['code'] == 'add_merge' for reason in resp.json()['reasons']), patch
+
+
+def test_the_database_refuses_to_change_or_delete_the_trail(client):
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+    proposal = _canary(client)
+    assert _score(client, proposal['after_hash'], 'kept', False).status_code == 200
+
+    async def attempt(statement):
+        async with SessionLocal() as db:
+            try:
+                await db.execute(text(statement))
+                await db.commit()
+            except DBAPIError:
+                await db.rollback()
+                return 'refused'
+            return 'changed'
+    for table in ('factory_improvement_events', 'factory_scores', 'factory_failures'):
+        column = 'type' if table == 'factory_improvement_events' else 'reason'
+        assert anyio.run(attempt, f"UPDATE {table} SET {column} = 'x'") == 'refused', table
+        assert anyio.run(attempt, f'DELETE FROM {table}') == 'refused', table
+
+
+def test_a_proposed_definition_that_nests_too_deep_is_refused(client):
+    _activate(definition())
+    deep: dict = {}
+    node = deep
+    for _ in range(80):
+        node['x'] = {}
+        node = node['x']
+    after = definition('Build.')
+    after['agents']['builder']['localSkills'] = deep
+    resp = client.post('/factory/improvements/analyze', json={'factory_id': FACTORY, 'after': after, 'justification': 'x'}, headers=HUMAN)
+    assert resp.status_code == 422
+
+
+def test_a_database_made_before_the_triggers_gets_them_at_startup(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import DBAPIError
+
+    from database import _migrate_factory_scores
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text('CREATE TABLE factory_scores (id VARCHAR PRIMARY KEY, factory_id VARCHAR, scorer_id VARCHAR, run_id VARCHAR, reason VARCHAR)'))
+        conn.execute(text('CREATE TABLE factory_failures (id VARCHAR PRIMARY KEY, reason VARCHAR)'))
+        conn.execute(text('CREATE TABLE factory_improvement_events (id INTEGER PRIMARY KEY, type VARCHAR)'))
+        conn.execute(text("INSERT INTO factory_scores (id, reason) VALUES ('s', 'old')"))
+        conn.execute(text("INSERT INTO factory_failures (id, reason) VALUES ('f', 'old')"))
+        conn.execute(text("INSERT INTO factory_improvement_events (id, type) VALUES (1, 'old')"))
+    with engine.begin() as conn:
+        _migrate_factory_scores(conn)
+    for table, column in (('factory_scores', 'reason'), ('factory_failures', 'reason'), ('factory_improvement_events', 'type')):
+        for statement in (f"UPDATE {table} SET {column} = 'x'", f'DELETE FROM {table}'):
+            with pytest.raises(DBAPIError), engine.begin() as conn:
+                conn.execute(text(statement))
+    with engine.begin() as conn:  # running it again is harmless
+        _migrate_factory_scores(conn)
+    engine.dispose()

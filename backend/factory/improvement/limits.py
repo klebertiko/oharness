@@ -9,6 +9,7 @@ or change a protected field is refused with a reason. The Forja never merges, an
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
 
 from factory import definition_rules as rules
@@ -29,17 +30,28 @@ _COMMAND_WINDOW = 8  # a `merge` subcommand this many words after `git` (options
 TEXT_SCAN_MAX = 100_000  # a new text past this is refused rather than scanned
 
 
+# The forge command lines and the word before their merge subcommand.
+_FORGE_CLIS = {'gh': 'pr', 'glab': 'mr', 'tea': 'pr', 'hub': 'pr'}
+
+
+def _visible(text: str) -> str:
+    """The text as it reads: NFKC folds look-alike forms (full width, ligatures), and format characters (zero width, soft
+    hyphen) are dropped, so a merge cannot hide between them."""
+    return ''.join(char for char in unicodedata.normalize('NFKC', text) if unicodedata.category(char) != 'Cf')
+
+
 def _merges(text: str) -> Counter:
     """Each merge the text spells, as a normalized signature. Linear in the text: one regex with no nested repetition, then a
     walk over the words. Comparing the signatures on both sides, not presence or a count, keeps a merge already mentioned
     before from hiding a new or a swapped one."""
+    text = _visible(text)
     found: Counter = Counter(' '.join(match.group(0).lower().split()) for match in MERGE_TEXT.finditer(text))
     words = [word.lower().strip('.,:!?') for word in _TOKEN.findall(text)]
     for index, word in enumerate(words):
         program = _PATH_SEP.split(word)[-1].removesuffix('.exe')
         following = words[index + 1:index + 1 + _COMMAND_WINDOW]
-        if program == 'gh' and 'pr' in following:
-            following = following[following.index('pr') + 1:]
+        if program in _FORGE_CLIS and _FORGE_CLIS[program] in following:
+            following = following[following.index(_FORGE_CLIS[program]) + 1:]
         elif program != 'git':
             continue
         if 'merge' in following:
@@ -63,7 +75,7 @@ _JUDGED = tuple(re.compile(p) for p in (
     r'agents\.[^.]+\.networkPolicy\..+', r'scorers\.[^.]+\.(passingScore|enabled|selfImprovement|samplingRate)',
     r'selfImprovement\.(' + '|'.join(rules.SELF_IMPROVEMENT_DEFAULTS) + ')',
 ))
-_NEW_AGENT_PROTECTED = re.compile(r'agents\.[^.]+\.(harness|engine|trigger)')
+_NEW_AGENT_PROTECTED = re.compile(r'agents\.[^.]+\.(harness|engine|trigger|runner)')
 _MUST_STAY = tuple(re.compile(p) for p in (
     r'policy\.[^.]+', r'scorers\.[^.]+\.passingScore', r'selfImprovement\.(' + '|'.join(rules.SELF_IMPROVEMENT_DEFAULTS) + ')',
 ))
@@ -126,6 +138,11 @@ def _flags(defn: dict) -> dict[str, tuple[bool, bool, bool]]:
             enabled = bool(explicit.get('enabled', True))
             out[stage] = (bool(explicit.get('required')), enabled, enabled)
         return out
+
+
+def required_stages(defn: dict) -> set[str]:
+    """Stages the definition requires, with the effective policy (a required spec included)."""
+    return {stage for stage, (required, _enabled, _runs) in _flags(defn).items() if required}
 
 
 def _secrets(defn: dict) -> set[str]:
@@ -195,7 +212,7 @@ def text_merges(text: str) -> bool:
     return len(text) > TEXT_SCAN_MAX or bool(_merges(text))
 
 
-def _fields(before: dict, after: dict) -> list[dict]:
+def _fields(before: dict, after: dict, free: tuple = ()) -> list[dict]:
     """Removed keys, changed types and changes to fields no rule judges."""
     reasons: list[dict] = []
     old, new = _leaves(before), _leaves(after)
@@ -218,7 +235,7 @@ def _fields(before: dict, after: dict) -> list[dict]:
             continue  # a whole agent added or removed: the agent and stage rules judge it
         if parts[0] == 'scorers' and len(parts) > 2 and parts[1] not in old_scorers:
             continue  # a new scorer only scores more
-        if any(rule.fullmatch(path) for rule in _FREE + _JUDGED):
+        if any(rule.fullmatch(path) for rule in _FREE + _JUDGED + free):
             continue
         reasons.append(_reason('protected_field', path, 'This field is not one a proposal may change. A person edits it in the definition.'))
     return reasons
@@ -332,11 +349,14 @@ def _trial_rules(before: dict, after: dict) -> list[dict]:
     return reasons
 
 
-def check(before: dict, after: dict) -> list[dict]:
-    """Reasons the proposal cannot be shown to a person. Empty means it may be reviewed."""
+def check(before: dict, after: dict, *, free: tuple[str, ...] = ()) -> list[dict]:
+    """Reasons the proposal cannot be shown to a person. Empty means it may be reviewed.
+
+    `free` adds path patterns a caller may change on top of the short list: a person editing the blueprint passes `blueprint\\..+`.
+    Every gate, mode, ceiling and scorer rule still applies."""
     if not isinstance(before, dict) or not isinstance(after, dict):
         return [_reason('invalid_type', '$', 'A definition is a mapping.')]
-    reasons = _fields(before, after) + _policy_rules(before, after) + _agent_rules(before, after) + _scorer_rules(before, after)
+    reasons = _fields(before, after, tuple(re.compile(p) for p in free)) + _policy_rules(before, after) + _agent_rules(before, after) + _scorer_rules(before, after)
     reasons += _trial_rules(before, after)
     if _secrets(after) - _secrets(before):
         reasons.append(_reason('add_secret', 'secrets', 'The proposal grants a secret the active definition does not.'))

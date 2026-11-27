@@ -2,11 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, ConfirmInline, Input, Notice, Sheet } from "@/components/ui";
 import { useI18n } from "@/i18n/store";
-import type { MessageKey } from "@/i18n/translate";
 import { forjaApi } from "./forjaApi";
 import type { FactoryAction, WorkItem, WorkItemArtifact, WorkItemEvent } from "./types";
 import { useExplain } from "./useForja";
-import { actionsFor, ageParts, eventKey, openQuestion, sourceKey, statusTone } from "./view";
+import { actionsFor, ageParts, eventKey, label, openQuestion, sourceKey, statusTone } from "./view";
 import { formatDate } from "@/i18n/translate";
 
 type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string; stage: string; agent_id: string | null }[] };
@@ -15,7 +14,7 @@ type Detail = WorkItem & { artifacts: WorkItemArtifact[]; runs: { run_id: string
  * One work item: where it is, its spec (with the approval of the revision a person is looking at), what happened and what a person can
  * do. Text that came from outside is shown as data in its own block and is never an instruction. There is no merge action (ADR 0055).
  */
-export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+export function ItemSheet({ id, live = null, onClose, onChanged }: { id: string; live?: { run_id: string } | null; onClose: () => void; onChanged: () => void }) {
   const { t, number, locale } = useI18n();
   const explain = useExplain();
   const [item, setItem] = useState<Detail | null>(null);
@@ -25,6 +24,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
   const [answer, setAnswer] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [steer, setSteer] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +64,42 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
     }
   };
 
+  const [choices, setChoices] = useState<{ id: string; name: string; root_path: string }[] | null>(null);
+  // Only a registered project whose definition is this item's Forja; with more than one, the person picks.
+  const startRun = async (repo?: string) => {
+    try {
+      if (!repo) {
+        const { repositories } = await forjaApi.itemRepositories(id);
+        if (repositories.length === 0) {
+          setError(t("forja.runs.noProject"));
+          return;
+        }
+        if (repositories.length > 1) {
+          setChoices(repositories);
+          return;
+        }
+        repo = repositories[0].root_path;
+      }
+      setChoices(null);
+      await forjaApi.startRun(id, repo);
+      setError(null);
+      await load();
+      onChanged();
+    } catch (e) {
+      setError(explain(e));
+    }
+  };
+  const control = async (run: () => Promise<unknown>) => {
+    try {
+      await run();
+      setError(null);
+      setSteer("");
+      onChanged();
+    } catch (e) {
+      setError(explain(e));
+    }
+  };
+
   const question = item && item.status === "awaiting_human" ? openQuestion(events) : null;
   const source = item ? sourceKey(item) : null;
 
@@ -81,10 +117,10 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
           {error && <Notice tone="warn">{error}</Notice>}
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="text-ink-dim">{t("forja.item.stage")}</dt>
-            <dd>{t(`forja.stage.${item.stage}` as MessageKey)}</dd>
+            <dd>{label(t, `forja.stage.${item.stage}`, item.stage)}</dd>
             <dt className="text-ink-dim">{t("forja.item.status")}</dt>
             <dd>
-              <Badge tone={statusTone(item.status)}>{t(`forja.status.${item.status}` as MessageKey)}</Badge>
+              <Badge tone={statusTone(item.status)}>{label(t, `forja.status.${item.status}`, item.status)}</Badge>
             </dd>
             <dt className="text-ink-dim">{t("forja.item.source")}</dt>
             <dd>{t(source.key, source.n ? { n: source.n } : undefined)}</dd>
@@ -114,7 +150,7 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
             <pre className="whitespace-pre-wrap rounded-control border border-line-soft bg-sub-200 p-2">{item.origin_context.text || "–"}</pre>
           </section>
           <List title={t("forja.item.artifacts")} id="forja-artifacts" empty={t("forja.item.none")} rows={item.artifacts.map((a) => `${a.kind}: ${a.ref}`)} />
-          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${t(`forja.stage.${r.stage}` as MessageKey)} · ${r.agent_id ?? t("forja.item.none")}`)} />
+          <List title={t("forja.item.runs")} id="forja-runs" empty={t("forja.item.none")} rows={item.runs.map((r) => `${label(t, `forja.stage.${r.stage}`, r.stage)} · ${r.agent_id ?? t("forja.item.none")}`)} />
           <section aria-labelledby="forja-history">
             <h3 id="forja-history" className="mb-1 text-title">{t("forja.item.history")}</h3>
             {events.length === 0 ? <p className="text-ink-mute">{t("forja.item.none")}</p> : (
@@ -142,12 +178,37 @@ export function ItemSheet({ id, onClose, onChanged }: { id: string; onClose: () 
               </div>
             </section>
           )}
+          {live && (
+            <section aria-labelledby="forja-live" className="flex flex-col gap-2">
+              <h3 id="forja-live" className="text-title">{t("forja.tab.runs")}</h3>
+              <Input label={t("forja.runs.steerHint")} value={steer} onChange={(e) => setSteer(e.target.value)} />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!steer.trim()} onClick={() => void control(() => forjaApi.steerRun(live.run_id, steer.trim()))}>{t("forja.runs.steer")}</Button>
+                <Button size="sm" variant="danger" onClick={() => void control(() => forjaApi.stopRun(live.run_id))}>{t("forja.runs.stop")}</Button>
+              </div>
+            </section>
+          )}
+          {item.stage === "implement" && item.status === "queued" && !live && (
+            <div>
+              <Button size="sm" variant="primary" onClick={() => void startRun()}>{t("forja.runs.start")}</Button>
+              {choices && (
+                <fieldset className="mt-2 flex flex-wrap gap-2">
+                  <legend className="text-body text-ink-dim">{t("forja.runs.pickProject")}</legend>
+                  {choices.map((choice) => (
+                    <Button key={choice.id} size="sm" title={choice.root_path} onClick={() => void startRun(choice.root_path)}>
+                      {t("forja.runs.startIn", { name: choice.name })}
+                    </Button>
+                  ))}
+                </fieldset>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Input label={t("forja.item.noteLabel")} value={note} onChange={(e) => setNote(e.target.value)} />
             <div className="flex flex-wrap gap-2">
               {actionsFor(item).map((action) => (
                 <Button key={action} variant={action === "approve_spec" ? "primary" : action === "cancel" ? "danger" : "secondary"} size="sm" onClick={() => (action === "cancel" ? setConfirming(true) : void act(action))} disabled={action === "note" && !note.trim()}>
-                  {t(`forja.action.${action}` as MessageKey)}
+                  {label(t, `forja.action.${action}`, action)}
                 </Button>
               ))}
             </div>

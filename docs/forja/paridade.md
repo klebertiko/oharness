@@ -7,7 +7,8 @@ Legenda:
 - **Já na base** — existe na `main` e este PR não refaz.
 - **Neste PR** — entra agora, com teste.
 - **Fatia 2** — próxima entrega da Forja, ainda neste pacote, sem depender do laço de execução.
-- **Fatia 3** — depende do laço de execução (o módulo que dispara os estágios), que este pacote não altera. Enquanto ele não estiver na `main`, a tela mostra que a execução automática está desligada.
+- **Feito** — coberto por teste. O laço de execução já dispara o estágio, com worktree, pool, parar e orientar.
+- **Fatia 3** — o que ainda falta: trials executados, branch de código no repositório, forge genérico, conectores e o restante desta lista.
 - **Não se aplica** — o motivo está na linha.
 
 ## Núcleo
@@ -21,7 +22,7 @@ Legenda:
 | W5 | Skills embutidas, globais e do próprio agente | Já na base |
 | W6 | Modelo, harness e instruções por agente | Neste PR o campo opcional `engine` (id de um harness do Studio) no agente, validado pelo schema e recusado em agente que escreve. A tela não mostra o formato do arquivo. O editor que grava uma versão em teste: Fatia 2 |
 | W7 | Agente novo pela tela ou pela definição | Fatia 2 — "Novo agente", atribuir a um estágio, aparecer no blueprint |
-| W8 | Override de runner e de perfil de setup por tarefa | Fatia 3 |
+| W8 | Override de runner e de perfil de setup por tarefa | Feito — a tarefa nomeia o runner; os comandos de setup desse runner rodam antes do estágio |
 | W9 | Quem pode disparar cada agente | Fatia 2 — o validador recusa um disparo de papel não autorizado |
 | W10 | O mesmo agente em dois estágios | Fatia 2 |
 
@@ -29,13 +30,13 @@ Legenda:
 
 | # | Capacidade | Situação |
 |---|---|---|
-| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2 — diagrama só de leitura e edição que gera uma versão nova, sem mudar o que já corre |
-| W12 | Entrada condicional (a primeira transição que a condição aceita) | Fatia 2 — teste: um item com o rótulo certo entra direto em implementação |
-| W13 | Devolver a revisão para implementação, com teto | Já na base o retorno e o teto da política. Teto por transição: Fatia 2 |
-| W14 | Rota condicional que encerra o item com um motivo | Fatia 2 |
-| W15 | Simular o caminho com um payload de exemplo | Fatia 2 |
+| W11 | Blueprint com estágios, agentes, transições e gates | Fatia 2, neste PR — a tela carrega o blueprint ativo e lista entradas, rotas e gates. Ela edita a partir dele, mostra o que o salvamento remove antes de gravar e grava um teste; o item que já corre fica na versão antiga; pular um estágio obrigatório é recusado. O diagrama visual não está neste PR |
+| W12 | Entrada condicional (a primeira transição que a condição aceita) | Fatia 2, neste PR — um item com o rótulo `docs` entra em implementação |
+| W13 | Devolver a revisão para implementação, com teto | Já na base o retorno da política. Neste PR (fatia 2) o teto por transição manda o item para uma pessoa |
+| W14 | Rota condicional que encerra o item com um motivo | Fatia 2, neste PR |
+| W15 | Simular o caminho com um payload de exemplo | Fatia 2, neste PR — `POST /factory/blueprint/simulate` com rótulos de exemplo, sobre o blueprint ativo ou o rascunho da tela |
 | W16 | Gate de aprovação da especificação | Já na base |
-| W17 | Gate condicional: perguntar quando uma condição em prosa for verdadeira | Fatia 2 — o gate declarado pausa, e a resposta pode decidir a transição |
+| W17 | Gate condicional: perguntar quando uma condição em prosa for verdadeira | Fatia 2, neste PR — o gate pausa com a pergunta declarada |
 | W18 | Mudança de definição não altera o que já está em execução | Já na base. Neste PR o teste de canário confirma que o item antigo fica na versão em que nasceu |
 | W19 | Merge só de pessoa; o validador recusa uma ação de merge | Já na base a regra de merge. Neste PR o validador de proposta recusa merge, com motivo, antes de chegar à pessoa |
 
@@ -47,8 +48,8 @@ Legenda:
 | W21 | Filtros: todos precisam bater; lista vazia não restringe | Já na base |
 | W22 | Filtro de payload em webhook | Já na base |
 | W23 | Agenda | Já na base. A tela mostra a próxima execução no horário local: Fatia 2 |
-| W24 | Evento interno quando o item muda de estágio, para encadear outra automação | Fatia 2 — teste: chegar a concluído dispara a automação de resumo |
-| W25 | "Dispararia?" contra um payload de exemplo, dizendo qual filtro falhou | Fatia 2 |
+| W24 | Evento interno quando o item muda de estágio, para encadear outra automação | Fatia 2, neste PR — chegar a concluído dispara a automação de resumo |
+| W25 | "Dispararia?" contra um payload de exemplo, dizendo qual filtro falhou | Fatia 2, neste PR |
 | W26 | Aviso quando duas automações disparam o mesmo evento e o mesmo alvo | Fatia 2 |
 | W27 | Webhooks autenticados | Já na base no servidor. Tela com URL, copiar segredo, rotação e as últimas entregas: Fatia 2 |
 | W28 | Limite de tamanho, retentativa e idempotência | Já na base |
@@ -67,15 +68,15 @@ Legenda:
 
 | # | Capacidade | Situação |
 |---|---|---|
-| W39 | Worktree por run e teto de runs simultâneas | Já na base o mecanismo, desligado do laço. Fatia 3 liga |
-| W40 | Precedência do runner: tarefa, automação, agente, padrão | Fatia 3 |
-| W41 | Comandos de setup na worktree antes do primeiro estágio | Fatia 3 |
-| W42 | Erro de setup diz qual comando falhou, com a saída redigida | Fatia 3 |
+| W39 | Worktree por run e teto de runs simultâneas | Feito — `factory.loop.start` chama `dispatch.run_stage` em produção: um worktree por run e o pool de `maxConcurrentRuns` |
+| W40 | Precedência do runner: tarefa, automação, agente, padrão | Feito — a tarefa vence, depois a automação, o agente e o primeiro runner |
+| W41 | Comandos de setup na worktree antes do primeiro estágio | Feito — cada comando do runner roda na worktree antes da nota do estágio |
+| W42 | Erro de setup diz qual comando falhou, com a saída redigida | Feito — a mensagem cita o comando e o valor do segredo não aparece |
 | W43 | Segredos por nome, sem mostrar o valor | Já na base. Rotação que mantém o nome: Fatia 2 |
-| W44 | Política de rede por agente | Neste PR o campo no schema e a proposta não pode ampliá-la. Aplicar a política na saída: Fatia 3 |
-| W45 | MCP por agente, com cliente de verdade | Fatia 3 |
-| W46 | Cada agente escolhe o harness | Neste PR o id opcional `engine`. Escolher entre conexões prontas: Fatia 3, junto do pacote de providers |
-| W47 | Um item usa um harness na especificação e outro na implementação | Fatia 3 |
+| W44 | Política de rede por agente | Feito como checagem da linha de comando antes de executar, inclusive a do servidor MCP. Não é firewall e não pega host montado em tempo de execução. A negação vence uma permissão do mesmo host, e o `allowedHosts` do agente soma ao da base. Modo supervisionado (#552) e bloqueio pelo SO ficam em PRs próprios |
+| W45 | MCP por agente, com cliente de verdade | Feito — o cliente fala JSON-RPC com um processo e com um servidor no mesmo processo: initialize e depois a lista de ferramentas |
+| W46 | Cada agente escolhe o harness | Feito — o `engine` tem de ser um harness que já existe no Studio. A escolha de conexão de provider fica no pacote de providers |
+| W47 | Um item usa um harness na especificação e outro na implementação | Feito — cada agente resolve o seu id; a run usa o do agente daquele estágio |
 | W48 | Hospedagem gerenciada, orquestrador externo, cluster | Não se aplica — a Forja já é local |
 | W49 | Política de retenção do provider na linha da conexão | Não se aplica neste pacote — fica no pacote de providers |
 
@@ -87,8 +88,8 @@ Legenda:
 | W51 | Tipos: pergunta, especificação, pronto para revisar, bloqueado, falhou | Já na base. Neste PR a melhoria entra como mais um tipo |
 | W52 | Resolver e desfazer; abrir não resolve | Já na base. Neste PR desfazer fica oferecido por alguns segundos |
 | W53 | Filtros Ativos, Concluídos, Bloqueados, Falhos; busca; Hoje, Semana, Tudo | Neste PR |
-| W54 | Runs com filhos, linha do tempo, custo e sessão | Fatia 3. Neste PR o banner diz que a execução automática está desligada |
-| W55 | Parar um run na hora e orientar o run ao vivo | Fatia 3 — "Parar run" encerra o processo e preserva a worktree; "Orientar" injeta uma mensagem no run ativo, coberto com um driver falso |
+| W54 | Runs com filhos, linha do tempo, custo e sessão | Feito — a tela Execuções lista a run, a run aninhada e quantas cabem no pool. O custo da run é o que o driver gastou. A divisão máquina/inferência continua em W58 |
+| W55 | Parar um run na hora e orientar o run ao vivo | Feito — parar devolve o item para a fila e preserva a worktree; orientar grava a mensagem no jornal, e um segredo nessa mensagem sai redigido |
 | W56 | Pontuar um run e virar tarefa de benchmark | Neste PR a pontuação sob demanda e a tarefa congelada a partir dos dados do run. A execução dos trials: Fatia 3 |
 | W57 | Métricas: autonomia, tempo de ciclo, custo, abertos e concluídos | Já na base os números. Neste PR, sem dados, só o estado vazio; com dados, a série diária. Autonomia pelos autores dos commits: Fatia 3 |
 | W58 | Custo decomposto em máquina e inferência | Fatia 3 |
@@ -131,7 +132,7 @@ Legenda:
 | W78 | Definição em `.oharness/forja`, com scorers, benchmarks, política de rede e autoaperfeiçoamento | Neste PR essas seções no schema, opcionais, sem quebrar uma definição antiga. Roteadores e um schema por tipo de arquivo: Fatia 2 e Fatia 3 |
 | W79 | Validar a definição | Já na base na rota e na CLI. A ferramenta MCP: Fatia 3 |
 | W80 | Roteador que escolhe o modelo por regra | Fatia 3 |
-| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2 — o Nilo gera a definição a partir de um pedido e o validador confere antes de gravar |
+| W81 | Receitas (issue para PR, triagem, revisão, incidente, monorepo) e "Montar com o Nilo" | Fatia 2, neste PR — o Nilo monta a definição e o validador confere; um pedido para tirar a revisão não tira o gate. Gravar o que o Nilo montou não está neste PR |
 | W82 | Um item com dois repositórios e a ordem de merge declarada por pessoa | Fatia 3 |
 | W83 | O setup pergunta o escopo e o validador recusa item fora dele | Fatia 2 |
 | W84 | Primeiro teste: um item pequeno e um checklist de avaliação | Fatia 2 |
@@ -146,4 +147,4 @@ Legenda:
 
 **Fatia 2** (telas e regras, sem o laço de execução): blueprint editável, rotas e gates condicionais, evento de mudança de estágio, "Dispararia?", editor de definição, agentes e memória por seletor, automações na tela, nova Forja e "Montar com o Nilo", catálogo de erros na tela, gráfico das três recomendações.
 
-**Fatia 3** (quando o laço de execução estiver ligado): runs ao vivo, parar e orientar, worktree e política de rede aplicadas, juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.
+**Fatia 3** (o laço, o MCP e o harness por agente estão feitos; a rede está feita como checagem da linha de comando antes de executar, que não é firewall e não pega host montado em tempo de execução, e o modo supervisionado (#552) e o bloqueio pelo SO ficam em PRs próprios): juiz por modelo, trials de benchmark executados, branch de código gravada no repositório, forge genérico e conectores que hoje são esqueleto.

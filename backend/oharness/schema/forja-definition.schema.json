@@ -156,6 +156,10 @@
                 "custom"
               ]
             },
+            "runner": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "type": "string"
+            },
             "secrets": {
               "items": {
                 "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
@@ -236,6 +240,138 @@
             "task"
           ],
           "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "blueprint": {
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "to": {
+                "enum": [
+                  "intake",
+                  "triage",
+                  "spec",
+                  "implement",
+                  "review",
+                  "verify",
+                  "handoff",
+                  "monitor",
+                  "end"
+                ]
+              },
+              "when": {
+                "maxLength": 500,
+                "minLength": 0,
+                "type": "string"
+              }
+            },
+            "required": [
+              "to"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "gates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              "prompt": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "stage": {
+                "enum": [
+                  "intake",
+                  "triage",
+                  "spec",
+                  "implement",
+                  "review",
+                  "verify",
+                  "handoff",
+                  "monitor"
+                ]
+              },
+              "when": {
+                "maxLength": 500,
+                "minLength": 0,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "stage",
+              "prompt"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "routes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "enum": [
+                  "intake",
+                  "triage",
+                  "spec",
+                  "implement",
+                  "review",
+                  "verify",
+                  "handoff",
+                  "monitor"
+                ]
+              },
+              "maxReturns": {
+                "maximum": 10,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reason": {
+                "maxLength": 500,
+                "minLength": 0,
+                "type": "string"
+              },
+              "to": {
+                "enum": [
+                  "intake",
+                  "triage",
+                  "spec",
+                  "implement",
+                  "review",
+                  "verify",
+                  "handoff",
+                  "monitor",
+                  "end"
+                ]
+              },
+              "when": {
+                "maxLength": 500,
+                "minLength": 0,
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "maxItems": 40,
+          "type": "array"
         }
       },
       "type": "object"
@@ -500,6 +636,29 @@
             "pushSecretRef": {
               "pattern": "^forja/[A-Za-z0-9_.-]{1,100}$",
               "type": "string"
+            },
+            "setup": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "argv": {
+                    "items": {
+                      "maxLength": 500,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "argv"
+                ],
+                "type": "object"
+              },
+              "maxItems": 20,
+              "type": "array"
             },
             "type": {
               "enum": [
