@@ -1306,6 +1306,7 @@ export const ptBR: Record<MessageKey, string> = {
   "forja.blueprint.when": "Condição",
   "forja.blueprint.save": "Salvar como teste",
   "forja.blueprint.factoryInvalid": "Use letras minúsculas, dígitos e hífens.",
+  "forja.blueprint.trialRunning": "Um teste deste blueprint está rodando. Promova ou aborte antes de salvar outra mudança.",
   "forja.blueprint.load": "Carregar",
   "forja.blueprint.empty": "Este blueprint ainda não tem regras. Todo item entra na entrada.",
   "forja.blueprint.kind.entry": "Entrada",

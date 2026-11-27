@@ -1304,6 +1304,7 @@ export const en = {
   "forja.blueprint.when": "Condition",
   "forja.blueprint.save": "Save as a trial",
   "forja.blueprint.factoryInvalid": "Use lowercase letters, digits and hyphens.",
+  "forja.blueprint.trialRunning": "A trial of this blueprint is running. Promote or abort it before saving another change.",
   "forja.blueprint.load": "Load",
   "forja.blueprint.empty": "This blueprint has no rules yet. Every item enters at intake.",
   "forja.blueprint.kind.entry": "Entry",
