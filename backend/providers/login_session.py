@@ -10,11 +10,11 @@ import os
 import secrets
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PureWindowsPath
 from shutil import which
 from typing import Callable
 
-from adapters.cli_shared import find_cli
+from adapters.cli_shared import default_cli_cwd, find_cli
 
 # cli id -> (binary name, fixed args). Never built from request text.
 LOGIN_ARGV: dict[str, tuple[str, ...]] = {
@@ -36,10 +36,20 @@ class LoginSession:
 
 
 _sessions: dict[str, LoginSession] = {}
+# A sign-in that was cancelled is forgotten; the table never holds more than this.
+MAX_SESSIONS = 16
 
 
 def reset_sessions() -> None:
     _sessions.clear()
+
+
+def _keep(session: LoginSession) -> None:
+    for stale in [key for key, row in _sessions.items() if not row.running]:
+        del _sessions[stale]
+    while len(_sessions) >= MAX_SESSIONS:
+        del _sessions[next(iter(_sessions))]
+    _sessions[session.id] = session
 
 
 # Basename from the installed path -> the literal command that is actually started.
@@ -47,22 +57,38 @@ def reset_sessions() -> None:
 _LOGIN_NAMES = {
     "claude": "claude",
     "claude.exe": "claude",
+    "claude.cmd": "claude",
     "codex": "codex",
     "codex.exe": "codex",
+    "codex.cmd": "codex",
     "cursor-agent": "cursor-agent",
     "cursor-agent.exe": "cursor-agent",
     "cursor-agent.cmd": "cursor-agent",
 }
 
 
-def _checked_login(argv: list[str]) -> str:
+@dataclass(frozen=True)
+class _Login:
+    name: str
+    # An npm `.cmd` shim on Windows: CreateProcess cannot start it, `cmd.exe /c` can.
+    # The words handed to cmd.exe are still the literals below, never the path found on disk.
+    via_cmd: bool
+
+
+def _checked_login(argv: list[str]) -> _Login:
     """One of the three login commands, or a refusal. Extra flags are refused."""
     if len(argv) != 2 or argv[1] != "login":
         raise ValueError("refused")
-    name = _LOGIN_NAMES.get(Path(argv[0]).name.lower())
+    base = PureWindowsPath(argv[0]).name.lower()
+    name = _LOGIN_NAMES.get(base)
     if name is None:
         raise ValueError("refused")
-    return name
+    return _Login(name=name, via_cmd=os.name == "nt" and base.endswith(".cmd"))
+
+
+def _login_cwd() -> str:
+    """The app-owned directory, so neither CreateProcess nor cmd.exe finds a program planted in the sidecar's cwd."""
+    return str(default_cli_cwd())
 
 
 def _terminal_kind() -> str | None:
@@ -89,19 +115,42 @@ def _spawn_direct(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    raise ValueError("refused")
+
+
+def _spawn_cmd(name: str) -> int:
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["cmd.exe", "/c", "claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["cmd.exe", "/c", "codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["cmd.exe", "/c", "cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     raise ValueError("refused")
 
@@ -112,19 +161,42 @@ def _spawn_wt(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["wt.exe", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["wt.exe", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["wt.exe", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    raise ValueError("refused")
+
+
+def _spawn_wt_cmd(name: str) -> int:
+    detached = os.name != "nt"
+    if name == "claude":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "cmd.exe", "/c", "claude", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    if name == "codex":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "cmd.exe", "/c", "codex", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
+        ))
+    if name == "cursor-agent":
+        return _quiet(subprocess.Popen(
+            ["wt.exe", "cmd.exe", "/c", "cursor-agent", "login"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     raise ValueError("refused")
 
@@ -135,19 +207,19 @@ def _spawn_emulator(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["x-terminal-emulator", "-e", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     raise ValueError("refused")
 
@@ -158,19 +230,19 @@ def _spawn_xterm(name: str) -> int:
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "claude", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "codex":
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "codex", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     if name == "cursor-agent":
         return _quiet(subprocess.Popen(
             ["xterm", "-e", "cursor-agent", "login"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=detached,
+            start_new_session=detached, cwd=_login_cwd(),
         ))
     raise ValueError("refused")
 
@@ -181,15 +253,15 @@ def default_spawner(argv: list[str]) -> int | None:
     When this machine has a terminal, that same command is shown there so the
     person can finish signing in. The request's path is not the program that runs.
     """
-    name = _checked_login(argv)
+    login = _checked_login(argv)
     kind = _terminal_kind()
     if kind == "wt":
-        return _spawn_wt(name)
+        return _spawn_wt_cmd(login.name) if login.via_cmd else _spawn_wt(login.name)
     if kind == "x-terminal-emulator":
-        return _spawn_emulator(name)
+        return _spawn_emulator(login.name)
     if kind == "xterm":
-        return _spawn_xterm(name)
-    return _spawn_direct(name)
+        return _spawn_xterm(login.name)
+    return _spawn_cmd(login.name) if login.via_cmd else _spawn_direct(login.name)
 
 
 def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = default_spawner) -> dict:
@@ -206,7 +278,7 @@ def start_login(cli_id: str, *, finder: Finder = find_cli, spawner: Spawner = de
         # A shim the launcher refuses, or a program that did not start. The reason stays closed.
         return {"ok": False, "reason": "not-started"}
     session = LoginSession(id=secrets.token_hex(8), cli=cli_id, pid=pid, running=True)
-    _sessions[session.id] = session
+    _keep(session)
     return {"ok": True, "id": session.id, "cli": cli_id, "running": True}
 
 
@@ -222,4 +294,5 @@ def cancel_login(session_id: str) -> bool:
             session.pid = None
     session.running = False
     session.pid = None
+    _sessions.pop(session_id, None)
     return True

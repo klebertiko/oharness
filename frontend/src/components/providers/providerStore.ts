@@ -16,7 +16,7 @@ import { tr } from "@/i18n/store";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { modelNotPulled } from "./modelPull";
 import { cleanResetAt } from "./usageLimit";
-import { cancelLoginRequest, loginCliId, requestLogin } from "./subscriptionLogin";
+import { cancelLoginRequest, loginCliId, requestLogin, type LoginRefusal } from "./subscriptionLogin";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -76,6 +76,8 @@ export interface Connection {
   resetAt?: string;
   /** Place in the saved failover order (0 first). Absent or null: no order saved for it. */
   rank?: number | null;
+  /** The sign-in could not be started from the app, so the step is to copy the command instead. */
+  loginRefused?: LoginRefusal;
 }
 
 export const CLI_STATES = ["ready", "not-logged-in", "not-installed", "unavailable", "error"] as const;
@@ -494,6 +496,8 @@ interface ProviderState {
   usageLimit: { connectionId: string; resetAt: string | null } | null;
   /** A sign-in that is running outside the app. Nothing the CLI prints is stored here. */
   loginWatch: { connectionId: string; cliId: string; sessionId: string; startedAt: number } | null;
+  /** The last sign-in attempt's outcome worth a sentence: it could not start, or it was never detected. */
+  loginNotice: { connectionId: string; reason: LoginRefusal | "timeout" } | null;
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -518,6 +522,8 @@ interface ProviderState {
   /** Start the fixed sign-in command for a subscription connection. */
   startLogin: (id: string) => Promise<void>;
   cancelLogin: () => Promise<void>;
+  /** The wait ran out without a signed-in CLI. Stops the session and keeps a sentence saying so. */
+  timeoutLogin: () => Promise<void>;
   /** The poll saw a signed-in CLI. Clears the watch. */
   finishLogin: () => void;
   attachSecret: (id: string, plaintext: string) => Promise<void>;
@@ -556,6 +562,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   loadState: "idle",
   usageLimit: null,
   loginWatch: null,
+  loginNotice: null,
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -708,18 +715,33 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (!connection) return;
     const cliId = loginCliId(connection);
     if (!cliId) return;
+    set({ loginNotice: null });
     const started = await requestLogin(cliId);
-    if (!started) return;
+    if (!started.ok) {
+      const reason = started.reason;
+      set({
+        loginNotice: { connectionId: id, reason },
+        connections: patch(get().connections, id, (c) => ({ ...c, loginRefused: reason })),
+      });
+      return;
+    }
     set({ loginWatch: { connectionId: id, cliId, sessionId: started.id, startedAt: Date.now() } });
   },
 
   cancelLogin: async () => {
     const watch = get().loginWatch;
-    set({ loginWatch: null });
+    set({ loginWatch: null, loginNotice: null });
     if (watch) await cancelLoginRequest(watch.sessionId);
   },
 
-  finishLogin: () => set({ loginWatch: null }),
+  timeoutLogin: async () => {
+    const watch = get().loginWatch;
+    if (!watch) return;
+    set({ loginWatch: null, loginNotice: { connectionId: watch.connectionId, reason: "timeout" } });
+    await cancelLoginRequest(watch.sessionId);
+  },
+
+  finishLogin: () => set({ loginWatch: null, loginNotice: null }),
 
   clearUsageLimit: () => {
     const current = get().usageLimit;

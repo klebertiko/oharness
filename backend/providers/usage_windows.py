@@ -6,7 +6,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from adapters.cli_shared import _kill, find_cli, line_reset_at, scrub_env
+from adapters.cli_shared import _kill, default_cli_cwd, find_cli, line_reset_at, scrub_env
 
 _PCT = re.compile(
     r"(?P<label>5[\s-]*hour|five[\s-]*hour|weekly|week)\s+usage:\s*(?P<pct>\d{1,3})%\s*(?P<left>left)?",
@@ -78,7 +78,8 @@ def parse_usage_windows(text: str, *, now: datetime | None = None) -> dict:
     if stripped.startswith("{"):
         try:
             parsed = _from_json(json.loads(stripped), moment)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):
+            # Not JSON, or nested deeper than the decoder goes. Either way the text is dropped.
             parsed = None
     if parsed is None:
         parsed = _from_lines(text or "", moment)
@@ -136,7 +137,7 @@ async def _reply_to_read(stdout: asyncio.StreamReader) -> dict | None:
             return None
         try:
             message = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if isinstance(message, dict) and message.get("id") == 1:
             result = message.get("result")
@@ -156,7 +157,7 @@ async def read_codex_rate_limits(*, timeout: float = CODEX_READ_TIMEOUT_S) -> di
         proc = await asyncio.create_subprocess_exec(
             "codex", "app-server",
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            env=scrub_env(), limit=_MAX_LINE,
+            env=scrub_env(), limit=_MAX_LINE, cwd=str(default_cli_cwd()),
         )
     except OSError:
         return None

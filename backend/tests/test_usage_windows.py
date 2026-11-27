@@ -1,8 +1,16 @@
 """A subscription window keeps a percent and a reset instant, never the source text."""
 from __future__ import annotations
 
+import asyncio
+import json
+import os
+import sys
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import NamedTuple
 
+import pytest
 from fastapi.testclient import TestClient
 
 from main import app
@@ -119,3 +127,157 @@ def test_route_reads_codex_and_says_why_the_others_are_not_measured() -> None:
     assert rows["claude"] == {"cli": "claude", "provider": "anthropic", "available": False, "reason": "not-exposed"}
     assert rows["cursor"]["reason"] == "not-exposed"
     assert EMAIL not in str(rows)
+
+
+# ── Deeply nested JSON is dropped, never a 500 ──
+
+DEEP = "[" * 100000
+
+
+def test_a_deeply_nested_json_text_is_unavailable_not_an_exception() -> None:
+    assert parse_usage_windows('{"fiveHour": ' + DEEP, now=NOW) == {"available": False}
+
+
+def test_the_route_survives_a_reader_that_returns_deeply_nested_json() -> None:
+    app.state.usage_window_reader = lambda cli: '{"weekly": ' + DEEP
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get("/providers/usage-windows")
+    finally:
+        app.state.usage_window_reader = None
+    assert response.status_code == 200
+    assert all(row["available"] is False for row in response.json()["windows"])
+
+
+def test_reply_reader_drops_a_deeply_nested_line_and_keeps_reading() -> None:
+    from providers.usage_windows import _reply_to_read
+
+    async def scenario() -> dict | None:
+        stream = asyncio.StreamReader(limit=1024 * 1024)
+        stream.feed_data((DEEP + "\n").encode())
+        stream.feed_data(b'{"id": 1, "result": {"rateLimits": {}}}\n')
+        stream.feed_eof()
+        return await _reply_to_read(stream)
+
+    assert asyncio.run(scenario()) == {"rateLimits": {}}
+
+
+# ── The real reader against a fake app-server ──
+# The production call stays `create_subprocess_exec("codex", "app-server", ...)`. The test
+# records that call and starts a Python fake with the very same keyword arguments, so the
+# environment, the line limit and the working directory the fake sees are the production ones.
+
+ENV_CANARY = "OH_USAGE_CANARY_7d1e"
+REPLY = {"id": 1, "result": {"rateLimits": {"primary": {"usedPercent": 25, "windowDurationMins": 300}}}}
+
+_FAKE = r'''
+import json, os, sys, time
+dump = {dump!r}
+with open(dump, "w", encoding="utf-8") as fh:
+    json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ), "cwd": os.getcwd(), "pid": os.getpid()}}, fh)
+for line in sys.stdin:
+    if json.loads(line).get("id") == 1:
+        break
+for out in {before!r}:
+    sys.stdout.write(out + "\n")
+sys.stdout.flush()
+if {silent!r}:
+    time.sleep(120)
+sys.stdout.write(json.dumps({reply!r}) + "\n")
+sys.stdout.flush()
+'''
+
+
+class FakeServer(NamedTuple):
+    calls: list[tuple[tuple[str, ...], dict]]
+    procs: list[asyncio.subprocess.Process]
+    dump: Path
+
+
+def _fake_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, before: list[str] | None = None, silent: bool = False,
+) -> FakeServer:
+    import providers.usage_windows as uw
+
+    dump = tmp_path / "seen.json"
+    script = tmp_path / "fake_app_server.py"
+    script.write_text(_FAKE.format(dump=str(dump), before=before or [], silent=silent, reply=REPLY), encoding="utf-8")
+    calls: list[tuple[tuple[str, ...], dict]] = []
+    procs: list[asyncio.subprocess.Process] = []
+    real_exec = asyncio.create_subprocess_exec
+
+    async def spy(*argv: str, **kwargs: object) -> asyncio.subprocess.Process:
+        if argv[:1] != ("codex",):
+            # The process-tree kill (`taskkill` on Windows) runs for real.
+            return await real_exec(*argv, **kwargs)
+        calls.append((argv, dict(kwargs)))
+        proc = await real_exec(sys.executable, str(script), *argv[1:], **kwargs)
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr(uw, "find_cli", lambda name: f"/fake/bin/{name}")
+    monkeypatch.setattr(uw.asyncio, "create_subprocess_exec", spy)
+    monkeypatch.setenv(ENV_CANARY, CANARY)
+    return FakeServer(calls, procs, dump)
+
+
+def _seen(server: FakeServer) -> dict:
+    return json.loads(server.dump.read_text(encoding="utf-8"))
+
+
+def test_the_reader_runs_the_literal_app_server_with_the_cli_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from adapters.cli_shared import default_cli_cwd
+    from providers.usage_windows import read_codex_rate_limits
+
+    server = _fake_server(tmp_path, monkeypatch)
+    assert asyncio.run(read_codex_rate_limits(timeout=20)) == REPLY["result"]
+    argv, kwargs = server.calls[0]
+    assert argv == ("codex", "app-server")
+    seen = _seen(server)
+    assert seen["argv"] == ["app-server"]
+    assert ENV_CANARY not in seen["env"] and ENV_CANARY.upper() not in seen["env"]
+    assert set(kwargs["env"]) <= {k for k in os.environ if k.upper() in {
+        "PATH", "PATHEXT", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "HOME", "APPDATA", "LOCALAPPDATA",
+        "XDG_CONFIG_HOME", "XDG_DATA_HOME", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP",
+        "COMSPEC", "USERNAME", "USER", "LANG", "LC_ALL"}}
+    assert kwargs["stderr"] is asyncio.subprocess.DEVNULL
+    assert kwargs["limit"] == 256 * 1024
+    assert kwargs["cwd"] == str(default_cli_cwd())
+    assert Path(seen["cwd"]).resolve() == default_cli_cwd().resolve()
+    assert server.procs[0].returncode is not None
+
+
+def test_the_reader_skips_garbage_and_deeply_nested_lines_before_the_reply(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from providers.usage_windows import read_codex_rate_limits
+
+    noise = ["not json", f'{{"id": 2, "note": "{CANARY}"}}', "[" * 100000, '{"id": 1, "result": "x"']
+    _fake_server(tmp_path, monkeypatch, before=noise)
+    assert asyncio.run(read_codex_rate_limits(timeout=20)) == REPLY["result"]
+
+
+def test_a_silent_app_server_times_out_and_is_killed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from providers.usage_windows import read_codex_rate_limits
+
+    server = _fake_server(tmp_path, monkeypatch, silent=True)
+    started = time.monotonic()
+    assert asyncio.run(read_codex_rate_limits(timeout=1.5)) is None
+    assert time.monotonic() - started < 15
+    assert server.procs[0].returncode is not None
+
+
+def test_a_line_longer_than_the_limit_ends_the_read_without_a_crash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from providers.usage_windows import read_codex_rate_limits
+
+    server = _fake_server(tmp_path, monkeypatch, before=["x" * (300 * 1024)])
+    assert asyncio.run(read_codex_rate_limits(timeout=20)) is None
+    assert server.procs[0].returncode is not None
+
+
+def test_the_reader_limits_stay_at_their_production_values() -> None:
+    import inspect
+
+    import providers.usage_windows as uw
+
+    assert uw._MAX_LINE == 256 * 1024
+    assert uw.CODEX_READ_TIMEOUT_S == 15.0
+    assert inspect.signature(uw.read_codex_rate_limits).parameters["timeout"].default == 15.0

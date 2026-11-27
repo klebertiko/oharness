@@ -29,11 +29,19 @@ export function readSignedIn(body: { clis?: { id?: string; loggedIn?: boolean; s
   return row?.signed_in === true || row?.loggedIn === true;
 }
 
-export async function requestLogin(cliId: string): Promise<{ id: string } | null> {
-  const res = await fetch(apiUrl(`/providers/clis/${encodeURIComponent(cliId)}/login`), { method: "POST" });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { id?: string };
-  return typeof body.id === "string" ? { id: body.id } : null;
+/** Why a sign-in did not start. An unreachable sidecar or an unexpected reply counts as `not-started`. */
+export type LoginRefusal = "not-started" | "not-installed";
+export type LoginStart = { ok: true; id: string } | { ok: false; reason: LoginRefusal };
+
+export async function requestLogin(cliId: string): Promise<LoginStart> {
+  try {
+    const res = await fetch(apiUrl(`/providers/clis/${encodeURIComponent(cliId)}/login`), { method: "POST" });
+    const body = (await res.json()) as { id?: unknown; reason?: unknown };
+    if (res.ok && typeof body.id === "string") return { ok: true, id: body.id };
+    return { ok: false, reason: body.reason === "not-installed" ? "not-installed" : "not-started" };
+  } catch {
+    return { ok: false, reason: "not-started" };
+  }
 }
 
 export async function cancelLoginRequest(sessionId: string): Promise<void> {
