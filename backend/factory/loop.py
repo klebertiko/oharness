@@ -17,7 +17,11 @@ from factory.driver import production_driver
 
 MAX_STEERING = 20  # messages waiting for the run to read them; past this the person waits for the run to catch up
 MAX_FINISHED = 100  # finished runs the board still lists; older ones are only in the journal
-_LIVE = ('starting', 'running')
+_LIVE = ('starting', 'running', 'finishing')
+
+
+class TooLate(Exception):
+    """The run is past its point of no return: the stage completes, so a stop or a message would be ignored."""
 
 
 class SteeringFull(Exception):
@@ -72,7 +76,7 @@ class LiveBoard:
         return self.runs.get(run_id)
 
     def active_for_item(self, item_id: str) -> LiveRun | None:
-        return next((row for row in self.runs.values() if row.item_id == item_id and row.status in ('starting', 'running')), None)
+        return next((row for row in self.runs.values() if row.item_id == item_id and row.status in _LIVE), None)
 
     def steer(self, run_id: str, text: str) -> None:
         row = self._live(run_id)
@@ -89,6 +93,8 @@ class LiveBoard:
         row = self.runs.get(run_id)
         if row is None or row.status not in _LIVE:
             raise KeyError(run_id)
+        if row.status == 'finishing':
+            raise TooLate(run_id)
         return row
 
     def occupancy(self) -> dict:
@@ -152,14 +158,38 @@ async def start(item_id: str, definition: dict, repo, store, driver=None) -> str
             row.workspace = str((run.workspace or {}).get('path') or '') or None
             await driver(run)
 
+        def seal() -> None:
+            row.status = 'finishing'
+
+        previous = item.status
         try:
-            await dispatch.run_stage(db, item, definition, stage, assignment, wrapped, store, pool, repo,
-                                     run_id=run_id, cancel=row.cancel, steering=row.steering, on_child=on_child, outcome=outcome)
+            await dispatch.run_stage(db, item, definition, stage, assignment, wrapped, store, pool, repo, run_id=run_id,
+                                     cancel=row.cancel, steering=row.steering, on_child=on_child, outcome=outcome, on_seal=seal)
+            row.status = outcome['status']
         except dispatch.DispatchError:
             row.status = 'error'
             raise
-        row.status = outcome['status']
+        except asyncio.CancelledError:
+            row.status = 'stopped'
+            raise
+        except Exception:
+            # A failure outside the stage itself (the database, the journal): the row closes and the item gets its status back.
+            row.status = 'error'
+            await db.rollback()
+            await _restore(item.id, previous)
+            raise
+        finally:
+            if row.status in _LIVE:
+                row.status = 'error'
         return run_id
+
+
+async def _restore(item_id: str, previous: str) -> None:
+    async with SessionLocal() as db:
+        item = await service.get(db, item_id)
+        if item.status == 'running':
+            item.status = previous
+            await db.commit()
 
 
 def steer(run_id: str, text: str) -> None:

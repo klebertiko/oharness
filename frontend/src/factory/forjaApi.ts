@@ -123,6 +123,8 @@ export const forjaApi = {
   niloWorkflow: (body: { recipe: string; name: string; request: string }) =>
     call<{ ok: boolean; errors: { message: string }[]; review_required: boolean }>("/factory/blueprint/nilo", { method: "POST", ...json(body) }),
   runs: () => call<RunBoard>("/factory/runs"),
+  itemRepositories: (id: string) =>
+    call<{ repositories: { id: string; name: string; root_path: string }[] }>(`/factory/work-items/${encodeURIComponent(id)}/repositories`),
   startRun: (id: string, repo: string) => call<{ run_id: string; status: string }>(`/factory/work-items/${encodeURIComponent(id)}/run`, { method: "POST", ...json({ repo }) }),
   stopRun: (id: string) => call<void>(`/factory/runs/${encodeURIComponent(id)}/stop`, { method: "POST" }),
   steerRun: (id: string, text: string) => call<{ accepted: boolean }>(`/factory/runs/${encodeURIComponent(id)}/steer`, { method: "POST", ...json({ text }) }),
