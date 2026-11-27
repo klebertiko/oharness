@@ -88,6 +88,11 @@ def _migrate_factory_scores(conn) -> None:
         columns = {column["name"] for column in inspect(conn).get_columns("factory_failures")}
         if "attempt" not in columns:
             conn.execute(text("ALTER TABLE factory_failures ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"))
+    from factory.improvement.orm import APPEND_ONLY_TABLES, guard_statements
+
+    for statement in guard_statements():  # tables made before the triggers existed get them here; new ones at creation
+        if any(f" ON {table} " in statement and table in names for table in APPEND_ONLY_TABLES):
+            conn.execute(text(statement))
 
 
 def _migrate_provider_connections(conn) -> None:

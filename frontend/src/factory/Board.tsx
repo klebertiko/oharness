@@ -7,7 +7,7 @@ import { OfflineNotice } from "./Offline";
 import { forjaApi } from "./forjaApi";
 import type { WorkItem } from "./types";
 import { useLoad } from "./useForja";
-import { ageParts, displayColumn, groupByDisplay, moveReason, sourceKey, statusTone, type DisplayColumn } from "./view";
+import { ageParts, displayColumn, groupByDisplay, label, moveReason, sourceKey, statusTone, type DisplayColumn } from "./view";
 
 /** Work items in six stage columns. A drag that the blueprint does not allow explains why and leaves the card where it is. */
 export function Board({ onOpen }: { onOpen: (id: string) => void }) {
@@ -83,7 +83,7 @@ function Card({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }
       >
         <span className="text-title text-ink">{item.title}</span>
         <span className="flex flex-wrap items-center gap-2 text-body text-ink-dim">
-          <Badge tone={statusTone(item.status)}>{t(`forja.status.${item.status}` as MessageKey)}</Badge>
+          <Badge tone={statusTone(item.status)}>{label(t, `forja.status.${item.status}`, item.status)}</Badge>
           <span>{t(source.key, source.n ? { n: source.n } : undefined)}</span>
           {age && <span>{age.n == null ? t(age.key) : t(age.key, { n: number(age.n) })}</span>}
           <span>{t("forja.item.tokens", { n: number(item.cost.tokens) })}</span>
