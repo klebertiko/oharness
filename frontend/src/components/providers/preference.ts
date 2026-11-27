@@ -10,12 +10,6 @@ export function movePreference(ids: string[], from: number, to: number): string[
   return next;
 }
 
-export function renameAccount(labels: Record<string, string>, id: string, label: string): Record<string, string> {
-  const trimmed = label.trim();
-  if (!trimmed) return labels;
-  return { ...labels, [id]: trimmed };
-}
-
 /** Accounts that can answer a chat now, in the saved order (ranked first), the rest in list order after them. */
 export function accountOrder(connections: Connection[]): Connection[] {
   const ready = connections.filter((c) => isChatCapable(c) && providerReadiness(c).ready);

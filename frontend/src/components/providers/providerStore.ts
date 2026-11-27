@@ -36,8 +36,6 @@ export interface ModelInfo {
   via?: string;
   /** Local models report their on-disk size. */
   size?: string;
-  /** Effort levels this model accepts. Empty or absent means no effort control. */
-  efforts?: ("low" | "medium" | "high")[];
 }
 
 /** A fact the probe learned about the account behind the credential. */

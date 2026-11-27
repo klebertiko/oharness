@@ -2,16 +2,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useLocaleStore } from "@/i18n/store";
 import { FallbackNotice } from "./FallbackNotice";
-import { ModelDirectory } from "./ModelDirectory";
 import { PreferenceOrder } from "./PreferenceOrder";
-import { movePreference, renameAccount } from "./preference";
-import { pickByIntent, rememberChoice, type ChoiceModel, type ModelChoice } from "./modelChoice";
-
-const models: ChoiceModel[] = [
-  { id: "slow", connectionId: "a", connectionLabel: "Pessoal", available: true, price: [15, 75], efforts: ["low", "high"] },
-  { id: "fast", connectionId: "b", connectionLabel: "Empresa", available: true, price: [1, 5] },
-  { id: "gone", connectionId: "c", connectionLabel: "Empresa", available: false, reason: "Needs a sign-in" },
-];
+import { movePreference } from "./preference";
+import { cheapestModel, rememberChoice, type ModelChoice } from "./modelChoice";
+import type { Connection } from "./providerStore";
 
 afterEach(() => {
   cleanup();
@@ -19,10 +13,9 @@ afterEach(() => {
 });
 
 describe("preference order", () => {
-  it("moves an account and keeps a trimmed label", () => {
+  it("moves an account", () => {
     expect(movePreference(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
-    expect(renameAccount({ a: "Pessoal" }, "a", "  Casa  ")).toEqual({ a: "Casa" });
-    expect(renameAccount({ a: "Pessoal" }, "a", "   ")).toEqual({ a: "Pessoal" });
+    expect(movePreference(["a", "b"], 0, 5)).toEqual(["a", "b"]);
   });
 
   it("reorders from the buttons", () => {
@@ -34,33 +27,26 @@ describe("preference order", () => {
   });
 });
 
-describe("model directory", () => {
-  it("picks by intent, keeps five recent combinations, and disables a missing model", () => {
-    expect(pickByIntent(models, "cheapest")?.id).toBe("fast");
-    expect(pickByIntent(models, "best")?.id).toBe("slow");
+describe("model choice", () => {
+  const priced = (id: string, provider: Connection["provider"], models: Connection["models"]): Connection => ({
+    id, provider, label: id, residence: "cloud", endpoint: "", secret: null, health: "live", detail: "", probes: [], facts: [],
+    models, defaultModel: "", enabled: true, lastProbe: "",
+  });
+
+  it("keeps five recent combinations, newest first, without repeats", () => {
     let recent: ModelChoice[] = [];
-    for (let n = 0; n < 6; n += 1) recent = rememberChoice(recent, { connectionId: "a", model: `m${n}`, effort: null });
+    for (let n = 0; n < 6; n += 1) recent = rememberChoice(recent, { connectionId: "a", model: `m${n}` });
     expect(recent).toHaveLength(5);
     expect(recent[0].model).toBe("m5");
+    recent = rememberChoice(recent, { connectionId: "a", model: "m3" });
+    expect(recent.map((r) => r.model)).toEqual(["m3", "m5", "m4", "m2", "m1"]);
+  });
 
-    const onConnect = viConnect();
-    render(
-      <ModelDirectory
-        models={models}
-        value={{ connectionId: "a", model: "slow", effort: "low" }}
-        recent={[{ connectionId: "b", model: "fast", effort: null }]}
-        onChange={() => undefined}
-        onConnect={onConnect.fn}
-      />,
-    );
-    fireEvent.click(screen.getByRole("tab", { name: "All" }));
-    const missing = screen.getByRole("button", { name: "gone" });
-    expect(missing).toHaveProperty("disabled", true);
-    expect(screen.getByText("Needs a sign-in")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    expect(onConnect.id).toBe("c");
-    expect(screen.getByRole("group", { name: "Effort" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "fast" }).length).toBeGreaterThan(0);
+  it("compares list prices of metered accounts only", () => {
+    const sub = priced("sub", "anthropic", [{ id: "tiny", ctx: 0, price: [0.01, 0.02] }]);
+    const key = priced("key", "openrouter", [{ id: "big", ctx: 0, price: [15, 75] }, { id: "small", ctx: 0, price: [0.28, 1.1] }]);
+    expect(cheapestModel([sub, key])?.model).toBe("small");
+    expect(cheapestModel([sub])).toBeNull();
   });
 });
 
