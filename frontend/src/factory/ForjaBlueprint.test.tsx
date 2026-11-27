@@ -55,6 +55,35 @@ describe("the blueprint editor", () => {
     expect(await axeViolations(document.body)).toEqual([]);
   });
 
+  it("reloads after a save and, while the trial runs, shows it without offering a second save", async () => {
+    let reads = 0;
+    routes.set("GET /factory/blueprint", () => {
+      reads += 1;
+      return reads === 1
+        ? { hash: HASH, blueprint: { entry: [{ to: "intake" }], gates: [gate] }, stages: {}, trial: false }
+        : { hash: HASH, blueprint: { entry: [{ when: "has label docs", to: "spec" }], gates: [gate] }, stages: {}, trial: true };
+    });
+    routes.set("POST /factory/blueprint", (body: Record<string, unknown>) => (body.preview ? { status: "preview", removed: [], reasons: [] } : { status: "canary" }));
+    await load();
+    await userEvent.click(screen.getByRole("button", { name: "Save as a trial" }));
+    expect(await screen.findByText(/A trial of this blueprint is running/)).toBeTruthy();
+    expect(reads).toBe(2);
+    expect(screen.getByText(/has label docs → Spec/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save as a trial" })).toBeNull();
+  });
+
+  it("shows the files Nilo built and the problems the validator found", async () => {
+    routes.set("POST /factory/blueprint/nilo", {
+      ok: false, review_required: true, files: { "forja.yaml": "kind: forja\nname: \"payments\"\n" }, errors: [{ message: "agents/builder is missing" }],
+    });
+    render(<ForjaBlueprint />);
+    await userEvent.click(screen.getByRole("radio", { name: "Build with Nilo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Build with Nilo" }));
+    expect(await screen.findByText("forja.yaml")).toBeTruthy();
+    expect(screen.getByText(/name: "payments"/)).toBeTruthy();
+    expect(screen.getByText("agents/builder is missing")).toBeTruthy();
+  });
+
   it("names what a save would remove and waits for the person to confirm", async () => {
     routes.set("POST /factory/blueprint", (body: Record<string, unknown>) =>
       body.preview ? { status: "preview", removed: [{ kind: "gates", rule: gate }], reasons: [] } : { status: "canary" });
