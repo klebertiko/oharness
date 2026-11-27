@@ -51,7 +51,8 @@ export function UsageWindowLine({ row, name }: { row: UsageWindowsRow; name: str
 
 export function UsageStrip({ connections }: { connections: Connection[] }) {
   const t = useT();
-  const [rows, setRows] = useState<UsageWindowsRow[]>([]);
+  // null until the sidecar first answers: "loading" is not the same claim as "unavailable".
+  const [rows, setRows] = useState<UsageWindowsRow[] | null>(null);
   const subscriptions = connections.filter((c) => specOf(c).credential.kind === "cli");
   useEffect(() => {
     if (subscriptions.length === 0) return;
@@ -73,7 +74,8 @@ export function UsageStrip({ connections }: { connections: Connection[] }) {
     <section aria-label={t("providers.usage.strip")} className="border-b border-line-soft px-4 py-3">
       <h2 className="t-body font-medium text-ink">{t("providers.usage.strip")}</h2>
       <div className="mt-2 space-y-1 text-ink-dim">
-        {subscriptions.map((c) => {
+        {rows === null && <p role="status">{t("providers.usage.loading")}</p>}
+        {rows !== null && subscriptions.map((c) => {
           const row = rows.find((item) => item.provider === c.provider) ?? { cli: "", provider: c.provider, available: false };
           return <UsageWindowLine key={c.id} row={row} name={c.label} />;
         })}

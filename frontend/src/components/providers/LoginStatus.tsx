@@ -13,6 +13,8 @@ export function LoginStatus({ connectionId }: { connectionId: string }) {
   const watch = useProviderStore((s) => s.loginWatch);
   const finish = useProviderStore((s) => s.finishLogin);
   const cancel = useProviderStore((s) => s.cancelLogin);
+  const timeout = useProviderStore((s) => s.timeoutLogin);
+  const notice = useProviderStore((s) => (s.loginNotice?.connectionId === connectionId ? s.loginNotice.reason : null));
   const probe = useProviderStore((s) => s.probe);
   const active = watch?.connectionId === connectionId ? watch : null;
 
@@ -34,7 +36,7 @@ export function LoginStatus({ connectionId }: { connectionId: string }) {
         finish();
         void probe(active.connectionId);
       } else if (decision === "timeout" || elapsed >= LOGIN_POLL_LIMIT_MS) {
-        void cancel();
+        void timeout();
       }
     };
     void tick();
@@ -43,9 +45,20 @@ export function LoginStatus({ connectionId }: { connectionId: string }) {
       stopped = true;
       window.clearInterval(id);
     };
-  }, [active, cancel, finish, probe]);
+  }, [active, timeout, finish, probe]);
 
-  if (!active) return null;
+  if (!active) {
+    if (!notice) return null;
+    const sentence =
+      notice === "timeout" ? t("providers.login.timeout")
+      : notice === "not-installed" ? t("providers.login.notInstalled")
+      : t("providers.login.notStarted");
+    return (
+      <p role="status" className="t-body text-ink-dim">
+        {sentence}
+      </p>
+    );
+  }
   return (
     <p role="status" className="t-body flex flex-wrap items-center gap-2 text-ink-dim">
       <span>{t("providers.login.waiting")}</span>
