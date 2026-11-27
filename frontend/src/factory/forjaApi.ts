@@ -105,6 +105,23 @@ export const forjaApi = {
     const text = query.toString();
     return call<{ events: TrailEvent[]; next: number | null }>(`/factory/improvements/export${text ? `?${text}` : ""}`);
   },
+  readBlueprint: (factory: string) =>
+    call<{ hash: string; blueprint: Record<string, unknown>; stages: Record<string, unknown> }>(
+      `/factory/blueprint?factory_id=${encodeURIComponent(factory)}`,
+    ),
+  saveBlueprint: (body: { factory_id: string; base_hash: string; blueprint: Record<string, unknown>; preview?: boolean }) =>
+    call<{
+      mode?: string;
+      status?: string;
+      reasons?: { code: string; message: string }[];
+      removed?: { kind: "entry" | "routes" | "gates"; rule: Record<string, unknown> }[];
+    }>("/factory/blueprint", { method: "POST", ...json(body) }),
+  simulateBlueprint: (body: { factory_id: string; blueprint?: Record<string, unknown>; facts: { labels: string[] } }) =>
+    call<{ path: { stage: string; gate?: string | null; reason?: string }[] }>("/factory/blueprint/simulate", { method: "POST", ...json(body) }),
+  wouldFire: (body: { provider: string; event: string; filter: Record<string, unknown>; fields: Record<string, unknown> }) =>
+    call<{ fires: boolean; failed: string[] }>("/factory/blueprint/would-fire", { method: "POST", ...json(body) }),
+  niloWorkflow: (body: { recipe: string; name: string; request: string }) =>
+    call<{ ok: boolean; errors: { message: string }[]; review_required: boolean }>("/factory/blueprint/nilo", { method: "POST", ...json(body) }),
 };
 
 export interface Proposal {
