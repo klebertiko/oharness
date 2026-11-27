@@ -109,13 +109,26 @@ export const forjaApi = {
     const text = query.toString();
     return call<{ events: TrailEvent[]; next: number | null }>(`/factory/improvements/export${text ? `?${text}` : ""}`);
   },
-  saveBlueprint: (body: { factory_id: string; blueprint: Record<string, unknown>; stages?: Record<string, unknown> }) =>
-    call<{ mode?: string; status?: string; reasons?: { code: string }[] }>("/factory/blueprint", { method: "POST", ...json(body) }),
+  readBlueprint: (factory: string) =>
+    call<{ hash: string; blueprint: Record<string, unknown>; stages: Record<string, unknown> }>(
+      `/factory/blueprint?factory_id=${encodeURIComponent(factory)}`,
+    ),
+  saveBlueprint: (body: { factory_id: string; base_hash: string; blueprint: Record<string, unknown>; preview?: boolean }) =>
+    call<{
+      mode?: string;
+      status?: string;
+      reasons?: { code: string; message: string }[];
+      removed?: { kind: "entry" | "routes" | "gates"; rule: Record<string, unknown> }[];
+    }>("/factory/blueprint", { method: "POST", ...json(body) }),
+  simulateBlueprint: (body: { factory_id: string; blueprint?: Record<string, unknown>; facts: { labels: string[] } }) =>
+    call<{ path: { stage: string; gate?: string | null; reason?: string }[] }>("/factory/blueprint/simulate", { method: "POST", ...json(body) }),
   wouldFire: (body: { provider: string; event: string; filter: Record<string, unknown>; fields: Record<string, unknown> }) =>
     call<{ fires: boolean; failed: string[] }>("/factory/blueprint/would-fire", { method: "POST", ...json(body) }),
   niloWorkflow: (body: { recipe: string; name: string; request: string }) =>
     call<{ ok: boolean; errors: { message: string }[]; review_required: boolean }>("/factory/blueprint/nilo", { method: "POST", ...json(body) }),
   runs: () => call<RunBoard>("/factory/runs"),
+  itemRepositories: (id: string) =>
+    call<{ repositories: { id: string; name: string; root_path: string }[] }>(`/factory/work-items/${encodeURIComponent(id)}/repositories`),
   startRun: (id: string, repo: string) => call<{ run_id: string; status: string }>(`/factory/work-items/${encodeURIComponent(id)}/run`, { method: "POST", ...json({ repo }) }),
   stopRun: (id: string) => call<void>(`/factory/runs/${encodeURIComponent(id)}/stop`, { method: "POST" }),
   steerRun: (id: string, text: string) => call<{ accepted: boolean }>(`/factory/runs/${encodeURIComponent(id)}/steer`, { method: "POST", ...json({ text }) }),

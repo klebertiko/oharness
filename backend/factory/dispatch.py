@@ -156,10 +156,12 @@ def _git(workspace: dict, args: list[str]) -> str:
 async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: str, assignment: dict, driver: Driver, store,
                     pool: runner.RunnerPool, repo, *, run_id: str | None = None, cancel: asyncio.Event | None = None,
                     steering: list[str] | None = None, on_child: Callable[[str, str], None] | None = None,
-                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None) -> str:
+                    outcome: dict | None = None, engine: str | None = None, runner_id: str | None = None,
+                    on_seal: Callable[[], None] | None = None) -> str:
     """Runs `stage` for `item` and returns the run id. Raises DispatchError (nothing created) when it cannot start.
 
     `cancel` and `steering` are how a person stops the run and talks to it while it is going. A stop keeps the worktree.
+    `on_seal` is called at the point of no return: past it the stage completes, and a stop is refused instead of ignored.
     """
     agent_id, agent = _check(item, definition, stage, assignment)
     try:
@@ -195,6 +197,8 @@ async def run_stage(db: AsyncSession, item: WorkItem, definition: dict, stage: s
                 raise RunStopped('The run was stopped.')
             if item.status != 'running':
                 raise RunStopped('The item changed while the run was active.')
+            if on_seal is not None:  # no await between the last check and the seal: a stop lands before it or is refused after it
+                on_seal()
             sha = await asyncio.to_thread(_git, workspace, ['rev-parse', 'HEAD'])
             branch = f'forja/{item.id}-{run_id}'
             await foreman.implement_done(db, item, definition, branch, sha, base)

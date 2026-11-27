@@ -384,8 +384,7 @@ async def _apply_blueprint(db: AsyncSession, item: WorkItem, actor: tuple[str, s
         return
     route, capped = route_decision(blueprint, stage, facts)
     if capped and route is None:
-        _move(item, item.stage, 'awaiting_human')
-        await add_event(db, item, 'checkpoint_requested', actor, {'kind': 'question', 'question': 'The return cap was reached.', 'question_id': str(uuid.uuid4())})
+        await request_checkpoint(db, item, actor, 'question', 'The return cap was reached.')
     elif route is not None and route.get('to') == 'end':
         _move(item, item.stage, 'cancelled')
         item.closed_at = _now()

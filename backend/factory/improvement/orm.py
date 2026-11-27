@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text, event
+from sqlalchemy import DDL, Boolean, DateTime, Float, Index, Integer, String, Text, event
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from database import Base
@@ -120,3 +120,27 @@ def _refuse_rewrites(session: Session, _context, _instances) -> None:
     for row in session.dirty:
         if isinstance(row, _APPEND_ONLY) and session.is_modified(row):
             raise AppendOnlyError(f'{type(row).__name__} rows are append-only')
+
+
+APPEND_ONLY_TABLES = ('factory_scores', 'factory_failures', 'factory_improvement_events')
+
+
+def guard_statements() -> list[str]:
+    """SQLite triggers that refuse an UPDATE or a DELETE on the append-only tables, from any code, not only this package."""
+    out = []
+    for table in APPEND_ONLY_TABLES:
+        for action in ('UPDATE', 'DELETE'):
+            out.append(f"CREATE TRIGGER IF NOT EXISTS {table}_no_{action.lower()} BEFORE {action} ON {table} "
+                       f"BEGIN SELECT RAISE(ABORT, '{table} is append-only'); END")
+    return out
+
+
+def unguard_statements() -> list[str]:
+    """For a test that resets the database. The application never calls it."""
+    return [f'DROP TRIGGER IF EXISTS {table}_no_{action}' for table in APPEND_ONLY_TABLES for action in ('update', 'delete')]
+
+
+for _model in (FactoryScore, FactoryFailure, ImprovementEvent):
+    for _statement in guard_statements():
+        if f' ON {_model.__tablename__} ' in _statement:
+            event.listen(_model.__table__, 'after_create', DDL(_statement).execute_if(dialect='sqlite'))

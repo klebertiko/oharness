@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from factory import definition as definition_files
 from factory import dispatch, loop, service
 from factory.auth import actor_for
 
@@ -41,6 +43,39 @@ async def list_runs():
     return loop.snapshot()
 
 
+def _forja_of(root: str) -> str | None:
+    """The name of the Forja a project folder defines, or None when it has no valid definition."""
+    folder = Path(root) / '.oharness' / 'forja'
+    if not folder.is_dir():
+        return None
+    try:
+        loaded = definition_files.load(folder)
+    except definition_files.DefinitionNotFound:
+        return None
+    return (loaded.definition or {}).get('name') if loaded.ok else None
+
+
+async def _repositories_for(db: AsyncSession, factory_id: str) -> list[dict]:
+    """Registered projects whose definition is the one of this Forja: an item runs only in one of them."""
+    from models import CoworkProject
+
+    projects = list(await db.scalars(select(CoworkProject).order_by(CoworkProject.name)))
+
+    def scan() -> list[dict]:
+        return [{'id': project.id, 'name': project.name, 'root_path': project.root_path}
+                for project in projects if _forja_of(project.root_path) == factory_id]
+    return await anyio.to_thread.run_sync(scan)
+
+
+@router.get('/work-items/{item_id}/repositories')
+async def item_repositories(item_id: ItemId, db: AsyncSession = Depends(get_db)):
+    try:
+        item = await service.get(db, item_id)
+    except service.FactoryError as exc:
+        raise HTTPException(status_code=exc.status, detail={'code': exc.code, 'message': exc.detail}) from None
+    return {'repositories': await _repositories_for(db, item.factory_id)}
+
+
 @router.post('/work-items/{item_id}/run')
 async def start_run(item_id: ItemId, body: StartBody, request: Request, db: AsyncSession = Depends(get_db)):
     from routers.execution import _validated_project_cwd
@@ -53,6 +88,8 @@ async def start_run(item_id: ItemId, body: StartBody, request: Request, db: Asyn
         item = await service.get(db, item_id)
     except service.FactoryError as exc:
         raise HTTPException(status_code=exc.status, detail={'code': exc.code, 'message': exc.detail})
+    if cwd not in {str(Path(row['root_path']).resolve()) for row in await _repositories_for(db, item.factory_id)}:
+        raise HTTPException(status_code=409, detail={'code': 'wrong_repository', 'message': "That project does not define this item's Forja."})
     definition = await service._definition_of(db, item)
     if not definition:
         raise HTTPException(status_code=409, detail={'code': 'no_definition', 'message': 'This item has no definition to run from.'})
@@ -69,6 +106,8 @@ async def stop_run(run_id: RunId, request: Request):
     _human(request)
     try:
         loop.stop(run_id)
+    except loop.TooLate:
+        raise HTTPException(status_code=409, detail={'code': 'too_late', 'message': 'The run is already finishing its stage; it can no longer be stopped.'}) from None
     except KeyError:
         raise HTTPException(status_code=404, detail={'code': 'no_such_run', 'message': 'That run is not going.'})
     return Response(status_code=204)
@@ -79,6 +118,8 @@ async def steer_run(run_id: RunId, body: SteerBody, request: Request):
     _human(request)
     try:
         loop.steer(run_id, body.text)
+    except loop.TooLate:
+        raise HTTPException(status_code=409, detail={'code': 'too_late', 'message': 'The run is already finishing its stage; it no longer reads messages.'}) from None
     except KeyError:
         raise HTTPException(status_code=404, detail={'code': 'no_such_run', 'message': 'That run is not going.'})
     except loop.SteeringFull:
