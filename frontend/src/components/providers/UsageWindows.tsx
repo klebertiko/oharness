@@ -11,6 +11,8 @@ export type UsageWindowsRow = {
   cli: string;
   provider: string;
   available: boolean;
+  /** Why there are no windows: the tool keeps usage to itself, is absent, or did not answer. */
+  reason?: "not-exposed" | "not-installed" | "unreadable";
   fiveHour?: UsageWindow;
   weekly?: UsageWindow;
 };
@@ -29,7 +31,12 @@ export function UsageWindowLine({ row, name }: { row: UsageWindowsRow; name: str
   const t = useT();
   const locale = useLocaleStore((s) => s.locale);
   if (!row.available || (row.fiveHour == null && row.weekly == null)) {
-    return <p><span className="font-medium">{name}</span> {t("providers.usage.unavailable")}</p>;
+    const why =
+      row.reason === "not-exposed" ? t("providers.usage.notExposed")
+      : row.reason === "not-installed" ? t("providers.usage.notInstalled")
+      : row.reason === "unreadable" ? t("providers.usage.unreadable")
+      : t("providers.usage.unavailable");
+    return <p><span className="font-medium">{name}</span> {why}</p>;
   }
   const reset = formatResetLocal(row.fiveHour?.resetsAt ?? row.weekly?.resetsAt, locale);
   return (
@@ -44,7 +51,8 @@ export function UsageWindowLine({ row, name }: { row: UsageWindowsRow; name: str
 
 export function UsageStrip({ connections }: { connections: Connection[] }) {
   const t = useT();
-  const [rows, setRows] = useState<UsageWindowsRow[]>([]);
+  // null until the sidecar first answers: "loading" is not the same claim as "unavailable".
+  const [rows, setRows] = useState<UsageWindowsRow[] | null>(null);
   const subscriptions = connections.filter((c) => specOf(c).credential.kind === "cli");
   useEffect(() => {
     if (subscriptions.length === 0) return;
@@ -66,7 +74,8 @@ export function UsageStrip({ connections }: { connections: Connection[] }) {
     <section aria-label={t("providers.usage.strip")} className="border-b border-line-soft px-4 py-3">
       <h2 className="t-body font-medium text-ink">{t("providers.usage.strip")}</h2>
       <div className="mt-2 space-y-1 text-ink-dim">
-        {subscriptions.map((c) => {
+        {rows === null && <p role="status">{t("providers.usage.loading")}</p>}
+        {rows !== null && subscriptions.map((c) => {
           const row = rows.find((item) => item.provider === c.provider) ?? { cli: "", provider: c.provider, available: false };
           return <UsageWindowLine key={c.id} row={row} name={c.label} />;
         })}

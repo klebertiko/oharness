@@ -1,4 +1,5 @@
 import type { RunState } from "@/components/agent-run/types";
+import { providerErrorText } from "@/components/providers/errorCatalog";
 import { tr } from "@/i18n/store";
 
 /**
@@ -14,7 +15,8 @@ export function summarizeRunOutput(run: RunState): string {
 
   for (const seg of run.plan) {
     if (seg.error) {
-      errors.push(`${seg.label}: ${seg.error}`);
+      // A named provider failure reads as the catalog's sentence, never as the text that came with it.
+      errors.push(`${seg.label}: ${seg.failure ? tr(providerErrorText(seg.failure).what) : seg.error}`);
       continue;
     }
     // `output` (from node_done) *is* the assembled text of `blocks` (from

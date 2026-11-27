@@ -90,8 +90,23 @@ def _migrate_factory_scores(conn) -> None:
             conn.execute(text("ALTER TABLE factory_failures ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1"))
 
 
+def _migrate_provider_connections(conn) -> None:
+    """Connections gained a `rank` (the saved failover order). Idempotent; SQLite adds the column in place,
+    and existing rows read null: no order until a person saves one."""
+    if conn.dialect.name != "sqlite":
+        return
+    from sqlalchemy import inspect, text
+
+    if "provider_connections" not in inspect(conn).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(conn).get_columns("provider_connections")}
+    if "rank" not in columns:
+        conn.execute(text("ALTER TABLE provider_connections ADD COLUMN rank INTEGER"))
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(_migrate_usage_records)
         await conn.run_sync(_migrate_factory_scores)
+        await conn.run_sync(_migrate_provider_connections)
         await conn.run_sync(Base.metadata.create_all)

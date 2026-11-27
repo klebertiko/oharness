@@ -29,13 +29,19 @@ from adapters.catalog import (
     validate_custom_endpoint,
     validate_custom_model,
 )
-from adapters.cli_shared import INVALID_CLI_MODEL, run_cli, valid_cli_model
+from adapters.cli_shared import INVALID_CLI_MODEL, find_cli, run_cli, valid_cli_model
 from database import get_db
 from providers import store as connection_store
 from providers.diagnostics import build_report
 from providers.login_session import cancel_login, start_login
 from providers.resolution import ADAPTER_BY_PROVIDER
-from providers.usage_windows import parse_usage_windows
+from providers.usage_windows import (
+    NOT_EXPOSED,
+    NOT_INSTALLED,
+    parse_usage_windows,
+    read_codex_rate_limits,
+    windows_from_rate_limits,
+)
 from runtime.cli_detect import DETECTED, detect_clis
 from secret_store.base import SecretsStore
 
@@ -90,6 +96,15 @@ class ConnectionUpdate(BaseModel):
     _label = field_validator("label")(_plain_label)
 
 
+# More accounts than anyone keeps; a bound on the body, not a product limit.
+MAX_PREFERENCE_LEN = 64
+
+
+class PreferenceBody(BaseModel):
+    """The order failover walks: connection ids, first tried first. Ids left out have no place in it."""
+    order: list[str] = Field(..., max_length=MAX_PREFERENCE_LEN)
+
+
 class SecretBody(BaseModel):
     key: str = Field(..., min_length=1)
 
@@ -129,6 +144,7 @@ def _public_connection(row: dict[str, Any]) -> dict[str, Any]:
         "enabled": row.get("enabled", False),
         "secretRef": row.get("secretRef"),
         "defaultModel": row.get("defaultModel", ""),
+        "rank": row.get("rank"),
     }
 
 
@@ -229,10 +245,21 @@ async def stop_cli_login(session_id: str):
 async def usage_windows(request: Request):
     """5-hour and weekly windows. Missing data is unavailable, never 0%."""
     reader = getattr(request.app.state, "usage_window_reader", None)
+    codex_reader = getattr(request.app.state, "codex_rate_reader", None) or read_codex_rate_limits
     rows = []
     for cli, provider, _cls in DETECTED:
-        raw = reader(cli) if reader else ""
-        parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        if reader:
+            raw = reader(cli)
+            parsed = parse_usage_windows(raw if isinstance(raw, str) else "")
+        elif cli == "codex":
+            # Only codex hands its windows to another program (app-server).
+            if codex_reader is read_codex_rate_limits and not find_cli("codex"):
+                parsed = dict(NOT_INSTALLED)
+            else:
+                parsed = windows_from_rate_limits(await codex_reader())
+        else:
+            # Claude and Cursor show usage only inside their own interactive session.
+            parsed = dict(NOT_EXPOSED)
         rows.append({"cli": cli, "provider": provider, **parsed})
     return {"windows": rows}
 
@@ -333,6 +360,25 @@ async def update_connection(
     await connection_store.upsert(db, updated)
     connections[connection_id] = updated
     return _public_connection(updated)
+
+
+@router.put("/preference")
+async def save_preference(
+    body: PreferenceBody,
+    connections: dict = Depends(get_connections),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save the failover order. A run that does not pin its own `preference` walks it (providers/preference.py)."""
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(400, "Each connection can appear once in the order.")
+    if any(cid not in connections for cid in body.order):
+        raise HTTPException(404, "Connection not found")
+    place = {cid: index for index, cid in enumerate(body.order)}
+    # Commit copies first; swap them into memory only once the DB accepted them.
+    updated = {cid: {**row, "rank": place.get(cid)} for cid, row in connections.items()}
+    await connection_store.upsert_many(db, list(updated.values()))
+    connections.update(updated)
+    return {"order": list(body.order)}
 
 
 @router.delete("/connections/{connection_id}", status_code=204)

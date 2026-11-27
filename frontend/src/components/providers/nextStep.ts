@@ -67,18 +67,23 @@ function faultStep(c: Connection): NextStep | null {
       if (c.provider === "ollama" && c.residence === "local") return act("copy", "copyServe", { copy: "ollama serve", thenRetest: true });
       return spec.endpoint.editable ? act("checkEndpoint", "checkEndpoint") : retest();
     case "rate-limited":
+    case "overload":
       return act("retest", "testLater");
     case "out-of-credits":
       return spec.billingUrl ? act("link", "openBilling", { href: spec.billingUrl, thenRetest: true }) : retest();
     case "cli-signin": {
       const login = spec.credential.login;
-      return login ? act("login", "signIn", { login }) : retest();
+      if (!login) return retest();
+      // The app could not start the sign-in here, so the command is copied and run by hand.
+      if (c.loginRefused) return act("copy", "copyLogin", { copy: login, thenRetest: true }, { login });
+      return act("login", "signIn", { login });
     }
     case "cli-missing": {
       const url = spec.credential.installUrl;
       return url ? act("link", "openInstall", { href: url, thenRetest: true }) : retest();
     }
     case "cli-timeout":
+    case "timeout":
     case "cli-error":
     case "unknown":
       return retest();

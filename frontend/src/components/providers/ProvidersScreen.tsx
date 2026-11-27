@@ -6,6 +6,7 @@ import { ConnectionDetail, DetailSkeleton } from "./ConnectionDetail";
 import { ConnectionList } from "./ConnectionList";
 import { FirstAccountCard } from "./FirstAccountCard";
 import { shouldProbe } from "./health";
+import { AccountOrderPanel } from "./PreferenceOrder";
 import { UsageStrip } from "./UsageWindows";
 import { useProviderStore } from "./providerStore";
 import { defaultConnectionId } from "./view";
@@ -74,6 +75,7 @@ export function ProvidersScreen() {
       )}
       {!offline && !loading && <FirstAccountCard connections={connections} onChoose={select} />}
       {!offline && !loading && <UsageStrip connections={connections} />}
+      {!offline && !loading && <AccountOrderPanel />}
       <div className="grid min-h-0 flex-1 @2xl:grid-cols-[20rem_minmax(0,1fr)]">
         <aside aria-label={t("list.title")} className={`min-h-0 border-line-soft bg-sub-000 @2xl:border-r ${opened ? "@max-2xl:hidden" : ""}`}>
           <ConnectionList connections={connections} selectedId={shown?.id ?? ""} onSelect={select} offline={offline} loading={loading} />

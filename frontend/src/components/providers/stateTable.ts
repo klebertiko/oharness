@@ -57,6 +57,8 @@ export const STATE_TABLE: Record<ProviderFaultClass, { status: MessageKey; actio
   "cli-timeout": { status: "fault.cliTimeout", action: "testAgain" },
   "cli-error": { status: "fault.cliError", action: "testAgain" },
   usage_limit: { status: "providers.limit.short", action: "useOther" },
+  overload: { status: "fault.overload", action: "testLater" },
+  timeout: { status: "fault.timeout", action: "testAgain" },
   unknown: { status: "fault.unknown", action: "testAgain" },
 };
 

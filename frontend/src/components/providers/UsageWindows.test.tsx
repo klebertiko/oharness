@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useLocaleStore } from "@/i18n/store";
 import { UsageStrip, UsageWindowLine, type UsageWindowsRow } from "./UsageWindows";
 import type { Connection } from "./providerStore";
@@ -14,6 +15,7 @@ const unavailable: UsageWindowsRow = { cli: "claude", provider: "anthropic", ava
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   useLocaleStore.setState({ locale: "en" });
 });
 
@@ -23,6 +25,16 @@ describe("usage windows", () => {
     render(<UsageWindowLine row={unavailable} name="Anthropic" />);
     expect(screen.getByText("Uso indisponível para esta conta")).toBeTruthy();
     expect(document.body.textContent).not.toContain("0%");
+    expect(document.querySelector("meter")).toBeNull();
+  });
+
+  it("says why a provider is not measured, instead of a generic failure", () => {
+    const { rerender } = render(<UsageWindowLine row={{ ...unavailable, reason: "not-exposed" }} name="Anthropic" />);
+    expect(screen.getByText("Not available for this provider: its command-line tool does not share usage with other apps")).toBeTruthy();
+    rerender(<UsageWindowLine row={{ cli: "codex", provider: "openai", available: false, reason: "not-installed" }} name="ChatGPT" />);
+    expect(screen.getByText("Not available: the command-line tool is not on this computer")).toBeTruthy();
+    rerender(<UsageWindowLine row={{ cli: "codex", provider: "openai", available: false, reason: "unreadable" }} name="ChatGPT" />);
+    expect(screen.getByText("Not available right now: the tool did not report usage (it needs a subscription sign-in)")).toBeTruthy();
     expect(document.querySelector("meter")).toBeNull();
   });
 
@@ -42,5 +54,25 @@ describe("usage windows", () => {
   it("hides the strip when there is no subscription", () => {
     render(<UsageStrip connections={[conn({ id: "ollama-local", provider: "ollama", residence: "local", label: "Ollama local" })]} />);
     expect(screen.queryByText("Usage is unavailable for this account")).toBeNull();
+  });
+
+  it("says usage is loading until the first answer arrives, then shows the answer", async () => {
+    let release: (v: unknown) => void = () => undefined;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((r) => { release = r; })));
+    render(<UsageStrip connections={[conn({ id: "claude-sub", provider: "anthropic", label: "Claude" })]} />);
+    expect(screen.getByText("Reading usage…")).toBeTruthy();
+    expect(screen.queryByText(/Usage is unavailable/)).toBeNull();
+    await act(async () => {
+      release({ ok: true, json: async () => ({ windows: [{ cli: "claude", provider: "anthropic", available: false, reason: "not-exposed" }] }) });
+    });
+    await waitFor(() => expect(screen.queryByText("Reading usage…")).toBeNull());
+    expect(screen.getByText(/does not share usage/)).toBeTruthy();
+  });
+
+  it("says loading in Portuguese too", () => {
+    useLocaleStore.setState({ locale: "pt-BR" });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)));
+    render(<UsageStrip connections={[conn({ id: "claude-sub", provider: "anthropic", label: "Claude" })]} />);
+    expect(screen.getByText("Lendo o uso…")).toBeTruthy();
   });
 });

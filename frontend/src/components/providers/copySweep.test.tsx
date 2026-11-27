@@ -48,6 +48,7 @@ describe("providers copy in pt-BR", () => {
         onUseAccount={() => undefined}
         onUseApiKey={() => undefined}
         onRelease={() => undefined}
+        onCancelHold={() => undefined}
       />,
     );
     const text = document.body.textContent ?? "";

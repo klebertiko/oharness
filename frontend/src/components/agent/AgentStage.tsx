@@ -22,9 +22,12 @@ import { WorkspacePicker } from "@/components/agent/WorkspacePicker";
 import { WorktreeToggle } from "@/components/agent/WorktreeToggle";
 import { pickChatProvider } from "@/components/agent/chatProvider";
 import { missingProviderAction, performInPlace } from "@/components/providers/composerAction";
+import { ProviderErrorLines } from "@/components/providers/ProviderError";
 import { ComposerUsageLimit } from "@/components/providers/UsageLimitBanner";
+import { ChatFallbackNotice } from "@/components/providers/FallbackNotice";
 import { EMPTY_TABLE } from "@/components/providers/stateTable";
 import { useChatProviderStore } from "@/store/chatProviderStore";
+import { useComposerDraftStore } from "@/store/composerDraftStore";
 import { modelOverride, NEW_CHAT_KEY, useChatModelStore } from "@/store/chatModelStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
 import { chosenWorkspace, useWorkspaceStore } from "@/store/workspaceStore";
@@ -349,6 +352,18 @@ export function AgentStage() {
     sendHeld.current(text);
   }, [provider, live, releaseTick]);
 
+  // A held draft is the person's text: when the limit ends without it being sent, it goes back to the composer.
+  const usageLimit = useProviderStore((s) => s.usageLimit);
+  const giveBack = (text: string) => setInstruction(instruction.trim() ? `${instruction}
+${text}` : text);
+  const giveBackRef = useRef(giveBack);
+  giveBackRef.current = giveBack;
+  useEffect(() => {
+    if (usageLimit) return;
+    const text = useComposerDraftStore.getState().take();
+    if (text) giveBackRef.current(text);
+  }, [usageLimit]);
+
   const [approveBlocked, setApproveBlocked] = useState(false);
   useEffect(() => { if (provider) setApproveBlocked(false); }, [provider]); // the reason is gone once a provider is connected
   const approvePlan = async () => {
@@ -547,8 +562,14 @@ export function AgentStage() {
                 tone={run.status === "error" ? "fault" : "info"}
                 action={runOwner.current?.instruction ? <Button size="sm" onClick={() => applySuggestion(runOwner.current!.instruction)}>Reuse instruction</Button> : undefined}
               >
-                <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? t("run.notice.ceiling") : "The turn stopped. You can reuse your instruction when ready.")}</p>
-                {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
+                {run.status === "error" && run.failure ? (
+                  <ProviderErrorLines code={run.failure} />
+                ) : (
+                  <>
+                    <p>{run.status === "error" ? "The turn failed. Check the provider connection, then reuse your instruction to try again." : (run.budget ? t("run.notice.ceiling") : "The turn stopped. You can reuse your instruction when ready.")}</p>
+                    {run.notices?.map((notice, index) => <p key={index} className="mt-1 wrap-anywhere">{notice}</p>)}
+                  </>
+                )}
               </Notice>
             )}
 
@@ -579,6 +600,7 @@ export function AgentStage() {
           {queueNotice && <Notice tone="warn" className="mb-2">{queueNotice}</Notice>}
           <QueuedMessages items={queue} paused={queuePaused} restored={queueRestored} onRemove={(id) => useMessageQueueStore.getState().remove(queueKey, id)}
             onClear={() => useMessageQueueStore.getState().clear(queueKey)} onSendNext={sendNextQueued} />
+          <ChatFallbackNotice className="mb-2" />
           <ComposerUsageLimit
             draft={instruction}
             onHoldDraft={() => setInstruction("")}
@@ -587,6 +609,7 @@ export function AgentStage() {
               useProviderStore.getState().clearUsageLimit();
               setReleaseTick((n) => n + 1);
             }}
+            onCancelHold={giveBack}
           />
           <ChatComposer
             key={activeThreadId ?? "no-thread"}

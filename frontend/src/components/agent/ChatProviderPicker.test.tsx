@@ -5,6 +5,7 @@ import { useProviderStore, type Connection } from "@/components/providers/provid
 import { useChatModelStore } from "@/store/chatModelStore";
 import { useChatProviderStore } from "@/store/chatProviderStore";
 import { useChatSetupRequestStore } from "@/store/chatSetupStore";
+import { useChatRecentStore } from "@/store/chatRecentStore";
 import { ChatProviderPicker } from "./ChatProviderPicker";
 
 function connection(overrides: Partial<Connection>): Connection {
@@ -34,6 +35,8 @@ beforeEach(() => {
   useChatProviderStore.setState({ chosenId: "an" });
   useChatSetupRequestStore.setState({ token: 0, id: null });
   useChatModelStore.setState({ overrides: {} });
+  // Recent picks would otherwise carry over from one test to the next.
+  useChatRecentStore.setState({ recent: [] });
   setDefaultModel.mockClear();
   useProviderStore.setState({ setDefaultModel });
 });

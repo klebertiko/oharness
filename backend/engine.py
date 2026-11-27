@@ -37,6 +37,7 @@ from providers.resolution import (
     resolve_node_provider_with_failover,
 )
 from providers.outcomes import failure_details
+from providers.preference import failover_chain, failover_reason_class
 from sandbox.approval import ToolApproval
 from runtime.router import select_runtime
 from usage_tracking import BudgetExceededError, WARN_THRESHOLD as TOKEN_BUDGET_WARN_THRESHOLD, connection_billing
@@ -793,7 +794,9 @@ async def execute_harness(
             # once, so its observable shape is byte-for-byte what
             # `resolve_node_provider` + a plain `try/except` around the
             # stream produced before this story existed (AC#6).
-            remaining_ids = [str(p) for p in (data.get("providerIds") or []) if p]
+            # In the order failover walks (the node's own `preference`, else the saved
+            # order), so `rest` below is always "the ones after this candidate" in that order.
+            remaining_ids = failover_chain(data, connections)
             failover_attempts: list[FailoverAttempt] = []
             resolved = None
             stream_iter = None
@@ -891,7 +894,11 @@ async def execute_harness(
                             else "Provider failed a pre-flight health check."
                         )
                         failover_attempts.append(
-                            FailoverAttempt(connection_id=candidate.connection_id, reason=detail)
+                            FailoverAttempt(
+                                connection_id=candidate.connection_id,
+                                reason=detail,
+                                reason_class="unavailable" if probe_result.health == "setup" else "failed",
+                            )
                         )
                         remaining_ids = rest
                         continue
@@ -926,10 +933,12 @@ async def execute_harness(
                     idx = remaining_ids.index(candidate.connection_id)
                     rest = remaining_ids[idx + 1:]
                     if rest:
+                        details = failure_details(exc)
                         failover_attempts.append(
                             FailoverAttempt(
                                 connection_id=candidate.connection_id,
-                                reason=failure_details(exc).get("error", "Provider execution failed."),
+                                reason=details.get("error", "Provider execution failed."),
+                                reason_class=failover_reason_class(details.get("provider_failure")),
                             )
                         )
                         remaining_ids = rest
@@ -988,7 +997,7 @@ async def execute_harness(
             if failover_attempts:
                 node_view["failover"] = {
                     "attempts": [
-                        {"connection_id": a.connection_id, "reason": a.reason}
+                        {"connection_id": a.connection_id, "reason": a.reason, "reason_class": a.reason_class}
                         for a in failover_attempts
                     ],
                 }

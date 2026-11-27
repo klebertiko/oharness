@@ -1,11 +1,12 @@
 """Subscription usage windows. Only a percent and a reset instant leave the text."""
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
-from adapters.cli_shared import line_reset_at
+from adapters.cli_shared import _kill, checked_program, find_cli, inert_cwd, is_windows, line_reset_at, scrub_env
 
 _PCT = re.compile(
     r"(?P<label>5[\s-]*hour|five[\s-]*hour|weekly|week)\s+usage:\s*(?P<pct>\d{1,3})%\s*(?P<left>left)?",
@@ -77,10 +78,111 @@ def parse_usage_windows(text: str, *, now: datetime | None = None) -> dict:
     if stripped.startswith("{"):
         try:
             parsed = _from_json(json.loads(stripped), moment)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):
+            # Not JSON, or nested deeper than the decoder goes. Either way the text is dropped.
             parsed = None
     if parsed is None:
         parsed = _from_lines(text or "", moment)
     if not parsed:
         return {"available": False}
     return {"available": True, **parsed}
+
+
+# ── Codex: the app-server answers `account/rateLimits/read` with the two windows ──
+# primary is the 300-minute window, secondary the 10080-minute (weekly) one. Only
+# the percent and the reset instant leave this module; the account id, plan and
+# credits in the same reply are dropped here.
+_WINDOW_BY_MINUTES = {300: "fiveHour", 10080: "weekly"}
+_CODEX_NAMES = frozenset({"codex"})
+_CODEX_NAMES_WINDOWS = frozenset({"codex.exe"})
+CODEX_READ_TIMEOUT_S = 15.0
+_MAX_LINE = 256 * 1024
+_HANDSHAKE = (
+    {"method": "initialize", "id": 0, "params": {"clientInfo": {"name": "oharness", "title": "OpenHarness", "version": "0"}}},
+    {"method": "initialized", "params": {}},
+    {"method": "account/rateLimits/read", "id": 1},
+)
+
+
+def _codex_window(raw: object) -> tuple[str, dict] | None:
+    if not isinstance(raw, dict):
+        return None
+    minutes, used, reset = raw.get("windowDurationMins"), raw.get("usedPercent"), raw.get("resetsAt")
+    key = _WINDOW_BY_MINUTES.get(minutes) if isinstance(minutes, int) and not isinstance(minutes, bool) else None
+    if key is None or isinstance(used, bool) or not isinstance(used, (int, float)) or not 0 <= used <= 100:
+        return None
+    row: dict = {"usedPct": int(round(used))}
+    if isinstance(reset, int) and not isinstance(reset, bool) and 0 < reset < 4_102_444_800:
+        row["resetsAt"] = datetime.fromtimestamp(reset, timezone.utc).isoformat(timespec="seconds")
+    return key, row
+
+
+def windows_from_rate_limits(result: object) -> dict:
+    """The two windows from an app-server reply, or ``unreadable``. Nothing else is copied."""
+    limits = result.get("rateLimits") if isinstance(result, dict) else None
+    found: dict[str, dict] = {}
+    if isinstance(limits, dict):
+        for slot in ("primary", "secondary"):
+            window = _codex_window(limits.get(slot))
+            if window:
+                found.setdefault(window[0], window[1])
+    if not found:
+        return {"available": False, "reason": "unreadable"}
+    return {"available": True, **found}
+
+
+async def _reply_to_read(stdout: asyncio.StreamReader) -> dict | None:
+    """The result of request id 1. Every other line is dropped unread."""
+    while True:
+        line = await stdout.readline()
+        if not line:
+            return None
+        try:
+            message = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(message, dict) and message.get("id") == 1:
+            result = message.get("result")
+            return result if isinstance(result, dict) else None
+
+
+async def read_codex_rate_limits(*, timeout: float = CODEX_READ_TIMEOUT_S) -> dict | None:
+    """Ask the installed codex app-server for the rate limits. None when it is absent or silent.
+
+    The argv is literal and the program is the checked path the lookup found, so
+    neither PATH order nor the sidecar's folder picks it. The environment is the CLI
+    allowlist, and stderr is discarded. The working directory is one no run can
+    write to, so a planted project config is never read. The app-server exits on end of input
+    before it answers, so stdin stays open until the reply arrives.
+    """
+    found = find_cli("codex")
+    if not found:
+        return None
+    try:
+        # An npm `.cmd` shim is not a program CreateProcess can start, so only the real binary is read.
+        program = checked_program(found, _CODEX_NAMES_WINDOWS if is_windows() else _CODEX_NAMES, windows=is_windows())
+    except ValueError:
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "codex", "app-server", executable=program,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=scrub_env(), limit=_MAX_LINE, cwd=inert_cwd(),
+        )
+    except OSError:
+        return None
+    try:
+        if proc.stdin is None or proc.stdout is None:
+            return None
+        proc.stdin.write("".join(json.dumps(m) + "\n" for m in _HANDSHAKE).encode())
+        await proc.stdin.drain()
+        return await asyncio.wait_for(_reply_to_read(proc.stdout), timeout)
+    except (asyncio.TimeoutError, OSError, ValueError):
+        return None
+    finally:
+        await _kill(proc)
+
+
+# Why a subscription shows no windows. The UI turns each into one sentence.
+NOT_EXPOSED = {"available": False, "reason": "not-exposed"}
+NOT_INSTALLED = {"available": False, "reason": "not-installed"}

@@ -1,44 +1,27 @@
-export type Effort = "low" | "medium" | "high";
-export type Intent = "auto" | "best" | "fastest" | "cheapest";
+import { specOf, type Connection } from "./providerStore";
 
-export type ChoiceModel = {
-  id: string;
-  connectionId: string;
-  connectionLabel: string;
-  available: boolean;
-  reason?: string;
-  price?: [number, number];
-  efforts?: Effort[];
-};
+/** One account + model combination the chat can run. */
+export type ModelChoice = { connectionId: string; model: string };
 
-export type ModelChoice = { connectionId: string; model: string; effort: Effort | null };
+const key = (c: ModelChoice) => `${c.connectionId}\0${c.model}`;
 
-const INTENTS: Intent[] = ["auto", "best", "fastest", "cheapest"];
-export { INTENTS };
-
+/** Newest first, no repeats, at most five. */
 export function rememberChoice(recent: ModelChoice[], next: ModelChoice): ModelChoice[] {
-  const key = `${next.connectionId}\0${next.model}\0${next.effort ?? ""}`;
-  const rest = recent.filter((item) => `${item.connectionId}\0${item.model}\0${item.effort ?? ""}` !== key);
-  return [next, ...rest].slice(0, 5);
+  if (!next.connectionId || !next.model) return recent;
+  return [next, ...recent.filter((item) => key(item) !== key(next))].slice(0, 5);
 }
 
-function available(models: ChoiceModel[]): ChoiceModel[] {
-  return models.filter((model) => model.available);
-}
+export type CheapestPick = { connection: Connection; model: string; price: [number, number] };
 
-/** Intent picks among models that can answer. Price is the stand-in for best, fastest and cheapest. */
-export function pickByIntent(models: ChoiceModel[], intent: Intent): ChoiceModel | null {
-  const ready = available(models);
-  if (ready.length === 0) return null;
-  if (intent === "auto") return ready[0];
-  const priced = ready.filter((model) => model.price);
-  const pool = priced.length > 0 ? priced : ready;
-  if (intent === "cheapest" || intent === "fastest") {
-    return pool.slice().sort((a, b) => (a.price?.[0] ?? Number.POSITIVE_INFINITY) - (b.price?.[0] ?? Number.POSITIVE_INFINITY))[0];
+/** The model with the lowest list price (input, then output) among accounts billed per token.
+    A subscription is left out: its list price is not what a turn costs. Null unless there are
+    at least two priced models to compare, so the row never names a winner of a field of one. */
+export function cheapestModel(connections: Connection[]): CheapestPick | null {
+  const priced: CheapestPick[] = [];
+  for (const c of connections) {
+    if (specOf(c)?.credential.kind !== "api-key") continue;
+    for (const m of c.models) if (m.price) priced.push({ connection: c, model: m.id, price: m.price });
   }
-  return pool.slice().sort((a, b) => (b.price?.[1] ?? 0) - (a.price?.[1] ?? 0))[0];
-}
-
-export function fallbackLine(from: string, to: string, reason: string): { from: string; to: string; reason: string } {
-  return { from, to, reason };
+  if (priced.length < 2) return null;
+  return priced.slice().sort((a, b) => a.price[0] - b.price[0] || a.price[1] - b.price[1])[0];
 }

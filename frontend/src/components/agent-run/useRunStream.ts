@@ -8,6 +8,7 @@ import { useUsageStore } from "@/components/providers/usageStore";
 import { emptyRun, runReducer } from "./runReducer";
 import { useRunBudgetStore } from "@/store/runBudgetStore";
 import { useRunWorktreeStore } from "@/store/runWorktreeStore";
+import { fallbackReason, useChatFallbackStore } from "@/store/chatFallbackStore";
 import { sendControl, startDirectRun, startRun, type DirectRunPayload } from "./runClient";
 import type { RunState } from "./types";
 
@@ -109,8 +110,11 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
         refreshed = true;
         void useUsageStore.getState().refresh();
       };
+      // Only a direct chat turn answers for the chat's own account; a harness node has its own pins.
+      const direct = !(harnessEnabledRef.current && !tools?.preset && tools?.permission_mode !== "plan");
       const onEvent = (event: string, data: Record<string, unknown>) => {
         if (generation !== generationRef.current || terminal) return;
+        if (direct && event === "node_start" && providerId) noteFallback(providerId, data);
         // Only backend completion evidence proves contact, including triage
         // events that have no segment in the preview plan.
         const id = data.connection_id;
@@ -132,6 +136,9 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
           } else if (pf === "usage_limit") {
             // Only the reset instant. The error string is fixed text and is not stored.
             useProviderStore.getState().noteUsageLimit(id, data.reset_at);
+          } else if (pf === "overload" || pf === "timeout") {
+            // The class is the whole message: the catalog says what, why and what to do.
+            useProviderStore.getState().reportRunOutcome(id, { ok: false, detail: "", failure: pf });
           } else if (pf === "cli-signin" || pf === "cli-missing" || pf === "cli-timeout" || pf === "cli-error") {
             // Closed set only; the text is ours (catalog), never the backend's or the CLI's.
             useProviderStore.getState().reportRunOutcome(id, {
@@ -140,6 +147,11 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
               detail: tr(`run.cliFailure.${pf}`),
             });
           }
+        }
+        if (event === "error" && data.provider_failure === "usage_limit") {
+          // A run-level error names no node, and may name no connection: it is the chat's connection.
+          const owner = typeof id === "string" && id.trim() ? id : providerId;
+          if (owner) useProviderStore.getState().noteUsageLimit(owner, data.reset_at);
         }
         dispatch({ type: "sse", event, data });
         if (event === "harness_done" || event === "error") {
@@ -215,4 +227,15 @@ export function useRunStream({ graph, harnessEnabled }: UseRunStreamOptions): Ru
   }, []);
 
   return { run, elapsed, live, reset, start, stop, advance, resolveGate, resolveToolCall, steer };
+}
+
+/** The sidecar answered the chat's turn with another account of the saved order. Only the ids and the
+    closed class are read; the attempt's `reason` text never leaves this function. */
+function noteFallback(chatAccount: string, data: Record<string, unknown>): void {
+  const answered = data.connection_id;
+  const failover = data.failover as { attempts?: unknown } | undefined;
+  const first = Array.isArray(failover?.attempts) ? (failover.attempts[0] as Record<string, unknown> | undefined) : undefined;
+  if (typeof answered !== "string" || !answered || answered === chatAccount) return;
+  if (!first || first.connection_id !== chatAccount) return;
+  useChatFallbackStore.getState().note(chatAccount, answered, fallbackReason(first.reason_class));
 }

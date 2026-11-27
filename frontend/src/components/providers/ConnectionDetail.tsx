@@ -9,12 +9,15 @@ import { ConnectionPanel } from "./ConnectionPanel";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { ModelsPanel } from "./ModelsPanel";
 import { providerKey, vendorName } from "./providerText";
-import { specOf, type Connection } from "./providerStore";
+import { specOf, useProviderStore, type Connection } from "./providerStore";
+import { catalogCodeFromFault } from "./errorCatalog";
+import { ProviderErrorNotice } from "./ProviderError";
+import { providerFault } from "@/components/agent/chatProvider";
 import { WithCode } from "./rows";
 import { LoginStatus } from "./LoginStatus";
 import { useConnectionActions } from "./useConnectionActions";
 import { useUsageStore } from "./usageStore";
-import { metaLine, viewOf } from "./view";
+import { metaLine, otherReadyAccounts, viewOf } from "./view";
 import { setupGuideUrl } from "./guide";
 
 /** The store's detail often opens by restating the status word ("Not connected. Add a key…"); the header already says it. */
@@ -56,6 +59,10 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
   const agentOnly = spec.catalogue === "agent-only";
   const textKeys = PROVIDER_TEXT_KEY[providerKey(c)];
   const primaryWord = step && actions.copied === step.copy && step.copy ? t("action.copied") : step?.label;
+  const connections = useProviderStore((s) => s.connections);
+  // "Use another account" with nowhere to go is turned off, and the reason is said beside it.
+  const noOther = step?.kind === "limit" && otherReadyAccounts(connections, c.id).length === 0;
+  const failureCode = c.health === "fault" ? catalogCodeFromFault(providerFault(c)) : null;
 
   return (
     <div className="@container flex h-full min-h-0 flex-col" aria-busy={probing || undefined}>
@@ -82,9 +89,14 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
             {!offline && (
               <div className="flex flex-wrap items-center gap-2">
                 {step && !keyIsTheAction && (
-                  <Button variant="primary" onClick={() => actions.runStep()} loading={probing && step.kind === "retest"}>
+                  <Button variant="primary" onClick={() => actions.runStep()} loading={probing && step.kind === "retest"} disabled={noOther} aria-describedby={noOther ? "oh-limit-no-other" : undefined}>
                     {primaryWord}
                   </Button>
+                )}
+                {noOther && (
+                  <p id="oh-limit-no-other" className="t-body basis-full text-ink-dim">
+                    {t("providers.limit.noOther")}
+                  </p>
                 )}
                 {showTest && (
                   <Button onClick={() => void actions.test()} loading={probing && !(step?.kind === "retest")}>
@@ -96,6 +108,8 @@ export function ConnectionDetail({ c, offline, onBack }: { c: Connection; offlin
           </header>
 
           <LoginStatus connectionId={c.id} />
+          {failureCode && !offline && !probing && <ProviderErrorNotice code={failureCode} />}
+
           {probing && !offline && (
             <p role="status" className="t-body text-ink-dim">
               {t("detail.testing")}

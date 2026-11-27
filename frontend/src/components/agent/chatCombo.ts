@@ -10,6 +10,9 @@ const SEP = "␟";
 const MORE = "more";
 /** Prefix of a "Needs action" row: choosing it opens that connection in Providers, it does not select it. */
 const ACTION = "action";
+/** Prefixes of a model row repeated from Recent, and of the Cheapest row: both stand for one model of one connection. */
+const RECENT = "recent";
+const CHEAPEST = "cheapest";
 /** Heading of the group of connections that cannot answer yet, and how many it lists. */
 export const NEEDS_ACTION_GROUP = "Needs action";
 export const NEEDS_ACTION_MAX = 3;
@@ -17,6 +20,8 @@ export const NEEDS_ACTION_MAX = 3;
 export const modelOptionId = (connectionId: string, model: string) => connectionId + SEP + model;
 export const connectionOptionId = (connectionId: string) => connectionId;
 export const actionOptionId = (connectionId: string) => ACTION + SEP + connectionId;
+export const recentOptionId = (connectionId: string, model: string) => RECENT + SEP + modelOptionId(connectionId, model);
+export const cheapestOptionId = (connectionId: string, model: string) => CHEAPEST + SEP + modelOptionId(connectionId, model);
 
 /** What a combo option id means: Auto, a whole connection (no model list), or one model of a connection. */
 export function parseOptionId(
@@ -25,6 +30,12 @@ export function parseOptionId(
   if (id === AUTO_ID) return { connectionId: null, model: null, auto: true };
   if (id.startsWith(MORE + SEP)) return null;
   if (id.startsWith(ACTION + SEP)) return { connectionId: id.slice(ACTION.length + SEP.length), model: null, auto: false, fix: true };
+  for (const prefix of [RECENT, CHEAPEST]) {
+    if (id.startsWith(prefix + SEP)) {
+      const inner = parseOptionId(id.slice(prefix.length + SEP.length));
+      return inner?.connectionId && inner.model ? inner : null;
+    }
+  }
   const at = id.indexOf(SEP);
   if (at < 0) return { connectionId: id, model: null, auto: false };
   return { connectionId: id.slice(0, at), model: id.slice(at + 1), auto: false };
@@ -83,11 +94,22 @@ export type ComboBuildInput = {
   rowDetail: (c: Connection) => string;
   /** Connections that cannot answer yet, nearest to ready first, with the one action each needs. */
   needsAction?: { connection: Connection; detail: string }[];
+  /** The last picks, newest first, already limited to connections that can answer. */
+  recent?: { connection: Connection; model: string }[];
+  recentGroup?: string;
+  /** The lowest list price among metered models, with its row text; absent when it cannot be computed honestly. */
+  cheapest?: { connection: Connection; model: string; label: string; detail: string } | null;
 };
 
 /** Auto, then one group per usable connection holding its models (or, with no model list, the connection itself). */
 export function buildComboOptions(i: ComboBuildInput): ComboOption[] {
   const options: ComboOption[] = [{ id: AUTO_ID, label: "Auto", detail: i.autoDetail, leading: i.autoTone }];
+  if (i.cheapest) {
+    options.push({ id: cheapestOptionId(i.cheapest.connection.id, i.cheapest.model), label: i.cheapest.label, detail: i.cheapest.detail, leading: i.toneDot(i.cheapest.connection) });
+  }
+  for (const r of i.recent ?? []) {
+    options.push({ id: recentOptionId(r.connection.id, r.model), label: r.model, detail: r.connection.label, group: i.recentGroup ?? "Recent", leading: i.toneDot(r.connection) });
+  }
   const seen = new Map<string, number>();
   for (const c of i.usable) {
     const current = i.overrideFor(c.id) || c.defaultModel;

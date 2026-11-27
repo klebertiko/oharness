@@ -16,7 +16,7 @@ import { tr } from "@/i18n/store";
 import { PROVIDER_TEXT_KEY } from "./labels";
 import { modelNotPulled } from "./modelPull";
 import { cleanResetAt } from "./usageLimit";
-import { cancelLoginRequest, loginCliId, requestLogin } from "./subscriptionLogin";
+import { cancelLoginRequest, loginCliId, requestLogin, type LoginRefusal } from "./subscriptionLogin";
 
 /* ── Shapes ───────────────────────────────────────────────────────────────── */
 
@@ -36,8 +36,6 @@ export interface ModelInfo {
   via?: string;
   /** Local models report their on-disk size. */
   size?: string;
-  /** Effort levels this model accepts. Empty or absent means no effort control. */
-  efforts?: ("low" | "medium" | "high")[];
 }
 
 /** A fact the probe learned about the account behind the credential. */
@@ -76,6 +74,10 @@ export interface Connection {
   failure?: ProviderFaultClass;
   /** ISO instant a subscription limit frees up. Absent when the class did not name one. */
   resetAt?: string;
+  /** Place in the saved failover order (0 first). Absent or null: no order saved for it. */
+  rank?: number | null;
+  /** The sign-in could not be started from the app, so the step is to copy the command instead. */
+  loginRefused?: LoginRefusal;
 }
 
 export const CLI_STATES = ["ready", "not-logged-in", "not-installed", "unavailable", "error"] as const;
@@ -326,6 +328,7 @@ type BackendConnectionRow = {
   enabled: boolean;
   secretRef: string | null;
   defaultModel?: string;
+  rank?: number | null;
 };
 
 /** Create-if-missing so /probe and /secret never 404 on a connection this
@@ -493,6 +496,8 @@ interface ProviderState {
   usageLimit: { connectionId: string; resetAt: string | null } | null;
   /** A sign-in that is running outside the app. Nothing the CLI prints is stored here. */
   loginWatch: { connectionId: string; cliId: string; sessionId: string; startedAt: number } | null;
+  /** The last sign-in attempt's outcome worth a sentence: it could not start, or it was never detected. */
+  loginNotice: { connectionId: string; reason: LoginRefusal | "timeout" } | null;
 
   select: (id: string) => void;
   setQuery: (q: string) => void;
@@ -509,7 +514,7 @@ interface ProviderState {
       already be a caller-confirmed provider-level failure (see
       `isProviderLevelFailure`'s doc comment for why no caller uses it yet)
       — never a bad prompt, an HITL rejection, or a Stop. */
-  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing" }) => void;
+  reportRunOutcome: (id: string, outcome: { ok: true } | { ok: false; detail: string; cliFailure?: "cli-signin" | "cli-missing"; failure?: ProviderFaultClass }) => void;
   /** Record a usage limit. Only a validated reset instant is kept; the error text is ignored. */
   noteUsageLimit: (id: string, resetAt: unknown) => void;
   /** The window has opened, or the person picked another way out. */
@@ -517,6 +522,8 @@ interface ProviderState {
   /** Start the fixed sign-in command for a subscription connection. */
   startLogin: (id: string) => Promise<void>;
   cancelLogin: () => Promise<void>;
+  /** The wait ran out without a signed-in CLI. Stops the session and keeps a sentence saying so. */
+  timeoutLogin: () => Promise<void>;
   /** The poll saw a signed-in CLI. Clears the watch. */
   finishLogin: () => void;
   attachSecret: (id: string, plaintext: string) => Promise<void>;
@@ -526,6 +533,10 @@ interface ProviderState {
   saveEndpoint: (id: string, endpoint: string) => Promise<boolean>;
   /** Persist the model a run uses when its node pins none; false (and unchanged) on refusal. */
   setDefaultModel: (id: string, model: string) => Promise<boolean>;
+  /** Rename a connection through its update route; the old name comes back when the sidecar refuses. */
+  renameConnection: (id: string, label: string) => Promise<boolean>;
+  /** Save the order failover walks (first tried first). Ids left out lose their place. */
+  savePreference: (ids: string[]) => Promise<boolean>;
   toggleEnabled: (id: string) => Promise<void>;
   bindToggle: (id: string) => void;
   bindMove: (id: string, dir: -1 | 1) => void;
@@ -551,6 +562,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   loadState: "idle",
   usageLimit: null,
   loginWatch: null,
+  loginNotice: null,
 
   select: (selectedId) => set({ selectedId }),
   setQuery: (query) => set({ query }),
@@ -586,6 +598,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
             endpoint: row.endpoint,
             enabled: row.enabled,
             defaultModel: row.defaultModel ?? "",
+            rank: typeof row.rank === "number" ? row.rank : null,
             // The offline template's "Not connected. Add a key..." sentence
             // would contradict a row the sidecar says is on.
             detail: hydratedDetail(c, row),
@@ -674,7 +687,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       set({ connections: patch(get().connections, id, (x) => ({ ...x, cliState: undefined, health: "setup", detail })) });
     } else {
       set({
-        connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail })),
+        connections: patch(get().connections, id, (x) => ({ ...x, health: "fault", detail: outcome.detail, ...(outcome.failure ? { failure: outcome.failure } : {}) })),
       });
     }
   },
@@ -702,18 +715,33 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (!connection) return;
     const cliId = loginCliId(connection);
     if (!cliId) return;
+    set({ loginNotice: null });
     const started = await requestLogin(cliId);
-    if (!started) return;
+    if (!started.ok) {
+      const reason = started.reason;
+      set({
+        loginNotice: { connectionId: id, reason },
+        connections: patch(get().connections, id, (c) => ({ ...c, loginRefused: reason })),
+      });
+      return;
+    }
     set({ loginWatch: { connectionId: id, cliId, sessionId: started.id, startedAt: Date.now() } });
   },
 
   cancelLogin: async () => {
     const watch = get().loginWatch;
-    set({ loginWatch: null });
+    set({ loginWatch: null, loginNotice: null });
     if (watch) await cancelLoginRequest(watch.sessionId);
   },
 
-  finishLogin: () => set({ loginWatch: null }),
+  timeoutLogin: async () => {
+    const watch = get().loginWatch;
+    if (!watch) return;
+    set({ loginWatch: null, loginNotice: { connectionId: watch.connectionId, reason: "timeout" } });
+    await cancelLoginRequest(watch.sessionId);
+  },
+
+  finishLogin: () => set({ loginWatch: null, loginNotice: null }),
 
   clearUsageLimit: () => {
     const current = get().usageLimit;
@@ -783,6 +811,36 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (value === c.endpoint) return true;
     const ok = await putConnection({ ...c, endpoint: value }, { endpoint: value });
     if (ok) set({ connections: patch(get().connections, id, (x) => ({ ...x, endpoint: value })) });
+    return ok;
+  },
+
+  renameConnection: async (id, label) => {
+    const c = get().connections.find((x) => x.id === id);
+    const value = label.trim();
+    if (!c || !value || value === c.label) return false;
+    const previous = c.label;
+    set({ connections: patch(get().connections, id, (x) => ({ ...x, label: value })) });
+    const ok = await putConnection(c, { label: value });
+    if (!ok) set({ connections: patch(get().connections, id, (x) => (x.label === value ? { ...x, label: previous } : x)) });
+    return ok;
+  },
+
+  savePreference: async (ids) => {
+    const before = new Map(get().connections.map((c) => [c.id, c.rank ?? null]));
+    const place = new Map(ids.map((id, index) => [id, index]));
+    set({ connections: get().connections.map((c) => ({ ...c, rank: place.get(c.id) ?? null })) });
+    let ok = false;
+    try {
+      const res = await fetch(apiUrl("/providers/preference"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: ids }),
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    if (!ok) set({ connections: get().connections.map((c) => ({ ...c, rank: before.get(c.id) ?? null })) });
     return ok;
   },
 
