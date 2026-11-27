@@ -64,6 +64,7 @@ function faultStep(c: Connection): NextStep | null {
       if (c.provider === "ollama" && c.residence === "local") return act("copy", "copyServe", { copy: "ollama serve", thenRetest: true });
       return spec.endpoint.editable ? act("checkEndpoint", "checkEndpoint") : retest();
     case "rate-limited":
+    case "overload":
       return act("retest", "testLater");
     case "out-of-credits":
       return spec.billingUrl ? act("link", "openBilling", { href: spec.billingUrl, thenRetest: true }) : retest();
@@ -76,6 +77,7 @@ function faultStep(c: Connection): NextStep | null {
       return url ? act("link", "openInstall", { href: url, thenRetest: true }) : retest();
     }
     case "cli-timeout":
+    case "timeout":
     case "cli-error":
     case "unknown":
       return retest();

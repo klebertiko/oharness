@@ -71,3 +71,14 @@ describe("noteUsageLimit", () => {
     expect(c.health).toBe("live");
   });
 });
+
+describe("cleanResetAt cap", () => {
+  it("drops an instant more than 14 days ahead, the same cap as Retry-After", () => {
+    const now = Date.parse("2026-11-21T09:00:00Z");
+    expect(cleanResetAt("2026-12-04T09:00:00Z", now)).toBe("2026-12-04T09:00:00Z");
+    expect(cleanResetAt("2026-12-05T09:00:00Z", now)).toBe("2026-12-05T09:00:00Z");
+    expect(cleanResetAt("2026-12-05T09:00:01Z", now)).toBeNull();
+    expect(cleanResetAt("2099-01-01T00:00:00Z", now)).toBeNull();
+    expect(formatResetLocal("2099-01-01T00:00:00Z", "en")).toBeNull();
+  });
+});

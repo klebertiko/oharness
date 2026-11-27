@@ -304,11 +304,21 @@ _ISO_IN_LINE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?
 _CLOCK_IN_LINE = re.compile(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?\b", re.IGNORECASE)
 
 
-def clean_reset_at(value: object) -> str | None:
-    """An ISO reset instant, or None. Never a slice of the text it was read from."""
+def clean_reset_at(value: object, *, now: datetime | None = None) -> str | None:
+    """An ISO reset instant, or None. Never a slice of the text it was read from.
+
+    An instant further ahead than the Retry-After cap (`_MAX_RETRY_S`) is dropped too.
+    """
     if not isinstance(value, str) or not _RESET_AT.fullmatch(value):
         return None
     if "@" in value or any(ch.isspace() for ch in value):
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    current = now if now is not None else datetime.now(timezone.utc)
+    if moment - _as_aware(current) > timedelta(seconds=_MAX_RETRY_S):
         return None
     return value
 
@@ -319,8 +329,8 @@ def _as_aware(moment: datetime) -> datetime:
     return moment
 
 
-def _iso(moment: datetime) -> str | None:
-    return clean_reset_at(_as_aware(moment).isoformat(timespec="seconds"))
+def _iso(moment: datetime, now: datetime | None = None) -> str | None:
+    return clean_reset_at(_as_aware(moment).isoformat(timespec="seconds"), now=now)
 
 
 def _parse_absolute(token: str) -> datetime | None:
@@ -346,7 +356,7 @@ def _clock_reset(hour: int, minute: int, second: int, ampm: str | None, now: dat
     candidate = base.replace(hour=hour, minute=minute, second=second, microsecond=0)
     if candidate <= base:
         candidate += timedelta(days=1)
-    return _iso(candidate)
+    return _iso(candidate, base)
 
 
 def _reset_from_line(line: str, now: datetime) -> str | None:
@@ -355,7 +365,7 @@ def _reset_from_line(line: str, now: datetime) -> str | None:
     if absolute:
         parsed = _parse_absolute(absolute.group(0))
         if parsed is not None:
-            return _iso(parsed)
+            return _iso(parsed, now)
     clock = _CLOCK_IN_LINE.search(line)
     if not clock:
         return None
@@ -375,7 +385,7 @@ def reset_from_retry_after(value: str | None, *, now: datetime | None = None) ->
         seconds = int(raw)
         if seconds > _MAX_RETRY_S:
             return None
-        return _iso(moment + timedelta(seconds=seconds))
+        return _iso(moment + timedelta(seconds=seconds), moment)
     if not _looks_like_http_date(raw):
         return None
     try:
@@ -384,7 +394,7 @@ def reset_from_retry_after(value: str | None, *, now: datetime | None = None) ->
         return None
     if parsed is None:
         return None
-    return _iso(parsed)
+    return _iso(parsed, moment)
 
 
 def _looks_like_http_date(raw: str) -> bool:
