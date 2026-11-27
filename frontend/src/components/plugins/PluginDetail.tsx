@@ -1,0 +1,156 @@
+"use client";
+import { Copy, Download, FileJson, RefreshCw, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Badge, Button, ConfirmInline, Notice, Panel, Skeleton, Textarea } from "@/components/ui";
+import { useI18n } from "@/i18n/store";
+import { usePluginsStore } from "@/store/pluginsStore";
+import { CapabilityEffects } from "./CapabilityEffects";
+import { pluginsApi, PluginsError } from "./pluginsApi";
+import { STATE_BADGE, STATE_KEY, usePresent } from "./present";
+import type { PluginView } from "./types";
+
+/** One plugin: what it is, what it can do, its logs and errors, how to share it, and Remove. */
+export function PluginDetail({ plugin, canChange, onClose }: { plugin: PluginView; canChange: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  const { source, explain } = usePresent();
+  const shareReason = (error: unknown) =>
+    error instanceof PluginsError && error.code === "human_only" ? t("plugins.noCredential") : t("plugins.export.failed", { reason: error instanceof Error ? error.message : String(error) });
+  const logs = usePluginsStore((s) => s.logs);
+  const busy = usePluginsStore((s) => !!s.busy[plugin.id]);
+  const loadLogs = usePluginsStore((s) => s.loadLogs);
+  const remove = usePluginsStore((s) => s.remove);
+  const [confirming, setConfirming] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadLogs(plugin.id);
+    setConfirming(false);
+    setShareMessage(null);
+    setShareError(null);
+  }, [plugin.id, loadLogs]);
+
+  const download = async (kind: "package" | "index") => {
+    setShareError(null);
+    try {
+      const { filename, blob } = await (kind === "package" ? pluginsApi.exportPackage(plugin.id) : pluginsApi.exportIndex(plugin.id));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setShareError(shareReason(error));
+    }
+  };
+
+  const copy = async () => {
+    if (!plugin.shareLink) return;
+    setShareError(null);
+    try {
+      await navigator.clipboard.writeText(plugin.shareLink);
+      setShareMessage(t("plugins.export.copied"));
+    } catch (error) {
+      setShareError(shareReason(error));
+    }
+  };
+
+  const mine = logs.id === plugin.id;
+  return (
+    <Panel
+      title={t("plugins.detail.title", { name: plugin.name })}
+      titleId="plugins-detail-title"
+      actions={<Button size="sm" variant="ghost" iconOnly aria-label={t("plugins.detail.close")} icon={<X size={14} aria-hidden />} onClick={onClose} />}
+    >
+      <div className="flex flex-col gap-4 p-3">
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-body">
+          <dt className="text-ink-mute">{t("plugins.detail.version")}</dt>
+          <dd className="font-mono text-code text-ink">{plugin.version}</dd>
+          <dt className="text-ink-mute">{t("plugins.detail.source")}</dt>
+          <dd className="min-w-0 break-all font-mono text-code text-ink">{source(plugin.source)}</dd>
+          <dt className="text-ink-mute">{t("plugins.detail.runtime")}</dt>
+          <dd className="text-ink">{plugin.runtime === "in-process" ? t("plugins.runtime.in-process") : t("plugins.runtime.isolated")}</dd>
+          <dt className="text-ink-mute">{t("plugins.detail.state")}</dt>
+          <dd>
+            <Badge tone={STATE_BADGE[plugin.state]}>{t(STATE_KEY[plugin.state])}</Badge>
+          </dd>
+        </dl>
+        {plugin.state === "changed" && <Notice tone="warn">{t("plugins.state.changedHelp")}</Notice>}
+        {plugin.message && plugin.state !== "changed" && <Notice tone={plugin.state === "failed" ? "fault" : "info"}>{plugin.message}</Notice>}
+
+        <section aria-labelledby="plugins-caps" className="flex flex-col gap-1">
+          <h3 id="plugins-caps" className="t-heading text-ink">
+            {t("plugins.detail.capabilities")}
+          </h3>
+          <CapabilityEffects runtime={plugin.runtime} capabilities={plugin.capabilities} />
+          {plugin.scripts.length > 0 && <p className="text-body text-ink-mute">{t("plugins.detail.scripts", { list: plugin.scripts.join(", ") })}</p>}
+        </section>
+
+        <section aria-labelledby="plugins-logs" className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <h3 id="plugins-logs" className="t-heading flex-1 text-ink">
+              {t("plugins.logs.title")}
+            </h3>
+            <Button size="sm" variant="ghost" icon={<RefreshCw size={14} aria-hidden />} loading={logs.loading} onClick={() => void loadLogs(plugin.id)}>
+              {t("plugins.logs.refresh")}
+            </Button>
+          </div>
+          {mine && logs.error && <Notice tone="fault">{logs.error.code === "human_only" ? explain(logs.error) : t("plugins.logs.failed", { reason: logs.error.message })}</Notice>}
+          {!mine || (logs.loading && logs.lines.length === 0) ? (
+            <Skeleton className="h-16 w-full" />
+          ) : logs.lines.length === 0 && !logs.error ? (
+            <p className="text-body text-ink-mute">{t("plugins.logs.empty")}</p>
+          ) : (
+            // A read-only text box: it scrolls, the keyboard reaches it and a screen reader reads it, with no extra focus rules.
+            <Textarea
+              readOnly
+              mono
+              value={logs.lines.join("\n")}
+              aria-label={t("plugins.logs.aria", { name: plugin.name })}
+              rows={Math.min(12, Math.max(3, logs.lines.length))}
+            />
+          )}
+        </section>
+
+        <section aria-labelledby="plugins-export" className="flex flex-col gap-2">
+          <h3 id="plugins-export" className="t-heading text-ink">
+            {t("plugins.export.title")}
+          </h3>
+          <p className="text-body text-ink-mute">{t("plugins.export.help")}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" icon={<Download size={14} aria-hidden />} onClick={() => void download("package")}>
+              {t("plugins.export.package")}
+            </Button>
+            <Button size="sm" icon={<FileJson size={14} aria-hidden />} onClick={() => void download("index")}>
+              {t("plugins.export.index")}
+            </Button>
+            {plugin.shareLink && (
+              <Button size="sm" icon={<Copy size={14} aria-hidden />} onClick={() => void copy()}>
+                {t("plugins.export.copy")}
+              </Button>
+            )}
+          </div>
+          {shareMessage && <p role="status" className="text-body text-ink-dim">{shareMessage}</p>}
+          {shareError && <Notice tone="fault">{shareError}</Notice>}
+        </section>
+
+        <div className="border-t border-line-soft pt-3">
+          {confirming ? (
+            <ConfirmInline
+              prompt={t("plugins.remove.confirm", { name: plugin.name })}
+              confirmLabel={t("plugins.remove.yes")}
+              busy={busy}
+              onCancel={() => setConfirming(false)}
+              onConfirm={() => void remove(plugin.id)}
+            />
+          ) : (
+            <Button variant="danger" size="sm" disabled={!canChange} onClick={() => setConfirming(true)}>
+              {t("plugins.remove")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}

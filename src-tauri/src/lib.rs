@@ -115,6 +115,21 @@ fn sidecar_env(port: u16, token: &str, data_dir: &std::path::Path) -> Vec<(&'sta
     ]
 }
 
+/// Where the bundled plugin host is (ADR 0071): the Node runtime and the host folder staged by
+/// `scripts/build-cordis-host.mjs` under the app's resources. Without them (a dev build) nothing is
+/// passed, and the sidecar looks for `node` on PATH and the host in the repository. Paths only.
+fn cordis_env(resource_dir: &std::path::Path) -> Vec<(&'static str, String)> {
+    let host = resource_dir.join("cordis-host");
+    let node = host.join(if cfg!(windows) { "node.exe" } else { "node" });
+    if !node.is_file() {
+        return Vec::new();
+    }
+    vec![
+        ("OH_CORDIS_NODE", node.to_string_lossy().into_owned()),
+        ("OH_CORDIS_HOST_DIR", host.to_string_lossy().into_owned()),
+    ]
+}
+
 fn generate_token() -> Result<String, String> {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| format!("token generation failed: {e}"))?;
@@ -153,6 +168,11 @@ fn spawn_sidecar(app: &AppHandle, port: u16, token: &str, human: &str) -> Result
         .map_err(|e| format!("sidecar lookup failed: {e}"))?;
     for (name, value) in sidecar_env(port, token, &data_dir) {
         sidecar = sidecar.env(name, value);
+    }
+    if let Ok(resources) = app.path().resource_dir() {
+        for (name, value) in cordis_env(&resources) {
+            sidecar = sidecar.env(name, value);
+        }
     }
 
     let (mut _rx, mut child) = sidecar
@@ -374,6 +394,31 @@ mod tests {
         assert!(!sidecar_only.contains("human-secret"));
         assert!(both.contains("sidecar-secret") && both.contains("human-secret"));
         assert!(both.contains("__OH_HUMAN__") && both.contains("__OH_TOKEN__"));
+    }
+
+    #[test]
+    fn the_sidecar_is_told_where_the_bundled_plugin_host_is() {
+        let resources = std::env::temp_dir().join(format!("oh-cordis-env-{}", std::process::id()));
+        let host = resources.join("cordis-host");
+        std::fs::create_dir_all(&host).unwrap();
+        let node = host.join(if cfg!(windows) { "node.exe" } else { "node" });
+
+        // Dev builds have no bundled host: nothing is passed and the sidecar looks on PATH and in the repository.
+        assert!(cordis_env(&resources).is_empty());
+
+        std::fs::write(&node, b"").unwrap();
+        let env = cordis_env(&resources);
+        let get = |name: &str| env.iter().find(|(k, _)| *k == name).map(|(_, v)| v.clone());
+        assert_eq!(
+            get("OH_CORDIS_NODE"),
+            Some(node.to_string_lossy().into_owned())
+        );
+        assert_eq!(
+            get("OH_CORDIS_HOST_DIR"),
+            Some(host.to_string_lossy().into_owned())
+        );
+        assert_eq!(env.len(), 2, "only the two paths, no credential");
+        std::fs::remove_dir_all(&resources).unwrap();
     }
 
     #[test]

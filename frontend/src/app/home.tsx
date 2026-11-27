@@ -40,6 +40,7 @@ import { ValidateDock } from "@/components/studio/ValidateDock";
 import { AgentStage } from "@/components/agent/AgentStage";
 import { useThreadStore } from "@/store/threadStore";
 import { ProvidersScreen } from "@/components/providers/ProvidersScreen";
+import { PluginsScreen } from "@/components/plugins/PluginsScreen";
 import { ForjaScreen } from "@/factory/ForjaScreen";
 
 import { useCanvasStore } from "@/store/canvasStore";
@@ -359,10 +360,7 @@ export function Home({ initialPath }: { initialPath?: string }) {
     ) : section === "forja" ? (
       <ForjaScreen />
     ) : section === "plugins" ? (
-      <div className="mx-auto flex w-full flex-col gap-2 p-6" style={{ maxWidth: READING_WIDTH }}>
-        <h1 className="t-title text-ink">{t("shell.plugins.heading")}</h1>
-        <p className="text-body text-ink-mute">{t("shell.plugins.body")}</p>
-      </div>
+      <PluginsScreen />
     ) : section === "settings" ? (
       <div className="mx-auto flex w-full flex-col gap-2 p-6" style={{ maxWidth: READING_WIDTH }}>
         <h1 className="t-title text-ink">{t("shell.settings.heading")}</h1>

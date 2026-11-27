@@ -63,6 +63,7 @@ test('host exits when the parent closes its stdin', async () => {
     })
     const banner = await ready
     assert.equal(typeof banner.port, 'number')
+    assert.equal(banner.node, process.version)
     const exited = once(child, 'exit')
     child.stdin.end()
     const timeout = new Promise<never>((_, reject) => {

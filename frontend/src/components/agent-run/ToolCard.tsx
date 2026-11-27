@@ -1,6 +1,9 @@
 "use client";
 import { PERMISSION_LABEL, isPermissionMode } from "@/lib/permissionMode";
 import { useEffect, useState } from "react";
+import { CordisToolSummary } from "@/components/plugins/CordisToolSummary";
+import { cordisTitle } from "@/components/plugins/cordisAction";
+import { useI18n } from "@/i18n/store";
 import { sendControl } from "./runClient";
 import type { ToolCall } from "./types";
 import { Button } from "@/components/ui";
@@ -56,7 +59,10 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
   const pendingApproval = Boolean(call.approval) && !call.approval?.decision && !call.denied;
   const high = call.approval?.risk === "high";
   const state = stateOf(call);
-  const title = call.name === "exec" || call.name === "run_command" ? "Run command" : call.name === "read" || call.name === "read_file" ? "Read file" : call.name === "discover" || call.name === "list_workspace" ? "List workspace" : call.name;
+  const { t } = useI18n();
+  // The plugin tool of creator mode is described by what it does to a plugin, never as a command.
+  const isCordis = call.name === "cordis_plugins";
+  const title = isCordis ? cordisTitle(call.args, t) : call.name === "exec" || call.name === "run_command" ? "Run command" : call.name === "read" || call.name === "read_file" ? "Read file" : call.name === "discover" || call.name === "list_workspace" ? "List workspace" : call.name;
 
   const decide = (decision: Decision) => {
     if (sent || !runId || !pendingApproval) return;
@@ -93,7 +99,8 @@ export function ToolCard({ call, runId, connection }: { call: ToolCall; runId: s
         </p>
       ) : null}
 
-      {call.approval && (
+      {call.approval && isCordis && <CordisToolSummary />}
+      {call.approval && !isCordis && (
         <p className="mt-1.5 text-body text-ink-mute">
           {call.approval.reason === "secret_pattern"
             ? "This path looks like it contains secrets. It is read only if you approve."

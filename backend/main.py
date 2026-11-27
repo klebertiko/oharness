@@ -1,6 +1,10 @@
 import hmac
+import logging
 import math
+import os
+from pathlib import Path
 from contextlib import asynccontextmanager
+import anyio.to_thread
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
@@ -30,6 +34,9 @@ from factory.blueprint_router import router as factory_blueprint_router
 from factory.runs_router import router as factory_runs_router
 from factory.router import router as factory_router
 from factory.secrets_router import router as factory_secrets_router
+from cordis.router import router as cordis_router
+from cordis.service import CordisService, disabled_by_environment
+from cordis import creator as cordis_creator
 from secret_store.factory import build_secrets_store
 from factory.auth import load_human_credential
 
@@ -37,6 +44,12 @@ load_human_credential()  # the human credential leaves the environment before an
 from providers.store import load_all as load_provider_connections
 import models  # noqa: F401 — register ORM tables for create_all
 from version import APP_VERSION
+
+
+def _cordis_data_dir() -> Path:
+    from data_dir import resolve_data_dir
+    configured = os.environ.get("OH_CORDIS_DATA_DIR", "").strip()
+    return Path(configured) if configured else resolve_data_dir()
 
 
 @asynccontextmanager
@@ -57,7 +70,20 @@ async def lifespan(app: FastAPI):
         # 2026-09-12). `providers/store.py` is now the durable half.
         async with SessionLocal() as session:
             app.state.provider_connections = await load_provider_connections(session)
-    yield
+    # Plugin host (ADR 0071): starts on a thread and never blocks or stops the sidecar; a missing Node leaves it `unavailable`.
+    try:
+        app.state.cordis = CordisService(_cordis_data_dir(), enabled=not disabled_by_environment(os.environ))
+        app.state.cordis.start()
+        cordis_creator.bind(app.state.cordis)  # the chat tool reaches this service only while the sidecar runs
+    except Exception:  # plugins are optional: the sidecar serves everything else without them
+        logging.getLogger(__name__).exception("the plugin manager could not start")
+        app.state.cordis = None
+    try:
+        yield
+    finally:
+        if app.state.cordis is not None:
+            cordis_creator.bind(None)
+            await anyio.to_thread.run_sync(app.state.cordis.stop)
 
 
 app = FastAPI(title="OHarness API", version=APP_VERSION, lifespan=lifespan)
@@ -160,6 +186,7 @@ app.include_router(factory_router)
 app.include_router(factory_definition_router)
 app.include_router(factory_memory_router)
 app.include_router(factory_improvement_router)
+app.include_router(cordis_router)
 app.include_router(factory_blueprint_router)
 app.include_router(factory_runs_router)
 

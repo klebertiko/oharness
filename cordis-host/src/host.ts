@@ -2,7 +2,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import type { Context } from 'cordis'
+import type { Context, Fiber } from 'cordis'
 import { COMMAND_LINE } from './commands-service.ts'
 import { HostError } from './errors.ts'
 import { IsolatedPlugin } from './isolated-plugin.ts'
@@ -30,6 +30,10 @@ interface Loaded {
   readonly tree: string
   readonly result: InstallResult
   readonly isolated?: IsolatedPlugin
+  /** In-process plugin: its Cordis fiber, disposed on unload. */
+  readonly fiber?: Fiber
+  /** Folder of the private copy this plugin runs from. */
+  readonly snapshot: string
 }
 
 function packageVersion(name: string): string {
@@ -146,7 +150,12 @@ export class CordisRuntime {
       throw error
     }
     const outcome = await loadPlugin(this.context, asPlugin(imported), config)
-    return { tree: preview.tree, result: this.#result(preview, outcome.status, outcome.unmet, outcome.message) }
+    return {
+      tree: preview.tree,
+      snapshot: snapshot.dir,
+      result: this.#result(preview, outcome.status, outcome.unmet, outcome.message),
+      ...(outcome.fiber === undefined ? {} : { fiber: outcome.fiber }),
+    }
   }
 
   async #installIsolated(preview: PackagePreview, snapshot: { dir: string; entry: string }, config: unknown): Promise<Loaded> {
@@ -167,9 +176,9 @@ export class CordisRuntime {
     const clash = plugin.tools.find((name) => taken.has(name)) ?? plugin.commands.find((name) => takenCommands.has(name))
     if (clash !== undefined) {
       await plugin.stop()
-      return { tree: preview.tree, result: this.#result(preview, 'failed', [], `"${clash}" is already registered by another plugin`) }
+      return { tree: preview.tree, snapshot: snapshot.dir, result: this.#result(preview, 'failed', [], `"${clash}" is already registered by another plugin`) }
     }
-    return { tree: preview.tree, result: this.#result(preview, 'active', [], undefined), isolated: plugin }
+    return { tree: preview.tree, snapshot: snapshot.dir, result: this.#result(preview, 'active', [], undefined), isolated: plugin }
   }
 
   #result(preview: PackagePreview, status: InstallResult['status'], unmet: readonly string[], message: string | undefined): InstallResult {
@@ -213,6 +222,13 @@ export class CordisRuntime {
     return rows
   }
 
+  /** Tool and command names of the live host, isolated plugins included: what the creator mode reads, never code. */
+  catalog(): { tools: string[]; commands: string[] } {
+    const tools = new Set([...this.context.tools.names(), ...this.#isolated().flatMap((plugin) => plugin.tools)])
+    const commands = new Set([...this.context.commands.names(), ...this.#isolated().flatMap((plugin) => plugin.commands)])
+    return { tools: [...tools].sort(), commands: [...commands].sort() }
+  }
+
   #toolOwner(name: string): IsolatedPlugin | undefined {
     return this.#isolated().find((plugin) => plugin.tools.includes(name))
   }
@@ -252,6 +268,27 @@ export class CordisRuntime {
   /** Always 0 for isolated plugins: their record-only service never replays either. */
   sessionProjectionApplyCalls(): number {
     return this.context.sessionProjections.applyCalls
+  }
+
+  /**
+   * Stop a plugin by its package name and forget it: an isolated plugin's
+   * process is stopped, an in-process plugin's fiber is disposed, and its
+   * private copy is deleted. Another version can be installed afterwards.
+   */
+  async unload(name: string): Promise<void> {
+    const keys = [...this.#loaded.entries()].filter(([, loaded]) => loaded.result.name === name).map(([key]) => key)
+    if (keys.length === 0) throw new HostError('plugin-not-found', `no plugin named ${name} is loaded`)
+    for (const key of keys) {
+      const loaded = this.#loaded.get(key)
+      if (loaded === undefined) continue
+      this.#loaded.delete(key)
+      if (loaded.isolated !== undefined) await loaded.isolated.stop()
+      if (loaded.fiber !== undefined) await loaded.fiber.dispose().catch(() => undefined)
+      releaseSnapshot(loaded.snapshot)
+      const at = this.#snapshots.indexOf(loaded.snapshot)
+      if (at >= 0) this.#snapshots.splice(at, 1)
+      await rm(loaded.snapshot, { recursive: true, force: true }).catch(() => undefined)
+    }
   }
 
   /** Folders this runtime created for snapshots. */

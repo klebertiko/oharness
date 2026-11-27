@@ -288,7 +288,7 @@ export function runReducer(state: RunState, action: Action): RunState {
           ...call,
           ...(call.argv ? {} : parseToolArgs(action.data.args)),
           approval: {
-            reason: action.data.reason === "secret_pattern" ? "secret_pattern" : "exec",
+            reason: action.data.reason === "secret_pattern" ? "secret_pattern" : action.data.reason === "cordis_plugins" ? "cordis_plugins" : "exec",
             risk: action.data.risk === "high" ? "high" : "normal",
             riskHints: Array.isArray(action.data.risk_hints) ? action.data.risk_hints.map(String) : [],
           },

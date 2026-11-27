@@ -18,7 +18,7 @@ export interface ToolCall {
   path?: string;
   /** Present once the run parked on the approval gate for this call. */
   approval?: {
-    reason: "exec" | "secret_pattern";
+    reason: "exec" | "secret_pattern" | "cordis_plugins";
     risk: "normal" | "high";
     riskHints: string[];
     decision?: "approve" | "reject";

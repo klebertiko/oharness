@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import httpx
 
+from cordis import creator as cordis_creator
 from run_budget import compact_messages
 from .capabilities import capabilities
 from .discover import discover
@@ -43,7 +44,7 @@ def redact_value(value):
 
 class ToolBroker:
     def __init__(self, root, adapter_name, control, options, permission_mode='ask', workspace_trusted=False,
-                 run_budget=None, compact_at=None, hooks=(), hooks_loader=None):
+                 run_budget=None, compact_at=None, hooks=(), hooks_loader=None, creator_thread=None):
         self.root = Path(root) if root else None
         # Already resolved by the caller (stored mode clamped by the request); unknown -> ask.
         self.permission_mode = effective_mode(permission_mode)
@@ -58,6 +59,11 @@ class ToolBroker:
         self.run_budget, self.compact_at = run_budget, compact_at
         self.capabilities = capabilities(root, adapter_name)
         self.mock = adapter_name == 'mock'
+        # Creator mode (ADR 0071): the cordis_plugins tool, only in the thread the person turned it on for (stored by the sidecar),
+        # and only when this run's tools belong to that same thread.
+        same_thread = creator_thread is not None and getattr(options, 'thread_id', None) in (None, creator_thread)
+        self.cordis = cordis_creator.active_service(creator_thread) if same_thread else None
+        self.cordis_tool = False
         self.calls_used = self.reads_used = 0
         self.provider_called = False
         self.last_result = ''
@@ -72,6 +78,10 @@ class ToolBroker:
         yield {'kind': 'tool_call', 'call_id': call_id, 'name': name, 'args': args, 'origin': origin}
         started = time.monotonic()
         try:
+            if name == cordis_creator.TOOL_NAME:
+                async for event in self._cordis_call(call_id, args, started):
+                    yield event
+                return
             action = validate_call(name, args)
             if self.root is None:
                 raise ValueError('no-workspace')
@@ -164,6 +174,46 @@ class ToolBroker:
             yield {'kind': 'tool_result', 'call_id': call_id, 'ok': False, 'result': self.last_result,
                    'duration_ms': 0, 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0}
 
+    async def _cordis_call(self, call_id, args, started):
+        """Creator mode (ADR 0071): every action of cordis_plugins waits for the person, in any mode but Plan, which refuses it.
+        The agent never installs: its request_install only leaves a request the person approves on the Cordis Plugins screen."""
+        name = cordis_creator.TOOL_NAME
+        if self.permission_mode == 'plan':
+            self.last_result = DENY_NOTES['plan']
+            yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': 'policy', 'note': self.last_result, 'mode': self.permission_mode}
+            return
+        if self.cordis is None:
+            outcome = {'status': 'failed', 'error': 'creator_off', 'message': 'Creator mode is off in this chat.', 'nextStep': 'Ask the person to turn on creator mode for this chat in Cordis Plugins.'}
+        else:
+            outcome = cordis_creator.precheck(args)
+        if outcome is None:
+            blocked = False
+            async for event in self._hook_gate(call_id, name, args):
+                yield event
+                blocked = event['kind'] == 'tool_denied'
+            if blocked:
+                return
+            self.control.tool_approval.begin(call_id)
+            try:
+                yield {'kind': 'tool_approval_required', 'call_id': call_id, 'name': name, 'args': args,
+                       'reason': name, 'risk': 'normal', 'risk_hints': []}
+                decision = await self.control.tool_approval.wait()
+                if decision:
+                    yield {'kind': 'tool_approval_decision', 'call_id': call_id, **redact_value(decision)}
+                if not decision or decision['decision'] != 'approve':
+                    self.last_result = 'approval_timeout' if not decision else 'rejected'
+                    yield {'kind': 'tool_denied', 'call_id': call_id, 'reason': self.last_result,
+                           'note': redact((decision or {}).get('note', ''))[0]}
+                    return
+            finally:
+                self.control.tool_approval.finish()
+            if self.control.stop.is_set():
+                return
+            outcome = await asyncio.to_thread(cordis_creator.run_action, self.cordis, args)
+        self.last_result = json.dumps(outcome)
+        yield {'kind': 'tool_result', 'call_id': call_id, 'ok': outcome['status'] != 'failed', 'result': self.last_result,
+               'duration_ms': int((time.monotonic() - started) * 1000), 'exit_code': None, 'timed_out': False, 'truncated': False, 'redactions': 0}
+
     async def _hook_gate(self, call_id, name, args):
         """Run every hook that names this tool, in order: yields each decision, and ends with `tool_denied` at the first block."""
         for hook in (await self.hooks_loader() if self.hooks_loader else self.hooks):
@@ -196,7 +246,8 @@ class ToolBroker:
         plan_rule = '\n' + PLAN_MODE_RULE if self.permission_mode == 'plan' else ''
         config = replace(config, system_prompt=(config.system_prompt + '\n' + TOOL_DATA_RULE + workspace + plan_rule).strip())
         self.workspace_tools = bool(self.options.enabled and self.capabilities['tools']['read'])
-        if not (self.workspace_tools or self.options.subagents) or not hasattr(adapter, 'stream_turn'):
+        self.cordis_tool = self.cordis is not None
+        if not (self.workspace_tools or self.options.subagents or self.cordis_tool) or not hasattr(adapter, 'stream_turn'):
             self.provider_called = True
             if preset_result:
                 prompt += '\n' + preset_result
@@ -206,6 +257,8 @@ class ToolBroker:
             async for event in adapter.stream_events(prompt, config):
                 yield event
             return
+        if self.cordis_tool:
+            config = replace(config, system_prompt=config.system_prompt + '\n\n' + cordis_creator.skill_prompt())
         messages = [{'role': 'system', 'content': config.system_prompt}, {'role': 'user', 'content': prompt}]
         if preset_result:
             messages.append({'role': 'user', 'content': preset_result})
@@ -216,7 +269,8 @@ class ToolBroker:
                 messages, info = compacted
                 yield {'kind': 'context_compacted', **info}
             calls, text, turn_tokens = [], [], 0
-            tools = ([*(TOOL_SCHEMAS if self.workspace_tools else []), *([subagent_schema()] if self.options.subagents else [])]
+            tools = ([*(TOOL_SCHEMAS if self.workspace_tools else []), *([subagent_schema()] if self.options.subagents else []),
+                      *([cordis_creator.TOOL_SCHEMA] if self.cordis_tool else [])]
                      if self.calls_used < 8 and not unsupported else None)
             self.provider_called = True
             try:
@@ -258,6 +312,8 @@ class ToolBroker:
                     name = 'unknown'  # a subagents-only turn offers no workspace tool, so none runs
                 if function.get('name') == 'run_subagent' and self.options.subagents:
                     name = 'subagent'
+                if function.get('name') == cordis_creator.TOOL_NAME and self.cordis_tool:
+                    name = cordis_creator.TOOL_NAME
                 try:
                     args = json.loads(function.get('arguments') or '{}')
                 except ValueError:

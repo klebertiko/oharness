@@ -67,6 +67,10 @@ test('proof 1: our plugin stays unloaded until confirmation, then tools, command
     assert.equal(proof.plugin, '@oharness/proof-plugin')
     assert.ok(Array.isArray(proof.chain))
     assert.ok(proof.chain.includes('Service'))
+    // The catalog the creator mode reads: tool and command names of the live host, isolated plugins included, no code.
+    const catalog = asRecord(services.json)
+    assert.ok(Array.isArray(catalog.tools) && catalog.tools.includes('proof_echo'))
+    assert.ok(Array.isArray(catalog.commands) && catalog.commands.includes('proof'))
     const internal = await call(host, '/v1/events/emit', { body: { name: 'internal/plugin', payload: {} } })
     assert.equal(internal.status, 400)
   })

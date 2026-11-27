@@ -33,6 +33,9 @@ import { Transcript } from "@/components/agent-run/Transcript";
 import { HistoricalRunDetail } from "@/components/agent-run/HistoricalRunDetail";
 import { RunDetailRegion, RunDetailToggle } from "@/components/agent-run/RunDetailToggle";
 import { SubagentToggle } from "@/components/agent/SubagentToggle";
+import { CreatorModeChip } from "@/components/plugins/CreatorModeChip";
+import { NEW_DRAFT_KEY, useComposerDraftStore } from "@/store/composerDraftStore";
+import { usePluginsStore } from "@/store/pluginsStore";
 import { useSubagentStore } from "@/store/subagentStore";
 import { ToolHooksButton } from "@/components/agent/ToolHooksSheet";
 import { FlowToggle } from "@/components/agent-run/FlowToggle";
@@ -112,10 +115,10 @@ export function AgentStage() {
   // Workspace trust (stored by the sidecar) only matters under Auto and Workspace write.
   const trust = useWorkspaceTrust(chatTools.workspace?.root ?? null, permission.mode === "auto_workspace" || permission.mode === "workspace_write");
 
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const draftKey = activeThreadId ?? "new";
-  const instruction = drafts[draftKey] ?? "";
-  const setInstruction = (value: string) => setDrafts((current) => ({ ...current, [draftKey]: value }));
+  // The draft lives in a store so it survives leaving the chat (for example to Cordis Plugins) and coming back.
+  const draftKey = activeThreadId ?? NEW_DRAFT_KEY;
+  const instruction = useComposerDraftStore((s) => s.drafts[draftKey]) ?? "";
+  const setInstruction = (value: string) => useComposerDraftStore.getState().setDraft(draftKey, value);
   // The model comes from the chat combo: this chat's own pick, else the connection default (empty).
   const modelPins = useChatModelStore((s) => s.overrides);
   const selectedModel = provider ? modelOverride(modelPins, activeThreadId ?? NEW_CHAT_KEY, provider.id) : "";
@@ -334,6 +337,8 @@ export function AgentStage() {
       tools: subagentRun
         ? { subagents: true, thread_id: threadId, permission_mode: mode }
         : mode === "plan" || modeOverride ? { enabled: false, thread_id: threadId, permission_mode: mode } : undefined,
+      // Creator mode is the thread's: the broker offers cordis_plugins only when this thread has it on.
+      ...(usePluginsStore.getState().creatorByThread[threadId] ? { creatorThreadId: threadId } : {}),
     });
   };
 
@@ -589,6 +594,7 @@ export function AgentStage() {
             <fieldset disabled={live} aria-label="Run settings" className="contents disabled:opacity-60">
             <HarnessBar />
             <SubagentToggle unavailable={enabled ? "harness" : permission.mode === "plan" ? "plan" : undefined} />
+            <CreatorModeChip />
             <ChatProviderPicker disabled={live} modelAppliesToChat={!enabled || permission.mode === "plan"} onConnect={() => goToProviders("providers")} />
             <WorkspacePicker />
             {enabled && workspace?.rootPath && <WorktreeToggle disabled={live} />}
