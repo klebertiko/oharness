@@ -69,3 +69,28 @@ def test_advanced_route_keeps_a_rejected_save_as_an_error(client=None) -> None:
         good = http.put("/providers/connections/xai-work/advanced", json={"retryPolicy": "all", "retryCap": 1, "allowlist": [], "models": {}})
         assert good.status_code == 200
         assert http.get("/providers/connections/xai-work/advanced").json()["retryPolicy"] == "all"
+
+
+def test_a_display_name_may_have_spaces_but_not_control_characters() -> None:
+    ok, err = validate_advanced({"models": {"sonnet": {"displayName": "Claude Sonnet", "context": 0, "maxOutput": 0}}})
+    assert err is None and ok is not None
+    assert ok["models"]["sonnet"]["displayName"] == "Claude Sonnet"
+    for bad in ("Claude\nSonnet", "Claude\u200bSonnet", "Claude\tSonnet"):
+        clean, error = validate_advanced({"models": {"sonnet": {"displayName": bad}}})
+        assert clean is None and error
+
+
+def test_advanced_route_answers_400_to_a_body_that_is_not_json() -> None:
+    with TestClient(app) as http:
+        created = http.post("/providers/connections", json={
+            "id": "xai-raw", "provider": "xai", "label": "Raw", "residence": "cloud",
+            "endpoint": "https://api.x.ai/v1", "enabled": False, "defaultModel": "",
+        })
+        assert created.status_code == 201
+        bad = http.put(
+            "/providers/connections/xai-raw/advanced",
+            content=b"not json sk-test",
+            headers={"content-type": "application/json"},
+        )
+        assert bad.status_code == 400
+        assert "sk-test" not in bad.text

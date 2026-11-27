@@ -11,13 +11,14 @@ MAX_OUTPUT = 200_000
 MAX_MODELS = 40
 
 
-def _plain(value: object, limit: int) -> str | None:
+def _plain(value: object, limit: int, *, spaces: bool = False) -> str | None:
+    """Printable text. A display name may hold plain spaces; an id holds none."""
     if not isinstance(value, str):
         return None
     text = value.strip()
     if not text or len(text) > limit:
         return None
-    if any(unicodedata.category(ch) in ("Cc", "Cf") or ch.isspace() for ch in text):
+    if any(unicodedata.category(ch) in ("Cc", "Cf") or (ch.isspace() and not (spaces and ch == " ")) for ch in text):
         return None
     return text
 
@@ -49,7 +50,7 @@ def validate_advanced(body: object) -> tuple[dict | None, str | None]:
         if model_id is None or not isinstance(options, dict):
             return None, "A model id in the options is not valid."
         display = options.get("displayName", model_id)
-        shown = _plain(display, MAX_NAME)
+        shown = _plain(display, MAX_NAME, spaces=True)
         if shown is None:
             return None, "A display name is not valid."
         context = options.get("context", 0)

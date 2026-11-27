@@ -303,7 +303,11 @@ async def get_advanced(connection_id: str, connections: dict = Depends(get_conne
 async def put_advanced(connection_id: str, request: Request, connections: dict = Depends(get_connections), db: AsyncSession = Depends(get_db)):
     if connection_id not in connections:
         raise HTTPException(404, "Connection not found")
-    clean, error = validate_advanced(await request.json())
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    clean, error = validate_advanced(body)
     if error or clean is None:
         raise HTTPException(400, error or "The advanced options could not be read.")
     row = await db.get(ConnectionAdvanced, connection_id)
