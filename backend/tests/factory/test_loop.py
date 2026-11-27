@@ -497,3 +497,41 @@ def test_the_forja_of_a_project_is_read_again_only_when_its_file_changes(tmp_pat
     forja.write_text(forja.read_text(encoding='utf-8').replace('name: payments', 'name: billing', 1) + '\n', encoding='utf-8')
     assert runs_router._forja_of(str(root)) == 'billing'
     assert len(calls) == 2
+
+
+def test_the_forja_of_a_project_is_read_again_when_an_agent_runner_or_mcp_file_changes(tmp_path, monkeypatch):
+    from factory import runs_router
+    root = _forja_project(tmp_path / 'deep', 'payments')
+    runs_router._FORJA_NAMES.clear()
+    calls = []
+    original = runs_router.definition_files.load
+
+    def counted(folder):
+        calls.append(folder)
+        return original(folder)
+    monkeypatch.setattr(runs_router.definition_files, 'load', counted)
+    forja = root / '.oharness' / 'forja'
+    assert runs_router._forja_of(str(root)) == 'payments' and len(calls) == 1
+    agent = next((forja / 'agents').rglob('agent.md'))
+    agent.write_text(agent.read_text(encoding='utf-8') + '\nMore.\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 2
+    (forja / 'mcp').mkdir(exist_ok=True)
+    (forja / 'mcp' / 'docs.yaml').write_text('command: x\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 3
+    (forja / 'runners').mkdir(exist_ok=True)
+    (forja / 'runners' / 'main.yaml').write_text('type: local\n', encoding='utf-8')
+    runs_router._forja_of(str(root))
+    assert len(calls) == 4
+
+
+def test_the_forja_cache_has_a_ceiling(tmp_path):
+    from factory import runs_router
+    runs_router._FORJA_NAMES.clear()
+    for index in range(runs_router.FORJA_CACHE_MAX + 10):
+        folder = tmp_path / f'p{index}' / '.oharness' / 'forja'
+        folder.mkdir(parents=True)
+        (folder / 'forja.yaml').write_text('kind: forja\n', encoding='utf-8')
+        runs_router._forja_of(str(tmp_path / f'p{index}'))
+    assert len(runs_router._FORJA_NAMES) <= runs_router.FORJA_CACHE_MAX

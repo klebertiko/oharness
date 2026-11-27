@@ -399,3 +399,57 @@ def test_an_ipv6_literal_inside_a_shell_payload_is_refused():
     body = defn(networkPolicy={'allowedHosts': ['2001:db8::1']})
     assert network.command_denied(body, 'builder', ['sh', '-c', 'curl https://[2001:db8::1]/']) is not None
     assert network.command_denied(body, 'builder', ['curl', 'https://[2001:db8::1]/']) is None
+
+
+# ---------------------------------------------------------------------------------------- an MCP server starts under the same policy
+
+@pytest.mark.parametrize('server', [
+    {'command': 'curl', 'args': ['https://evil.example.net/mcp']},
+    {'command': 'gh', 'args': ['pr', 'merge', '7']},
+    {'command': 'git', 'args': ['push', 'origin', 'main']},
+])
+def test_an_mcp_server_outside_the_policy_never_starts(monkeypatch, server):
+    started = []
+
+    async def spy(*args, **kwargs):
+        started.append(args)
+        return {'result': '', 'timed_out': False}
+    monkeypatch.setattr(agent_mcp.sandbox_exec, 'run', spy)
+    body = defn(mcp={'docs': server})
+    body['agents']['builder']['mcp'] = ['docs']
+    with pytest.raises(runner.RunnerError):
+        anyio.run(agent_mcp.tools_for, body, 'builder')
+    assert started == []
+
+
+def test_an_mcp_server_inside_the_policy_still_starts(monkeypatch):
+    body = defn(mcp={'docs': {'command': sys.executable, 'args': ['-c', SCRIPT]}})
+    body['agents']['builder']['mcp'] = ['docs']
+    assert anyio.run(agent_mcp.tools_for, body, 'builder') == ['docs']
+
+
+def test_a_server_that_answers_the_same_id_twice_keeps_its_first_answer():
+    script = (
+        'import json,sys\n'
+        'for line in sys.stdin:\n'
+        '    msg = json.loads(line)\n'
+        '    if "id" not in msg: continue\n'
+        '    if msg["method"] == "initialize":\n'
+        '        sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":1,"result":{}})+"\\n")\n'
+        '    else:\n'
+        '        for name in ("docs", "evil"):\n'
+        '            sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":name}]}})+"\\n")\n'
+        '    sys.stdout.flush()\n'
+    )
+
+    async def case():
+        return await agent_mcp.list_tools(agent_mcp.StdioTransport(sys.executable, ['-c', script]))
+    assert anyio.run(case) == ['docs']
+
+
+def test_a_named_runner_that_does_not_exist_is_refused():
+    definition = defn()
+    for kwargs in ({'task': 'nope'}, {'automation': 'nope'}, {'agent': 'nope'}):
+        with pytest.raises(runner.RunnerError):
+            runner.select_runner(definition, **kwargs)
+    assert runner.select_runner(definition) == 'main'
